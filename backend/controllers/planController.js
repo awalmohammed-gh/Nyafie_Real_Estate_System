@@ -1,0 +1,66 @@
+import Plan from "../models/Plan.js";
+import Subscription from "../models/Subscription.js";
+import { ok, fail } from "../utils/response.js";
+
+const pickPlan = (body) => {
+  const out = {};
+  if (body.name !== undefined) out.name = String(body.name).trim();
+  if (body.tagline !== undefined) out.tagline = String(body.tagline).trim();
+  ["price", "duration", "propertyLimit", "imageLimit", "featuredPropertyLimit"].forEach((key) => {
+    if (body[key] !== undefined) out[key] = Number(body[key]);
+  });
+  if (["basic", "standard", "advanced"].includes(body.analyticsLevel)) out.analyticsLevel = body.analyticsLevel;
+  if (["basic", "full"].includes(body.inquiryManagement)) out.inquiryManagement = body.inquiryManagement;
+  ["priorityVisibility", "popular", "isActive"].forEach((key) => {
+    if (body[key] !== undefined) out[key] = Boolean(body[key]);
+  });
+  if (Array.isArray(body.features)) out.features = body.features.map((f) => String(f).trim()).filter(Boolean);
+  return out;
+};
+
+const validatePlan = (p, creating) => {
+  if (creating && !p.name) return "Give the plan a name.";
+  if (p.price !== undefined && !(p.price >= 0)) return "Price must be 0 or more.";
+  if (p.duration !== undefined && !(p.duration >= 1)) return "Duration must be at least 1 day.";
+  if (p.propertyLimit !== undefined && !(p.propertyLimit >= 1)) return "Property limit must be at least 1.";
+  if (p.imageLimit !== undefined && !(p.imageLimit >= 1)) return "Image limit must be at least 1.";
+  if (p.featuredPropertyLimit !== undefined && !(p.featuredPropertyLimit >= 0)) return "Featured limit can't be negative.";
+  return null;
+};
+
+// GET /api/plans (active plans; admins get all with ?all=true)
+export const listPlans = async (req, res) => {
+  const all = req.query.all === "true" && req.user?.role === "admin";
+  ok(res, await Plan.find(all ? {} : { isActive: true }).sort({ price: 1 }));
+};
+
+// POST /api/plans (admin)
+export const createPlan = async (req, res) => {
+  const data = pickPlan(req.body);
+  const problem = validatePlan(data, true);
+  if (problem) return fail(res, 400, problem);
+  if (await Plan.exists({ name: data.name })) return fail(res, 409, "Another plan already uses this name.");
+  ok(res, await Plan.create(data), "Plan created", 201);
+};
+
+// PUT /api/plans/:id (admin) - limits apply to subscribed agents immediately
+export const updatePlan = async (req, res) => {
+  const data = pickPlan(req.body);
+  const problem = validatePlan(data, false);
+  if (problem) return fail(res, 400, problem);
+  if (data.name && (await Plan.exists({ name: data.name, _id: { $ne: req.params.id } }))) {
+    return fail(res, 409, "Another plan already uses this name.");
+  }
+  const plan = await Plan.findByIdAndUpdate(req.params.id, data, { returnDocument: "after", runValidators: true }).catch(() => null);
+  if (!plan) return fail(res, 404, "Plan not found.");
+  ok(res, plan, "Plan updated");
+};
+
+// DELETE /api/plans/:id (admin) - only when nobody is actively subscribed
+export const deletePlan = async (req, res) => {
+  const active = await Subscription.countDocuments({ plan: req.params.id, status: "active", expiresAt: { $gt: new Date() } });
+  if (active > 0) return fail(res, 409, "Plans with active subscribers can't be deleted. Deactivate it instead.");
+  const plan = await Plan.findByIdAndDelete(req.params.id).catch(() => null);
+  if (!plan) return fail(res, 404, "Plan not found.");
+  ok(res, null, "Plan deleted");
+};

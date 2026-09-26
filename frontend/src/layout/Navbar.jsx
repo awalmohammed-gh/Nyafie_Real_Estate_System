@@ -1,203 +1,252 @@
-import React, { useState } from 'react'
-import { NavLink } from 'react-router-dom';
-import { ChevronDown, Menu, X } from 'lucide-react';
-
-const Navbar = ({onLoginClick}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [mobileDropdown, setMobileDropdown] = useState(false);
+import { useEffect, useState } from 'react';
+import { Link, NavLink } from 'react-router-dom';
+import { AnimatePresence, motion } from 'motion/react';
+import { ChevronDown, FileText, Menu, X } from 'lucide-react';
+import { useRealEstate } from '../context/useRealEstate';
+import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
+import { useAuth } from '../context/useAuth';
+import AccountMenu from '../components/account/AccountMenu';
 
 const navLinks = [
-  {
-    name: "Home",
-    path: "/",
-  },
+  { name: "Home", path: "/" },
   {
     name: "Properties",
     category: [
-      {
-        name: "For Sale",
-        path: "/sale",
-      },
-      {
-        name: "For Rent",
-        path: "/rent",
-      },
+      { name: "For Sale", path: "/sale", description: "Homes ready to own" },
+      { name: "For Rent", path: "/rent", description: "Monthly and short stays" },
+      { name: "All Properties", path: "/properties", description: "Everything we list" },
     ],
   },
-  {
-    name: "Listings",
-    path: "/listings",
-  },
-  {
-    name: "Agents",
-    path: "/agents",
-  },
-  {
-    name: "Contact",
-    path: "/contact",
-  },
+  { name: "Listings", path: "/listings" },
+  { name: "Agents", path: "/agents" },
+  { name: "Contact", path: "/contact" },
 ];
 
+const Logo = () => (
+  <Link to="/" className="flex items-center gap-2 text-xl font-extrabold tracking-tight sm:text-2xl">
+    <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-500 text-base text-white shadow-lg shadow-brand-500/30">
+      H
+    </span>
+    <span>
+      <span className="text-gray-900">Home</span>
+      <span className="text-brand-500">Base</span>
+    </span>
+  </Link>
+);
+
+const desktopLinkClass = ({ isActive }) =>
+  `relative rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+    isActive ? "bg-brand-50 text-brand-600" : "text-gray-600 hover:text-gray-900"
+  }`;
+
+const Navbar = ({ onAuth }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const { makeOffer } = useRealEstate();
+  const { isAuthenticated } = useAuth();
+
+  useLockBodyScroll(isOpen);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 8);
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const closeMenu = () => setIsOpen(false);
+
+  const offerBadge = makeOffer.length > 0 && (
+    <span className="absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full bg-brand-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">
+      {makeOffer.length}
+    </span>
+  );
 
   return (
-    <div className="bg-white shadow-sm border-b border-gray-100 sticky top-0 left-0 right-0 w-full z-100">
-      <nav className=" relative z-50 ">
-        <div className="flex items-center justify-between px-4 md:px-8 py-4">
-          {/* Logo */}
-          <NavLink
-            to="/"
-            className="text-2xl font-extrabold tracking-tight flex items-center gap-1"
-          >
-            <span className="text-gray-900">Home</span>
-            <span className="text-purple-600">Base</span>
-          </NavLink>
+    <header
+      className={`sticky top-0 z-50 w-full transition-all duration-300 ${
+        scrolled ? "bg-white/85 shadow-sm shadow-gray-900/5 backdrop-blur-lg" : "bg-white"
+      }`}
+    >
+      <nav className="container-page flex h-16 items-center justify-between gap-4 lg:h-20">
+        <Logo />
 
-          {/* Desktop Nav Links */}
-          <ul className="hidden md:flex items-center gap-8">
-            {navLinks.map((link, index) => (
-              <li key={index} className="relative group">
-                {link.category ? (
-                  <div className="flex items-center gap-1 cursor-pointer py-2 text-gray-600 hover:text-purple-600 font-medium transition-colors">
-                    {link.name}
-                    <ChevronDown className="w-4 h-4 transition-transform duration-300 group-hover:rotate-180" />
-
-                    {/* Dropdown Menu */}
-                    <ul className="absolute left-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 overflow-hidden transform group-hover:translate-y-0 translate-y-2">
-                      {link.category.map((sublink, idx) => (
-                        <li key={idx}>
-                          <NavLink
-                            to={sublink.path}
-                            className={({ isActive }) =>
-                              `block px-4 py-3 text-sm font-medium transition-colors ${
-                                isActive
-                                  ? "bg-purple-50 text-purple-600"
-                                  : "text-gray-600 hover:bg-gray-50 hover:text-purple-600"
-                              }`
-                            }
-                          >
-                            {sublink.name}
-                          </NavLink>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <NavLink
-                    to={link.path}
-                    className={({ isActive }) =>
-                      `py-2 text-gray-600 font-medium transition-colors hover:text-purple-600 flex relative ${
-                        isActive
-                          ? 'text-purple-600 after:content-[""] after:absolute after:left-0 after:-bottom-5.25 after:w-full after:h-0.5 after:bg-purple-600'
-                          : ""
-                      }`
-                    }
-                  >
-                    {link.name}
-                  </NavLink>
-                )}
+        {/* Desktop links */}
+        <ul className="hidden items-center gap-1 lg:flex">
+          {navLinks.map((link) =>
+            link.category ? (
+              <li key={link.name} className="group relative">
+                <button
+                  type="button"
+                  className="flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold text-gray-600 transition-colors group-focus-within:text-gray-900 hover:text-gray-900"
+                >
+                  {link.name}
+                  <ChevronDown className="h-4 w-4 transition-transform duration-300 group-focus-within:rotate-180 group-hover:rotate-180" />
+                </button>
+                <div className="invisible absolute top-full left-1/2 w-72 -translate-x-1/2 translate-y-2 pt-3 opacity-0 transition-all duration-200 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                  <ul className="rounded-2xl bg-white p-2 shadow-xl ring-1 shadow-gray-900/10 ring-gray-100">
+                    {link.category.map((sublink) => (
+                      <li key={sublink.path}>
+                        <NavLink
+                          to={sublink.path}
+                          className={({ isActive }) =>
+                            `block rounded-xl px-4 py-3 transition-colors ${
+                              isActive ? "bg-brand-50" : "hover:bg-gray-50"
+                            }`
+                          }
+                        >
+                          <span className="block text-sm font-semibold text-gray-900">{sublink.name}</span>
+                          <span className="block text-xs text-gray-500">{sublink.description}</span>
+                        </NavLink>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </li>
-            ))}
-          </ul>
+            ) : (
+              <li key={link.name}>
+                <NavLink to={link.path} end={link.path === "/"} className={desktopLinkClass}>
+                  {link.name}
+                </NavLink>
+              </li>
+            )
+          )}
+        </ul>
 
-          {/* Desktop Call to Action Buttons */}
-          <div className="hidden md:flex items-center gap-4">
-            <button
-              onClick={onLoginClick}
-              className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-            >
-              Sign In
-            </button>
-            <button className="px-5 py-2.5 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm shadow-purple-200 transition-colors">
-              Add Listing
-            </button>
-          </div>
-
-          {/* Mobile Hamburger Icon */}
-          <div className="md:hidden flex items-center">
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className="text-gray-600 hover:text-purple-600 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-600 rounded-md p-1"
-            >
-              {isOpen ? (
-                <X className="w-6 h-6" />
-              ) : (
-                <Menu className="w-6 h-6" />
-              )}
-            </button>
-          </div>
+        {/* Desktop actions */}
+        <div className="hidden items-center gap-3 lg:flex">
+          <Link to="/offer" className="btn btn-primary relative px-5 py-2.5">
+            <FileText className="h-4 w-4" />
+            Make an Offer
+            {offerBadge}
+          </Link>
+          <AccountMenu onAuth={onAuth} />
         </div>
 
-        {/* Mobile Menu Content */}
+        {/* Mobile actions */}
+        <div className="flex items-center gap-1 lg:hidden">
+          <Link
+            to="/offer"
+            aria-label="Your offer list"
+            className="relative grid h-10 w-10 place-items-center rounded-full text-gray-700 hover:bg-gray-100"
+          >
+            <FileText className="h-5 w-5" />
+            {offerBadge}
+          </Link>
+          <AccountMenu onAuth={onAuth} compact />
+          <button
+            onClick={() => setIsOpen(true)}
+            aria-label="Open menu"
+            aria-expanded={isOpen}
+            className="grid h-10 w-10 place-items-center rounded-full text-gray-700 hover:bg-gray-100"
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+        </div>
+      </nav>
+
+      {/* Mobile drawer */}
+      <AnimatePresence>
         {isOpen && (
-          <div className="md:hidden absolute top-full left-0 w-full bg-white border-b border-gray-100 shadow-xl flex flex-col px-4 pt-2 pb-6 space-y-2 max-h-[calc(100vh-80px)] overflow-y-auto">
-            {navLinks.map((link, index) => (
-              <div key={index} className="border-b border-gray-50 pb-2">
-                {link.category ? (
-                  <div>
-                    <button
-                      onClick={() => setMobileDropdown(!mobileDropdown)}
-                      className="flex items-center justify-between w-full py-3 text-gray-700 font-medium hover:text-purple-600"
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={closeMenu}
+              className="absolute inset-0 bg-gray-950/50 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="absolute inset-y-0 right-0 flex h-dvh w-[85%] max-w-sm flex-col bg-white shadow-2xl"
+            >
+              <div className="flex h-16 items-center justify-between border-b border-gray-100 px-5">
+                <Logo />
+                <button
+                  onClick={closeMenu}
+                  aria-label="Close menu"
+                  className="grid h-10 w-10 place-items-center rounded-full text-gray-700 hover:bg-gray-100"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-3 py-4">
+                {navLinks.map((link) =>
+                  link.category ? (
+                    <div key={link.name} className="py-2">
+                      <p className="px-3 pb-1 text-xs font-semibold tracking-wider text-gray-400 uppercase">
+                        {link.name}
+                      </p>
+                      {link.category.map((sublink) => (
+                        <NavLink
+                          key={sublink.path}
+                          to={sublink.path}
+                          onClick={closeMenu}
+                          className={({ isActive }) =>
+                            `block rounded-xl px-3 py-3 text-base font-semibold transition-colors ${
+                              isActive ? "bg-brand-50 text-brand-600" : "text-gray-700 hover:bg-gray-50"
+                            }`
+                          }
+                        >
+                          {sublink.name}
+                        </NavLink>
+                      ))}
+                    </div>
+                  ) : (
+                    <NavLink
+                      key={link.name}
+                      to={link.path}
+                      end={link.path === "/"}
+                      onClick={closeMenu}
+                      className={({ isActive }) =>
+                        `block rounded-xl px-3 py-3 text-base font-semibold transition-colors ${
+                          isActive ? "bg-brand-50 text-brand-600" : "text-gray-700 hover:bg-gray-50"
+                        }`
+                      }
                     >
-                      <span>{link.name}</span>
-                      <ChevronDown
-                        className={`w-4 h-4 transition-transform ${mobileDropdown ? "rotate-180" : ""}`}
-                      />
-                    </button>
-                    {mobileDropdown && (
-                      <div className="flex flex-col space-y-1 pl-4 mt-1">
-                        {link.category.map((sublink, idx) => (
-                          <NavLink
-                            key={idx}
-                            to={sublink.path}
-                            onClick={() => setIsOpen(false)}
-                            className={({ isActive }) =>
-                              `block px-3 py-2 text-sm font-medium transition-colors ${
-                                isActive
-                                  ? "text-purple-600 bg-purple-50 rounded-md"
-                                  : "text-gray-600 hover:bg-gray-50 hover:text-purple-600 rounded-md"
-                              }`
-                            }
-                          >
-                            {sublink.name}
-                          </NavLink>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <NavLink
-                    to={link.path}
-                    onClick={() => setIsOpen(false)}
-                    className={({ isActive }) =>
-                      `block py-3 px-3 text-gray-700 font-medium transition-colors hover:text-purple-600 ${
-                        isActive
-                          ? "text-purple-600 bg-purple-50 rounded-md"
-                          : "hover:bg-gray-50 rounded-md"
-                      }`
-                    }
-                  >
-                    {link.name}
-                  </NavLink>
+                      {link.name}
+                    </NavLink>
+                  )
                 )}
               </div>
-            ))}
-            <div className="flex flex-col gap-3 pt-6">
-              <NavLink
-                to="/login"
-                onClick={() => setIsOpen(false)}
-                className="text-center py-3 text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
-              >
-                Sign In
-              </NavLink>
-              <button className="text-center py-3 text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-md shadow-purple-200 transition-colors">
-                Add Listing
-              </button>
-            </div>
+
+              <div className="grid gap-3 border-t border-gray-100 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+                {!isAuthenticated && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => {
+                        closeMenu();
+                        onAuth("login");
+                      }}
+                      className="btn btn-light w-full"
+                    >
+                      Sign In
+                    </button>
+                    <button
+                      onClick={() => {
+                        closeMenu();
+                        onAuth("signup");
+                      }}
+                      className="btn btn-light w-full"
+                    >
+                      Create Account
+                    </button>
+                  </div>
+                )}
+                <Link to="/offer" onClick={closeMenu} className="btn btn-primary w-full">
+                  Make an Offer {makeOffer.length > 0 && `(${makeOffer.length})`}
+                </Link>
+              </div>
+            </motion.div>
           </div>
         )}
-      </nav>
-    </div>
+      </AnimatePresence>
+    </header>
   );
-}
+};
 
-export default Navbar
+export default Navbar;

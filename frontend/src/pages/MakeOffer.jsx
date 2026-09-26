@@ -1,356 +1,207 @@
-import React, { useState } from 'react';
-import { useRealEstate } from '../context/RealEstateProvider';
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  DollarSign, 
-  CreditCard, 
-  Building2,
-  Home,
-  MapPin,
-  Bed,
-  Bath,
-  Maximize2,
-  Send,
-  CheckCircle,
-  AlertCircle,
-  ArrowLeft,
-  Smartphone,
-  Landmark
-} from 'lucide-react';
-import { motion } from 'framer-motion';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion } from 'motion/react';
+import { ArrowLeft, Bath, Bed, CheckCircle2, Home, Info, Loader2, MapPin, Send, Trash2 } from 'lucide-react';
+import { useRealEstate } from '../context/useRealEstate';
+import { formatLocation, formatPrice } from '../utils/property';
 
 const MakeOffer = () => {
   const navigate = useNavigate();
-  const { makeOffer, properties, setMakeOffer } = useRealEstate();
-  const [paymentMethod, setPaymentMethod] = useState('momo');
+  const { makeOffer, properties, setMakeOffer, removeFromOffer } = useRealEstate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [formData, setFormData] = useState({
     fullname: "",
     email: "",
     phone: "",
-    price: 0
+    price: "",
+    message: "",
   });
+  const timers = useRef([]);
 
-  const myProperties = makeOffer.map((id) =>{
-    const property = properties.find((item) => item.id === id);
-    return property;
-  })
+  const selected = makeOffer.map((id) => properties.find((item) => item.id === id)).filter(Boolean);
+
+  // Cancel pending timers if the user leaves the page mid-submit
+  useEffect(() => {
+    const pending = timers.current;
+    return () => pending.forEach(clearTimeout);
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
-    // Simulate API call
-    console.log(myProperties, formData);
-    setMakeOffer([])
-    setTimeout(() => {
+
+    // Simulate API call. Replace with a real request that sends
+    // { propertyIds: makeOffer, ...formData } to the backend.
+    timers.current.push(setTimeout(() => {
+      setMakeOffer([]);
       setIsSubmitting(false);
       setSubmitSuccess(true);
-      setTimeout(() => {
-        navigate('/listings');
-      }, 2000);
-    }, 1500);
+      timers.current.push(setTimeout(() => navigate('/listings'), 4000));
+    }, 1500));
   };
 
   if (submitSuccess) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="grid min-h-[70vh] place-items-center bg-gray-50 px-4 py-16">
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
+          initial={{ opacity: 0, scale: 0.94 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="text-center max-w-md bg-white rounded-2xl p-8 shadow-xl"
+          className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-xl sm:p-10"
         >
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-10 h-10 text-green-500" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Offer Submitted!</h2>
-          <p className="text-gray-600 mb-6">
+          <span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-emerald-50">
+            <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+          </span>
+          <h1 className="mt-6 text-2xl font-extrabold text-gray-900">Offer submitted!</h1>
+          <p className="mt-2 text-gray-600">
             Your offer has been sent successfully. The property owner will contact you shortly.
           </p>
-          <Link to="/properties">
-            <button className="bg-[#9810fa] text-white px-6 py-2 rounded-lg hover:bg-[#7a0cc8] transition-colors">
-              Browse More Properties
-            </button>
+          <Link to="/listings" className="btn btn-primary mt-8">
+            Browse More Properties
           </Link>
+          <p className="mt-4 text-xs text-gray-400">Taking you back to listings in a moment...</p>
         </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-8 md:py-12">
-      <div className="container mx-auto px-4 max-w-6xl">
-        
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <Link to="/properties" className="inline-flex items-center gap-2 text-gray-500 hover:text-[#9810fa] transition-colors mb-4">
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to Properties</span>
-          </Link>
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Make an Offer</h1>
-          <p className="text-gray-600 mt-2">Submit your offer for the property you're interested in</p>
-        </motion.div>
+    <div className="bg-gray-50 py-10 sm:py-14">
+      <div className="container-page">
+        <Link to="/listings" className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-brand-600">
+          <ArrowLeft className="h-4 w-4" />
+          Back to listings
+        </Link>
+        <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">Make an Offer</h1>
+        <p className="mt-2 text-gray-600">Submit your offer for the properties you're interested in.</p>
 
-        <div className="flex flex-col lg:flex-row gap-8">
-          
-          {/* Properties Section */}
-          <motion.div
-            initial={{ opacity: 0, x: -30 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="lg:w-1/2"
-          >
-            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-[#9810fa]" />
-              Your Selected Properties
+        <div className="mt-10 grid gap-8 lg:grid-cols-5">
+          {/* Selected properties */}
+          <section className="lg:col-span-3">
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-gray-900">
+              Your selected properties
+              <span className="rounded-full bg-brand-100 px-2.5 py-0.5 text-sm text-brand-700">{selected.length}</span>
             </h2>
-            
-            <div className="space-y-4">
-              {makeOffer.length === 0 ? (
-                <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
-                  <Home className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No properties selected</p>
-                  <Link to="/listings">
-                    <button className="mt-4 text-[#9810fa] font-semibold hover:underline">
-                      Browse Properties
-                    </button>
-                  </Link>
-                </div>
-              ) : (
-                makeOffer.map((offer, index) => {
-                  const item = properties.find((property) => String(property.id) === String(offer));
-                  if (!item) return null;
 
-                  return (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, y: 20 }}
+            {selected.length === 0 ? (
+              <div className="rounded-3xl bg-white px-6 py-16 text-center ring-1 ring-gray-200/80">
+                <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gray-50 text-gray-400">
+                  <Home className="h-8 w-8" />
+                </span>
+                <p className="mt-5 font-semibold text-gray-900">No properties selected yet</p>
+                <p className="mt-1 text-sm text-gray-500">Open a property and tap "Make an Offer" to add it here.</p>
+                <Link to="/listings" className="btn btn-primary mt-6">
+                  Browse Properties
+                </Link>
+              </div>
+            ) : (
+              <ul className="space-y-4">
+                <AnimatePresence initial={false}>
+                  {selected.map((item) => (
+                    <motion.li
+                      key={item.id}
+                      layout
+                      initial={{ opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300"
+                      exit={{ opacity: 0, x: -30 }}
+                      className="flex gap-4 rounded-3xl bg-white p-3 ring-1 ring-gray-200/80 sm:p-4"
                     >
-                      <div className="flex flex-col sm:flex-row">
-                        {/* Image */}
-                        <div className="sm:w-32 h-32 bg-gray-100 overflow-hidden">
-                          <img 
-                            src={item.media.images[0]} 
-                            alt={item.title}
-                            className="w-full h-full object-cover hover:scale-110 transition-transform duration-500"
-                          />
+                      <Link to={`/house/${item.id}`} className="shrink-0">
+                        <img
+                          src={item.media.images[0]}
+                          alt={item.title}
+                          className="h-24 w-24 rounded-2xl object-cover sm:h-28 sm:w-36"
+                        />
+                      </Link>
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <div className="flex items-start justify-between gap-2">
+                          <Link to={`/house/${item.id}`} className="font-bold text-gray-900 hover:text-brand-600">
+                            {item.title}
+                          </Link>
+                          <button
+                            onClick={() => removeFromOffer(item.id)}
+                            aria-label={`Remove ${item.title}`}
+                            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-gray-400 transition hover:bg-red-50 hover:text-red-500"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
-                        
-                        {/* Details */}
-                        <div className="flex-1 p-4">
-                          <h3 className="font-bold text-gray-800 mb-1">{item.title}</h3>
-                          <div className="flex flex-wrap gap-3 mb-2 text-sm text-gray-500">
-                            <span className="flex items-center gap-1">
-                              <Bed className="w-3.5 h-3.5" />
-                              {item.property.bedrooms} beds
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Bath className="w-3.5 h-3.5" />
-                              {item.property.bathrooms} baths
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Maximize2 className="w-3.5 h-3.5" />
-                              {item.property.size.value} {item.property.size.unit}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 text-sm text-gray-500">
-                            <MapPin className="w-3.5 h-3.5 text-[#9810fa]" />
-                            <span>{item.location.name}, {item.location.region}</span>
-                          </div>
-                          <div className="mt-2">
-                            <span className="text-lg font-bold text-[#9810fa]">
-                              {item.property.status === "Sale" 
-                                ? `₵${item.pricing.amount?.toLocaleString()}`
-                                : item.pricing.perNight 
-                                  ? `₵${item.pricing.perNight.toLocaleString()}/night`
-                                  : `₵${item.pricing.perMonth?.toLocaleString()}/month`
-                              }
-                            </span>
-                          </div>
+                        <p className="flex items-center gap-1 text-sm text-gray-500">
+                          <MapPin className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{formatLocation(item.location)}</span>
+                        </p>
+                        <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2">
+                          <span className="flex items-center gap-3 text-xs text-gray-500">
+                            <span className="flex items-center gap-1"><Bed className="h-3.5 w-3.5" />{item.property.bedrooms}</span>
+                            <span className="flex items-center gap-1"><Bath className="h-3.5 w-3.5" />{item.property.bathrooms}</span>
+                          </span>
+                          <span className="font-extrabold text-brand-600">{formatPrice(item)}</span>
                         </div>
                       </div>
-                    </motion.div>
-                  );
-                })
-              )}
-            </div>
-          </motion.div>
+                    </motion.li>
+                  ))}
+                </AnimatePresence>
+              </ul>
+            )}
+          </section>
 
-          {/* Offer Form Section */}
-          <motion.div
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="lg:w-1/2"
-          >
-            <div className="bg-white rounded-2xl shadow-lg p-6 md:p-8">
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">Formal Property Offer</h2>
-              <p className="text-gray-500 text-sm mb-6">Fill in your details and submit your offer</p>
-
-              <form onSubmit={handleSubmit} className="space-y-5">
-                {/* Full Name */}
+          {/* Offer form */}
+          <section className="lg:col-span-2">
+            <form onSubmit={handleSubmit} className="space-y-4 rounded-3xl bg-white p-6 ring-1 ring-gray-200/80 sm:p-8 lg:sticky lg:top-28">
+              <h2 className="text-lg font-bold text-gray-900">Your details</h2>
+              <div>
+                <label htmlFor="fullname" className="mb-1.5 block text-sm font-medium text-gray-700">Full name</label>
+                <input id="fullname" name="fullname" value={formData.fullname} onChange={handleChange} required autoComplete="name" placeholder="Enter your full name" className="field" />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    <span className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-[#9810fa]" />
-                      Full Name
-                    </span>
-                  </label>
-                  <input
-                    type="text"
-                    name="fullname"
-                    value={formData.fullname}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#9810fa] focus:ring-2 focus:ring-[#9810fa]/20 transition-all"
-                    placeholder="Enter your full name"
-                  />
+                  <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-gray-700">Email</label>
+                  <input id="email" type="email" name="email" value={formData.email} onChange={handleChange} required autoComplete="email" placeholder="you@example.com" className="field" />
                 </div>
-
-                {/* Email */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    <span className="flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-[#9810fa]" />
-                      Email Address
-                    </span>
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#9810fa] focus:ring-2 focus:ring-[#9810fa]/20 transition-all"
-                    placeholder="you@example.com"
-                  />
+                  <label htmlFor="phone" className="mb-1.5 block text-sm font-medium text-gray-700">Phone</label>
+                  <input id="phone" type="tel" name="phone" value={formData.phone} onChange={handleChange} required autoComplete="tel" placeholder="+233 ..." className="field" />
                 </div>
-
-                {/* Phone */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    <span className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-[#9810fa]" />
-                      Phone Number
-                    </span>
-                  </label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#9810fa] focus:ring-2 focus:ring-[#9810fa]/20 transition-all"
-                    placeholder="+233 XX XXX XXXX"
-                  />
+              </div>
+              <div>
+                <label htmlFor="price" className="mb-1.5 block text-sm font-medium text-gray-700">Your offer (GHS)</label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 font-semibold text-gray-400">₵</span>
+                  <input id="price" type="number" min="1" inputMode="numeric" name="price" value={formData.price} onChange={handleChange} required placeholder="Enter your offer amount" className="field pl-9" />
                 </div>
+              </div>
+              <div>
+                <label htmlFor="message" className="mb-1.5 block text-sm font-medium text-gray-700">
+                  Message <span className="text-gray-400">(optional)</span>
+                </label>
+                <textarea id="message" name="message" rows={3} value={formData.message} onChange={handleChange} placeholder="Anything the owner should know?" className="field resize-none" />
+              </div>
 
-                {/* Offer Price */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    <span className="flex items-center gap-2">
-                      <DollarSign className="w-4 h-4 text-[#9810fa]" />
-                      Offer Price (GHS)
-                    </span>
-                  </label>
-                  <input
-                    type="number"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleChange}
-                    required
-                    min="0"
-                    step="1000"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-[#9810fa] focus:ring-2 focus:ring-[#9810fa]/20 transition-all"
-                    placeholder="Enter your offer amount"
-                  />
-                </div>
+              <p className="flex items-start gap-2 rounded-2xl bg-sky-50 p-4 text-sm text-sky-800">
+                <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                Your offer is sent to the listing agent, who will contact you to discuss next steps.
+              </p>
 
-                {/* Payment Method */}
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-[#9810fa]" />
-                    Payment Method
-                  </h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('momo')}
-                      className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all ${
-                        paymentMethod === 'momo'
-                          ? 'border-[#9810fa] bg-[#9810fa]/5 text-[#9810fa]'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                      }`}
-                    >
-                      <Smartphone className="w-4 h-4" />
-                      <span className="text-sm font-medium">Mobile Money</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('bank')}
-                      className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all ${
-                        paymentMethod === 'bank'
-                          ? 'border-[#9810fa] bg-[#9810fa]/5 text-[#9810fa]'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                      }`}
-                    >
-                      <Landmark className="w-4 h-4" />
-                      <span className="text-sm font-medium">Bank Transfer</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Note */}
-                <div className="bg-blue-50 rounded-lg p-4 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-blue-700">
-                    By submitting this offer, you agree to our terms and conditions. 
-                    The property owner will review your offer and contact you within 24-48 hours.
-                  </p>
-                </div>
-
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={isSubmitting || makeOffer.length === 0}
-                  className={`w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all ${
-                    isSubmitting || makeOffer.length === 0
-                      ? 'bg-gray-300 cursor-not-allowed'
-                      : 'bg-[#9810fa] hover:bg-[#7a0cc8] shadow-lg hover:shadow-xl'
-                  } text-white`}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Submitting...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-5 h-5" />
-                      <span>Submit Offer</span>
-                    </>
-                  )}
-                </button>
-              </form>
-            </div>
-          </motion.div>
+              <button type="submit" disabled={isSubmitting || selected.length === 0} className="btn btn-primary w-full py-3.5">
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Submit Offer
+                  </>
+                )}
+              </button>
+            </form>
+          </section>
         </div>
       </div>
     </div>

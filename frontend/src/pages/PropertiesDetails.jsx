@@ -1,368 +1,427 @@
-import { useNavigate, useParams } from "react-router-dom";
-import { useRealEstate } from "../context/RealEstateProvider";
-import { useEffect, useState } from "react";
-import { 
-  Home, 
-  MapPin, 
-  Bed, 
-  Bath, 
-  Maximize2, 
-  ChevronRight,
-  Heart,
-  Share2,
-  Phone,
-  Mail,
-  MessageCircle,
-  CheckCircle,
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { motion } from "motion/react";
+import {
+  Bath,
+  Bed,
   Building2,
-  User,
+  Check,
+  CheckCircle2,
+  ChevronRight,
+  Eye,
+  FileText,
+  Heart,
+  Mail,
+  MessageSquare,
+  MessageCircle,
+  AlertCircle,
+  BadgeCheck,
+  MapPin,
+  Maximize2,
+  Phone,
+  Share2,
   Star,
-  Clock,
-  Shield,
-  Wifi,
-  Wind,
-  Coffee,
-  Car,
-  Award
 } from "lucide-react";
-import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
+import { useRealEstate } from "../context/useRealEstate";
+import HouseCard from "../components/card/HouseCard";
+import Reveal from "../components/ui/Reveal";
+import NotFound from "./NotFound";
+import PageLoader from "../components/ui/PageLoader";
+import InquiryModal from "../components/InquiryModal";
+import { useAuth } from "../context/useAuth";
+import { usePlatform } from "../context/usePlatform";
+import StartChatModal from "../components/chat/StartChatModal";
+import WhatsAppIcon from "../components/ui/WhatsAppIcon";
+import StatusBadge from "../components/ui/StatusBadge";
+import { buildWhatsAppLink } from "../utils/whatsapp";
+import { formatType, getInitials, getPriceParts, statusLabel } from "../utils/property";
 
 const PropertiesDetails = () => {
   const { id } = useParams();
-  const { properties,setMakeOffer } = useRealEstate();
-  const [propertiesData, setPropertiesData] = useState(null);
-  const [thumbnails, setThumbnails] = useState("");
-  const [price, setPrice] = useState("");
-  const [isLiked, setIsLiked] = useState(false);
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
   const navigate = useNavigate();
+  const location = useLocation();
+  const { properties, propertiesLoading, agents, makeOffer, addToOffer, isFavorite, toggleFavorite, recordView } = useRealEstate();
+  const { user } = useAuth();
+  const { settings } = usePlatform();
+  const [inquiryOpen, setInquiryOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const viewedRef = useRef(null);
+  const [activeImage, setActiveImage] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
 
+  const property = properties.find((item) => item.id === id);
+
+  // Count one view per visit for agent listings (not the owner viewing their own listing)
   useEffect(() => {
-    const fetchPropertyData = () => {
-      const getProperty = properties.find((item) => item.id === id);
-      if (getProperty) {
-        setPropertiesData(getProperty);
-        setThumbnails(getProperty.media.images[0]);
-        setActiveImageIndex(0);
+    if (!property || viewedRef.current === id) return;
+    viewedRef.current = id;
+    if (property.owner?.type === "agent" && property.owner.id !== user?.id) recordView(id);
+  }, [id, property, user, recordView]);
 
-        let isForSale = getProperty.property.status === "Sale"
-            ? `₵${getProperty.pricing.amount?.toLocaleString()}`
-            : getProperty.pricing.perNight
-              ? `₵${getProperty.pricing.perNight.toLocaleString()}/night`
-              : `₵${getProperty.pricing.perMonth?.toLocaleString()}/month`;
-        setPrice(isForSale);
-      }
-    };
+  if (!property && propertiesLoading) return <PageLoader label="Loading property..." />;
 
-    fetchPropertyData();
-  }, [id, properties]);
-
-  if (!propertiesData) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-[#9810fa] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading property details...</p>
-        </div>
-      </div>
-    );
+  if (!property) {
+    return <NotFound message="This property doesn't exist or is no longer listed." />;
   }
 
-  // Get property specs
-  const getPropertySpecs = () => {
-    const specs = [];
-    if (propertiesData.property.bedrooms) {
-      specs.push({ icon: Bed, label: "Bedrooms", value: propertiesData.property.bedrooms });
+  const { title, description, location: place, property: details, features, media, agent, meta } = property;
+  const { value, period } = getPriceParts(property);
+  const images = media.images;
+  const liked = isFavorite(id);
+  const inOffer = makeOffer.includes(id);
+  const isForSale = details.status === "Sale";
+
+  // Contact always goes to the real owner: HomeBase (admin listings) or the listing agent
+  const isAdminListing = property.owner.type === "admin";
+  const availability = property.listing.availability;
+  const unavailable = availability === "Sold" || availability === "Rented";
+  const ownerName = isAdminListing ? settings.platform.name : agent.name;
+  const ownerPhone = isAdminListing ? settings.platform.phone : agent.phone;
+  const ownerEmail = isAdminListing ? settings.platform.email : agent.email;
+  const whatsappNumber = isAdminListing ? settings.contact?.whatsapp : agent.phone;
+  const whatsappLink = buildWhatsAppLink(whatsappNumber, property, window.location.href);
+  const agentProfile = !isAdminListing ? agents.find((a) => a.id === agent.id) : null;
+  const listingCount = agentProfile?.properties.length || 1;
+  const isOwnListing = Boolean(user) && ((isAdminListing && user.role === "admin") || property.ownerUserId === user.id);
+
+  const openChat = () => {
+    if (!user) {
+      navigate("/login", { state: { from: location.pathname } });
+      return;
     }
-    if (propertiesData.property.bathrooms) {
-      specs.push({ icon: Bath, label: "Bathrooms", value: propertiesData.property.bathrooms });
-    }
-    if (propertiesData.property.size) {
-      specs.push({ icon: Maximize2, label: "Size", value: `${propertiesData.property.size.value} ${propertiesData.property.size.unit}` });
-    }
-    return specs;
+    setChatOpen(true);
   };
 
-  // Get status color
-  const getStatusColor = () => {
-    if (propertiesData.property.status === "Sale") return "bg-green-500";
-    return "bg-blue-500";
+  const specs = [
+    details.bedrooms != null && { icon: Bed, label: "Bedrooms", value: details.bedrooms },
+    details.bathrooms != null && { icon: Bath, label: "Bathrooms", value: details.bathrooms },
+    details.size && { icon: Maximize2, label: "Size", value: `${details.size.value} ${details.size.unit}` },
+    { icon: Building2, label: "Type", value: formatType(details.type) },
+  ].filter(Boolean);
+
+  const similar = properties
+    .filter((item) => item.id !== id && item.property.status === details.status)
+    .sort((a, b) => Number(b.location.name === place.name) - Number(a.location.name === place.name))
+    .slice(0, 3);
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    } catch {
+      // The user closed the share sheet
+    }
   };
 
-  // Get pricing type
-  const getPricingType = () => {
-    if (propertiesData.property.status === "Sale") return "For Sale";
-    if (propertiesData.pricing.perNight) return "Per Night";
-    return "Per Month";
+  const handleMakeOffer = () => {
+    addToOffer(id);
+    navigate("/offer");
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 md:py-12">
-      <div className="container mx-auto px-4 max-w-7xl">
-        
+    <div className="bg-white pb-28 lg:pb-8">
+      <div className="container-page pt-6 sm:pt-10">
         {/* Breadcrumb */}
+        <nav aria-label="Breadcrumb" className="mb-6 flex flex-wrap items-center gap-1.5 text-sm text-gray-500">
+          <Link to="/" className="hover:text-brand-600">Home</Link>
+          <ChevronRight className="h-3.5 w-3.5" />
+          <Link to={isForSale ? "/sale" : "/rent"} className="hover:text-brand-600">{statusLabel(details.status)}</Link>
+          <ChevronRight className="h-3.5 w-3.5" />
+          <span className="truncate font-medium text-gray-900">{title}</span>
+        </nav>
+
+        {/* Title row */}
         <motion.div
-          initial={{ opacity: 0, y: -20 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center gap-2 text-sm text-gray-500 mb-6 flex-wrap"
+          transition={{ duration: 0.5 }}
+          className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between"
         >
-          <Link to="/" className="hover:text-[#9810fa] transition-colors flex items-center gap-1">
-            <Home className="w-4 h-4" />
-            Home
-          </Link>
-          <ChevronRight className="w-4 h-4" />
-          <Link to="/listings" className="hover:text-[#9810fa] transition-colors">
-            Listings
-          </Link>
-          <ChevronRight className="w-4 h-4" />
-          <span className="text-[#9810fa] font-semibold">{propertiesData.title}</span>
-        </motion.div>
-
-        <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
-          
-          {/* Image Gallery Section */}
-          <motion.div
-            initial={{ opacity: 0, x: -30 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="lg:w-1/2"
-          >
-            <div className="sticky top-24">
-              {/* Main Image */}
-              <div className="relative bg-white rounded-2xl overflow-hidden shadow-lg mb-4">
-                <img
-                  src={thumbnails}
-                  alt={propertiesData.title}
-                  className="w-full h-[400px] md:h-[500px] object-cover"
-                />
-                
-                {/* Status Badge */}
-                <div className={`absolute top-4 left-4 ${getStatusColor()} text-white px-3 py-1.5 rounded-lg text-sm font-semibold`}>
-                  {propertiesData.property.status}
-                </div>
-                
-                {/* Action Buttons */}
-                <div className="absolute top-4 right-4 flex gap-2">
-                  <button
-                    onClick={() => setIsLiked(!isLiked)}
-                    className="bg-white/90 backdrop-blur-sm p-2 rounded-full hover:bg-white transition-all"
-                  >
-                    <Heart className={`w-5 h-5 ${isLiked ? "fill-red-500 text-red-500" : "text-gray-600"}`} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Thumbnails */}
-              <div className="flex gap-3 overflow-x-auto pb-2">
-                {propertiesData.media.images.map((image, index) => (
-                  <motion.div
-                    key={index}
-                    whileHover={{ scale: 1.05 }}
-                    onClick={() => {
-                      setThumbnails(image);
-                      setActiveImageIndex(index);
-                    }}
-                    className={`flex-shrink-0 w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${
-                      activeImageIndex === index ? "border-[#9810fa] shadow-lg" : "border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    <img
-                      src={image}
-                      alt={`Thumbnail ${index + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Property Details Section */}
-          <motion.div
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="lg:w-1/2"
-          >
-            {/* Title */}
-            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-3">
-              {propertiesData.title}
-            </h1>
-
-            {/* Location */}
-            <div className="flex items-center gap-2 text-gray-500 mb-4">
-              <MapPin className="w-4 h-4 text-[#9810fa]" />
-              <span className="text-sm">
-                {propertiesData.location.name}, {propertiesData.location.city}, {propertiesData.location.region}
+          <div>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isForSale ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-700"}`}>
+                {statusLabel(details.status)}
               </span>
+              <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 capitalize">
+                {formatType(details.type)}
+              </span>
+              {meta?.isFeatured && (
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">Featured</span>
+              )}
             </div>
-
-            {/* Price */}
-            <div className="mb-6">
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl md:text-4xl font-bold text-[#9810fa]">{price}</span>
-                <span className="text-gray-500 text-sm">{getPricingType()}</span>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">*Inclusive of all taxes and fees</p>
-            </div>
-
-            {/* Property Specs */}
-            <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-white rounded-xl shadow-sm">
-              {getPropertySpecs().map((spec, index) => {
-                const Icon = spec.icon;
-                return (
-                  <div key={index} className="text-center">
-                    <Icon className="w-5 h-5 text-[#9810fa] mx-auto mb-1" />
-                    <p className="text-xs text-gray-500">{spec.label}</p>
-                    <p className="font-semibold text-gray-800">{spec.value}</p>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Features Tags */}
-            <div className="mb-6">
-              <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-[#9810fa]" />
-                Key Features
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {propertiesData.features.map((feature, index) => (
-                  <span
-                    key={index}
-                    className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm flex items-center gap-1"
-                  >
-                    <CheckCircle className="w-3 h-3 text-[#9810fa]" />
-                    {feature}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Description */}
-            <div className="mb-6">
-              <h3 className="font-semibold text-gray-800 mb-3">Description</h3>
-              <p className="text-gray-600 leading-relaxed">{propertiesData.description}</p>
-            </div>
-
-            {/* Agent Info */}
-            <div className="mb-6 p-4 bg-gradient-to-r from-[#9810fa]/5 to-transparent rounded-xl">
-              <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                <User className="w-5 h-5 text-[#9810fa]" />
-                Listed By
-              </h3>
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                  <p className="font-medium text-gray-800">{propertiesData.agent.name}</p>
-                  <div className="flex items-center gap-4 mt-2">
-                    <a href={`tel:${propertiesData.agent.phone}`} className="flex items-center gap-1 text-sm text-gray-600 hover:text-[#9810fa] transition-colors">
-                      <Phone className="w-3.5 h-3.5" />
-                      {propertiesData.agent.phone}
-                    </a>
-                    <a href={`mailto:${propertiesData.agent.email}`} className="flex items-center gap-1 text-sm text-gray-600 hover:text-[#9810fa] transition-colors">
-                      <Mail className="w-3.5 h-3.5" />
-                      Email
-                    </a>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button className="flex items-center gap-2 px-4 py-2 bg-[#9810fa] text-white rounded-lg hover:bg-[#7a0cc8] transition-all">
-                    <Phone className="w-4 h-4" />
-                    <a href={`tel:${propertiesData.agent.phone}`}>Call</a>
-                  </button>
-                  <button className="flex items-center gap-2 px-4 py-2 border border-[#9810fa] text-[#9810fa] rounded-lg hover:bg-[#9810fa] hover:text-white transition-all">
-                    <MessageCircle className="w-4 h-4" />
-                    Message
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-4">
-              <button className="flex-1 py-3.5 bg-[#9810fa] text-white rounded-xl font-semibold hover:bg-[#7a0cc8] transition-all shadow-lg hover:shadow-xl">
-                Schedule a Tour
-              </button>
-              <button onClick={() => {setMakeOffer((prev) => prev.includes(propertiesData.id)? prev : [...prev, propertiesData.id] );
-              navigate("/offer");
-              window.scrollTo(0,0)
-              }} className="flex-1 py-3.5 border-2 border-[#9810fa] text-[#9810fa] rounded-xl font-semibold hover:bg-[#9810fa] hover:text-white transition-all">
-                Make an Offer
-              </button>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Additional Information Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="mt-12 pt-8 border-t border-gray-200"
-        >
-          <div className="grid md:grid-cols-2 gap-8">
-            
-            {/* Amenities */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm">
-              <h3 className="font-bold text-xl text-gray-800 mb-4 flex items-center gap-2">
-                <Award className="w-6 h-6 text-[#9810fa]" />
-                Amenities
-              </h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Shield className="w-4 h-4 text-[#9810fa]" />
-                  <span className="text-sm">24/7 Security</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Wifi className="w-4 h-4 text-[#9810fa]" />
-                  <span className="text-sm">High-Speed WiFi</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Wind className="w-4 h-4 text-[#9810fa]" />
-                  <span className="text-sm">Air Conditioning</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Coffee className="w-4 h-4 text-[#9810fa]" />
-                  <span className="text-sm">Fully Furnished</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Car className="w-4 h-4 text-[#9810fa]" />
-                  <span className="text-sm">Parking Space</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Building2 className="w-4 h-4 text-[#9810fa]" />
-                  <span className="text-sm">Power Backup</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Location Details */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm">
-              <h3 className="font-bold text-xl text-gray-800 mb-4 flex items-center gap-2">
-                <MapPin className="w-6 h-6 text-[#9810fa]" />
-                Location Details
-              </h3>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-gray-500">Full Address</p>
-                  <p className="text-gray-800 font-medium">{propertiesData.location.address}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">City</p>
-                  <p className="text-gray-800 font-medium">{propertiesData.location.city}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Region</p>
-                  <p className="text-gray-800 font-medium">{propertiesData.location.region}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Nearby Landmarks</p>
-                  <p className="text-gray-800 font-medium">Shopping Mall, Schools, Hospital</p>
-                </div>
-              </div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-balance text-gray-900 sm:text-4xl lg:text-5xl">{title}</h1>
+            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-gray-600">
+              <span className="flex items-center gap-1.5">
+                <MapPin className="h-4 w-4 text-brand-500" />
+                {place.address}, {place.name}, {place.city}
+              </span>
+              {meta?.rating && (
+                <span className="flex items-center gap-1.5">
+                  <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                  <span className="font-semibold text-gray-900">{meta.rating.toFixed(1)}</span> rating
+                </span>
+              )}
+              {meta?.views && (
+                <span className="flex items-center gap-1.5">
+                  <Eye className="h-4 w-4" />
+                  {meta.views.toLocaleString()} views
+                </span>
+              )}
             </div>
           </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => toggleFavorite(id)}
+              aria-pressed={liked}
+              className={`btn btn-light ${liked ? "text-brand-600 ring-brand-200" : ""}`}
+            >
+              <Heart className={`h-4 w-4 ${liked ? "fill-brand-500 text-brand-500" : ""}`} />
+              {liked ? "Saved" : "Save"}
+            </button>
+            <button onClick={handleShare} className="btn btn-light">
+              {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Share2 className="h-4 w-4" />}
+              {copied ? "Link copied" : "Share"}
+            </button>
+          </div>
         </motion.div>
+
+        {availability !== "Available" && (
+          <p className={`mb-6 flex items-start gap-3 rounded-2xl p-4 text-sm ring-1 ${unavailable ? "bg-gray-900 text-white ring-gray-900" : "bg-amber-50 text-amber-900 ring-amber-100"}`}>
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+            {unavailable
+              ? `This property has been ${availability.toLowerCase()} and is no longer available. You can still contact the owner about similar properties.`
+              : "This property is under offer. You can still contact the owner to register your interest."}
+          </p>
+        )}
+
+        {/* Gallery */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.6, delay: 0.1 }}
+          className="overflow-hidden rounded-3xl bg-gray-100"
+        >
+          <img
+            src={images[activeImage]}
+            alt={title}
+            fetchPriority="high"
+            className="aspect-4/3 w-full object-cover sm:aspect-16/9 lg:aspect-21/9"
+          />
+        </motion.div>
+        {images.length > 1 && (
+          <div className="mt-3 flex gap-3 overflow-x-auto no-scrollbar">
+            {images.map((image, index) => (
+              <button
+                key={image}
+                onClick={() => setActiveImage(index)}
+                aria-label={`Show image ${index + 1}`}
+                className={`h-20 w-28 shrink-0 overflow-hidden rounded-xl ring-2 transition ${index === activeImage ? "ring-brand-500" : "ring-transparent opacity-70 hover:opacity-100"}`}
+              >
+                <img src={image} alt="" className="h-full w-full object-cover" />
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-10 grid gap-10 lg:grid-cols-3 lg:gap-12">
+          {/* Main column */}
+          <div className="lg:col-span-2">
+            <Reveal className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {specs.map((spec) => (
+                <div key={spec.label} className="rounded-2xl bg-gray-50 p-4">
+                  <spec.icon className="h-5 w-5 text-brand-500" />
+                  <p className="mt-3 text-lg font-bold text-gray-900">{spec.value}</p>
+                  <p className="text-xs text-gray-500">{spec.label}</p>
+                </div>
+              ))}
+            </Reveal>
+
+            <Reveal className="mt-10">
+              <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">About this property</h2>
+              <p className={`mt-4 leading-relaxed text-gray-600 ${expanded ? "" : "line-clamp-5"}`}>{description}</p>
+              <button
+                onClick={() => setExpanded((prev) => !prev)}
+                className="mt-2 text-sm font-semibold text-brand-600 hover:text-brand-800"
+              >
+                {expanded ? "Show less" : "Read more"}
+              </button>
+            </Reveal>
+
+            {features?.length > 0 && (
+              <Reveal className="mt-10">
+                <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">Features</h2>
+                <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {features.map((feature) => (
+                    <li key={feature} className="flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 text-sm font-medium text-gray-800">
+                      <CheckCircle2 className="h-5 w-5 shrink-0 text-brand-500" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+              </Reveal>
+            )}
+
+            <Reveal className="mt-10">
+              <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">Location</h2>
+              <dl className="mt-4 grid gap-3 rounded-2xl bg-gray-50 p-5 text-sm sm:grid-cols-2">
+                {[
+                  ["Address", place.address],
+                  ["Neighbourhood", place.name],
+                  ["City", place.city],
+                  ["Region", place.region],
+                ].map(([label, text]) => (
+                  <div key={label}>
+                    <dt className="text-gray-500">{label}</dt>
+                    <dd className="font-semibold text-gray-900">{text}</dd>
+                  </div>
+                ))}
+              </dl>
+            </Reveal>
+          </div>
+
+          {/* Sidebar */}
+          <aside className="lg:col-span-1">
+            <div className="space-y-5 lg:sticky lg:top-28">
+              <div className="rounded-3xl bg-white p-6 shadow-xl ring-1 shadow-gray-900/5 ring-gray-100">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-gray-500">{isForSale ? "Asking price" : "Rental price"}</p>
+                  {availability !== "Available" && <StatusBadge status={availability} />}
+                </div>
+                <p className={`mt-1 ${unavailable ? "text-gray-400 line-through decoration-2" : ""}`}>
+                  <span className={`text-3xl font-extrabold tracking-tight ${unavailable ? "" : "text-gray-900"}`}>{value}</span>
+                  {period && <span className="text-base font-medium text-gray-500">{period}</span>}
+                </p>
+
+                {/* Contact the owner */}
+                {isOwnListing ? (
+                  <p className="mt-6 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">This is your listing. Customer chats appear in your Messages.</p>
+                ) : (
+                  <div className="mt-6 grid gap-3">
+                    <button onClick={openChat} className="btn btn-primary w-full py-3.5">
+                      <MessageCircle className="h-4 w-4" />
+                      Chat with {isAdminListing ? "HomeBase" : "Agent"}
+                    </button>
+                    <div className="grid grid-cols-2 gap-3">
+                      {whatsappLink && (
+                        <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="btn bg-emerald-600 px-3 text-white hover:bg-emerald-700">
+                          <WhatsAppIcon />
+                          WhatsApp
+                        </a>
+                      )}
+                      <button onClick={() => setInquiryOpen(true)} className={`btn btn-light px-3 ${whatsappLink ? "" : "col-span-2"}`}>
+                        <MessageSquare className="h-4 w-4" />
+                        Send inquiry
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!unavailable && !isOwnListing && (
+                  <div className="mt-5 flex items-center gap-2 border-t border-gray-100 pt-5">
+                    <button onClick={handleMakeOffer} className="btn btn-light flex-1 px-3">
+                      <FileText className="h-4 w-4" />
+                      Make an Offer
+                    </button>
+                    <button onClick={() => addToOffer(id)} disabled={inOffer} aria-label="Add to offer list" title={inOffer ? "In your offer list" : "Add to offer list"} className="btn btn-light px-4 disabled:opacity-100">
+                      {inOffer ? <Check className="h-4 w-4 text-emerald-600" /> : "+"}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Owner */}
+              <div className="rounded-3xl bg-gray-50 p-6">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold tracking-wider text-gray-500 uppercase">Listed by</p>
+                  <StatusBadge status={isAdminListing ? "HomeBase listing" : "Agent listing"} tone={isAdminListing ? "gray" : "brand"} dot={false} />
+                </div>
+                <div className="mt-4 flex items-center gap-4">
+                  <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-brand-500 text-lg font-bold text-white">
+                    {isAdminListing ? <BadgeCheck className="h-7 w-7" /> : getInitials(ownerName)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-bold text-gray-900">{ownerName}</span>
+                    <span className="text-sm text-gray-500">
+                      {isAdminListing ? "Verified HomeBase listing" : `${listingCount} ${listingCount === 1 ? "listing" : "listings"} on HomeBase`}
+                    </span>
+                  </span>
+                </div>
+                <div className="mt-5 space-y-2 text-sm">
+                  {ownerPhone && (
+                    <a href={`tel:${ownerPhone.replace(/\s+/g, "")}`} className="flex items-center gap-2 text-gray-700 hover:text-brand-600">
+                      <Phone className="h-4 w-4 text-gray-400" />
+                      {ownerPhone}
+                    </a>
+                  )}
+                  {ownerEmail && (
+                    <a href={`mailto:${ownerEmail}`} className="flex items-center gap-2 break-all text-gray-700 hover:text-brand-600">
+                      <Mail className="h-4 w-4 shrink-0 text-gray-400" />
+                      {ownerEmail}
+                    </a>
+                  )}
+                </div>
+                {!isAdminListing && (
+                  <Link to={`/agent/${agent.id}`} className="btn btn-light mt-5 w-full bg-white">
+                    View agent profile
+                  </Link>
+                )}
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        {/* Similar */}
+        {similar.length > 0 && (
+          <section className="mt-20">
+            <div className="mb-8 flex items-end justify-between gap-4">
+              <h2 className="text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl">Similar properties</h2>
+              <Link to={isForSale ? "/sale" : "/rent"} className="text-sm font-semibold text-brand-600 hover:text-brand-800">
+                View all
+              </Link>
+            </div>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {similar.map((item, index) => (
+                <Reveal key={item.id} delay={index * 0.08} className="h-full">
+                  <HouseCard house={item} />
+                </Reveal>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
+
+      <InquiryModal key={property.id} property={property} open={inquiryOpen} onClose={() => setInquiryOpen(false)} />
+      <StartChatModal key={`chat-${property.id}`} property={property} ownerName={ownerName} open={chatOpen} onClose={() => setChatOpen(false)} />
+
+      {/* Phones: contact actions stay within reach */}
+      {!isOwnListing && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-lg lg:hidden">
+          <div className={`grid gap-2 ${whatsappLink ? "grid-cols-3" : "grid-cols-2"}`}>
+            <button onClick={openChat} className="btn btn-primary px-2 text-xs sm:text-sm">
+              <MessageCircle className="h-4 w-4" />
+              Chat
+            </button>
+            {whatsappLink && (
+              <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="btn bg-emerald-600 px-2 text-xs text-white hover:bg-emerald-700 sm:text-sm">
+                <WhatsAppIcon />
+                WhatsApp
+              </a>
+            )}
+            <button onClick={() => setInquiryOpen(true)} className="btn btn-light px-2 text-xs sm:text-sm">
+              <MessageSquare className="h-4 w-4" />
+              Inquiry
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
