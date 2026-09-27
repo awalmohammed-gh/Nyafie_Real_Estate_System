@@ -90,7 +90,7 @@ const ChatThread = ({ conversationId, onBack, onChanged }) => {
     );
   }
 
-  const { conversation, messages } = data;
+  const { conversation, messages, offer } = data;
   const isOwnerSide = conversation.side === "owner";
   const counterpart = isOwnerSide ? conversation.customer : conversation.owner;
   const closed = conversation.status === "closed";
@@ -111,6 +111,13 @@ const ChatThread = ({ conversationId, onBack, onChanged }) => {
           <Link to={`/house/${conversation.property.id}`} className="block truncate text-sm text-brand-600 hover:underline">
             {conversation.property.title}
           </Link>
+          {offer && (
+            <p className="truncate text-xs text-gray-500">
+              Offer: <span className="font-semibold text-gray-900">₵{offer.amount.toLocaleString()}</span>
+              {offer.counterAmount && offer.status === "countered" && ` · Counter ₵${offer.counterAmount.toLocaleString()}`}
+              {` · ${offer.status}`}
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {isOwnerSide && counterpart?.phone && (

@@ -10,11 +10,16 @@ import FilterTabs from "../../components/ui/FilterTabs";
 import SearchInput from "../../components/ui/SearchInput";
 import StatusBadge from "../../components/ui/StatusBadge";
 import ActionMenu from "../../components/ui/ActionMenu";
+import SidePanel from "../../components/ui/SidePanel";
 import Modal from "../../components/ui/Modal";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import EmptyState from "../../components/ui/EmptyState";
 import { formatDate } from "../../utils/date";
 import { formatPrice, formatType, getApprovalStatus, getListingStatus, statusLabel } from "../../utils/property";
+import { usePlatform } from "../../context/usePlatform";
+import { useViewMode } from "../../hooks/useViewMode";
+import PropertyTile from "../../components/dashboard/PropertyTile";
+import ViewToggle from "../../components/dashboard/ViewToggle";
 
 const EditPropertyModal = ({ property, onClose }) => {
   const { updateListing } = useAdminData();
@@ -76,6 +81,7 @@ const EditPropertyModal = ({ property, onClose }) => {
 };
 
 const AdminProperties = () => {
+  const { siteName } = usePlatform();
   const { listings, ownerOf, isPubliclyVisible, setListingState, setFeatured, deleteListing, updateListing, users } = useAdminData();
   const run = useAsyncAction();
   const navigate = useNavigate();
@@ -87,6 +93,7 @@ const AdminProperties = () => {
   const [rejecting, setRejecting] = useState(null);
   const [reason, setReason] = useState("");
   const [deleting, setDeleting] = useState(null);
+  const [view, setView] = useViewMode("admin-properties");
 
   const ownerId = params.get("owner");
   const ownerFilterName = ownerId && users.find((u) => u.id === ownerId)?.name;
@@ -144,11 +151,8 @@ const AdminProperties = () => {
     const owner = ownerOf(p);
     return (
       <div className="min-w-0">
-        <p className="truncate font-medium text-gray-800">{owner.name}</p>
-        <div className="mt-0.5 flex items-center gap-1.5">
-          <StatusBadge status={`${owner.type} listing`} tone={owner.type === "Admin" ? "gray" : "brand"} dot={false} />
-          {owner.type === "Admin" && p.agent && <span className="truncate text-xs text-gray-500">{p.agent.name}</span>}
-        </div>
+        <p className="truncate text-gray-800">{owner.name}</p>
+        <p className="truncate text-xs text-gray-500">{owner.type === "Admin" ? `${siteName} listing` : "Agent listing"}</p>
       </div>
     );
   };
@@ -158,6 +162,7 @@ const AdminProperties = () => {
     return (
       <div className="flex flex-wrap items-center gap-1.5">
         <StatusBadge status={getListingStatus(p, visible)} />
+        {p.listing.state === "published" && !["Available", getListingStatus(p, visible)].includes(p.listing.availability) && <StatusBadge status={p.listing.availability} dot={false} />}
         {p.meta?.isFeatured && <StatusBadge status="Featured" dot={false} />}
       </div>
     );
@@ -168,21 +173,20 @@ const AdminProperties = () => {
       key: "property",
       header: "Property",
       render: (p) => (
-        <button onClick={() => setParam("open", p.id)} className="flex items-center gap-3 text-left">
-          <img src={p.media.images[0]} alt="" className="h-12 w-16 shrink-0 rounded-lg bg-slate-100 object-cover" />
+        <div className="flex min-w-0 items-center gap-3">
+          <img src={p.media.images[0]} alt="" className="h-10 w-14 shrink-0 rounded-md bg-gray-100 object-cover" />
           <span className="min-w-0">
-            <span className="block max-w-56 truncate font-semibold text-gray-900 hover:text-brand-600">{p.title}</span>
-            <span className="block text-xs text-gray-500">{formatType(p.property.type)} · {statusLabel(p.property.status)}</span>
+            <span className="block max-w-56 truncate font-medium text-gray-900">{p.title}</span>
+            <span className="block text-xs text-gray-500"><span className="capitalize">{formatType(p.property.type)}</span> · {statusLabel(p.property.status)}</span>
           </span>
-        </button>
+        </div>
       ),
     },
-    { key: "owner", header: "Owner", render: ownerCell },
-    { key: "price", header: "Price", render: (p) => <span className="font-semibold whitespace-nowrap text-gray-900">{formatPrice(p)}</span> },
-    { key: "location", header: "Location", render: (p) => <span className="whitespace-nowrap text-gray-600">{p.location.name}, {p.location.city}</span> },
-    { key: "status", header: "Listing", render: listingBadge },
-    { key: "approval", header: "Approval", render: (p) => <StatusBadge status={getApprovalStatus(p)} /> },
-    { key: "added", header: "Added", render: (p) => <span className="whitespace-nowrap text-gray-600">{formatDate(p.listing.createdAt)}</span> },
+    { key: "location", header: "Location", render: (p) => <span className="block max-w-40 truncate text-gray-600">{p.location.name}, {p.location.city}</span> },
+    { key: "price", header: "Price", render: (p) => <span className="font-medium whitespace-nowrap text-gray-900">{formatPrice(p)}</span> },
+    { key: "owner", header: "Agent / owner", render: ownerCell },
+    { key: "status", header: "Status", render: listingBadge },
+    { key: "added", header: "Added", render: (p) => <span className="whitespace-nowrap text-gray-500">{formatDate(p.listing.createdAt)}</span> },
     { key: "actions", header: <span className="sr-only">Actions</span>, align: "right", render: (p) => <ActionMenu actions={actionsFor(p)} label={`Actions for ${p.title}`} /> },
   ];
 
@@ -190,7 +194,7 @@ const AdminProperties = () => {
     <>
       <AdminPageTitle
         title="Properties"
-        description="Every listing on the platform, from HomeBase and agents."
+        description={`Every listing on the platform, from ${siteName} and agents.`}
         action={<Link to="/admin/properties/add" className="btn btn-primary"><Plus className="h-4 w-4" />Add Property</Link>}
       />
 
@@ -209,7 +213,7 @@ const AdminProperties = () => {
         />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <SearchInput value={query} onChange={setQuery} placeholder="Search title, area or owner" className="sm:w-80" />
-          <select value={ownerType} onChange={(e) => setOwnerType(e.target.value)} aria-label="Filter by owner type" className="field rounded-full sm:w-44">
+          <select value={ownerType} onChange={(e) => setOwnerType(e.target.value)} aria-label="Filter by owner type" className="field py-2 sm:w-44">
             <option value="all">All owners</option>
             <option value="admin">Admin</option>
             <option value="agent">Agents</option>
@@ -220,13 +224,41 @@ const AdminProperties = () => {
               <X className="h-4 w-4" />
             </button>
           )}
+          <div className="flex items-center justify-between gap-3 sm:ml-auto">
+            <p className="text-sm text-gray-500 sm:hidden">{rows.length} {rows.length === 1 ? "property" : "properties"}</p>
+            <ViewToggle value={view} onChange={setView} />
+          </div>
         </div>
       </div>
 
+      {view === "grid" ? (
+        rows.length === 0 ? (
+          listings.length === 0 ? (
+            <EmptyState icon={Building2} title="No properties yet" description="Properties added to the platform will appear here." action={<Link to="/admin/properties/add" className="btn btn-primary px-3.5 py-2"><Plus className="h-4 w-4" />Add Property</Link>} />
+          ) : (
+            <EmptyState icon={Building2} title="No properties here" description="Nothing matches these filters." />
+          )
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {rows.map((p, i) => (
+              <PropertyTile
+                key={p.id}
+                index={i}
+                property={p}
+                owner={ownerOf(p).name}
+                status={getListingStatus(p, p.listing.state !== "published" || isPubliclyVisible(p))}
+                actions={actionsFor(p)}
+                onOpen={() => setParam("open", p.id)}
+              />
+            ))}
+          </div>
+        )
+      ) : (
       <DataTable
         columns={columns}
         rows={rows}
-        minWidth={1080}
+        minWidth={980}
+        onRowClick={(p) => setParam("open", p.id)}
         empty={<EmptyState icon={Building2} title="No properties here" description="Nothing matches these filters." />}
         mobileCard={(p) => (
           <div className="flex gap-3">
@@ -244,14 +276,14 @@ const AdminProperties = () => {
           </div>
         )}
       />
+      )}
 
       {/* View / moderate */}
-      <Modal
+      <SidePanel
         open={Boolean(viewed)}
         onClose={() => setParam("open", null)}
         title={viewed?.title}
         description={viewed && `${formatType(viewed.property.type)} · ${statusLabel(viewed.property.status)} · added ${formatDate(viewed.listing.createdAt)}`}
-        size="lg"
         footer={
           viewed && (
             <>
@@ -270,23 +302,23 @@ const AdminProperties = () => {
       >
         {viewed && (
           <div className="space-y-5">
-            <img src={viewed.media.images[0]} alt="" className="aspect-16/9 w-full rounded-2xl bg-slate-100 object-cover" />
+            <img src={viewed.media.images[0]} alt="" className="aspect-video w-full rounded-lg bg-gray-100 object-cover" />
             {viewed.media.images.length > 1 && (
               <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                {viewed.media.images.slice(1).map((src, i) => <img key={i} src={src} alt="" className="h-16 w-24 shrink-0 rounded-xl object-cover" />)}
+                {viewed.media.images.slice(1).map((src, i) => <img key={i} src={src} alt="" className="h-14 w-20 shrink-0 rounded-md object-cover" />)}
               </div>
             )}
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-2xl font-extrabold text-gray-900">{formatPrice(viewed)}</p>
+              <p className="text-xl font-semibold text-gray-900">{formatPrice(viewed)}</p>
               <div className="flex flex-wrap gap-2">
                 {listingBadge(viewed)}
                 <StatusBadge status={`Approval: ${getApprovalStatus(viewed)}`} tone={{ Pending: "amber", Rejected: "red", Approved: "green" }[getApprovalStatus(viewed)] || "gray"} />
               </div>
             </div>
             {viewed.listing.state === "rejected" && viewed.listing.rejectionReason && (
-              <p className="rounded-2xl bg-red-50 p-4 text-sm text-red-800"><span className="font-semibold">Rejection reason:</span> {viewed.listing.rejectionReason}</p>
+              <p className="rounded-lg bg-red-50 p-4 text-sm text-red-800"><span className="font-semibold">Rejection reason:</span> {viewed.listing.rejectionReason}</p>
             )}
-            <dl className="grid grid-cols-2 gap-4 rounded-2xl bg-slate-50 p-4 text-sm sm:grid-cols-3">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border border-gray-200 p-4 text-sm sm:grid-cols-3">
               {[
                 ["Owner", `${ownerOf(viewed).name} (${ownerOf(viewed).type})`],
                 ["Contact", viewed.agent?.name || "—"],
@@ -320,7 +352,7 @@ const AdminProperties = () => {
             </div>
           </div>
         )}
-      </Modal>
+      </SidePanel>
 
       {editing && <EditPropertyModal property={editing} onClose={() => setEditing(null)} />}
 

@@ -48,6 +48,18 @@ export const buildAgents = (properties) => {
   });
 };
 
+/**
+ * The public agents list: every available agent from the directory API (so an agent with no
+ * published listing yet still appears), with stats from their public listings where they have any.
+ * Without the directory (request failed), falls back to agents found on listings.
+ */
+export const mergeAgents = (directory, properties) => {
+  const withListings = new Map(buildAgents(properties).map((a) => [String(a.id), a]));
+  if (!directory) return [...withListings.values()];
+  const empty = { rating: null, saleCount: 0, rentCount: 0, views: 0, locations: [], properties: [] };
+  return directory.map((d) => ({ ...empty, ...withListings.get(d.id), id: d.id, name: d.name, phone: d.phone, email: d.email, joinedAt: d.joinedAt }));
+};
+
 // "East Legon, Accra", but just "Kumasi" when the neighbourhood is the city
 export const formatLocation = ({ name, city }) => (name === city ? name : `${name}, ${city}`);
 

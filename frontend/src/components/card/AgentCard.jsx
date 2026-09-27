@@ -44,14 +44,16 @@ const AgentCard = ({ agent }) => {
 
         <p className="mt-4 mb-6 flex items-start gap-1.5 text-sm text-gray-500">
           <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
-          {agent.locations.join(" · ")}
+          {agent.locations.length ? agent.locations.join(" · ") : "No listings yet"}
         </p>
 
         <div className="relative z-10 mt-auto flex items-center gap-2">
-          <a href={`tel:${agent.phone.replace(/\s+/g, "")}`} className="btn btn-light flex-1 px-4 py-2.5">
-            <Phone className="h-4 w-4" />
-            Call
-          </a>
+          {agent.phone && (
+            <a href={`tel:${agent.phone.replace(/\s+/g, "")}`} className="btn btn-light flex-1 px-4 py-2.5">
+              <Phone className="h-4 w-4" />
+              Call
+            </a>
+          )}
           <a href={`mailto:${agent.email}`} className="btn btn-light flex-1 px-4 py-2.5">
             <Mail className="h-4 w-4" />
             Email

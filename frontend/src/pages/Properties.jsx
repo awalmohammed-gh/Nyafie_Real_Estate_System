@@ -1,11 +1,9 @@
 import { useSearchParams } from 'react-router-dom';
-import { useRealEstate } from '../context/useRealEstate';
 import PropertyBrowser from '../components/PropertyBrowser';
 
-// Shows every property; the Hero search and neighbourhood tiles link here with
+// Server-side property search; the Hero search and neighbourhood tiles link here with
 // ?status=, ?area= and ?type= to pre-fill the filters.
 const Properties = () => {
-  const { properties } = useRealEstate();
   const [searchParams] = useSearchParams();
 
   const status = searchParams.get('status') || '';
@@ -16,7 +14,6 @@ const Properties = () => {
   return (
     <PropertyBrowser
       key={searchParams.toString()}
-      properties={properties}
       title={isSearch ? 'Search Results' : 'All Properties'}
       description={
         isSearch
@@ -24,7 +21,7 @@ const Properties = () => {
           : 'Browse every property we have available for sale and rent.'
       }
       heroImage="/listBg.jpg"
-      initialFilters={{ status, area, types: type ? [type] : [] }}
+      initialFilters={{ listingType: status, area, types: type ? [type] : [] }}
     />
   );
 };

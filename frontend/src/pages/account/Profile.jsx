@@ -1,19 +1,24 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { ArrowRight, BadgeCheck, Loader2 } from "lucide-react";
 import AccountShell from "../../components/account/AccountShell";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { useAuth } from "../../context/useAuth";
 import { useToast } from "../../context/useToast";
 import { formatDate } from "../../utils/date";
+import { usePlatform } from "../../context/usePlatform";
 
 const Profile = () => {
-  const { user, isAgent, isActive, updateProfile } = useAuth();
+  const { siteName } = usePlatform();
+  const { user, isAgent, isAdmin, isActive, updateProfile } = useAuth();
   const { toast } = useToast();
   const [form, setForm] = useState({ firstName: user.firstName, lastName: user.lastName, phone: user.phone || "" });
   const [saving, setSaving] = useState(false);
 
   const dirty = form.firstName !== user.firstName || form.lastName !== user.lastName || form.phone !== (user.phone || "");
+
+  // Admins have no customer profile; their account lives in the admin console
+  if (isAdmin) return <Navigate to="/admin/settings" replace />;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -83,7 +88,7 @@ const Profile = () => {
           ) : (
             <>
               <p className="mt-1 text-xl font-bold text-gray-900">Home seeker</p>
-              <p className="mt-3 text-sm text-gray-600">List your own properties and receive inquiries by becoming a HomeBase agent.</p>
+              <p className="mt-3 text-sm text-gray-600">List your own properties and receive inquiries by becoming a {siteName} agent.</p>
               <Link to="/agent/plans" className="btn btn-primary mt-5 w-full">
                 Become an Agent
                 <ArrowRight className="h-4 w-4" />

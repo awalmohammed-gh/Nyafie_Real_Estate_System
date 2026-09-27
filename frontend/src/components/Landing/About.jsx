@@ -2,7 +2,8 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, CloudSun, HandMetal, House, Shield, Star } from 'lucide-react';
 import aboutImg from "../../assets/aboutImg.jpg";
 import Reveal from '../ui/Reveal';
-import { useRealEstate } from '../../context/useRealEstate';
+import { propertyApi } from "../../frontApi";
+import { useApiQuery } from "../../hooks/useApiQuery";
 
 const features = [
   {
@@ -28,9 +29,9 @@ const features = [
 ];
 
 const About = () => {
-  const { properties } = useRealEstate();
-  // A highly rated listing to show beside the main photo
-  const spotlight = [...properties].sort((a, b) => (b.meta?.rating || 0) - (a.meta?.rating || 0))[0];
+  // The highest-rated listing, shown beside the main photo (only when one has a rating)
+  const top = useApiQuery("home-top-rated", () => propertyApi.searchProperties({ sort: "rating", limit: 1 }));
+  const spotlight = top.data?.items.find((p) => p.meta?.rating);
 
   return (
     <section id="about" className="scroll-mt-20 py-20 sm:py-28">

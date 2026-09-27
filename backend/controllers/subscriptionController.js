@@ -1,27 +1,16 @@
-import crypto from "crypto";
 import Plan from "../models/Plan.js";
 import Subscription from "../models/Subscription.js";
 import User from "../models/User.js";
 import { loadUser } from "./authController.js";
 import { subscriptionState } from "../utils/permissions.js";
 import { ok, fail } from "../utils/response.js";
+import { paymentMode as paystackMode, paystack, newReference, isPaystackPaid } from "../utils/paystack.js";
+import { getSettings } from "../models/Setting.js";
+
+// Subscription payments need Paystack and the admin's "subscription payments" switch
+const paymentMode = async () => (paystackMode() === "paystack" && (await getSettings()).payments.subscriptionsEnabled ? "paystack" : "disabled");
 
 const DAY = 24 * 60 * 60 * 1000;
-const PAYSTACK = "https://api.paystack.co";
-
-// Test mode: allowed only outside production when no Paystack key is configured
-const paymentMode = () => {
-  if (process.env.PAYSTACK_SECRET_KEY) return "paystack";
-  return process.env.NODE_ENV === "production" ? "disabled" : "test";
-};
-
-const paystack = async (path, options = {}) => {
-  const response = await fetch(`${PAYSTACK}${path}`, {
-    ...options,
-    headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`, "Content-Type": "application/json" },
-  });
-  return response.json();
-};
 
 /**
  * Activates a paid subscription and makes the user an agent. The server
@@ -58,33 +47,30 @@ export const activateSubscription = async (subscription, extra = {}) => {
 // GET /api/subscriptions/current
 export const currentSubscription = async (req, res) => {
   const subscription = req.user.subscription ? await Subscription.findById(req.user.subscription).populate("plan") : null;
-  ok(res, { subscription, state: subscriptionState(subscription), paymentMode: paymentMode() });
+  ok(res, { subscription, state: subscriptionState(subscription), paymentMode: await paymentMode() });
 };
 
 // POST /api/subscriptions/initialize { planId, method } -> starts a payment
 export const initializePayment = async (req, res) => {
   if (req.user.role === "admin") return fail(res, 403, "Admins manage plans from the admin console.");
-  const mode = paymentMode();
-  if (mode === "disabled") return fail(res, 503, "Payments are not configured yet.");
+  if ((await paymentMode()) === "disabled") return fail(res, 503, "Subscription payments are not available right now.");
 
   const plan = await Plan.findById(req.body.planId).catch(() => null);
   const current = req.user.subscription ? await Subscription.findById(req.user.subscription) : null;
   const isCurrentPlan = current && String(current.plan) === String(plan?._id);
   if (!plan || (!plan.isActive && !isCurrentPlan)) return fail(res, 404, "This plan is not available.");
 
-  const reference = `HB-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+  const reference = newReference("HB");
   const subscription = await Subscription.create({
     user: req.user._id,
     plan: plan._id,
     planName: plan.name,
     amount: plan.price,
     paymentReference: reference,
-    paymentMethod: mode === "paystack" ? "Paystack" : String(req.body.method || "Test payment"),
+    paymentMethod: "Paystack",
     status: "pending",
     paymentStatus: "pending",
   });
-
-  if (mode === "test") return ok(res, { mode, reference, subscriptionId: subscription.id }, "Test payment started");
 
   const result = await paystack("/transaction/initialize", {
     method: "POST",
@@ -103,7 +89,7 @@ export const initializePayment = async (req, res) => {
     console.error("Paystack initialize failed:", result.message);
     return fail(res, 502, "Could not start the payment. Please try again.");
   }
-  ok(res, { mode, reference, authorizationUrl: result.data.authorization_url }, "Payment started");
+  ok(res, { mode: "paystack", reference, authorizationUrl: result.data.authorization_url }, "Payment started");
 };
 
 // POST /api/subscriptions/verify { reference } -> the server confirms the payment itself
@@ -114,15 +100,8 @@ export const verifyPayment = async (req, res) => {
   // Idempotent: verifying twice (e.g. a page refresh) returns the same result
   if (subscription.paymentStatus === "paid") return ok(res, await loadUser(req.user._id), "Subscription already active");
 
-  const mode = paymentMode();
-  let paid = false;
-  if (mode === "paystack") {
-    const result = await paystack(`/transaction/verify/${encodeURIComponent(subscription.paymentReference)}`);
-    const tx = result.data;
-    paid = result.status && tx?.status === "success" && tx.amount >= Math.round(subscription.amount * 100) && tx.currency === "GHS";
-  } else if (mode === "test") {
-    paid = req.body.simulate !== "decline"; // lets the UI demonstrate a declined payment
-  }
+  if (paystackMode() === "disabled") return fail(res, 503, "Payments are not configured yet.");
+  const paid = await isPaystackPaid(subscription.paymentReference, subscription.amount);
 
   if (!paid) {
     subscription.paymentStatus = "failed";

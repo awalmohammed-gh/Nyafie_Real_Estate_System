@@ -117,7 +117,7 @@ export const mapProperty = (p) => ({
   media: { images: p.images || [] },
   agent: {
     id: p.contact?.id || idOf(p.owner),
-    name: p.contact?.name || "HomeBase",
+    name: p.contact?.name || "",
     phone: p.contact?.phone || "",
     email: p.contact?.email || "",
   },
@@ -214,4 +214,142 @@ export const mapMessage = (m) => ({
   message: m.message,
   read: m.read,
   createdAt: m.createdAt,
+});
+
+// ---------- Offers & rentals ----------
+const mapListingSummary = (p) =>
+  p && typeof p === "object"
+    ? {
+        id: p.id,
+        title: p.title,
+        image: p.images?.[0] || "",
+        location: [p.location?.neighbourhood, p.location?.city].filter(Boolean).join(", "),
+        price: p.price,
+        pricePeriod: p.pricePeriod,
+        listingType: p.listingType,
+        availability: p.availability,
+      }
+    : { id: idOf(p), title: "Removed property", image: "", location: "" };
+
+const OFFER_STATUS = { pending: "Pending", accepted: "Accepted", rejected: "Rejected", countered: "Countered", withdrawn: "Withdrawn" };
+
+export const mapOffer = (o) => ({
+  id: o.id,
+  property: mapListingSummary(o.property),
+  customer: o.customer,
+  owner: o.owner,
+  ownerType: o.ownerType,
+  askingPrice: o.askingPrice,
+  amount: o.amount,
+  message: o.message || "",
+  status: OFFER_STATUS[o.status] || o.status,
+  counterAmount: o.counterAmount,
+  response: o.response || "",
+  respondedAt: o.respondedAt,
+  conversationId: o.conversation || null,
+  createdAt: o.createdAt,
+});
+
+
+// Who made each change to a rental or purchase request
+const mapHistory = (history = []) => history.map((h) => ({ ...h, statusLabel: h.status, at: h.at }));
+
+export const RENTAL_STATUS = {
+  pending: "Pending",
+  payment_pending: "Payment Pending",
+  paid: "Paid",
+  confirmed: "Confirmed",
+  active: "Active",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+const PAYMENT_STATUS = { pending: "Pending", paid: "Paid", failed: "Failed", duplicate: "Duplicate" };
+
+export const mapRental = (r) => ({
+  id: r.id,
+  property: mapListingSummary(r.property),
+  customer: r.customer,
+  owner: r.owner,
+  ownerType: r.ownerType,
+  startDate: r.startDate, // preferred move-in date
+  endDate: r.endDate,
+  pricePeriod: r.pricePeriod,
+  unitPrice: r.unitPrice,
+  units: r.units,
+  fees: r.fees || 0,
+  amount: r.amount,
+  statusKey: r.status,
+  status: RENTAL_STATUS[r.status] || r.status,
+  paymentStatus: PAYMENT_STATUS[r.paymentStatus] || r.paymentStatus,
+  paymentMethod: r.paymentMethod,
+  contactName: r.contactName,
+  contactPhone: r.contactPhone,
+  contactEmail: r.contactEmail,
+  currentAddress: r.currentAddress || "",
+  occupants: r.occupants,
+  notes: r.notes || "",
+  reference: r.paymentReference,
+  paidAt: r.paidAt,
+  conversationId: r.conversation || null,
+  history: mapHistory(r.history).map((h) => ({ ...h, statusLabel: RENTAL_STATUS[h.status] || h.status })),
+  canManage: Boolean(r.canManage),
+  createdAt: r.createdAt,
+});
+
+// ---------- Purchase (sale) requests ----------
+export const SALE_STATUS = {
+  pending: "Pending",
+  contacted: "Contacted",
+  offer_received: "Offer Received",
+  negotiating: "Negotiating",
+  approved: "Approved",
+  payment_pending: "Payment Pending",
+  paid_at_office: "Paid at Office",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  rejected: "Rejected",
+};
+export const SALE_PAYMENT_STATUS = { pending: "Pending", payment_requested: "Payment Requested", confirmed: "Payment Confirmed", failed: "Failed" };
+
+export const mapSaleRequest = (s) => ({
+  id: s.id,
+  property: mapListingSummary(s.property),
+  customer: s.customer,
+  owner: s.owner,
+  ownerType: s.ownerType,
+  askingPrice: s.askingPrice,
+  contactName: s.contactName,
+  contactEmail: s.contactEmail,
+  contactPhone: s.contactPhone,
+  message: s.message || "",
+  statusKey: s.status,
+  status: SALE_STATUS[s.status] || s.status,
+  paymentStatusKey: s.paymentStatus,
+  paymentStatus: SALE_PAYMENT_STATUS[s.paymentStatus] || s.paymentStatus,
+  amountPaid: s.amountPaid,
+  paymentConfirmedBy: s.paymentConfirmedBy,
+  paymentConfirmedAt: s.paymentConfirmedAt,
+  offer: s.offer, // the customer's latest offer on this property, if any
+  conversationId: s.conversation || null,
+  history: mapHistory(s.history).map((h) => ({ ...h, statusLabel: SALE_STATUS[h.status] || h.status })),
+  canManage: Boolean(s.canManage),
+  createdAt: s.createdAt,
+});
+
+// ---------- Payment records (rentals online, sales at the office) ----------
+export const mapPaymentRecord = (p) => ({
+  id: p.id,
+  kind: p.kind,
+  reference: p.reference,
+  amount: p.amount,
+  method: p.method,
+  status: PAYMENT_STATUS[p.status] || p.status,
+  customer: p.customer?.firstName ? `${p.customer.firstName} ${p.customer.lastName}` : "Deleted user",
+  property: p.property?.title || "Removed property",
+  ownerType: p.ownerType,
+  owner: p.ownerType === "admin" ? "Admin" : p.owner?.firstName ? `${p.owner.firstName} ${p.owner.lastName}` : "Agent",
+  confirmedBy: p.confirmedBy?.firstName ? `${p.confirmedBy.firstName} ${p.confirmedBy.lastName}` : null,
+  note: p.note || "",
+  paidAt: p.paidAt,
+  createdAt: p.createdAt,
 });

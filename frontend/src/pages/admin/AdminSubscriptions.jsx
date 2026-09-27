@@ -146,7 +146,7 @@ const AdminSubscriptions = () => {
               <StatusBadge status={viewing.sub.statusLabel} tone={subTone[viewing.sub.status]} />
               <StatusBadge status={`Payment ${viewing.subscription.paymentStatus}`} tone={payTone[viewing.subscription.paymentStatus]} dot={false} />
             </div>
-            <dl className="grid grid-cols-2 gap-4 rounded-2xl bg-slate-50 p-4 text-sm sm:grid-cols-3">
+            <dl className="grid grid-cols-2 gap-4 rounded-lg bg-slate-50 p-4 text-sm sm:grid-cols-3">
               {[
                 ["Plan", viewing.subscription.planName],
                 ["Amount", formatCedis(viewing.subscription.price)],
@@ -163,7 +163,7 @@ const AdminSubscriptions = () => {
             </dl>
             <div>
               <p className="mb-2 text-sm font-semibold text-gray-900">Payment history</p>
-              <ul className="divide-y divide-slate-100 rounded-2xl ring-1 ring-slate-200">
+              <ul className="divide-y divide-slate-100 rounded-lg ring-1 ring-slate-200">
                 {payments.filter((p) => p.userId === viewing.id).map((p) => (
                   <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
                     <span>

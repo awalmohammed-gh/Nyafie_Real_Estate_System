@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Headset } from "lucide-react";
 import Reveal from "./Reveal";
+import { usePlatform } from "../../context/usePlatform";
 
 const CtaBanner = () => {
+  const { paths } = usePlatform();
   return (
     <section className="container-page py-16 sm:py-20">
       <Reveal className="relative isolate overflow-hidden rounded-3xl bg-linear-to-br from-brand-500 to-brand-800 px-6 py-12 sm:px-12 sm:py-16">
@@ -22,11 +24,11 @@ const CtaBanner = () => {
             </p>
           </div>
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-            <Link to="/agents" className="btn bg-white text-brand-700 hover:bg-brand-50">
+            <Link to={paths.agents} className="btn bg-white text-brand-700 hover:bg-brand-50">
               Contact an Agent
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link to="/listings" className="btn bg-white/10 text-white ring-1 ring-white/30 hover:bg-white/20">
+            <Link to={paths.listings} className="btn bg-white/10 text-white ring-1 ring-white/30 hover:bg-white/20">
               Browse Listings
             </Link>
           </div>

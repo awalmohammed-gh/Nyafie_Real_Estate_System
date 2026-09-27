@@ -4,9 +4,18 @@ import Property from "../models/Property.js";
 import Inquiry from "../models/Inquiry.js";
 import Plan from "../models/Plan.js";
 import Subscription from "../models/Subscription.js";
-import Setting, { defaultSettings, getSettings } from "../models/Setting.js";
+import Offer from "../models/Offer.js";
+import Rental from "../models/Rental.js";
+import SaleRequest from "../models/SaleRequest.js";
+import Payment from "../models/Payment.js";
+import Conversation from "../models/Conversation.js";
+import Message from "../models/Message.js";
+import Notification from "../models/Notification.js";
+import Setting, { getSettings } from "../models/Setting.js";
+import { validateSection } from "../utils/settingsValidation.js";
+import { paymentStatus } from "../utils/paystack.js";
 import { COUNTED_STATES, subscriptionState } from "../utils/permissions.js";
-import { pickPropertyFields, validateForPublishing } from "./propertyController.js";
+import { checkPropertyOptions, pickPropertyFields, validateForPublishing } from "./propertyController.js";
 import { resolveImages } from "../utils/uploadImages.js";
 import { updateInquiryStatus } from "./inquiryController.js";
 import { activateSubscription } from "./subscriptionController.js";
@@ -105,6 +114,22 @@ export const deleteUser = async (req, res) => {
   const user = await User.findById(req.params.id).catch(() => null);
   if (!user) return fail(res, 404, "User not found.");
   if (user.role !== "user") return fail(res, 403, "Only customer accounts can be deleted. Suspend agents instead.");
+
+  // Remove the customer's open activity so it no longer shows (or counts) on the admin boards.
+  // Money that actually changed hands stays on record: paid rentals, confirmed or completed purchases,
+  // successful payments and accepted offers (they appear as "Deleted user").
+  const id = user._id;
+  const conversations = await Conversation.find({ customer: id }).select("_id");
+  await Promise.all([
+    Offer.deleteMany({ customer: id, status: { $ne: "accepted" } }),
+    Rental.deleteMany({ customer: id, paymentStatus: { $ne: "paid" } }),
+    SaleRequest.deleteMany({ customer: id, status: { $ne: "completed" }, paymentStatus: { $ne: "confirmed" } }),
+    Payment.deleteMany({ customer: id, status: { $in: ["pending", "failed"] } }),
+    Message.deleteMany({ conversation: { $in: conversations.map((c) => c._id) } }),
+    Conversation.deleteMany({ customer: id }),
+    Inquiry.deleteMany({ customer: id }),
+    Notification.deleteMany({ recipient: id }),
+  ]);
   await user.deleteOne();
   ok(res, null, "User deleted");
 };
@@ -185,8 +210,8 @@ export const listProperties = async (_req, res) => {
   ok(res, await Property.find().sort({ createdAt: -1 }));
 };
 
-// Public contact for HomeBase (admin) listings
-const platformContact = (settings) => ({ id: "homebase", name: settings.platform.name, phone: settings.platform.phone, email: settings.platform.email });
+// Public contact for admin-owned listings: the business details from Settings
+const platformContact = (settings) => ({ id: "homebase", name: settings.general.siteName, phone: settings.contact.phone, email: settings.contact.email });
 
 // POST /api/admin/properties -> admin-owned listing. No plan limits and no review:
 // it is published straight away (or saved as a draft). The admin is always the owner.
@@ -195,6 +220,8 @@ export const createProperty = async (req, res) => {
   const fields = pickPropertyFields(req.body);
   const images = Array.isArray(req.body.images) ? req.body.images : [];
   if (!fields.title || fields.title.length < 3) return fail(res, 400, "Give the property a title (at least 3 characters).");
+  const optionProblem = checkPropertyOptions(fields, settings);
+  if (optionProblem) return fail(res, 400, optionProblem);
   if (images.length > settings.property.maxImages) return fail(res, 400, `Up to ${settings.property.maxImages} photos per property.`);
 
   const draft = req.body.status === "draft";
@@ -225,6 +252,8 @@ export const updateProperty = async (req, res) => {
   if (!property) return fail(res, 404, "Property not found.");
   const settings = await getSettings();
   const fields = pickPropertyFields(req.body);
+  const optionProblem = checkPropertyOptions(fields, settings, property);
+  if (optionProblem) return fail(res, 400, optionProblem);
   if (fields.contact) fields.contact = { ...fields.contact, id: property.contact?.id || (property.ownerType === "admin" ? "homebase" : String(property.owner)) };
   Object.assign(property, fields);
   if (Array.isArray(req.body.images)) {
@@ -289,18 +318,41 @@ export const setInquiryStatus = async (req, res) => {
 
 // ---------- Settings ----------
 
-// PUT /api/admin/settings/:section
+// PUT /api/admin/settings/:section -> validates and saves one section (admins only, see adminRoutes)
 export const updateSettings = async (req, res) => {
   const { section } = req.params;
-  if (!defaultSettings[section]) return fail(res, 404, "Unknown settings section.");
-  // Only keys that exist in the defaults can be saved
-  const allowed = Object.keys(defaultSettings[section]);
   const current = await getSettings();
-  const next = { ...current[section] };
-  allowed.forEach((key) => {
-    if (req.body[key] !== undefined) next[key] = req.body[key];
-  });
-  if (section === "property") next.maxImages = Math.min(50, Math.max(1, Number(next.maxImages) || 1));
-  await Setting.updateOne({ key: "platform" }, { $set: { [section]: next } }, { upsert: true });
-  ok(res, await getSettings(), "Settings saved");
+  const next = await validateSection(section, req.body, current);
+  await Setting.updateOne({ key: "platform" }, { $set: { [section]: next, updatedBy: req.user._id } }, { upsert: true });
+  const saved = await getSettings();
+
+  // Admin-owned listings show the business name and contact details: keep them in step
+  if (section === "general" || section === "contact") {
+    const { id, ...contact } = platformContact(saved);
+    await Property.updateMany({ ownerType: "admin" }, { $set: { contact: { id, ...contact } } });
+  }
+  ok(res, saved, "Settings saved");
+};
+
+// GET /api/admin/settings/payment-status -> what is configured in .env, never the keys themselves
+export const getPaymentStatus = async (_req, res) => ok(res, paymentStatus());
+
+// PUT /api/admin/account -> the signed-in admin's own details. Changing the sign-in email needs the current password.
+export const updateAccount = async (req, res) => {
+  const admin = await User.findById(req.user._id).select("+password");
+  const { firstName, lastName, phone = "", email, currentPassword } = req.body;
+  if (!String(firstName || "").trim() || !String(lastName || "").trim()) return fail(res, 400, "First and last name are required.");
+  const nextEmail = String(email || "").trim().toLowerCase();
+  if (!/^\S+@\S+\.\S+$/.test(nextEmail)) return fail(res, 400, "Enter a valid email address.");
+
+  if (nextEmail !== admin.email) {
+    if (!(await admin.matchPassword(String(currentPassword || "")))) return fail(res, 400, "Enter your current password to change your sign-in email.");
+    if (await User.exists({ email: nextEmail, _id: { $ne: admin._id } })) return fail(res, 409, "Another account already uses this email.");
+    admin.email = nextEmail;
+  }
+  admin.firstName = String(firstName).trim();
+  admin.lastName = String(lastName).trim();
+  admin.phone = String(phone).trim().slice(0, 30);
+  await admin.save();
+  ok(res, await User.findById(admin._id).populate("subscription"), "Account updated");
 };

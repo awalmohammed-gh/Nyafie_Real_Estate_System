@@ -8,7 +8,7 @@ import Reveal from '../components/ui/Reveal';
 import SkeletonGrid from '../components/ui/SkeletonGrid';
 
 const Agents = () => {
-  const { agents, propertiesLoading } = useRealEstate();
+  const { agents, agentsLoading } = useRealEstate();
   const [searchTerm, setSearchTerm] = useState('');
 
   const term = searchTerm.trim().toLowerCase();
@@ -29,7 +29,7 @@ const Agents = () => {
         <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="flex items-center gap-2 text-gray-600">
             <Users className="h-5 w-5 text-brand-500" />
-            <span><span className="font-bold text-gray-900">{filteredAgents.length}</span> agents available</span>
+            <span><span className="font-bold text-gray-900">{filteredAgents.length}</span> {filteredAgents.length === 1 ? "agent" : "agents"} available</span>
           </p>
           <div className="relative w-full sm:max-w-sm">
             <Search className="pointer-events-none absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-gray-400" />
@@ -44,7 +44,7 @@ const Agents = () => {
           </div>
         </div>
 
-        {propertiesLoading ? (
+        {agentsLoading ? (
           <SkeletonGrid count={3} />
         ) : filteredAgents.length > 0 ? (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

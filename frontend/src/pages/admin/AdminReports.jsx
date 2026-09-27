@@ -4,13 +4,13 @@ import { BarChart, ProportionBar } from "../../components/ui/Charts";
 import { formatCedis, monthlySeries } from "../../utils/reports";
 
 const ReportCard = ({ title, description, total, children, className = "" }) => (
-  <section className={`rounded-2xl bg-white p-6 ring-1 ring-slate-200 ${className}`}>
+  <section className={`rounded-lg bg-white p-6 ring-1 ring-slate-200 ${className}`}>
     <div className="mb-5 flex items-start justify-between gap-4">
       <div>
         <h2 className="font-bold text-gray-900">{title}</h2>
         <p className="text-sm text-gray-500">{description}</p>
       </div>
-      {total != null && <p className="shrink-0 text-right text-xl font-extrabold text-gray-900 tabular-nums">{total}</p>}
+      {total != null && <p className="shrink-0 text-right text-xl font-semibold text-gray-900 tabular-nums">{total}</p>}
     </div>
     {children}
   </section>
@@ -38,7 +38,7 @@ const AdminReports = () => {
 
   return (
     <>
-      <AdminPageTitle title="Reports" description="Platform trends over the last 6 months. Figures come from the demo data." />
+      <AdminPageTitle title="Reports" description="Platform trends over the last 6 months, calculated from the records in the database." />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <ReportCard title="Subscription revenue" description="Paid agent subscriptions per month" total={formatCedis(sumValues(revenue, "revenue"))} className="lg:col-span-2">

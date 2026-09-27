@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowRight, ArrowUp, Clock, Heart, Mail, MapPin, Phone } from 'lucide-react';
+import { usePlatform } from '../context/usePlatform';
+import BrandLogo from '../components/brand/BrandLogo';
+import SocialLinks from '../components/brand/SocialLinks';
+import { businessContactItems } from '../utils/contact';
 
 const exploreLinks = [
   { name: "Home", path: "/" },
-  { name: "All Listings", path: "/listings" },
-  { name: "Our Agents", path: "/agents" },
+  { name: "All Listings", page: "listings" },
+  { name: "Our Agents", page: "agents" },
   { name: "Contact Us", path: "/contact" },
 ];
 
@@ -14,14 +18,7 @@ const serviceLinks = [
   { name: "Buy a Home", path: "/sale" },
   { name: "Rent a Home", path: "/rent" },
   { name: "Sell a Home", path: "/contact" },
-  { name: "Make an Offer", path: "/offer" },
-];
-
-const contactItems = [
-  { icon: MapPin, lines: ["123 Independence Avenue,", "Airport City, Accra, Ghana"] },
-  { icon: Phone, lines: ["+233 24 152 9904"], href: "tel:+233241529904" },
-  { icon: Mail, lines: ["info@homebase.com"], href: "mailto:info@homebase.com" },
-  { icon: Clock, lines: ["Mon - Fri: 9:00 AM - 6:00 PM", "Sat: 10:00 AM - 4:00 PM"] },
+  { name: "My Offers", path: "/account/offers" },
 ];
 
 const LinkColumn = ({ title, links }) => (
@@ -39,7 +36,12 @@ const LinkColumn = ({ title, links }) => (
   </div>
 );
 
+const CONTACT_ICONS = { address: MapPin, phone: Phone, email: Mail, hours: Clock };
+
 const Footer = () => {
+  const { settings, siteName, paths } = usePlatform();
+  const contactItems = businessContactItems(settings.contact);
+  const explore = exploreLinks.map((link) => ({ ...link, path: link.page ? paths[link.page] : link.path }));
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -95,20 +97,17 @@ const Footer = () => {
         {/* Links */}
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-12">
           <div className="sm:col-span-2 lg:col-span-4">
-            <Link to="/" className="flex items-center gap-2 text-2xl font-extrabold tracking-tight">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-500 text-base">H</span>
-              <span>
-                Home<span className="text-brand-400">Base</span>
-              </span>
+            <Link to="/" className="inline-flex">
+              <BrandLogo tone="dark" size="lg" />
             </Link>
-            <p className="mt-4 max-w-sm text-sm leading-relaxed text-gray-400">
-              Discover your dream home with Ghana's premier real estate agency. We connect you with the finest
-              properties across the country, ensuring a seamless and rewarding experience.
-            </p>
+            {settings.general.description && (
+              <p className="mt-4 max-w-sm text-sm leading-relaxed text-gray-400">{settings.general.description}</p>
+            )}
+            <SocialLinks social={settings.social} className="mt-6" />
           </div>
 
           <div className="lg:col-span-2">
-            <LinkColumn title="Explore" links={exploreLinks} />
+            <LinkColumn title="Explore" links={explore} />
           </div>
           <div className="lg:col-span-2">
             <LinkColumn title="Services" links={serviceLinks} />
@@ -117,11 +116,17 @@ const Footer = () => {
           <div className="sm:col-span-2 lg:col-span-4">
             <h3 className="mb-4 text-sm font-semibold tracking-wider text-white uppercase">Contact</h3>
             <ul className="space-y-4">
-              {contactItems.map(({ icon: Icon, lines, href }) => (
-                <li key={lines[0]} className="flex items-start gap-3 text-sm text-gray-400">
+              {contactItems.map(({ kind, lines, href }) => {
+                const Icon = CONTACT_ICONS[kind];
+                return (
+                <li key={kind} className="flex items-start gap-3 text-sm text-gray-400">
                   <Icon className="mt-0.5 h-4 w-4 shrink-0 text-brand-400" />
                   {href ? (
-                    <a href={href} className="transition-colors hover:text-white">{lines[0]}</a>
+                    <a href={href} target={kind === "address" ? "_blank" : undefined} rel={kind === "address" ? "noopener noreferrer" : undefined} className="transition-colors hover:text-white">
+                      {lines.map((line) => (
+                        <span key={line} className="block">{line}</span>
+                      ))}
+                    </a>
                   ) : (
                     <span>
                       {lines.map((line) => (
@@ -130,14 +135,15 @@ const Footer = () => {
                     </span>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </div>
         </div>
 
         {/* Bottom bar */}
         <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 text-center text-sm text-gray-500 sm:flex-row sm:text-left">
-          <p>© {new Date().getFullYear()} HomeBase Real Estate. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {siteName}. All rights reserved.</p>
           <p className="flex items-center gap-1.5">
             Made with <Heart className="h-4 w-4 fill-red-500 text-red-500" /> in Ghana
           </p>

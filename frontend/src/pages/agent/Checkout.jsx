@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { AnimatePresence, motion } from "motion/react";
-import { AlertCircle, ArrowLeft, Check, CreditCard, Loader2, Lock, ShieldCheck, Smartphone } from "lucide-react";
+import { motion } from "motion/react";
+import { AlertCircle, ArrowLeft, Check, Loader2, Lock, ShieldCheck } from "lucide-react";
 import { durationLabel } from "../../data/plans";
 import { usePlatform } from "../../context/usePlatform";
 import { useAuth } from "../../context/useAuth";
@@ -12,12 +12,6 @@ import { subscriptionApi } from "../../frontApi";
 import PageLoader from "../../components/ui/PageLoader";
 
 const steps = ["Choose plan", "Payment", "Agent account"];
-
-const networks = ["MTN MoMo", "Telecel Cash", "AirtelTigo Money"];
-
-// Test payment mode only: this number/card simulates a declined payment
-const DECLINE_MOMO = "0000000000";
-const DECLINE_CARD = "4000000000000002";
 
 const Stepper = ({ current }) => (
   <ol className="flex items-center gap-2 sm:gap-4">
@@ -47,20 +41,17 @@ const RETURN_KEY = "homebase:checkout";
 
 const Checkout = () => {
   const [searchParams] = useSearchParams();
-  const { getPlan, plansLoading } = usePlatform();
+  const { getPlan, plansLoading, siteName } = usePlatform();
   const plan = getPlan(searchParams.get("plan"));
   // Paystack sends the user back here with ?reference=... after paying
   const returnReference = searchParams.get("reference") || searchParams.get("trxref");
   const { user, isAdmin, refreshUser } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const [method, setMethod] = useState("momo");
-  const [momo, setMomo] = useState({ network: networks[0], number: user?.phone?.replace(/\D/g, "").replace(/^233/, "0") || "" });
-  const [card, setCard] = useState({ name: user?.name || "", number: "", expiry: "", cvc: "" });
   const [status, setStatus] = useState(returnReference ? "verifying" : "idle"); // idle | processing | verifying | success | error
   const [error, setError] = useState("");
   const [subscription, setSubscription] = useState(null);
-  const [paymentMode, setPaymentMode] = useState(null); // "paystack" | "test" | "disabled"
+  const [paymentMode, setPaymentMode] = useState(null); // "paystack" | "disabled" (from the server)
   const timers = useRef([]);
 
   useEffect(() => {
@@ -72,7 +63,7 @@ const Checkout = () => {
     subscriptionApi
       .getCurrentSubscription()
       .then((data) => setPaymentMode(data.paymentMode))
-      .catch(() => setPaymentMode("test"));
+      .catch(() => setPaymentMode("disabled"));
   }, []);
 
   // The subscription and the agent role always come from the server after it verified the payment
@@ -81,7 +72,7 @@ const Checkout = () => {
     setSubscription({ ...fresh?.subscription, wasRenewal });
     setStatus("success");
     toast({
-      title: wasRenewal ? "Subscription renewed" : "You are now a HomeBase agent!",
+      title: wasRenewal ? "Subscription renewed" : `You are now a ${siteName} agent!`,
       description: fresh?.subscription ? `${fresh.subscription.planName} plan active until ${formatDate(fresh.subscription.expiryDate)}.` : undefined,
     });
     timers.current.push(setTimeout(() => navigate("/agent/dashboard"), 2600));
@@ -147,48 +138,17 @@ const Checkout = () => {
   const isRenewal = Boolean(plan) && currentState.isActive && current?.planId === plan.id;
   const startDate = isRenewal ? current.startDate : new Date().toISOString();
   const expiryDate = plan ? addDays(isRenewal ? current.expiryDate : new Date(), plan.durationDays) : null;
-  const usingPaystack = paymentMode === "paystack";
+  const paymentsDisabled = paymentMode === "disabled";
 
-  const formatCardNumber = (value) => value.replace(/\D/g, "").slice(0, 16).replace(/(\d{4})(?=\d)/g, "$1 ");
-  const formatExpiry = (value) => value.replace(/\D/g, "").slice(0, 4).replace(/(\d{2})(\d)/, "$1/$2");
-
-  const validate = () => {
-    if (method === "momo") {
-      if (!/^0\d{9}$/.test(momo.number)) return "Enter a valid 10-digit mobile money number (e.g. 0241234567).";
-    } else {
-      if (!card.name.trim()) return "Enter the name on the card.";
-      if (card.number.replace(/\s/g, "").length !== 16) return "Enter a valid 16-digit card number.";
-      if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(card.expiry)) return "Enter the expiry date as MM/YY.";
-      if (!/^\d{3,4}$/.test(card.cvc)) return "Enter the 3-digit security code.";
-    }
-    return "";
-  };
-
+  // Payment happens on Paystack; the backend verifies the transaction when the user returns
   const handlePay = async (e) => {
     e.preventDefault();
-    if (!usingPaystack) {
-      const problem = validate();
-      if (problem) {
-        setError(problem);
-        setStatus("error");
-        return;
-      }
-    }
     setError("");
     setStatus("processing");
     try {
-      const init = await subscriptionApi.initializePayment(plan.id, usingPaystack ? "Paystack" : method === "momo" ? momo.network : "Card");
-      if (init.mode === "paystack") {
-        // Pay on Paystack; the backend verifies the transaction when the user returns
-        sessionStorage.setItem(RETURN_KEY, JSON.stringify({ reference: init.reference, wasRenewal: isRenewal }));
-        window.location.assign(init.authorizationUrl);
-        return;
-      }
-      // Test mode (no Paystack key on the server): these details simulate a declined payment
-      const declined =
-        (method === "momo" && momo.number === DECLINE_MOMO) || (method === "card" && card.number.replace(/\s/g, "") === DECLINE_CARD);
-      await subscriptionApi.verifyPayment(init.reference, declined ? { simulate: "decline" } : {});
-      await finish(isRenewal);
+      const init = await subscriptionApi.initializePayment(plan.id, "Paystack");
+      sessionStorage.setItem(RETURN_KEY, JSON.stringify({ reference: init.reference, wasRenewal: isRenewal }));
+      window.location.assign(init.authorizationUrl);
     } catch (err) {
       setError(err.message);
       setStatus("error");
@@ -258,105 +218,18 @@ const Checkout = () => {
           {/* Payment */}
           <form onSubmit={handlePay} className="rounded-3xl bg-white p-6 ring-1 ring-gray-200 sm:p-8 lg:col-span-3" noValidate>
             <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">Payment details</h1>
-            <p className="mt-1 text-sm text-gray-500">{usingPaystack ? "Secure payment powered by Paystack." : "Choose how you would like to pay for your subscription."}</p>
+            <p className="mt-1 text-sm text-gray-500">Secure payment powered by Paystack.</p>
 
-            {usingPaystack ? (
-              <div className="mt-6 flex items-start gap-3 rounded-2xl bg-brand-50 p-4 text-sm text-brand-900 ring-1 ring-brand-100">
-                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-500" />
-                <span>You will be taken to Paystack to pay securely with mobile money or card. Your agent account activates as soon as HomeBase confirms the payment.</span>
+            {paymentsDisabled ? (
+              <div className="mt-6 flex items-start gap-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-100">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+                <span>Online payments are not available right now. Please try again later or contact {siteName}.</span>
               </div>
             ) : (
-              <>
-            <div role="radiogroup" aria-label="Payment method" className="mt-6 grid grid-cols-2 gap-3">
-              {[
-                { id: "momo", label: "Mobile Money", icon: Smartphone },
-                { id: "card", label: "Debit / Credit Card", icon: CreditCard },
-              ].map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={method === option.id}
-                  onClick={() => {
-                    setMethod(option.id);
-                    setStatus("idle");
-                    setError("");
-                  }}
-                  className={`flex flex-col items-start gap-3 rounded-2xl p-4 text-left text-sm font-semibold ring-1 transition sm:flex-row sm:items-center ${
-                    method === option.id ? "bg-brand-50 text-brand-800 ring-2 ring-brand-500" : "text-gray-700 ring-gray-200 hover:ring-gray-300"
-                  }`}
-                >
-                  <option.icon className={`h-5 w-5 ${method === option.id ? "text-brand-500" : "text-gray-400"}`} />
-                  {option.label}
-                </button>
-              ))}
-            </div>
-
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={method}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.18 }}
-                className="mt-6 space-y-4"
-              >
-                {method === "momo" ? (
-                  <>
-                    <div>
-                      <label htmlFor="network" className="mb-1.5 block text-sm font-medium text-gray-700">Network</label>
-                      <select id="network" value={momo.network} onChange={(e) => setMomo((p) => ({ ...p, network: e.target.value }))} className="field">
-                        {networks.map((n) => (
-                          <option key={n}>{n}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label htmlFor="momo-number" className="mb-1.5 block text-sm font-medium text-gray-700">Mobile money number</label>
-                      <input
-                        id="momo-number"
-                        inputMode="numeric"
-                        value={momo.number}
-                        onChange={(e) => setMomo((p) => ({ ...p, number: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
-                        placeholder="0241234567"
-                        className="field"
-                      />
-                      <p className="mt-1.5 text-xs text-gray-500">You'd normally approve the payment prompt on your phone.</p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <label htmlFor="card-name" className="mb-1.5 block text-sm font-medium text-gray-700">Name on card</label>
-                      <input id="card-name" autoComplete="cc-name" value={card.name} onChange={(e) => setCard((p) => ({ ...p, name: e.target.value }))} className="field" />
-                    </div>
-                    <div>
-                      <label htmlFor="card-number" className="mb-1.5 block text-sm font-medium text-gray-700">Card number</label>
-                      <input
-                        id="card-number"
-                        inputMode="numeric"
-                        autoComplete="cc-number"
-                        value={card.number}
-                        onChange={(e) => setCard((p) => ({ ...p, number: formatCardNumber(e.target.value) }))}
-                        placeholder="4242 4242 4242 4242"
-                        className="field"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="card-expiry" className="mb-1.5 block text-sm font-medium text-gray-700">Expiry</label>
-                        <input id="card-expiry" inputMode="numeric" autoComplete="cc-exp" value={card.expiry} onChange={(e) => setCard((p) => ({ ...p, expiry: formatExpiry(e.target.value) }))} placeholder="MM/YY" className="field" />
-                      </div>
-                      <div>
-                        <label htmlFor="card-cvc" className="mb-1.5 block text-sm font-medium text-gray-700">CVC</label>
-                        <input id="card-cvc" inputMode="numeric" autoComplete="cc-csc" value={card.cvc} onChange={(e) => setCard((p) => ({ ...p, cvc: e.target.value.replace(/\D/g, "").slice(0, 4) }))} placeholder="123" className="field" />
-                      </div>
-                    </div>
-                  </>
-                )}
-              </motion.div>
-            </AnimatePresence>
-              </>
+              <div className="mt-6 flex items-start gap-3 rounded-2xl bg-brand-50 p-4 text-sm text-brand-900 ring-1 ring-brand-100">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-500" />
+                <span>You will be taken to Paystack to pay securely with mobile money or card. Your agent account activates as soon as {siteName} confirms the payment.</span>
+              </div>
             )}
 
             {status === "error" && (
@@ -371,25 +244,20 @@ const Checkout = () => {
               </motion.p>
             )}
 
-            <button type="submit" disabled={processing} className="btn btn-primary mt-6 w-full py-4 text-base">
+            <button type="submit" disabled={processing || paymentsDisabled || !paymentMode} className="btn btn-primary mt-6 w-full py-4 text-base">
               {processing ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  Confirming payment...
+                  Opening Paystack...
                 </>
               ) : (
                 <>
                   <Lock className="h-4 w-4" />
-                  Pay ₵{plan.price.toLocaleString()}{usingPaystack ? " with Paystack" : ""}
+                  Pay ₵{plan.price.toLocaleString()} with Paystack
                 </>
               )}
             </button>
 
-            {paymentMode === "test" && (
-            <p className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-500">
-              Test mode (no Paystack key on the server): no real payment is taken. Use {DECLINE_MOMO} or card {DECLINE_CARD.replace(/(\d{4})/g, "$1 ").trim()} to see a declined payment.
-            </p>
-            )}
           </form>
 
           {/* Summary */}

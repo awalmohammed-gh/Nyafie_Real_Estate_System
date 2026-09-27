@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { ChevronDown, ChevronLeft, ChevronRight, Home, MapPin, Search, Sparkles } from "lucide-react";
-import { heroContent } from "../../assets/house_data";
-import { useRealEstate } from "../../context/useRealEstate";
+import { ArrowRight, Check, ChevronDown, ChevronLeft, ChevronRight, Home, MapPin, Search, Sparkles } from "lucide-react";
+import { heroContent } from "../../assets/landing_content";
+import { usePropertyFacets } from "../../hooks/usePropertyFacets";
+import { usePlatform } from "../../context/usePlatform";
+import NavOverlay from "../nav/NavOverlay";
 import { formatType } from "../../utils/property";
 
 const SLIDE_DURATION = 6000;
@@ -34,22 +36,24 @@ const SearchSelect = ({ icon: Icon, label, name, value, onChange, children }) =>
 
 const Hero = () => {
   const navigate = useNavigate();
-  const { properties, agents } = useRealEstate();
+  const { paths } = usePlatform();
+  const facets = usePropertyFacets();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [search, setSearch] = useState({ status: "", area: "", type: "" });
   const touchStartX = useRef(0);
 
-  const areas = [...new Set(properties.map((p) => p.location.name))].sort();
-  const types = [...new Set(properties.map((p) => p.property.type))].sort();
-  const ratings = properties.map((p) => p.meta?.rating).filter(Boolean);
-  const avgRating = (ratings.reduce((sum, r) => sum + r, 0) / ratings.length).toFixed(1);
+  // Search options and numbers come from the listings in the database
+  const f = facets.data;
+  const areas = (f?.areas || []).map((a) => a.name).sort();
+  const types = (f?.types || []).map((t) => t.value).sort();
+  const show = (value) => (f ? value : "–");
 
   const stats = [
-    { value: properties.length, label: "Properties listed" },
-    { value: areas.length, label: "Neighbourhoods" },
-    { value: agents.length, label: "Expert agents" },
-    { value: avgRating, label: "Average rating" },
+    { value: show(f?.total), label: "Properties listed" },
+    { value: show(areas.length), label: "Neighbourhoods" },
+    { value: show(f?.agents), label: "Expert agents" },
+    { value: show(f?.avgRating ? f.avgRating.toFixed(1) : "–"), label: "Average rating" },
   ];
 
   const goTo = (index) => setCurrentIndex((index + heroContent.length) % heroContent.length);
@@ -86,17 +90,18 @@ const Hero = () => {
   const handleSearch = (e) => {
     e.preventDefault();
     const params = new URLSearchParams(Object.entries(search).filter(([, value]) => value));
-    navigate(`/properties${params.toString() ? `?${params}` : ""}`);
+    navigate(`${paths.properties}${params.toString() ? `?${params}` : ""}`);
   };
 
   const currentSlide = heroContent[currentIndex];
 
   return (
     <section
-      className="relative isolate flex min-h-[calc(100svh-4rem)] items-center overflow-hidden bg-gray-950 lg:min-h-[calc(100svh-5rem)]"
+      className="relative isolate flex min-h-svh items-center overflow-hidden bg-gray-950"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
+      <NavOverlay />
       {/* Background slides: all stacked and cross-faded so there is never a blank frame */}
       {heroContent.map((slide, i) => (
         <motion.img
@@ -113,22 +118,18 @@ const Hero = () => {
           className="absolute inset-0 -z-20 h-full w-full object-cover"
         />
       ))}
-      <div className="absolute inset-0 -z-10 bg-linear-to-r from-gray-950/90 via-gray-950/70 to-gray-950/30" />
-      <div className="absolute inset-0 -z-10 bg-linear-to-t from-gray-950/80 via-transparent to-transparent" />
+      {/* Overlay: dark on the text side for contrast, a light brand tint, and a fade behind the search and stats */}
+      <div className="absolute inset-0 -z-10 bg-linear-to-r from-gray-950/90 via-gray-950/65 to-gray-950/20" />
+      <div className="absolute inset-0 -z-10 bg-brand-900/20 mix-blend-multiply" />
+      <div className="absolute inset-0 -z-10 bg-linear-to-t from-gray-950/85 via-gray-950/10 to-gray-950/30" />
+      {/* Darker band at the top keeps the transparent navbar readable over bright photos */}
+      <div className="absolute inset-x-0 top-0 -z-10 h-40 bg-linear-to-b from-gray-950/60 to-transparent" />
 
-      <div className="container-page py-14 sm:py-20">
+      {/* Top padding leaves room for the navbar, which overlays the hero */}
+      <div className="container-page pt-28 pb-14 sm:pt-32 sm:pb-20 lg:pt-36">
         <div className="max-w-3xl">
-          <motion.span
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="mb-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-semibold tracking-wider text-white uppercase ring-1 ring-white/20 backdrop-blur"
-          >
-            <Sparkles className="h-4 w-4 text-brand-300" />
-            Premier Real Estate in Ghana
-          </motion.span>
-
-          <div className="min-h-[9.5rem] sm:min-h-[11rem] lg:min-h-[13.5rem]">
+          {/* Tall enough for the longest slide at each width, so changing slides never shifts the page */}
+          <div className="min-h-[28.5rem] min-[380px]:min-h-[24.5rem] sm:min-h-[23.5rem]">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentIndex}
@@ -137,12 +138,33 @@ const Hero = () => {
                 exit={{ opacity: 0, y: -16 }}
                 transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
               >
+                <span className="mb-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-semibold tracking-wider text-white uppercase ring-1 ring-white/20 backdrop-blur">
+                  <Sparkles className="h-4 w-4 text-brand-300" />
+                  {currentSlide.eyebrow}
+                </span>
                 <h1 className="text-4xl leading-[1.1] font-extrabold tracking-tight text-balance text-white sm:text-5xl lg:text-6xl">
                   {currentSlide.title}
                 </h1>
                 <p className="mt-5 max-w-2xl text-base text-pretty text-gray-300 sm:text-lg">
                   {currentSlide.description}
                 </p>
+                <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-2">
+                  {currentSlide.highlights.map((item) => (
+                    <li key={item} className="flex items-center gap-2 text-sm font-medium text-white/90">
+                      <span className="grid h-5 w-5 place-items-center rounded-full bg-brand-500/90">
+                        <Check className="h-3 w-3 text-white" strokeWidth={3} />
+                      </span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  to={currentSlide.cta.page ? paths[currentSlide.cta.page] : currentSlide.cta.to}
+                  className="group mt-7 inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-lg shadow-gray-950/20 transition hover:bg-brand-50 hover:text-brand-700"
+                >
+                  {currentSlide.cta.label}
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                </Link>
               </motion.div>
             </AnimatePresence>
           </div>

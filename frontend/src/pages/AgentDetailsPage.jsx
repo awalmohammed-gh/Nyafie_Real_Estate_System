@@ -6,8 +6,10 @@ import { useRealEstate } from "../context/useRealEstate";
 import HouseCard from "../components/card/HouseCard";
 import Reveal from "../components/ui/Reveal";
 import NotFound from "./NotFound";
+import NavOverlay from "../components/nav/NavOverlay";
 import PageLoader from "../components/ui/PageLoader";
 import { getInitials } from "../utils/property";
+import { usePlatform } from "../context/usePlatform";
 
 const tabs = [
   { label: "All", value: "All" },
@@ -16,13 +18,14 @@ const tabs = [
 ];
 
 const AgentDetailsPage = () => {
+  const { paths } = usePlatform();
   const { id } = useParams();
-  const { agents, propertiesLoading } = useRealEstate();
+  const { agents, agentsLoading } = useRealEstate();
   const [selectedCategory, setSelectedCategory] = useState("All");
 
   const agent = agents.find((item) => item.id === id);
 
-  if (!agent && propertiesLoading) return <PageLoader label="Loading agent..." />;
+  if (!agent && agentsLoading) return <PageLoader label="Loading agent..." />;
 
   if (!agent) {
     return <NotFound message="We couldn't find this agent." />;
@@ -43,14 +46,15 @@ const AgentDetailsPage = () => {
     <>
       {/* Profile header */}
       <section className="relative isolate overflow-hidden bg-gray-950">
+        <NavOverlay />
         <div className="absolute inset-0 -z-10 bg-linear-to-br from-brand-700/60 via-gray-950 to-gray-950" />
         <div className="absolute -top-32 -right-32 -z-10 h-96 w-96 rounded-full bg-brand-500/30 blur-3xl" />
 
-        <div className="container-page py-12 sm:py-16">
+        <div className="container-page pt-28 pb-12 sm:pt-32 sm:pb-16 lg:pt-36">
           <nav aria-label="Breadcrumb" className="mb-8 flex items-center gap-1.5 text-sm text-gray-400">
             <Link to="/" className="hover:text-white">Home</Link>
             <ChevronRight className="h-3.5 w-3.5" />
-            <Link to="/agents" className="hover:text-white">Agents</Link>
+            <Link to={paths.agents} className="hover:text-white">Agents</Link>
             <ChevronRight className="h-3.5 w-3.5" />
             <span className="text-white">{agent.name}</span>
           </nav>
@@ -75,10 +79,12 @@ const AgentDetailsPage = () => {
               </div>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <a href={`tel:${agent.phone.replace(/\s+/g, "")}`} className="btn btn-primary">
-                <Phone className="h-4 w-4" />
-                {agent.phone}
-              </a>
+              {agent.phone && (
+                <a href={`tel:${agent.phone.replace(/\s+/g, "")}`} className="btn btn-primary">
+                  <Phone className="h-4 w-4" />
+                  {agent.phone}
+                </a>
+              )}
               <a href={`mailto:${agent.email}`} className="btn bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20">
                 <Mail className="h-4 w-4" />
                 Send email

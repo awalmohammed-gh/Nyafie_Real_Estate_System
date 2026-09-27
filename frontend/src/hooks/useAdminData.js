@@ -46,7 +46,7 @@ export const useAdminData = () => {
 
     const ownerOf = (property) =>
       property.owner.type === "admin"
-        ? { name: "HomeBase", type: "Admin" }
+        ? { name: platform.siteName, type: "Admin" }
         : { name: users.find((u) => u.id === property.owner.id)?.name || "Deleted agent", type: "Agent", id: property.owner.id };
 
     const userInquiries = (u) => inquiries.filter((i) => i.userId === u.id || i.email.toLowerCase() === u.email.toLowerCase());

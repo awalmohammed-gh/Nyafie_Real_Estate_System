@@ -3,14 +3,23 @@ import { PlatformContext } from "./platformContext";
 import { useAuth } from "./useAuth";
 import { planApi, settingsApi, adminApi } from "../frontApi";
 import { defaultSettings } from "../data/defaultSettings";
+import { readStorage, writeStorage } from "../utils/storage";
+
+// The last settings this browser saw, so a renamed site never flashes the default name on load
+const SETTINGS_CACHE = "homebase:settings";
+
+// Fills any section/key missing from older cached or saved values with the defaults
+const withDefaults = (saved = {}) =>
+  Object.fromEntries(Object.entries(defaultSettings).map(([section, defaults]) => [section, { ...defaults, ...(saved[section] || {}) }]));
 
 // Plans, platform settings and (for admins) the payment ledger, loaded from the API
 export const PlatformProvider = ({ children }) => {
   const { isAdmin, users } = useAuth();
   const [plans, setPlans] = useState([]);
   const [plansLoading, setPlansLoading] = useState(true);
-  const [settings, setSettings] = useState(defaultSettings);
+  const [settings, setSettingsState] = useState(() => withDefaults(readStorage(SETTINGS_CACHE, {})));
   const [settingsReady, setSettingsReady] = useState(false);
+  const [settingsError, setSettingsError] = useState("");
   const [payments, setPayments] = useState([]);
 
   const refreshPlans = useCallback(async () => {
@@ -29,13 +38,26 @@ export const PlatformProvider = ({ children }) => {
     refreshPlans().catch(() => {});
   }, [refreshPlans]);
 
-  useEffect(() => {
-    settingsApi
-      .getSettings()
-      .then(setSettings)
-      .catch(() => {})
-      .finally(() => setSettingsReady(true));
+  const setSettings = useCallback((next) => {
+    const full = withDefaults(next);
+    setSettingsState(full);
+    writeStorage(SETTINGS_CACHE, full);
   }, []);
+
+  const reloadSettings = useCallback(async () => {
+    setSettingsError("");
+    try {
+      setSettings(await settingsApi.getSettings());
+    } catch (err) {
+      setSettingsError(err.message || "Settings could not be loaded.");
+    } finally {
+      setSettingsReady(true);
+    }
+  }, [setSettings]);
+
+  useEffect(() => {
+    reloadSettings();
+  }, [reloadSettings]);
 
   // Reload the payment ledger when admins change subscriptions (the user list refreshes)
   useEffect(() => {
@@ -70,15 +92,28 @@ export const PlatformProvider = ({ children }) => {
     [plans, refreshPlans]
   );
 
-  const updateSettings = useCallback(async (section, values) => {
-    setSettings(await adminApi.updateSettings(section, values));
-  }, []);
+  const updateSettings = useCallback(
+    async (section, values) => {
+      setSettings(await adminApi.updateSettings(section, values));
+    },
+    [setSettings]
+  );
+
+  // Public list pages live at the slugs chosen in Admin Settings > SEO & URLs
+  const paths = useMemo(
+    () => ({ properties: `/${settings.slugs.properties}`, listings: `/${settings.slugs.listings}`, agents: `/${settings.slugs.agents}` }),
+    [settings.slugs]
+  );
 
   const value = useMemo(
     () => ({
       plans,
       plansLoading,
       settingsReady,
+      settingsError,
+      reloadSettings,
+      siteName: settings.general.siteName,
+      paths,
       activePlans: plans.filter((p) => p.active),
       settings,
       payments,
@@ -90,7 +125,7 @@ export const PlatformProvider = ({ children }) => {
       refreshPlans,
       refreshPayments,
     }),
-    [plans, plansLoading, settingsReady, settings, payments, getPlan, savePlan, deletePlan, togglePlanActive, updateSettings, refreshPlans, refreshPayments]
+    [plans, plansLoading, settingsReady, settingsError, reloadSettings, paths, settings, payments, getPlan, savePlan, deletePlan, togglePlanActive, updateSettings, refreshPlans, refreshPayments]
   );
 
   return <PlatformContext.Provider value={value}>{children}</PlatformContext.Provider>;

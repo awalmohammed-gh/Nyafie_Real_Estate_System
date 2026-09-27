@@ -1,0 +1,45 @@
+import mongoose from "mongoose";
+import { schemaOptions } from "../utils/schemaOptions.js";
+import { historySchema } from "./historySchema.js";
+
+export const SALE_STATUSES = [
+  "pending",
+  "contacted",
+  "offer_received",
+  "negotiating",
+  "approved",
+  "payment_pending",
+  "paid_at_office",
+  "completed",
+  "cancelled",
+  "rejected",
+];
+export const CLOSED_SALE_STATUSES = ["completed", "cancelled", "rejected"];
+// Sale payments are made at the office, never online
+export const SALE_PAYMENT_STATUSES = ["pending", "payment_requested", "confirmed", "failed"];
+
+// A customer's request to buy a property ("Buy Now"). The owner contacts them,
+// the customer pays at the office, and the owner confirms the payment here.
+const saleRequestSchema = new mongoose.Schema(
+  {
+    customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    property: { type: mongoose.Schema.Types.ObjectId, ref: "Property", required: true, index: true },
+    owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true }, // taken from the property
+    ownerType: { type: String, enum: ["admin", "agent"], required: true, index: true },
+    askingPrice: { type: Number, required: true }, // property price when the request was made
+    contactName: { type: String, required: true, trim: true, maxlength: 120 },
+    contactEmail: { type: String, required: true, trim: true, lowercase: true },
+    contactPhone: { type: String, required: true, trim: true, maxlength: 30 },
+    message: { type: String, default: "", maxlength: 1000 },
+    status: { type: String, enum: SALE_STATUSES, default: "pending", index: true },
+    paymentStatus: { type: String, enum: SALE_PAYMENT_STATUSES, default: "pending" },
+    amountPaid: { type: Number, default: null }, // recorded when the office payment is confirmed
+    paymentConfirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    paymentConfirmedAt: { type: Date },
+    conversation: { type: mongoose.Schema.Types.ObjectId, ref: "Conversation" },
+    history: [historySchema],
+  },
+  schemaOptions
+);
+
+export default mongoose.models.SaleRequest || mongoose.model("SaleRequest", saleRequestSchema);

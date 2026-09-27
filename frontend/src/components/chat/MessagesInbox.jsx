@@ -66,7 +66,7 @@ const MessagesInbox = ({ scope, emptyTitle, emptyDescription, emptyAction }) => 
   }
 
   return (
-    <div className="grid h-[calc(100dvh-13rem)] min-h-[28rem] grid-cols-1 overflow-hidden rounded-3xl bg-white ring-1 ring-gray-200 lg:grid-cols-[22rem_1fr]">
+    <div className="grid h-[calc(100dvh-13rem)] min-h-[28rem] grid-cols-1 overflow-hidden rounded-3xl bg-white ring-1 ring-gray-200 in-[.dash]:rounded-xl lg:grid-cols-[22rem_1fr]">
       {/* Conversation list (hidden on phones while a chat is open) */}
       <aside className={`min-h-0 flex-col border-gray-100 lg:flex lg:border-r ${selectedId ? "hidden" : "flex"}`}>
         <div className="border-b border-gray-100 p-3">

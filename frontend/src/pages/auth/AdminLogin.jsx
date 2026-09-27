@@ -4,10 +4,13 @@ import { motion } from "motion/react";
 import { AlertCircle, ArrowLeft, Eye, EyeOff, Loader2, Lock, Mail, ShieldCheck } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { useToast } from "../../context/useToast";
+import { usePlatform } from "../../context/usePlatform";
+import BrandLogo from "../../components/brand/BrandLogo";
 
 // Full-screen admin sign in, shown by RequireAdmin whenever /admin/* is opened
 // without an admin session. Credentials are checked by the backend only.
 const AdminLogin = () => {
+  const { siteName } = usePlatform();
   const { user, adminLogin } = useAuth();
   const { toast } = useToast();
   const [form, setForm] = useState({ email: "", password: "" });
@@ -40,10 +43,12 @@ const AdminLogin = () => {
         className="w-full max-w-md"
       >
         <div className="mb-8 flex flex-col items-center text-center">
-          <span className="grid h-14 w-14 place-items-center rounded-2xl bg-brand-500 text-white shadow-lg shadow-brand-500/40">
-            <ShieldCheck className="h-7 w-7" />
+          <BrandLogo tone="dark" size="lg" />
+          <span className="mt-6 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-gray-300 ring-1 ring-white/10">
+            <ShieldCheck className="h-3.5 w-3.5 text-brand-300" />
+            Administrators only
           </span>
-          <h1 className="mt-5 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">HomeBase Admin Console</h1>
+          <h1 className="mt-5 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">{siteName} Admin Console</h1>
           <p className="mt-2 text-sm text-gray-400">Sign in with your administrator account to continue.</p>
         </div>
 

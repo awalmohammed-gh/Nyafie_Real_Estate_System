@@ -2,25 +2,25 @@ import { Link } from 'react-router-dom';
 import { ArrowUpRight, CircleDollarSign, HandCoins, Handshake } from 'lucide-react';
 import SectionHeading from '../ui/SectionHeading';
 import Reveal from '../ui/Reveal';
-import { useRealEstate } from '../../context/useRealEstate';
+import { usePropertyFacets } from '../../hooks/usePropertyFacets';
 
 const OurServices = () => {
-  const { properties } = useRealEstate();
-  const saleCount = properties.filter((p) => p.property.status === "Sale").length;
-  const rentCount = properties.filter((p) => p.property.status === "Rent").length;
+  const facets = usePropertyFacets();
+  const saleCount = facets.data?.sale;
+  const rentCount = facets.data?.rent;
 
   const services = [
     {
       title: "Buy a Home",
       description: "Find the perfect property to call your own. Browse verified listings, compare prices, and make confident decisions with ease.",
-      cta: `Browse ${saleCount} homes`,
+      cta: saleCount ? `Browse ${saleCount} homes` : "Browse homes for sale",
       path: "/sale",
       icon: CircleDollarSign,
     },
     {
       title: "Rent a Home",
       description: "Explore a wide range of rental options that fit your lifestyle and budget. From apartments to family homes, discover your next place quickly.",
-      cta: `Browse ${rentCount} rentals`,
+      cta: rentCount ? `Browse ${rentCount} rentals` : "Browse rentals",
       path: "/rent",
       icon: HandCoins,
     },

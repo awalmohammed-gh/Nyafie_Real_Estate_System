@@ -34,6 +34,18 @@ const statusTone = {
   Waived: "gray",
   Featured: "brand",
   "No subscription": "gray",
+  Accepted: "green",
+  Countered: "sky",
+  Withdrawn: "gray",
+  Confirmed: "green",
+  Completed: "gray",
+  "Payment Pending": "amber",
+  "Payment Requested": "amber",
+  "Payment Confirmed": "green",
+  "Paid at Office": "green",
+  "Offer Received": "brand",
+  Negotiating: "sky",
+  Duplicate: "red",
 };
 
 const StatusBadge = ({ status, tone, dot = true, className = "" }) => {

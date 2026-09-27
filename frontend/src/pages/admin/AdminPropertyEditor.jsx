@@ -4,10 +4,12 @@ import { useRealEstate } from "../../context/useRealEstate";
 import { PropertyEditorForm } from "../agent/PropertyEditor";
 import EmptyState from "../../components/ui/EmptyState";
 import PageLoader from "../../components/ui/PageLoader";
+import { usePlatform } from "../../context/usePlatform";
 
 // Add / edit HomeBase (admin-owned) listings with the shared property form.
 // Agent listings are moderated from the Properties page instead.
 const AdminPropertyEditor = () => {
+  const { siteName } = usePlatform();
   const { propertyId } = useParams();
   const { listings, listingsReady } = useRealEstate();
   if (propertyId && !listingsReady) return <PageLoader label="Loading property..." />;
@@ -17,8 +19,8 @@ const AdminPropertyEditor = () => {
     return (
       <EmptyState
         icon={AlertCircle}
-        title="This isn't a HomeBase listing"
-        description="Only HomeBase listings are edited here. Agent listings are moderated from the Properties page."
+        title={`This isn't a ${siteName} listing`}
+        description={`Only ${siteName} listings are edited here. Agent listings are moderated from the Properties page.`}
         action={<Link to="/admin/properties" className="btn btn-primary">Back to properties</Link>}
       />
     );

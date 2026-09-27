@@ -3,17 +3,29 @@ import { motion } from "motion/react";
 import { CheckCircle2, Clock, Mail, MapPin, Phone, Send } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import Reveal from '../components/ui/Reveal';
+import WhatsAppIcon from '../components/ui/WhatsAppIcon';
+import SocialLinks from '../components/brand/SocialLinks';
+import { usePlatform } from '../context/usePlatform';
+import { businessContactItems } from '../utils/contact';
+import { toWhatsAppNumber } from '../utils/whatsapp';
 
-const contactInfo = [
-  { icon: MapPin, title: "Visit us", lines: ["123 Independence Avenue,", "Airport City, Accra, Ghana"] },
-  { icon: Phone, title: "Call us", lines: ["+233 24 152 9904"], href: "tel:+233241529904" },
-  { icon: Mail, title: "Email us", lines: ["info@homebase.com"], href: "mailto:info@homebase.com" },
-  { icon: Clock, title: "Office hours", lines: ["Mon - Fri: 9:00 AM - 6:00 PM", "Sat: 10:00 AM - 4:00 PM"] },
-];
+// Business details come from Admin Settings > Contact & Business
+const CARDS = {
+  address: { icon: MapPin, title: "Visit us" },
+  phone: { icon: Phone, title: "Call us" },
+  email: { icon: Mail, title: "Email us" },
+  hours: { icon: Clock, title: "Office hours" },
+};
 
 const emptyForm = { name: "", email: "", phone: "", subject: "", message: "" };
 
 const Contact = () => {
+  const { settings } = usePlatform();
+  const whatsapp = toWhatsAppNumber(settings.contact.whatsapp);
+  const contactInfo = [
+    ...businessContactItems(settings.contact).map((item) => ({ ...CARDS[item.kind], ...item })),
+    whatsapp && { icon: WhatsAppIcon, title: "WhatsApp", lines: [settings.contact.whatsapp], href: `https://wa.me/${whatsapp}`, external: true },
+  ].filter(Boolean);
   const [formData, setFormData] = useState(emptyForm);
   const [submitted, setSubmitted] = useState(false);
 
@@ -41,7 +53,7 @@ const Contact = () => {
       <section className="container-page grid gap-8 py-12 sm:py-16 lg:grid-cols-3 lg:gap-10">
         {/* Contact info */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 lg:content-start">
-          {contactInfo.map(({ icon: Icon, title, lines, href }, index) => (
+          {contactInfo.map(({ icon: Icon, title, lines, href, external, kind }, index) => (
             <Reveal key={title} delay={index * 0.06}>
               <div className="flex h-full items-start gap-4 rounded-3xl bg-gray-50 p-5">
                 <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white text-brand-500 shadow-sm">
@@ -51,7 +63,7 @@ const Contact = () => {
                   <h2 className="font-bold text-gray-900">{title}</h2>
                   {lines.map((line) =>
                     href ? (
-                      <a key={line} href={href} className="block text-sm text-gray-600 transition hover:text-brand-600">
+                      <a key={line} href={href} target={external || kind === "address" ? "_blank" : undefined} rel="noopener noreferrer" className="block text-sm text-gray-600 transition hover:text-brand-600">
                         {line}
                       </a>
                     ) : (
@@ -62,6 +74,7 @@ const Contact = () => {
               </div>
             </Reveal>
           ))}
+          <SocialLinks social={settings.social} tone="light" className="px-1" />
         </div>
 
         {/* Form */}

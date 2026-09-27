@@ -1,6 +1,8 @@
 import User from "../models/User.js";
 import { setAuthCookie, clearAuthCookie } from "../utils/generateToken.js";
 import { ok, fail } from "../utils/response.js";
+import { notifyAdmins } from "../utils/notify.js";
+import { siteName } from "../models/Setting.js";
 
 const isEmail = (value) => /^\S+@\S+\.\S+$/.test(String(value || ""));
 
@@ -33,6 +35,7 @@ export const register = async (req, res) => {
     role: "user",
   });
   setAuthCookie(res, user._id);
+  notifyAdmins({ type: "user", title: "New account", message: `${user.firstName} ${user.lastName} (${user.email}) signed up.`, link: "/admin/customers" });
   ok(res, await loadUser(user._id), "Account created", 201);
 };
 
@@ -60,7 +63,7 @@ export const login = async (req, res) => {
     return fail(
       res,
       403,
-      "This account has been suspended. Please contact HomeBase support.",
+      `This account has been suspended. Please contact ${siteName()} support.`,
     );
   setAuthCookie(res, user._id);
   ok(res, await loadUser(user._id), "Signed in");
