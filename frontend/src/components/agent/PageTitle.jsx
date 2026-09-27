@@ -1,11 +1,6 @@
-const PageTitle = ({ title, description, action }) => (
-  <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-    <div>
-      <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl">{title}</h1>
-      {description && <p className="mt-1 text-gray-500">{description}</p>}
-    </div>
-    {action && <div className="flex shrink-0 flex-wrap gap-3">{action}</div>}
-  </div>
-);
+import { PageHeader } from "../dashboard/Page";
+
+// Agent pages: same title row as the admin console
+const PageTitle = ({ title, description, action }) => <PageHeader title={title} description={description} actions={action} />;
 
 export default PageTitle;

@@ -42,6 +42,7 @@ export const getAgentPermissions = ({ user, plans, settings, listings }) => {
         : null;
 
   return {
+    siteName: settings.general.siteName, // for messages such as "Contact HomeBase support"
     isAgent,
     isSuspended,
     isActive,
@@ -82,7 +83,7 @@ export const getAgentPermissions = ({ user, plans, settings, listings }) => {
 export const lockCopy = (perms, feature) => {
   const planName = perms.plan?.name || "current";
   if (perms.restriction === "suspended") {
-    return { title: "Your agent account is suspended", description: "Contact HomeBase support to restore access to your listings and inquiries.", cta: null };
+    return { title: "Your agent account is suspended", description: `Contact ${perms.siteName} support to restore access to your listings and inquiries.`, cta: null };
   }
   if (perms.restriction && perms.restriction !== "not-agent") {
     const reason = { expired: "has expired", cancelled: "was cancelled", pending: "is waiting for payment confirmation", none: "is not active" }[perms.restriction];
@@ -106,7 +107,7 @@ export const lockCopy = (perms, feature) => {
     case "advanced":
       return { title: "Advanced Analytics", description: "Listing performance trends are available on the Premium plan.", cta: "Upgrade Plan" };
     case "publishing":
-      return { title: "Publishing paused", description: "HomeBase has temporarily paused new agent listings. You can still save drafts.", cta: null };
+      return { title: "Publishing paused", description: `${perms.siteName} has temporarily paused new agent listings. You can still save drafts.`, cta: null };
     default:
       return { title: "Not available", description: "This feature isn't available on your current plan.", cta: "Upgrade Plan" };
   }

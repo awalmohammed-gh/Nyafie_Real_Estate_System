@@ -2,6 +2,10 @@ import { Router } from "express";
 import * as admin from "../controllers/adminController.js";
 import { deleteProperty } from "../controllers/propertyController.js";
 import { listConversations } from "../controllers/chatController.js";
+import { ownerOffers } from "../controllers/offerController.js";
+import { ownerRentals } from "../controllers/rentalController.js";
+import { ownerSaleRequests } from "../controllers/saleRequestController.js";
+import { listPayments } from "../controllers/paymentController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { adminOnly } from "../middleware/adminMiddleware.js";
 
@@ -33,8 +37,15 @@ router.delete("/properties/:id", deleteProperty);
 router.get("/inquiries", admin.listInquiries);
 router.patch("/inquiries/:id/status", admin.setInquiryStatus);
 
+router.get("/settings/payment-status", admin.getPaymentStatus);
 router.put("/settings/:section", admin.updateSettings);
+router.put("/account", admin.updateAccount); // the signed-in admin's own details (password: PUT /api/auth/me/password)
 
 router.get("/messages", listConversations("owner")); // chats about admin-owned properties
+
+router.get("/offers", ownerOffers); // every offer on the platform
+router.get("/rentals", ownerRentals);
+router.get("/sale-requests", ownerSaleRequests);
+router.get("/payments", listPayments);
 
 export default router;

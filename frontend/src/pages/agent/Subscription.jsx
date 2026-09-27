@@ -74,7 +74,7 @@ const Subscription = () => {
         <motion.section
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`relative overflow-hidden rounded-3xl p-6 sm:p-8 lg:col-span-2 ${inactive ? "bg-white ring-2 ring-red-200" : "bg-gray-900 text-white"}`}
+          className={`relative overflow-hidden rounded-xl p-6 sm:p-8 lg:col-span-2 ${inactive ? "bg-white ring-2 ring-red-200" : "bg-gray-900 text-white"}`}
         >
           {!inactive && <div className="absolute -top-20 -right-20 h-60 w-60 rounded-full bg-brand-500/30 blur-3xl" />}
           <div className="relative">
@@ -82,13 +82,13 @@ const Subscription = () => {
               <p className={`text-sm ${inactive ? "text-gray-500" : "text-gray-400"}`}>Current plan</p>
               <StatusBadge status={state.statusLabel} tone={statusTone[state.status]} />
             </div>
-            <h2 className={`mt-2 text-3xl font-extrabold tracking-tight ${inactive ? "text-gray-900" : ""}`}>{plan?.name || sub.planName}</h2>
+            <h2 className={`mt-2 text-3xl font-semibold tracking-tight ${inactive ? "text-gray-900" : ""}`}>{plan?.name || sub.planName}</h2>
             <p className={inactive ? "text-gray-600" : "text-gray-300"}>
               ₵{sub.price.toLocaleString()} for {plan ? durationLabel(plan.durationDays) : `${totalDays} days`}
             </p>
 
             {inactive && (
-              <p className="mt-5 flex items-start gap-3 rounded-2xl bg-red-50 p-4 text-sm text-red-800">
+              <p className="mt-5 flex items-start gap-3 rounded-lg bg-red-50 p-4 text-sm text-red-800">
                 <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
                 {state.status === "pending"
                   ? "Your payment is waiting for confirmation. Your plan starts as soon as it's confirmed."
@@ -107,7 +107,7 @@ const Subscription = () => {
               </div>
               <div className="col-span-2 sm:col-span-1">
                 <dt className={`text-sm ${inactive ? "text-gray-500" : "text-gray-400"}`}>Days remaining</dt>
-                <dd className={`mt-1 text-2xl font-extrabold ${inactive ? "text-red-600" : state.expiringSoon ? "text-amber-300" : ""}`}>{state.daysRemaining}</dd>
+                <dd className={`mt-1 text-2xl font-semibold ${inactive ? "text-red-600" : state.expiringSoon ? "text-amber-300" : ""}`}>{state.daysRemaining}</dd>
               </div>
             </dl>
 
@@ -139,7 +139,7 @@ const Subscription = () => {
         </motion.section>
 
         {/* Usage */}
-        <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="space-y-6 rounded-3xl bg-white p-6 ring-1 ring-gray-200 sm:p-8">
+        <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="space-y-6 rounded-xl bg-white p-6 ring-1 ring-gray-200 sm:p-8">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Usage</h2>
             <p className="mt-1 text-sm text-gray-500">Published and pending listings count towards your limit. Drafts don't.</p>
@@ -148,17 +148,17 @@ const Subscription = () => {
           {perms.featuredLimit > 0 ? (
             <Meter label="Featured listings" used={perms.featuredCount} limit={perms.featuredLimit} message={perms.featuredCount >= perms.featuredLimit ? "Featured limit reached." : null} />
           ) : (
-            <p className="flex items-start gap-2 rounded-2xl bg-gray-50 p-3 text-sm text-gray-600">
+            <p className="flex items-start gap-2 rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
               <Lock className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
               Featured listings are not available on your current plan.
             </p>
           )}
           <div className="grid grid-cols-2 gap-3 text-center">
-            <div className="rounded-2xl bg-gray-50 p-3">
+            <div className="rounded-lg bg-gray-50 p-3">
               <p className="text-lg font-bold text-gray-900">{perms.imageLimit}</p>
               <p className="text-xs text-gray-500">Photos per property</p>
             </div>
-            <div className="rounded-2xl bg-gray-50 p-3">
+            <div className="rounded-lg bg-gray-50 p-3">
               <p className="text-lg font-bold text-gray-900">{ANALYTICS_LEVELS[perms.analyticsLevel]?.label}</p>
               <p className="text-xs text-gray-500">Analytics</p>
             </div>
@@ -167,7 +167,7 @@ const Subscription = () => {
       </div>
 
       {/* Features */}
-      <section className="mt-6 rounded-3xl bg-white p-6 ring-1 ring-gray-200 sm:p-8">
+      <section className="mt-6 rounded-xl bg-white p-6 ring-1 ring-gray-200 sm:p-8">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-lg font-bold text-gray-900">What's included</h2>
@@ -177,7 +177,7 @@ const Subscription = () => {
         </div>
         <ul className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {featureRows.map((f) => (
-            <li key={f.label} className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm ${f.on ? "bg-brand-50/60 text-gray-800" : "bg-gray-50 text-gray-400"}`}>
+            <li key={f.label} className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm ${f.on ? "bg-brand-50/60 text-gray-800" : "bg-gray-50 text-gray-400"}`}>
               {f.on ? <Check className="h-4 w-4 shrink-0 text-brand-500" /> : <Lock className="h-4 w-4 shrink-0" />}
               {f.label}
             </li>
@@ -186,7 +186,7 @@ const Subscription = () => {
       </section>
 
       {/* Billing details */}
-      <section className="mt-6 rounded-3xl bg-white p-6 ring-1 ring-gray-200 sm:p-8">
+      <section className="mt-6 rounded-xl bg-white p-6 ring-1 ring-gray-200 sm:p-8">
         <h2 className="text-lg font-bold text-gray-900">Billing details</h2>
         <dl className="mt-5 grid grid-cols-1 gap-5 text-sm sm:grid-cols-3">
           <div>

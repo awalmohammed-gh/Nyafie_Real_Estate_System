@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { buildAgents } from "../utils/property";
+import { mergeAgents } from "../utils/property";
 import { readStorage, writeStorage } from "../utils/storage";
 import { RealEstateContext } from "./realEstateContext";
 import { useAuth } from "./useAuth";
@@ -17,6 +17,7 @@ export const RealEstateProvider = ({ children }) => {
   const userId = user?.id;
 
   const [properties, setProperties] = useState([]);
+  const [agentDirectory, setAgentDirectory] = useState(undefined); // undefined = loading, null = unavailable
   const [propertiesLoading, setPropertiesLoading] = useState(true);
   const [listings, setListings] = useState([]);
   const [listingsLoading, setListingsLoading] = useState(false);
@@ -24,9 +25,9 @@ export const RealEstateProvider = ({ children }) => {
   const [inquiries, setInquiries] = useState([]);
   const [guestFavorites, setGuestFavorites] = useState(() => readStorage(GUEST_FAVORITES_KEY, []));
   const [savedIds, setSavedIds] = useState([]);
-  const [makeOffer, setMakeOffer] = useState([]);
 
   const refreshProperties = useCallback(async () => {
+    agentApi.getPublicAgents().then(setAgentDirectory, () => setAgentDirectory(null));
     try {
       setProperties(await propertyApi.getProperties());
     } finally {
@@ -74,7 +75,8 @@ export const RealEstateProvider = ({ children }) => {
     await Promise.all([refreshProperties(), refreshListings()]);
   }, [refreshProperties, refreshListings]);
 
-  const agents = useMemo(() => buildAgents(properties), [properties]);
+  const agents = useMemo(() => mergeAgents(agentDirectory, properties), [agentDirectory, properties]);
+  const agentsLoading = propertiesLoading || agentDirectory === undefined;
 
   const addListing = useCallback(
     async (data) => {
@@ -170,6 +172,7 @@ export const RealEstateProvider = ({ children }) => {
       properties,
       propertiesLoading,
       agents,
+      agentsLoading,
       listings,
       listingsLoading,
       listingsReady: listingsLoadedFor === role,
@@ -188,10 +191,6 @@ export const RealEstateProvider = ({ children }) => {
       refreshListings,
       refreshInquiries,
       refreshUser,
-      makeOffer,
-      setMakeOffer,
-      addToOffer: (id) => setMakeOffer((prev) => (prev.includes(id) ? prev : [...prev, id])),
-      removeFromOffer: (id) => setMakeOffer((prev) => prev.filter((item) => item !== id)),
       favorites,
       isFavorite: (id) => favorites.includes(id),
       toggleFavorite,
@@ -200,6 +199,7 @@ export const RealEstateProvider = ({ children }) => {
       properties,
       propertiesLoading,
       agents,
+      agentsLoading,
       listings,
       listingsLoading,
       listingsLoadedFor,
@@ -219,7 +219,6 @@ export const RealEstateProvider = ({ children }) => {
       refreshListings,
       refreshInquiries,
       refreshUser,
-      makeOffer,
       favorites,
       toggleFavorite,
     ]

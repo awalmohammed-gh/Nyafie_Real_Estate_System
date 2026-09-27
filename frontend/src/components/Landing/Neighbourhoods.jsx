@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
-import { useRealEstate } from '../../context/useRealEstate';
+import { usePropertyFacets } from "../../hooks/usePropertyFacets";
 import SectionHeading from '../ui/SectionHeading';
 import Reveal from '../ui/Reveal';
+import { usePlatform } from "../../context/usePlatform";
 
 // Bento layout: the first tile is large, the rest fill in around it
 const tileClasses = [
@@ -14,21 +15,11 @@ const tileClasses = [
 ];
 
 const Neighbourhoods = () => {
-  const { properties, propertiesLoading } = useRealEstate();
-
-  const neighbourhoods = Object.values(
-    properties.reduce((acc, property) => {
-      const name = property.location.name;
-      acc[name] ??= { name, city: property.location.city, image: property.media.images[0], count: 0, views: 0 };
-      acc[name].count += 1;
-      acc[name].views += property.meta?.views || 0;
-      return acc;
-    }, {})
-  )
-    .sort((a, b) => b.count - a.count || b.views - a.views)
-    .slice(0, 5);
-
-  if (propertiesLoading && properties.length === 0) return null;
+  const { paths } = usePlatform();
+  const facets = usePropertyFacets();
+  // Busiest areas first (already sorted by the server); hidden until there are listings
+  const neighbourhoods = (facets.data?.areas || []).slice(0, 5);
+  if (neighbourhoods.length === 0) return null;
 
   return (
     <section className="bg-gray-50 py-20 sm:py-28">
@@ -44,7 +35,7 @@ const Neighbourhoods = () => {
           {neighbourhoods.map((place, index) => (
             <Reveal key={place.name} delay={index * 0.06} className={`h-full ${tileClasses[index] || ""}`}>
               <Link
-                to={`/properties?area=${encodeURIComponent(place.name)}`}
+                to={`${paths.properties}?area=${encodeURIComponent(place.name)}`}
                 className="group relative block h-full overflow-hidden rounded-3xl bg-gray-200"
               >
                 <img

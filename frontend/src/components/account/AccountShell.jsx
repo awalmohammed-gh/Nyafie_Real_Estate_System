@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Heart, MessageCircle, MessageSquare, Settings, UserRound } from "lucide-react";
+import { Building, HandCoins, Heart, KeyRound, MessageCircle, MessageSquare, Settings, UserRound } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { getInitials } from "../../utils/property";
 import { AgentBadge } from "./AccountMenu";
@@ -7,7 +7,10 @@ import { AgentBadge } from "./AccountMenu";
 const tabs = [
   { label: "Profile", to: "/account/profile", icon: UserRound },
   { label: "Saved", to: "/account/saved", icon: Heart },
-  { label: "Messages", to: "/account/messages", icon: MessageCircle },
+  { label: "Conversations", to: "/account/messages", icon: MessageCircle },
+  { label: "Offers", to: "/account/offers", icon: HandCoins },
+  { label: "Rentals", to: "/account/rentals", icon: KeyRound },
+  { label: "Purchases", to: "/account/purchases", icon: Building },
   { label: "Inquiries", to: "/account/inquiries", icon: MessageSquare },
   { label: "Settings", to: "/account/settings", icon: Settings },
 ];

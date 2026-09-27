@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Ban, CheckCircle2, Eye, Pencil, Trash2, Users } from "lucide-react";
+import { Ban, Building, CheckCircle2, Eye, HandCoins, Heart, Inbox, KeyRound, Mail, Pencil, Phone, Trash2, Users } from "lucide-react";
 import { useAdminData } from "../../hooks/useAdminData";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
+import { useTransactions } from "../../context/useTransactions";
 import AdminPageTitle from "../../components/admin/AdminPageTitle";
 import EditUserModal from "../../components/admin/EditUserModal";
 import DataTable from "../../components/ui/DataTable";
@@ -10,21 +11,26 @@ import FilterTabs from "../../components/ui/FilterTabs";
 import SearchInput from "../../components/ui/SearchInput";
 import StatusBadge from "../../components/ui/StatusBadge";
 import ActionMenu from "../../components/ui/ActionMenu";
-import Modal from "../../components/ui/Modal";
+import SidePanel from "../../components/ui/SidePanel";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import EmptyState from "../../components/ui/EmptyState";
-import { formatDate, formatRelative } from "../../utils/date";
+import { formatDate, formatRelative, isWithinDays } from "../../utils/date";
 import { getInitials } from "../../utils/property";
+import { formatCedis } from "../../utils/reports";
 
-const roleBadge = (role) => <StatusBadge status={role[0].toUpperCase() + role.slice(1)} tone={{ admin: "gray", agent: "brand", user: "sky" }[role]} dot={false} />;
 const statusBadge = (status) => <StatusBadge status={status === "suspended" ? "Suspended" : "Active"} tone={status === "suspended" ? "red" : "green"} />;
 
-const Avatar = ({ user }) => (
-  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-100 text-sm font-bold text-slate-600">{getInitials(user.name)}</span>
+const Avatar = ({ user, size = "h-10 w-10 text-sm" }) => (
+  <span className={`grid shrink-0 place-items-center rounded-full bg-slate-100 font-bold text-slate-600 ${size}`}>{getInitials(user.name)}</span>
 );
 
+/**
+ * Customers: the people who registered to browse, rent and buy. Admin and agent accounts
+ * have their own roles and pages (Settings > Admin Account, Agents) and never appear here.
+ */
 const AdminUsers = () => {
-  const { users, user: me, admin, savedCount, userInquiries, findProperty } = useAdminData();
+  const { users, admin, savedCount, userInquiries, findProperty } = useAdminData();
+  const { offers, rentals, sales } = useTransactions();
   const run = useAsyncAction();
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
@@ -32,82 +38,106 @@ const AdminUsers = () => {
   const [editing, setEditing] = useState(null);
   const [confirm, setConfirm] = useState(null); // { type: "suspend" | "activate" | "delete", user }
 
+  const customers = users.filter((u) => u.role === "user");
+  const activityOf = (u) => ({
+    inquiries: userInquiries(u),
+    offers: offers.filter((o) => o.customer?.id === u.id),
+    rentals: rentals.filter((r) => r.customer?.id === u.id),
+    purchases: sales.filter((s) => s.customer?.id === u.id),
+  });
+
   const counts = {
-    all: users.length,
-    users: users.filter((u) => u.role === "user").length,
-    agents: users.filter((u) => u.role === "agent").length,
-    suspended: users.filter((u) => u.status === "suspended").length,
-    active: users.filter((u) => u.status !== "suspended").length,
+    all: customers.length,
+    active: customers.filter((u) => u.status !== "suspended").length,
+    suspended: customers.filter((u) => u.status === "suspended").length,
+    recent: customers.filter((u) => isWithinDays(u.createdAt, 30)).length,
   };
   const q = query.trim().toLowerCase();
-  const rows = users
-    .filter((u) =>
-      filter === "users" ? u.role === "user" : filter === "agents" ? u.role === "agent" : filter === "suspended" ? u.status === "suspended" : filter === "active" ? u.status !== "suspended" : true
-    )
+  const rows = customers
+    .filter((u) => (filter === "suspended" ? u.status === "suspended" : filter === "active" ? u.status !== "suspended" : filter === "recent" ? isWithinDays(u.createdAt, 30) : true))
     .filter((u) => !q || `${u.name} ${u.email} ${u.phone}`.toLowerCase().includes(q))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  const viewed = viewing && users.find((u) => u.id === viewing);
-  const protectedAccount = (u) => u.role === "admin" || u.id === me.id;
+  const viewed = viewing && customers.find((u) => u.id === viewing);
+  const viewedActivity = viewed && activityOf(viewed);
 
   const actionsFor = (u) => [
-    { label: "View details", icon: Eye, onClick: () => setViewing(u.id) },
-    { label: "Edit", icon: Pencil, onClick: () => setEditing(u) },
+    { label: "View customer", icon: Eye, onClick: () => setViewing(u.id) },
+    { label: "Edit details", icon: Pencil, onClick: () => setEditing(u) },
     u.status === "suspended"
       ? { label: "Activate", icon: CheckCircle2, onClick: () => setConfirm({ type: "activate", user: u }) }
-      : { label: "Suspend", icon: Ban, onClick: () => setConfirm({ type: "suspend", user: u }), hidden: protectedAccount(u) },
-    {
-      label: "Delete",
-      icon: Trash2,
-      danger: true,
-      onClick: () => setConfirm({ type: "delete", user: u }),
-      hidden: protectedAccount(u),
-      disabled: u.role === "agent",
-      disabledReason: "Agents can't be deleted. Cancel their subscription or suspend them instead.",
-    },
+      : { label: "Suspend", icon: Ban, onClick: () => setConfirm({ type: "suspend", user: u }) },
+    { label: "Delete", icon: Trash2, danger: true, onClick: () => setConfirm({ type: "delete", user: u }) },
   ];
 
   const runConfirm = async () => {
     const { type, user: u } = confirm;
     setConfirm(null);
     if (type === "delete") {
-      const { ok } = await run(admin.deleteUser(u.id), { success: "User deleted", description: u.name, type: "info" });
+      const { ok } = await run(admin.deleteUser(u.id), { success: "Customer deleted", description: u.name, type: "info" });
       if (ok && viewing === u.id) setViewing(null);
     } else {
       await run(admin.setStatus(u.id, type === "suspend" ? "suspended" : "active"), {
-        success: type === "suspend" ? "User suspended" : "User activated",
+        success: type === "suspend" ? "Customer suspended" : "Customer activated",
         description: u.name,
         type: type === "suspend" ? "warning" : "success",
       });
     }
   };
 
+  const activityCell = (u) => {
+    const a = activityOf(u);
+    return (
+      <span className="flex items-center gap-3 text-xs text-gray-600">
+        {[
+          [Inbox, a.inquiries.length, "inquiries"],
+          [HandCoins, a.offers.length, "offers"],
+          [KeyRound, a.rentals.length + a.purchases.length, "rental and purchase requests"],
+        ].map(([Icon, n, label]) => (
+          <span key={label} className={`inline-flex items-center gap-1 ${n ? "text-gray-800" : "text-gray-400"}`} title={`${n} ${label}`}>
+            <Icon className="h-3.5 w-3.5" />
+            <span className="tabular-nums">{n}</span>
+          </span>
+        ))}
+      </span>
+    );
+  };
+
   const columns = [
     {
-      key: "user",
-      header: "User",
+      key: "customer",
+      header: "Customer",
       render: (u) => (
         <div className="flex items-center gap-3">
           <Avatar user={u} />
           <div className="min-w-0">
-            <p className="truncate font-semibold text-gray-900">{u.name}{u.id === me.id && <span className="ml-1 text-xs font-normal text-gray-400">(you)</span>}</p>
+            <p className="truncate font-semibold text-gray-900">{u.name}</p>
             <p className="truncate text-xs text-gray-500">{u.email}</p>
           </div>
         </div>
       ),
     },
     { key: "phone", header: "Phone", render: (u) => <span className="whitespace-nowrap text-gray-600">{u.phone || "—"}</span> },
-    { key: "role", header: "Role", render: (u) => roleBadge(u.role) },
-    { key: "joined", header: "Registered", render: (u) => <span className="whitespace-nowrap text-gray-600">{formatDate(u.createdAt)}</span> },
-    { key: "status", header: "Status", render: (u) => statusBadge(u.status) },
+    { key: "joined", header: "Joined", render: (u) => <span className="whitespace-nowrap text-gray-600">{formatDate(u.createdAt)}</span> },
+    { key: "activity", header: "Inquiries · Offers · Requests", render: activityCell },
     { key: "saved", header: "Saved", align: "right", render: (u) => <span className="tabular-nums">{savedCount(u)}</span> },
-    { key: "inq", header: "Inquiries", align: "right", render: (u) => <span className="tabular-nums">{userInquiries(u).length}</span> },
+    { key: "status", header: "Status", render: (u) => statusBadge(u.status) },
     { key: "actions", header: <span className="sr-only">Actions</span>, align: "right", render: (u) => <ActionMenu actions={actionsFor(u)} label={`Actions for ${u.name}`} /> },
   ];
 
+  // Everything the customer has done, newest first, for the preview panel
+  const timeline = viewedActivity
+    ? [
+        ...viewedActivity.offers.map((o) => ({ id: `o-${o.id}`, icon: HandCoins, label: `Offer of ${formatCedis(o.amount)}`, subject: o.property.title, status: o.status, date: o.createdAt })),
+        ...viewedActivity.rentals.map((r) => ({ id: `r-${r.id}`, icon: KeyRound, label: `Rental request · ${formatCedis(r.amount)}`, subject: r.property.title, status: r.status, date: r.createdAt })),
+        ...viewedActivity.purchases.map((s) => ({ id: `s-${s.id}`, icon: Building, label: "Purchase request", subject: s.property.title, status: s.status, date: s.createdAt })),
+        ...viewedActivity.inquiries.map((i) => ({ id: `i-${i.id}`, icon: Inbox, label: "Inquiry", subject: findProperty(i.propertyId)?.title || "Removed property", status: i.status, date: i.createdAt })),
+      ].sort((a, b) => new Date(b.date) - new Date(a.date))
+    : [];
+
   return (
     <>
-      <AdminPageTitle title="Users" description="Everyone registered on HomeBase." />
+      <AdminPageTitle title="Customers" description="People who registered to browse, rent and buy. Agents are managed on the Agents page." />
 
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <FilterTabs
@@ -115,9 +145,8 @@ const AdminUsers = () => {
           onChange={setFilter}
           tabs={[
             { id: "all", label: "All", count: counts.all },
-            { id: "users", label: "Users", count: counts.users },
-            { id: "agents", label: "Agents", count: counts.agents },
             { id: "active", label: "Active", count: counts.active },
+            { id: "recent", label: "Joined this month", count: counts.recent },
             { id: "suspended", label: "Suspended", count: counts.suspended },
           ]}
         />
@@ -128,77 +157,108 @@ const AdminUsers = () => {
         columns={columns}
         rows={rows}
         minWidth={900}
-        empty={<EmptyState icon={Users} title="No users found" description="Try another filter or search term." />}
+        onRowClick={(u) => setViewing(u.id)}
+        empty={
+          customers.length === 0 ? (
+            <EmptyState icon={Users} title="No customers yet" description="Registered customers will appear here." />
+          ) : (
+            <EmptyState icon={Users} title="No customers found" description="Try another filter or search term." />
+          )
+        }
         mobileCard={(u) => (
           <div>
             <div className="flex items-start gap-3">
               <Avatar user={u} />
-              <div className="min-w-0 flex-1">
+              <button onClick={() => setViewing(u.id)} className="min-w-0 flex-1 text-left">
                 <p className="truncate font-semibold text-gray-900">{u.name}</p>
                 <p className="truncate text-sm text-gray-500">{u.email}</p>
-                <div className="mt-2 flex flex-wrap gap-2">{roleBadge(u.role)}{statusBadge(u.status)}</div>
-              </div>
+              </button>
               <ActionMenu actions={actionsFor(u)} label={`Actions for ${u.name}`} />
             </div>
-            <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-gray-500">
-              Joined {formatDate(u.createdAt)} · {savedCount(u)} saved · {userInquiries(u).length} inquiries
-            </p>
+            <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+              {activityCell(u)}
+              {statusBadge(u.status)}
+            </div>
           </div>
         )}
       />
 
-      {/* Details */}
-      <Modal open={Boolean(viewed)} onClose={() => setViewing(null)} title="User details" size="lg"
-        footer={viewed && (
-          <>
-            {viewed.role === "agent" && <Link to={`/admin/agents?open=${viewed.id}`} className="btn btn-light">Agent profile</Link>}
-            <button onClick={() => setEditing(viewed)} className="btn btn-primary"><Pencil className="h-4 w-4" />Edit user</button>
-          </>
-        )}
+      {/* Customer preview */}
+      <SidePanel
+        open={Boolean(viewed)}
+        onClose={() => setViewing(null)}
+        title={viewed?.name}
+        description={viewed && `Customer since ${formatDate(viewed.createdAt)}`}
+        footer={
+          viewed && (
+            <>
+              {viewed.status === "suspended" ? (
+                <button onClick={() => setConfirm({ type: "activate", user: viewed })} className="btn btn-light"><CheckCircle2 className="h-4 w-4" />Activate</button>
+              ) : (
+                <button onClick={() => setConfirm({ type: "suspend", user: viewed })} className="btn btn-light"><Ban className="h-4 w-4" />Suspend</button>
+              )}
+              <button onClick={() => setEditing(viewed)} className="btn btn-primary"><Pencil className="h-4 w-4" />Edit details</button>
+            </>
+          )
+        }
       >
         {viewed && (
-          <div className="space-y-5">
+          <div className="space-y-6">
             <div className="flex items-center gap-4">
-              <span className="grid h-14 w-14 place-items-center rounded-2xl bg-brand-500 text-lg font-bold text-white">{getInitials(viewed.name)}</span>
-              <div className="min-w-0">
-                <p className="text-lg font-bold text-gray-900">{viewed.name}</p>
-                <div className="mt-1 flex flex-wrap gap-2">{roleBadge(viewed.role)}{statusBadge(viewed.status)}</div>
+              <Avatar user={viewed} size="h-14 w-14 text-lg" />
+              <div className="min-w-0 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">{statusBadge(viewed.status)}<StatusBadge status="Customer" tone="sky" dot={false} /></div>
+                <a href={`mailto:${viewed.email}`} className="flex items-center gap-1.5 truncate text-sm text-gray-600 hover:text-brand-700"><Mail className="h-3.5 w-3.5" />{viewed.email}</a>
+                {viewed.phone && <a href={`tel:${viewed.phone.replace(/\s+/g, "")}`} className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-brand-700"><Phone className="h-3.5 w-3.5" />{viewed.phone}</a>}
               </div>
             </div>
-            <dl className="grid grid-cols-1 gap-4 rounded-2xl bg-slate-50 p-4 text-sm sm:grid-cols-2">
+
+            <dl className="grid grid-cols-2 divide-gray-100 overflow-hidden rounded-lg border border-gray-200 sm:grid-cols-4 sm:divide-x">
               {[
-                ["Email", viewed.email],
-                ["Phone", viewed.phone || "—"],
-                ["Registered", formatDate(viewed.createdAt)],
-                ["Saved properties", savedCount(viewed)],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <dt className="text-gray-500">{label}</dt>
-                  <dd className="font-semibold break-all text-gray-900">{value}</dd>
+                ["Inquiries", viewedActivity.inquiries.length, Inbox],
+                ["Offers", viewedActivity.offers.length, HandCoins],
+                ["Requests", viewedActivity.rentals.length + viewedActivity.purchases.length, KeyRound],
+                ["Saved", savedCount(viewed), Heart],
+              ].map(([label, value, Icon]) => (
+                <div key={label} className="p-3">
+                  <dt className="flex items-center gap-1.5 text-xs text-gray-500"><Icon className="h-3.5 w-3.5" />{label}</dt>
+                  <dd className="mt-0.5 text-lg font-semibold text-gray-900 tabular-nums">{value}</dd>
                 </div>
               ))}
             </dl>
+
             <div>
-              <p className="mb-2 text-sm font-semibold text-gray-900">Inquiries sent ({userInquiries(viewed).length})</p>
-              {userInquiries(viewed).length === 0 ? (
-                <p className="text-sm text-gray-500">No inquiries yet.</p>
+              <h3 className="mb-2 text-sm font-semibold text-gray-900">Recent activity</h3>
+              {timeline.length === 0 ? (
+                <p className="rounded-lg bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">No inquiries, offers or requests yet.</p>
               ) : (
-                <ul className="divide-y divide-slate-100 rounded-2xl ring-1 ring-slate-200">
-                  {userInquiries(viewed).map((inq) => (
-                    <li key={inq.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                      <span className="min-w-0">
-                        <span className="block truncate font-medium text-gray-900">{findProperty(inq.propertyId)?.title || "Removed property"}</span>
-                        <span className="text-xs text-gray-500">{formatRelative(inq.createdAt)}</span>
+                <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                  {timeline.slice(0, 8).map((t) => (
+                    <li key={t.id} className="flex items-center gap-3 px-4 py-3">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-gray-50 text-gray-500"><t.icon className="h-4 w-4" /></span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-gray-900">{t.subject}</span>
+                        <span className="block truncate text-xs text-gray-500">{t.label} · {formatRelative(t.date)}</span>
                       </span>
-                      <StatusBadge status={inq.status} />
+                      <StatusBadge status={t.status} />
                     </li>
                   ))}
                 </ul>
               )}
+              {timeline.length > 0 && (
+                <p className="mt-3 text-xs text-gray-500">
+                  Manage these from <Link to="/admin/offers" className="font-semibold text-brand-600">Offers</Link>, <Link to="/admin/rentals" className="font-semibold text-brand-600">Rentals</Link>, <Link to="/admin/sale-requests" className="font-semibold text-brand-600">Sales</Link> and <Link to="/admin/inquiries" className="font-semibold text-brand-600">Inquiries</Link>.
+                </p>
+              )}
             </div>
+
+            <button onClick={() => setConfirm({ type: "delete", user: viewed })} className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 hover:text-red-700">
+              <Trash2 className="h-4 w-4" />
+              Delete customer account
+            </button>
           </div>
         )}
-      </Modal>
+      </SidePanel>
 
       {editing && <EditUserModal user={editing} onClose={() => setEditing(null)} />}
 
@@ -207,14 +267,14 @@ const AdminUsers = () => {
         onClose={() => setConfirm(null)}
         onConfirm={runConfirm}
         tone={confirm?.type === "activate" ? "primary" : "danger"}
-        title={{ suspend: "Suspend user?", activate: "Activate user?", delete: "Delete user?" }[confirm?.type]}
-        confirmLabel={{ suspend: "Suspend user", activate: "Activate user", delete: "Delete user" }[confirm?.type]}
+        title={{ suspend: "Suspend customer?", activate: "Activate customer?", delete: "Delete customer?" }[confirm?.type]}
+        confirmLabel={{ suspend: "Suspend", activate: "Activate", delete: "Delete customer" }[confirm?.type]}
         description={
           confirm &&
           {
-            suspend: `${confirm.user.name} will be signed out and won't be able to sign in until reactivated.${confirm.user.role === "agent" ? " Their listings will be hidden from the public." : ""}`,
+            suspend: `${confirm.user.name} will be signed out and won't be able to sign in until reactivated.`,
             activate: `${confirm.user.name} will be able to sign in again.`,
-            delete: `${confirm.user.name}'s account will be permanently removed. This can't be undone.`,
+            delete: `${confirm.user.name}'s account and open requests will be permanently removed. Completed payments stay on record. This can't be undone.`,
           }[confirm.type]
         }
       />

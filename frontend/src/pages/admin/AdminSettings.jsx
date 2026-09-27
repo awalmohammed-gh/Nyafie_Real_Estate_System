@@ -1,154 +1,124 @@
-import { useState } from "react";
-import { Bell, Building2, Globe, Save, UserCog, UserRound } from "lucide-react";
-import { useAdminData } from "../../hooks/useAdminData";
-import { useToast } from "../../context/useToast";
-import { useAsyncAction } from "../../hooks/useAsyncAction";
+import { useEffect, useState } from "react";
+import { useBlocker, useSearchParams } from "react-router-dom";
+import { Bell, Building2, CreditCard, Globe, Palette, Phone, Search, UserRound, Users } from "lucide-react";
+import { usePlatform } from "../../context/usePlatform";
+import { UnsavedContext } from "../../hooks/useSettingsForm";
 import AdminPageTitle from "../../components/admin/AdminPageTitle";
+import { Callout } from "../../components/admin/settings/SettingsUI";
+import { BrandingTab, GeneralTab, SeoTab } from "./settings/SiteTabs";
+import { AgentsTab, ContactTab, NotificationsTab, PaymentsTab, PropertyTab } from "./settings/BusinessTabs";
+import { AccountTab } from "./settings/AccountTab";
 
-const Toggle = ({ label, description, checked, onChange }) => (
-  <div className="flex items-center justify-between gap-4 py-3">
-    <div>
-      <p className="text-sm font-semibold text-gray-900">{label}</p>
-      {description && <p className="text-sm text-gray-500">{description}</p>}
-    </div>
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${checked ? "bg-brand-500" : "bg-gray-300"}`}
-    >
-      <span className={`absolute top-1 left-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-5" : ""}`} />
-    </button>
-  </div>
-);
+const SECTIONS = [
+  { group: "Website", items: [
+    { id: "general", label: "General", icon: Globe, Tab: GeneralTab },
+    { id: "branding", label: "Branding", icon: Palette, Tab: BrandingTab },
+    { id: "seo", label: "SEO & URLs", icon: Search, Tab: SeoTab },
+    { id: "contact", label: "Contact & Business", icon: Phone, Tab: ContactTab },
+  ] },
+  { group: "System", items: [
+    { id: "property", label: "Property Settings", icon: Building2, Tab: PropertyTab },
+    { id: "agents", label: "Agents & Plans", icon: Users, Tab: AgentsTab },
+    { id: "payments", label: "Payment Settings", icon: CreditCard, Tab: PaymentsTab },
+    { id: "notifications", label: "Notifications", icon: Bell, Tab: NotificationsTab },
+  ] },
+  { group: "You", items: [{ id: "account", label: "Admin Account", icon: UserRound, Tab: AccountTab }] },
+];
+const ALL = SECTIONS.flatMap((s) => s.items);
+const LEAVE_MESSAGE = "You have unsaved changes. Leave without saving?";
 
-const Section = ({ id, icon: Icon, title, description, onSave, dirty, children }) => (
-  <section id={id} className="scroll-mt-28 rounded-2xl bg-white ring-1 ring-slate-200">
-    <div className="flex items-start gap-3 border-b border-slate-100 px-6 py-5">
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600">
-        <Icon className="h-5 w-5" />
-      </span>
-      <div>
-        <h2 className="font-bold text-gray-900">{title}</h2>
-        <p className="text-sm text-gray-500">{description}</p>
-      </div>
-    </div>
-    <div className="px-6 py-5">{children}</div>
-    {onSave && (
-      <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
-        {dirty && <span className="text-sm text-gray-500">Unsaved changes</span>}
-        <button onClick={onSave} disabled={!dirty} className="btn btn-primary px-5 py-2.5">
-          <Save className="h-4 w-4" />
-          Save
-        </button>
-      </div>
-    )}
-  </section>
-);
-
-const Field = ({ label, children }) => (
-  <label className="block text-sm">
-    <span className="mb-1.5 block font-medium text-gray-700">{label}</span>
-    {children}
-  </label>
-);
-
-// Section form state that can be saved into the platform settings
-const useSectionForm = (initial) => {
-  const [form, setForm] = useState(initial);
-  const dirty = JSON.stringify(form) !== JSON.stringify(initial);
-  return [form, (key, value) => setForm((p) => ({ ...p, [key]: value })), dirty];
-};
-
+/**
+ * Admin Settings: the whole system's configuration (stored in MongoDB, applied site-wide)
+ * plus the admin's own account. Every section saves on its own with "Save Changes".
+ */
 const AdminSettings = () => {
-  const { settings, updateSettings, plans, user, updateProfile } = useAdminData();
-  const { toast } = useToast();
-  const run = useAsyncAction();
-  const [platform, setPlatform, platformDirty] = useSectionForm(settings.platform);
-  const [property, setProperty, propertyDirty] = useSectionForm(settings.property);
-  const [agent, setAgent, agentDirty] = useSectionForm(settings.agent);
-  const [notifications, setNotifications, notificationsDirty] = useSectionForm(settings.notifications);
-  const [profile, setProfile, profileDirty] = useSectionForm({ firstName: user.firstName, lastName: user.lastName, phone: user.phone || "" });
+  const { settingsError, reloadSettings } = usePlatform();
+  const [params, setParams] = useSearchParams();
+  const [unsaved] = useState(() => new Set());
+  const active = ALL.find((s) => s.id === params.get("tab")) || ALL[0];
 
-  const save = (section, values, label) => run(updateSettings(section, values), { success: `${label} saved` });
+  const open = (id) => {
+    if (id === active.id) return;
+    if (unsaved.size && !window.confirm(LEAVE_MESSAGE)) return;
+    unsaved.clear();
+    setParams({ tab: id }, { replace: true });
+  };
+
+  // Warn before leaving the page (other admin pages, reload or closing the tab) with unsaved edits
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => unsaved.size > 0 && currentLocation.pathname !== nextLocation.pathname);
+  useEffect(() => {
+    if (blocker.state !== "blocked") return;
+    if (window.confirm(LEAVE_MESSAGE)) blocker.proceed();
+    else blocker.reset();
+  }, [blocker]);
+  useEffect(() => {
+    const warn = (e) => {
+      if (!unsaved.size) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsaved]);
+
+  // On phones the section tabs scroll sideways: keep the open one visible
+  useEffect(() => {
+    document.querySelector("[data-settings-tab][aria-current]")?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [active.id]);
+
+  const { Tab } = active;
 
   return (
-    <>
-      <AdminPageTitle title="Settings" description="Platform configuration saved to the server." />
+    <UnsavedContext.Provider value={unsaved}>
+      <AdminPageTitle title="Settings" description="Configure the website, the system and your own admin account." />
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <Section
-          id="profile"
-          icon={UserRound}
-          title="Admin profile"
-          description={user.email}
-          dirty={profileDirty}
-          onSave={() => {
-            if (!profile.firstName.trim() || !profile.lastName.trim()) return toast({ type: "error", title: "Name is required" });
-            run(updateProfile({ firstName: profile.firstName.trim(), lastName: profile.lastName.trim(), phone: profile.phone.trim() }), { success: "Profile saved" });
-          }}
-        >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="First name"><input value={profile.firstName} onChange={(e) => setProfile("firstName", e.target.value)} className="field" /></Field>
-            <Field label="Last name"><input value={profile.lastName} onChange={(e) => setProfile("lastName", e.target.value)} className="field" /></Field>
-            <Field label="Phone"><input value={profile.phone} onChange={(e) => setProfile("phone", e.target.value)} className="field" /></Field>
-          </div>
-        </Section>
+      {settingsError && (
+        <div className="mb-6">
+          <Callout tone="red">
+            Settings couldn't be loaded from the server, so the values below may be out of date.{" "}
+            <button onClick={reloadSettings} className="font-semibold underline">Try again</button>
+          </Callout>
+        </div>
+      )}
 
-        <Section id="platform" icon={Globe} title="Platform settings" description="Public details shown across the site." dirty={platformDirty} onSave={() => save("platform", platform, "Platform settings")}>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Platform name"><input value={platform.name} onChange={(e) => setPlatform("name", e.target.value)} className="field" /></Field>
-            <Field label="Contact email"><input type="email" value={platform.email} onChange={(e) => setPlatform("email", e.target.value)} className="field" /></Field>
-            <Field label="Phone"><input value={platform.phone} onChange={(e) => setPlatform("phone", e.target.value)} className="field" /></Field>
-            <Field label="Currency">
-              <select value={platform.currency} onChange={(e) => setPlatform("currency", e.target.value)} className="field">
-                <option value="GHS">Ghana cedi (GHS)</option>
-                <option value="USD">US dollar (USD)</option>
-              </select>
-            </Field>
-            <div className="sm:col-span-2">
-              <Field label="Location"><input value={platform.location} onChange={(e) => setPlatform("location", e.target.value)} className="field" /></Field>
-            </div>
+      <div className="grid gap-6 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-start">
+        {/* Section navigation: a sidebar on large screens, scrollable tabs on phones */}
+        <nav aria-label="Settings sections" className="-mx-4 overflow-x-auto px-4 pb-1 lg:sticky lg:top-24 lg:mx-0 lg:overflow-visible lg:px-0 lg:pb-0">
+          <div className="flex gap-1 lg:flex-col lg:gap-5">
+            {SECTIONS.map(({ group, items }) => (
+              <div key={group} className="contents lg:block">
+                <p className="hidden px-3 pb-1.5 text-[11px] font-semibold tracking-wider text-gray-400 uppercase lg:block">{group}</p>
+                <ul className="contents lg:block lg:space-y-0.5">
+                  {items.map(({ id, label, icon: Icon }) => {
+                    const isActive = id === active.id;
+                    return (
+                      <li key={id} className="shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => open(id)}
+                          data-settings-tab
+                          aria-current={isActive ? "page" : undefined}
+                          className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
+                            isActive ? "bg-white text-gray-900 shadow-sm ring-1 ring-slate-200" : "text-gray-600 hover:bg-slate-100 hover:text-gray-900"
+                          }`}
+                        >
+                          <Icon className={`h-4 w-4 ${isActive ? "text-brand-600" : "text-gray-400"}`} />
+                          {label}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
           </div>
-        </Section>
+        </nav>
 
-        <Section id="property" icon={Building2} title="Property settings" description="Rules for listings across the platform." dirty={propertyDirty} onSave={() => save("property", { ...property, maxImages: Number(property.maxImages) || 1 }, "Property settings")}>
-          <Field label="Maximum images per property (platform cap)">
-            <input type="number" min="1" max="50" value={property.maxImages} onChange={(e) => setProperty("maxImages", e.target.value)} className="field max-w-40" />
-          </Field>
-          <p className="mt-1.5 text-xs text-gray-500">Each plan's image limit applies within this cap.</p>
-          <div className="mt-4 divide-y divide-slate-100">
-            <Toggle label="Property approval required" description="Agent submissions go to Pending Review before they're published." checked={property.requireApproval} onChange={(v) => setProperty("requireApproval", v)} />
-            <Toggle label="Allow agent property publishing" description="When off, agents can only save drafts." checked={property.allowAgentPublishing} onChange={(v) => setProperty("allowAgentPublishing", v)} />
-          </div>
-        </Section>
-
-        <Section id="agent" icon={UserCog} title="Agent settings" description="How agents join and what they can do." dirty={agentDirty} onSave={() => save("agent", agent, "Agent settings")}>
-          <div className="divide-y divide-slate-100">
-            <Toggle label="Require subscription" description="When off, agents without an active plan use the default plan's limits." checked={agent.requireSubscription} onChange={(v) => setAgent("requireSubscription", v)} />
-            <Toggle label="Manually verify new agents" description="Flag new agents for review (takes effect once the backend is connected)." checked={agent.manualAgentVerification} onChange={(v) => setAgent("manualAgentVerification", v)} />
-          </div>
-          <div className="mt-4">
-            <Field label="Default agent plan">
-              <select value={agent.defaultPlan} onChange={(e) => setAgent("defaultPlan", e.target.value)} className="field max-w-60">
-                {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </Field>
-          </div>
-        </Section>
-
-        <Section id="notifications" icon={Bell} title="Notification settings" description="Emails the admin team receives." dirty={notificationsDirty} onSave={() => save("notifications", notifications, "Notification settings")}>
-          <div className="divide-y divide-slate-100">
-            <Toggle label="Email notifications" description="Master switch for admin emails." checked={notifications.email} onChange={(v) => setNotifications("email", v)} />
-            <Toggle label="Inquiry notifications" description="New inquiries on HomeBase listings." checked={notifications.inquiries} onChange={(v) => setNotifications("inquiries", v)} />
-            <Toggle label="Subscription notifications" description="New, expiring and failed subscriptions." checked={notifications.subscriptions} onChange={(v) => setNotifications("subscriptions", v)} />
-            <Toggle label="Weekly digest" description="A summary of platform activity every Monday." checked={notifications.weeklyDigest} onChange={(v) => setNotifications("weeklyDigest", v)} />
-          </div>
-        </Section>
+        <div className="min-w-0">
+          <Tab key={active.id} />
+        </div>
       </div>
-    </>
+    </UnsavedContext.Provider>
   );
 };
 

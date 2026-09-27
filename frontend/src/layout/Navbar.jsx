@@ -1,51 +1,108 @@
-import { useEffect, useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronDown, FileText, Menu, X } from 'lucide-react';
-import { useRealEstate } from '../context/useRealEstate';
+import { ChevronDown, Heart, Menu, X } from 'lucide-react';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import { useAuth } from '../context/useAuth';
+import { useRealEstate } from '../context/useRealEstate';
+import { usePlatform } from '../context/usePlatform';
+import BrandLogo from '../components/brand/BrandLogo';
 import AccountMenu from '../components/account/AccountMenu';
+import NotificationBell from '../components/ui/NotificationBell';
+import { PropertyPreviewGrid, PropertyPreviewList } from '../components/nav/PropertyPreviews';
+import { useNavPropertyPreviews } from '../hooks/useNavPropertyPreviews';
 
-const navLinks = [
-  { name: "Home", path: "/" },
-  {
-    name: "Properties",
-    category: [
-      { name: "For Sale", path: "/sale", description: "Homes ready to own" },
-      { name: "For Rent", path: "/rent", description: "Monthly and short stays" },
-      { name: "All Properties", path: "/properties", description: "Everything we list" },
-    ],
-  },
-  { name: "Listings", path: "/listings" },
-  { name: "Agents", path: "/agents" },
-  { name: "Contact", path: "/contact" },
-];
+// Listing-type pages: all listings (URL set in Admin Settings), /rent and /sale (PropertyPerPage)
+const buildLinks = (paths) => {
+  const listingLinks = [
+    { name: "All Listings", path: paths.listings, description: "Every property for sale and rent" },
+    { name: "For Rent", path: "/rent", description: "Monthly and short stays" },
+    { name: "For Sale", path: "/sale", description: "Homes ready to own" },
+  ];
+  const navLinks = [
+    { name: "Home", path: "/" },
+    { name: "Listings", menu: "listings", matches: listingLinks.map((l) => l.path) },
+    { name: "Properties", menu: "properties", matches: [paths.properties, "/house/"] },
+    { name: "Agents", path: paths.agents },
+    { name: "Contact", path: "/contact" },
+  ];
+  return { listingLinks, navLinks };
+};
 
-const Logo = () => (
-  <Link to="/" className="flex items-center gap-2 text-xl font-extrabold tracking-tight sm:text-2xl">
-    <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-500 text-base text-white shadow-lg shadow-brand-500/30">
-      H
-    </span>
-    <span>
-      <span className="text-gray-900">Home</span>
-      <span className="text-brand-500">Base</span>
-    </span>
+const CLOSE_DELAY = 150; // lets the pointer cross the gap between a trigger and its panel
+const panelMotion = {
+  initial: { opacity: 0, y: 4 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: 4 },
+  transition: { duration: 0.15, ease: "easeOut" },
+};
+
+const Logo = ({ onDark = false }) => (
+  <Link to="/" className="min-w-0">
+    <BrandLogo tone={onDark ? "dark" : "light"} />
   </Link>
 );
 
-const desktopLinkClass = ({ isActive }) =>
-  `relative rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-    isActive ? "bg-brand-50 text-brand-600" : "text-gray-600 hover:text-gray-900"
+// onDark: the transparent navbar over a hero (white text, soft white highlights)
+const pillClass = (active, onDark = false) =>
+  `relative flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold transition-colors duration-300 ${
+    onDark
+      ? active ? "bg-white/15 text-white" : "text-white/85 hover:bg-white/10 hover:text-white"
+      : active ? "bg-brand-50 text-brand-600" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
   }`;
 
-const Navbar = ({ onAuth }) => {
+const drawerLinkClass = ({ isActive }) =>
+  `block rounded-xl px-3 py-3 text-base font-semibold transition-colors ${
+    isActive ? "bg-brand-50 text-brand-600" : "text-gray-700 hover:bg-gray-50"
+  }`;
+
+// Saved properties, with the same count the heart buttons on cards update
+const WishlistLink = ({ count, onClick, className = "", onDark = false }) => (
+  <Link
+    to="/account/saved"
+    onClick={onClick}
+    aria-label={count ? `Wishlist, ${count} saved ${count === 1 ? "property" : "properties"}` : "Wishlist"}
+    title="Wishlist"
+    className={`relative place-items-center rounded-full transition ${onDark ? "text-white/90 hover:bg-white/10 hover:text-white" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"} ${className}`}
+  >
+    <Heart className="h-5 w-5" />
+    {count > 0 && (
+      <span className={`absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-brand-500 px-1 text-[10px] font-bold text-white ring-2 ${onDark ? "ring-transparent" : "ring-white"}`}>
+        {count > 9 ? "9+" : count}
+      </span>
+    )}
+  </Link>
+);
+
+// overHero: the page starts with a dark hero. The navbar then overlays it with no background
+// until the visitor scrolls; on other pages it is solid from the start.
+const Navbar = ({ onAuth, overHero = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const { makeOffer } = useRealEstate();
+  const [openMenu, setOpenMenu] = useState(null); // desktop: "listings" | "properties" | null
+  const [expanded, setExpanded] = useState(null); // mobile drawer section
   const { isAuthenticated } = useAuth();
+  const { favorites } = useRealEstate();
+  const { paths } = usePlatform();
+  const { listingLinks, navLinks } = buildLinks(paths);
+  const { pathname, search } = useLocation();
+  const previews = useNavPropertyPreviews();
+  const navRef = useRef(null);
+  const closeTimer = useRef(null);
 
   useLockBodyScroll(isOpen);
+
+  // Transparent while a hero is behind the navbar and the page is at the top
+  const onDark = overHero && !scrolled;
+
+  // Any navigation (including back/forward) closes open menus
+  const routeKey = pathname + search;
+  const [lastRoute, setLastRoute] = useState(routeKey);
+  if (lastRoute !== routeKey) {
+    setLastRoute(routeKey);
+    setOpenMenu(null);
+    setIsOpen(false);
+  }
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 8);
@@ -54,91 +111,151 @@ const Navbar = ({ onAuth }) => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const closeMenu = () => setIsOpen(false);
+  useEffect(() => {
+    if (!openMenu) return undefined;
+    const handlePointer = (e) => !navRef.current?.contains(e.target) && setOpenMenu(null);
+    const handleKey = (e) => e.key === "Escape" && setOpenMenu(null);
+    document.addEventListener("pointerdown", handlePointer);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointer);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [openMenu]);
 
-  const offerBadge = makeOffer.length > 0 && (
-    <span className="absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full bg-brand-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">
-      {makeOffer.length}
-    </span>
-  );
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
+
+  const showMenu = (menu) => {
+    clearTimeout(closeTimer.current);
+    if (menu === "properties") previews.ensureLoaded();
+    setOpenMenu(menu);
+  };
+  const hideMenu = () => {
+    clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setOpenMenu(null), CLOSE_DELAY);
+  };
+  const closeAll = () => {
+    clearTimeout(closeTimer.current);
+    setOpenMenu(null);
+    setIsOpen(false);
+  };
+
+  // Hover opens menus for mouse users only; touch and keyboard use click
+  const hoverHandlers = (menu) => ({
+    onPointerEnter: (e) => e.pointerType === "mouse" && showMenu(menu),
+    onPointerLeave: (e) => e.pointerType === "mouse" && hideMenu(),
+    onBlur: (e) => !e.currentTarget.contains(e.relatedTarget) && setOpenMenu(null),
+  });
+
+  const toggleSection = (menu) => {
+    if (menu === "properties") previews.ensureLoaded();
+    setExpanded((prev) => (prev === menu ? null : menu));
+  };
+
+  const isSectionActive = (link) => link.matches.some((p) => (p.endsWith("/") ? pathname.startsWith(p) : pathname === p));
 
   return (
     <header
-      className={`sticky top-0 z-50 w-full transition-all duration-300 ${
-        scrolled ? "bg-white/85 shadow-sm shadow-gray-900/5 backdrop-blur-lg" : "bg-white"
+      className={`${overHero ? "fixed inset-x-0" : "sticky"} top-0 z-50 w-full border-b transition-[background-color,border-color,box-shadow] duration-300 ease-out ${
+        onDark ? "border-transparent bg-transparent" : scrolled ? "border-gray-200/80 bg-white shadow-sm shadow-gray-900/5" : "border-transparent bg-white"
       }`}
     >
-      <nav className="container-page flex h-16 items-center justify-between gap-4 lg:h-20">
-        <Logo />
+      <nav ref={navRef} className="container-page relative flex h-16 items-center justify-between gap-4 lg:h-20">
+        <Logo onDark={onDark} />
 
         {/* Desktop links */}
-        <ul className="hidden items-center gap-1 lg:flex">
-          {navLinks.map((link) =>
-            link.category ? (
-              <li key={link.name} className="group relative">
+        <ul className="hidden h-full items-center gap-1 lg:flex">
+          {navLinks.map((link) => {
+            if (!link.menu) {
+              return (
+                <li key={link.name}>
+                  <NavLink to={link.path} end={link.path === "/"} className={({ isActive }) => pillClass(isActive, onDark)}>
+                    {link.name}
+                  </NavLink>
+                </li>
+              );
+            }
+
+            const open = openMenu === link.menu;
+            const isMega = link.menu === "properties";
+            return (
+              // Full-height item so the pointer stays "inside" on its way down to the panel.
+              // The Listings dropdown anchors to its trigger; the mega-menu anchors to the nav.
+              <li key={link.name} className={`flex h-full items-center ${isMega ? "" : "relative"}`} {...hoverHandlers(link.menu)}>
                 <button
                   type="button"
-                  className="flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold text-gray-600 transition-colors group-focus-within:text-gray-900 hover:text-gray-900"
+                  onClick={() => (open ? setOpenMenu(null) : showMenu(link.menu))}
+                  aria-expanded={open}
+                  aria-controls={`nav-menu-${link.menu}`}
+                  className={pillClass(open || isSectionActive(link), onDark)}
                 >
                   {link.name}
-                  <ChevronDown className="h-4 w-4 transition-transform duration-300 group-focus-within:rotate-180 group-hover:rotate-180" />
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
                 </button>
-                <div className="invisible absolute top-full left-1/2 w-72 -translate-x-1/2 translate-y-2 pt-3 opacity-0 transition-all duration-200 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
-                  <ul className="rounded-2xl bg-white p-2 shadow-xl ring-1 shadow-gray-900/10 ring-gray-100">
-                    {link.category.map((sublink) => (
-                      <li key={sublink.path}>
-                        <NavLink
-                          to={sublink.path}
-                          className={({ isActive }) =>
-                            `block rounded-xl px-4 py-3 transition-colors ${
-                              isActive ? "bg-brand-50" : "hover:bg-gray-50"
-                            }`
-                          }
-                        >
-                          <span className="block text-sm font-semibold text-gray-900">{sublink.name}</span>
-                          <span className="block text-xs text-gray-500">{sublink.description}</span>
-                        </NavLink>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+
+                <AnimatePresence>
+                  {open && (
+                    <motion.div
+                      id={`nav-menu-${link.menu}`}
+                      {...panelMotion}
+                      className={
+                        isMega
+                          ? "absolute top-full left-1/2 z-40 w-[min(60rem,calc(100%-4rem))] -translate-x-1/2"
+                          : "absolute top-full left-1/2 z-40 w-72 -translate-x-1/2"
+                      }
+                    >
+                      <div className="overflow-hidden rounded-2xl bg-white shadow-lg ring-1 shadow-gray-900/8 ring-gray-200/80">
+                        {isMega ? (
+                          <PropertyPreviewGrid previews={previews} onNavigate={closeAll} />
+                        ) : (
+                          <ul className="p-2">
+                            {listingLinks.map((sublink) => (
+                              <li key={sublink.path}>
+                                <NavLink
+                                  to={sublink.path}
+                                  onClick={closeAll}
+                                  className={({ isActive }) =>
+                                    `block rounded-xl px-4 py-3 transition-colors ${isActive ? "bg-brand-50" : "hover:bg-gray-50"}`
+                                  }
+                                >
+                                  {({ isActive }) => (
+                                    <>
+                                      <span className={`block text-sm font-semibold ${isActive ? "text-brand-600" : "text-gray-900"}`}>{sublink.name}</span>
+                                      <span className="block text-xs text-gray-500">{sublink.description}</span>
+                                    </>
+                                  )}
+                                </NavLink>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </li>
-            ) : (
-              <li key={link.name}>
-                <NavLink to={link.path} end={link.path === "/"} className={desktopLinkClass}>
-                  {link.name}
-                </NavLink>
-              </li>
-            )
-          )}
+            );
+          })}
         </ul>
 
         {/* Desktop actions */}
-        <div className="hidden items-center gap-3 lg:flex">
-          <Link to="/offer" className="btn btn-primary relative px-5 py-2.5">
-            <FileText className="h-4 w-4" />
-            Make an Offer
-            {offerBadge}
-          </Link>
-          <AccountMenu onAuth={onAuth} />
+        <div className="hidden items-center gap-1 lg:flex">
+          {isAuthenticated && <NotificationBell onDark={onDark} />}
+          <WishlistLink count={favorites.length} className="grid h-10 w-10" onDark={onDark} />
+          <span className={`mx-2 h-6 w-px transition-colors duration-300 ${onDark ? "bg-white/25" : "bg-gray-200"}`} aria-hidden="true" />
+          <AccountMenu onAuth={onAuth} onDark={onDark} />
         </div>
 
         {/* Mobile actions */}
         <div className="flex items-center gap-1 lg:hidden">
-          <Link
-            to="/offer"
-            aria-label="Your offer list"
-            className="relative grid h-10 w-10 place-items-center rounded-full text-gray-700 hover:bg-gray-100"
-          >
-            <FileText className="h-5 w-5" />
-            {offerBadge}
-          </Link>
-          <AccountMenu onAuth={onAuth} compact />
+          {isAuthenticated && <NotificationBell onDark={onDark} />}
+          <WishlistLink count={favorites.length} className="hidden h-10 w-10 sm:grid" onDark={onDark} />
+          <AccountMenu onAuth={onAuth} compact onDark={onDark} />
           <button
             onClick={() => setIsOpen(true)}
             aria-label="Open menu"
             aria-expanded={isOpen}
-            className="grid h-10 w-10 place-items-center rounded-full text-gray-700 hover:bg-gray-100"
+            className={`grid h-10 w-10 place-items-center rounded-full transition-colors ${onDark ? "text-white hover:bg-white/10" : "text-gray-700 hover:bg-gray-100"}`}
           >
             <Menu className="h-6 w-6" />
           </button>
@@ -153,7 +270,7 @@ const Navbar = ({ onAuth }) => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={closeMenu}
+              onClick={closeAll}
               className="absolute inset-0 bg-gray-950/50 backdrop-blur-sm"
             />
             <motion.div
@@ -166,7 +283,7 @@ const Navbar = ({ onAuth }) => {
               <div className="flex h-16 items-center justify-between border-b border-gray-100 px-5">
                 <Logo />
                 <button
-                  onClick={closeMenu}
+                  onClick={closeAll}
                   aria-label="Close menu"
                   className="grid h-10 w-10 place-items-center rounded-full text-gray-700 hover:bg-gray-100"
                 >
@@ -174,52 +291,88 @@ const Navbar = ({ onAuth }) => {
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-3 py-4">
-                {navLinks.map((link) =>
-                  link.category ? (
-                    <div key={link.name} className="py-2">
-                      <p className="px-3 pb-1 text-xs font-semibold tracking-wider text-gray-400 uppercase">
+              <div className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
+                {navLinks.map((link) => {
+                  if (!link.menu) {
+                    return (
+                      <NavLink key={link.name} to={link.path} end={link.path === "/"} onClick={closeAll} className={drawerLinkClass}>
                         {link.name}
-                      </p>
-                      {link.category.map((sublink) => (
-                        <NavLink
-                          key={sublink.path}
-                          to={sublink.path}
-                          onClick={closeMenu}
-                          className={({ isActive }) =>
-                            `block rounded-xl px-3 py-3 text-base font-semibold transition-colors ${
-                              isActive ? "bg-brand-50 text-brand-600" : "text-gray-700 hover:bg-gray-50"
-                            }`
-                          }
-                        >
-                          {sublink.name}
-                        </NavLink>
-                      ))}
+                      </NavLink>
+                    );
+                  }
+
+                  const open = expanded === link.menu;
+                  return (
+                    <div key={link.name}>
+                      <button
+                        type="button"
+                        onClick={() => toggleSection(link.menu)}
+                        aria-expanded={open}
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-base font-semibold transition-colors ${
+                          isSectionActive(link) ? "text-brand-600" : "text-gray-700"
+                        } hover:bg-gray-50`}
+                      >
+                        {link.name}
+                        <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+                      </button>
+                      <AnimatePresence initial={false}>
+                        {open && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2, ease: "easeOut" }}
+                            className="overflow-hidden"
+                          >
+                            <div className="ml-3 border-l border-gray-100 pl-2">
+                              {link.menu === "properties" ? (
+                                <PropertyPreviewList previews={previews} onNavigate={closeAll} />
+                              ) : (
+                                listingLinks.map((sublink) => (
+                                  <NavLink
+                                    key={sublink.path}
+                                    to={sublink.path}
+                                    onClick={closeAll}
+                                    className={({ isActive }) =>
+                                      `block rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${
+                                        isActive ? "bg-brand-50 text-brand-600" : "text-gray-600 hover:bg-gray-50"
+                                      }`
+                                    }
+                                  >
+                                    {sublink.name}
+                                  </NavLink>
+                                ))
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
-                  ) : (
-                    <NavLink
-                      key={link.name}
-                      to={link.path}
-                      end={link.path === "/"}
-                      onClick={closeMenu}
-                      className={({ isActive }) =>
-                        `block rounded-xl px-3 py-3 text-base font-semibold transition-colors ${
-                          isActive ? "bg-brand-50 text-brand-600" : "text-gray-700 hover:bg-gray-50"
-                        }`
-                      }
-                    >
-                      {link.name}
-                    </NavLink>
-                  )
-                )}
+                  );
+                })}
+
+                <div className="my-3 border-t border-gray-100" />
+                <Link
+                  to="/account/saved"
+                  onClick={closeAll}
+                  className="flex items-center justify-between rounded-xl px-3 py-3 text-base font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  <span className="flex items-center gap-3">
+                    <Heart className="h-5 w-5 text-gray-400" />
+                    Wishlist
+                  </span>
+                  {favorites.length > 0 && (
+                    <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand-600">{favorites.length}</span>
+                  )}
+                </Link>
               </div>
 
-              <div className="grid gap-3 border-t border-gray-100 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-                {!isAuthenticated && (
+              {!isAuthenticated && (
+                <div className="grid gap-3 border-t border-gray-100 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       onClick={() => {
-                        closeMenu();
+                        closeAll();
                         onAuth("login");
                       }}
                       className="btn btn-light w-full"
@@ -228,7 +381,7 @@ const Navbar = ({ onAuth }) => {
                     </button>
                     <button
                       onClick={() => {
-                        closeMenu();
+                        closeAll();
                         onAuth("signup");
                       }}
                       className="btn btn-light w-full"
@@ -236,11 +389,8 @@ const Navbar = ({ onAuth }) => {
                       Create Account
                     </button>
                   </div>
-                )}
-                <Link to="/offer" onClick={closeMenu} className="btn btn-primary w-full">
-                  Make an Offer {makeOffer.length > 0 && `(${makeOffer.length})`}
-                </Link>
-              </div>
+                </div>
+              )}
             </motion.div>
           </div>
         )}

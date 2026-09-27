@@ -1,5 +1,3 @@
-import { useParams } from 'react-router-dom';
-import { useRealEstate } from '../context/useRealEstate';
 import PropertyBrowser from '../components/PropertyBrowser';
 import NotFound from './NotFound';
 
@@ -8,19 +6,16 @@ const descriptions = {
   rent: "Explore our properties available for rent. From short stays to long-term leases, find a place that fits your lifestyle and budget.",
 };
 
-const PropertyPerPage = () => {
-  const { status } = useParams();
-  const { properties } = useRealEstate();
+// /sale and /rent (routed by SlugPage)
+const PropertyPerPage = ({ status }) => {
   const key = status.toLowerCase();
 
   if (!descriptions[key]) return <NotFound />;
 
-  const propertyPage = properties.filter((item) => item.property.status.toLowerCase() === key);
-
   return (
     <PropertyBrowser
       key={key}
-      properties={propertyPage}
+      fixedListingType={key === 'sale' ? 'Sale' : 'Rent'}
       title={`For ${status} Properties`}
       description={descriptions[key]}
       heroImage="/cateHeroImg.jpg"

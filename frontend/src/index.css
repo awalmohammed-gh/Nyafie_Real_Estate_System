@@ -98,3 +98,19 @@
 @utility field {
   @apply w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 transition outline-none placeholder:text-gray-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10;
 }
+
+/*
+ * Admin & agent dashboards (the layout root has the `dash` class).
+ * Work tools use tighter corners and flatter buttons than the marketing site;
+ * only shape changes here (never colours or sizes, which stay per component).
+ * Unlayered on purpose so it wins over the shared utilities above.
+ */
+.dash .btn {
+  border-radius: 0.5rem;
+}
+.dash .btn-primary {
+  box-shadow: none;
+}
+.dash .field {
+  border-radius: 0.5rem;
+}

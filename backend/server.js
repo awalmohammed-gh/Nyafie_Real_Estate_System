@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 import connectDB from "./config/mongodb.js";
 import connectCloudinary from "./config/cloudinary.js";
 import { ensureAdmin } from "./utils/ensureAdmin.js";
+import { checkPaystackConfig } from "./utils/paystack.js";
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import propertyRoutes from "./routes/propertyRoutes.js";
@@ -15,6 +16,11 @@ import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import settingRoutes from "./routes/settingRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
+import offerRoutes from "./routes/offerRoutes.js";
+import rentalRoutes from "./routes/rentalRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
+import saleRequestRoutes from "./routes/saleRequestRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 import { listConversations } from "./controllers/chatController.js";
 import { protect } from "./middleware/authMiddleware.js";
 
@@ -42,6 +48,7 @@ try {
    await connectDB()
    connectCloudinary()
    await ensureAdmin()
+   checkPaystackConfig()
 } catch (error) {
    console.error("Startup failed:", error.message);
    process.exit(1);
@@ -63,6 +70,11 @@ app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/settings", settingRoutes);
 app.use("/api/conversations", chatRoutes);
+app.use("/api/offers", offerRoutes);
+app.use("/api/rentals", rentalRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/sale-requests", saleRequestRoutes);
+app.use("/api/notifications", notificationRoutes);
 app.get("/api/messages", protect, listConversations("customer")); // conversations the user started
 
 app.use("/api", (req, res) => res.status(404).json({ success: false, message: "Endpoint not found." }));

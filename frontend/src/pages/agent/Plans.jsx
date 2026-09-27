@@ -22,7 +22,7 @@ import StatusBadge from "../../components/ui/StatusBadge";
 import { formatDate } from "../../utils/date";
 
 const benefits = [
-  { icon: Users, title: "Reach serious buyers", text: "Thousands of home seekers browse HomeBase every month across Accra, Kumasi and beyond." },
+  { icon: Users, title: "Reach serious buyers", text: "Put your listings in front of buyers and renters searching across Ghana." },
   { icon: Megaphone, title: "Your own agent profile", text: "A public profile that showcases your listings, service areas and contact details." },
   { icon: Inbox, title: "Inquiries in one place", text: "Every message about your properties lands in a single inbox you can track and close." },
   { icon: BarChart3, title: "See what performs", text: "Track views and inquiries per listing so you know where to focus." },
@@ -45,7 +45,7 @@ const faqs = [
 
 const Plans = () => {
   const { isAuthenticated, isAgent, isAdmin, user, isActive, isExpired } = useAuth();
-  const { plans: allPlans, plansLoading } = usePlatform();
+  const { plans: allPlans, plansLoading, siteName } = usePlatform();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -88,10 +88,10 @@ const Plans = () => {
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-xs font-semibold tracking-wider text-brand-200 uppercase ring-1 ring-white/15">
               <Sparkles className="h-4 w-4" />
-              HomeBase for Agents
+              {siteName} for Agents
             </span>
             <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-extrabold tracking-tight text-balance text-white sm:text-5xl lg:text-6xl">
-              Grow your real estate business with HomeBase
+              Grow your real estate business with {siteName}
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-base text-pretty text-gray-300 sm:text-lg">
               Become a verified agent, list your properties in front of motivated buyers and renters, and manage every inquiry from one dashboard.

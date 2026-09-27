@@ -10,7 +10,7 @@
     "start": "node server.js",
     "server": "nodemon server.js",
     "seed": "node seed/seed.js",
-    "seed:demo": "node seed/seed.js --demo"
+    "admin:reset": "node seed/resetAdmin.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

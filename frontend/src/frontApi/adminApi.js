@@ -40,3 +40,8 @@ export const updateInquiryStatus = async (id, status) =>
   mapInquiry((await client.patch(`/admin/inquiries/${id}/status`, { status: inquiryStatusToApi(status) })).data);
 
 export const updateSettings = async (section, values) => (await client.put(`/admin/settings/${section}`, values)).data;
+
+// Which Paystack keys are configured in backend/.env (never the keys themselves)
+export const getPaymentStatus = async () => (await client.get("/admin/settings/payment-status")).data;
+// The signed-in admin's own name, phone and sign-in email (email changes need the current password)
+export const updateAccount = async (details) => mapUser((await client.put("/admin/account", details)).data);

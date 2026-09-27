@@ -7,6 +7,7 @@ import { useAuth } from "../../context/useAuth";
 import { useRealEstate } from "../../context/useRealEstate";
 import { formatRelative } from "../../utils/date";
 import { formatPrice } from "../../utils/property";
+import { usePlatform } from "../../context/usePlatform";
 
 const statusHelp = {
   New: "Waiting for the agent to respond",
@@ -15,6 +16,7 @@ const statusHelp = {
 };
 
 const MyInquiries = () => {
+  const { paths } = usePlatform();
   const { user } = useAuth();
   const { inquiries, findProperty } = useRealEstate();
   const mine = inquiries
@@ -28,7 +30,7 @@ const MyInquiries = () => {
           icon={MessageSquare}
           title="You haven't sent any inquiries"
           description="Open a property and use “Send inquiry” to contact the agent. Your messages will be tracked here."
-          action={<Link to="/listings" className="btn btn-primary">Find a property</Link>}
+          action={<Link to={paths.listings} className="btn btn-primary">Find a property</Link>}
         />
       ) : (
         <ul className="space-y-4">

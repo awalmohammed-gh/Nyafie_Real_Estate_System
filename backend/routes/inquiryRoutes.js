@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { createInquiry } from "../controllers/inquiryController.js";
-import { optionalAuth } from "../middleware/authMiddleware.js";
+import { protect } from "../middleware/authMiddleware.js";
 
 const router = Router();
 
-router.post("/", optionalAuth, createInquiry);
+router.post("/", protect, createInquiry); // customers must sign in to contact owners
 
 export default router;

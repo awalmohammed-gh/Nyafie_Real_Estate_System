@@ -5,6 +5,8 @@ import AuthForm from "../../components/auth/AuthForm";
 import { useAuth } from "../../context/useAuth";
 import { useToast } from "../../context/useToast";
 import heroImage from "../../assets/heroBg2.jpg";
+import { usePlatform } from "../../context/usePlatform";
+import BrandLogo from "../../components/brand/BrandLogo";
 
 const perks = [
   "Save properties and come back to them anytime",
@@ -16,6 +18,7 @@ const perks = [
 // so there is no navbar or footer). Protected routes send users here with the
 // page to return to in `state.from`.
 const AuthPage = ({ mode = "login" }) => {
+  const { siteName } = usePlatform();
   const { isAuthenticated, isAdmin } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -29,7 +32,7 @@ const AuthPage = ({ mode = "login" }) => {
   if (isAuthenticated) return <Navigate to={destination(isAdmin ? "admin" : "user")} replace />;
 
   const handleSuccess = (user, usedMode) => {
-    toast({ title: usedMode === "signup" ? `Welcome to HomeBase, ${user.firstName}!` : `Welcome back, ${user.firstName}` });
+    toast({ title: usedMode === "signup" ? `Welcome to ${siteName}, ${user.firstName}!` : `Welcome back, ${user.firstName}` });
     navigate(destination(user.role), { replace: true });
   };
 
@@ -44,12 +47,8 @@ const AuthPage = ({ mode = "login" }) => {
       {/* Form column */}
       <div className="flex min-h-dvh flex-col px-4 py-6 sm:px-8 lg:px-12">
         <div className="flex items-center justify-between gap-4">
-          <Link to="/" className="flex items-center gap-2 text-xl font-extrabold tracking-tight">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-500 text-base text-white shadow-lg shadow-brand-500/30">H</span>
-            <span>
-              <span className="text-gray-900">Home</span>
-              <span className="text-brand-500">Base</span>
-            </span>
+          <Link to="/" className="min-w-0">
+            <BrandLogo />
           </Link>
           <Link to={from || "/"} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 hover:text-gray-900">
             <ArrowLeft className="h-4 w-4" />
@@ -68,13 +67,13 @@ const AuthPage = ({ mode = "login" }) => {
               {mode === "signup" ? "Create your account" : "Welcome back"}
             </h1>
             <p className="mt-2 mb-8 text-gray-600">
-              {from && !voluntary ? "Please sign in to continue." : mode === "signup" ? "Join HomeBase to find your dream home." : "Sign in to your HomeBase account."}
+              {from && !voluntary ? "Please sign in to continue." : mode === "signup" ? `Join ${siteName} to find your dream home.` : `Sign in to your ${siteName} account.`}
             </p>
             <AuthForm initialMode={mode} onSuccess={handleSuccess} onModeChange={handleModeChange} />
           </motion.div>
         </div>
 
-        <p className="text-center text-xs text-gray-400">© {new Date().getFullYear()} HomeBase Real Estate</p>
+        <p className="text-center text-xs text-gray-400">© {new Date().getFullYear()} {siteName}</p>
       </div>
 
       {/* Image column (large screens) */}

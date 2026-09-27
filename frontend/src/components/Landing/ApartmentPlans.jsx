@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from "motion/react";
 import { CheckCircle2, Maximize2 } from 'lucide-react';
-import { apartmentPlans } from '../../assets/house_data';
+import { apartmentPlans } from '../../assets/landing_content';
 import SectionHeading from '../ui/SectionHeading';
 import Reveal from '../ui/Reveal';
 

@@ -17,7 +17,7 @@ const emptyPlan = {
 };
 
 const Toggle = ({ label, description, checked, onChange }) => (
-  <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-3">
+  <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg bg-slate-50 px-4 py-3">
     <span>
       <span className="block text-sm font-semibold text-gray-900">{label}</span>
       {description && <span className="block text-xs text-gray-500">{description}</span>}
@@ -171,7 +171,7 @@ const AdminPlans = () => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className={`flex flex-col rounded-2xl bg-white p-6 ring-1 ring-slate-200 ${plan.active ? "" : "opacity-75"}`}
+                className={`flex flex-col rounded-lg bg-white p-6 ring-1 ring-slate-200 ${plan.active ? "" : "opacity-75"}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -183,7 +183,7 @@ const AdminPlans = () => {
                     <p className="mt-1 text-sm text-gray-500">{plan.tagline}</p>
                   </div>
                   <p className="shrink-0 text-right">
-                    <span className="block text-2xl font-extrabold text-gray-900">₵{plan.price.toLocaleString()}</span>
+                    <span className="block text-2xl font-semibold text-gray-900">₵{plan.price.toLocaleString()}</span>
                     <span className="text-xs text-gray-500">{durationLabel(plan.durationDays)}</span>
                   </p>
                 </div>
