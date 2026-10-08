@@ -10,7 +10,7 @@ Deploy the repository root as **one Vercel project with two Services**. [Vercel 
 
 | Service | Root | Framework | Install | Build / entrypoint | Output |
 | --- | --- | --- | --- | --- | --- |
-| frontend | `frontend` | Vite | `npm ci` | `npm run build` | `dist` |
+| frontend | `frontend` | Vite | `npm ci --include=dev` (Vite is a dev dependency; `NODE_ENV=production` would otherwise skip it) | `npm run build` | `dist` |
 | backend | `backend` | Express | `npm ci` | exported Express app in `app.js` | Vercel Node.js Function |
 
 Both packages specify Node.js **24.x**. `vercel.json` owns these settings and the ordered public routing table. Select the repository root (`./`), not either service folder, when importing the project. Set the project's framework preset to **Services** in Build and Deployment settings, as required by the [Services setup guide](https://vercel.com/kb/guide/vercel-services). Each service's framework remains defined in the committed configuration. Do not add a project-wide build command or output directory that overrides the service settings.
