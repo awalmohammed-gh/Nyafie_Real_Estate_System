@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { Link, Outlet, ScrollRestoration, useNavigate } from 'react-router-dom'
 import { Loader2, LogOut } from 'lucide-react'
 import { useAuth } from '../context/useAuth'
 import BrandLogo from '../components/brand/BrandLogo'
+import PageLoader from '../components/ui/PageLoader'
 import '../pages/agent/workspace.css'
 
 // Agent onboarding (profile, subscription, payment, status): a focused screen with
@@ -38,7 +39,7 @@ const OnboardingLayout = () => {
         </div>
       </header>
       <main className="flex-1">
-        <Outlet />
+        <Suspense fallback={<PageLoader label="Loading page..." />}><Outlet /></Suspense>
       </main>
     </div>
   )

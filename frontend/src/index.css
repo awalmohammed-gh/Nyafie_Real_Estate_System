@@ -292,3 +292,70 @@
     animation-duration: var(--progress-duration, 6s) !important;
   }
 }
+
+/*
+ * App loader (components/ui/PageLoader): the HomeBase mark breathes gently while a soft
+ * brand-purple (#b45cfd) glow pulses behind it. It fades in after a short delay so quick
+ * loads never flash. Reduced motion: a still mark.
+ */
+.hb-loader {
+  animation: hb-loader-in 0.3s ease-out 0.15s both;
+}
+.hb-loader-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.hb-loader-mark::before {
+  content: "";
+  position: absolute;
+  inset: -35%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(180 92 253 / 0.38) 0%, rgb(180 92 253 / 0) 68%);
+  animation: hb-loader-glow 1.8s ease-in-out infinite;
+}
+.hb-loader.is-dark .hb-loader-mark::before {
+  background: radial-gradient(circle, rgb(180 92 253 / 0.55) 0%, rgb(180 92 253 / 0) 68%);
+}
+.hb-loader-mark img {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 22%;
+  box-shadow: 0 10px 28px -10px rgb(122 12 200 / 0.55);
+  user-select: none;
+  animation: hb-loader-breathe 1.8s ease-in-out infinite;
+}
+.hb-loader-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-gray-500);
+  animation: hb-loader-fade 1.8s ease-in-out infinite;
+}
+.hb-loader.is-dark .hb-loader-label {
+  color: var(--color-gray-400);
+}
+@keyframes hb-loader-in {
+  from { opacity: 0; }
+}
+@keyframes hb-loader-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-3px) scale(1.04); }
+}
+@keyframes hb-loader-glow {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+@keyframes hb-loader-fade {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hb-loader-mark::before, .hb-loader-mark img, .hb-loader-label {
+    animation: none !important;
+  }
+  .hb-loader-mark::before {
+    opacity: 0.6;
+  }
+}
