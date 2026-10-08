@@ -13,7 +13,8 @@ const template = () => {
     const frontend = process.env.FRONTEND_INTERNAL_URL || (process.env.NODE_ENV !== "production" ? "http://127.0.0.1:5173" : "");
     templatePromise = (async () => {
       if (!frontend) throw new Error('FRONTEND_INTERNAL_URL service binding is missing.');
-      const response = await fetch(new URL('/index.html', frontend), { signal: AbortSignal.timeout(10000) });
+      // Resolve relative to the binding's URL base so any path it carries is kept.
+      const response = await fetch(new URL('index.html', frontend.endsWith('/') ? frontend : `${frontend}/`), { signal: AbortSignal.timeout(10000) });
       if (!response.ok) throw new Error('Frontend HTML could not be loaded.');
       const html = await response.text();
       if (!html.includes('id="root"') || !html.includes('</head>')) throw new Error('Frontend returned an invalid app shell.');
