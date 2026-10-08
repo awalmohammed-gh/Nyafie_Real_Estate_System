@@ -1,13 +1,12 @@
 import { fail } from "../utils/response.js";
+import { clientOrigins } from "../config/runtime.js";
+import crypto from "node:crypto";
+import RateLimitBucket from "../models/RateLimitBucket.js";
 
 const isProduction = () => process.env.NODE_ENV === "production";
 
 // Trusted browser origins: CLIENT_URL, comma-separated for several (e.g. apex and www)
-export const allowedOrigins = () =>
-  (process.env.CLIENT_URL || "http://localhost:5173")
-    .split(",")
-    .map((origin) => origin.trim().replace(/\/+$/, ""))
-    .filter(Boolean);
+export const allowedOrigins = clientOrigins;
 
 /**
  * Security headers for a JSON API (helmet-equivalent, no extra dependency).
@@ -67,8 +66,8 @@ export const rejectOperatorKeys = (req, res, next) => {
 };
 
 /**
- * Fixed-window rate limiter kept in memory (per server process). Good for a single instance;
- * with several instances behind a load balancer, move the counters to a shared store (Redis).
+ * Production counters are atomic MongoDB records shared by all function instances.
+ * Development uses in-memory counters. Only hashed identifiers are stored; TTL removes old buckets.
  * key(req) groups requests, e.g. by IP or by IP + email for logins.
  */
 export const rateLimit = ({ windowMs, max, key = (req) => req.ip, message = "Too many requests. Please wait a moment and try again." }) => {
@@ -79,15 +78,32 @@ export const rateLimit = ({ windowMs, max, key = (req) => req.ip, message = "Too
   }, windowMs);
   sweep.unref?.();
 
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const now = Date.now();
     const id = key(req);
-    let entry = hits.get(id);
-    if (!entry || entry.resetAt <= now) {
-      entry = { count: 0, resetAt: now + windowMs };
-      hits.set(id, entry);
+    let entry;
+    if (isProduction()) {
+      const resetAt = (Math.floor(now / windowMs) + 1) * windowMs;
+      const bucketId = crypto.createHash("sha256").update(`${windowMs}|${max}|${message}|${id}|${resetAt}`).digest("hex");
+      try {
+        const update = { $inc: { hits: 1 }, $setOnInsert: { expiresAt: new Date(resetAt) } };
+        let bucket;
+        try { bucket = await RateLimitBucket.findOneAndUpdate({ _id: bucketId }, update, { upsert: true, returnDocument: "after" }); }
+        catch (error) {
+          if (error.code !== 11000) throw error;
+          bucket = await RateLimitBucket.findOneAndUpdate({ _id: bucketId }, { $inc: { hits: 1 } }, { returnDocument: "after" });
+        }
+        if (!bucket) throw new Error("Rate limit counter unavailable.");
+        entry = { count: bucket.hits, resetAt };
+      } catch (error) { return next(error); }
+    } else {
+      entry = hits.get(id);
+      if (!entry || entry.resetAt <= now) {
+        entry = { count: 0, resetAt: now + windowMs };
+        hits.set(id, entry);
+      }
+      entry.count += 1;
     }
-    entry.count += 1;
     res.set("RateLimit-Limit", String(max));
     res.set("RateLimit-Remaining", String(Math.max(0, max - entry.count)));
     if (entry.count > max) {

@@ -16,6 +16,9 @@ export const formatPrice = (property) => {
 
 export const formatType = (type) => type.replace(/-/g, " ");
 
+// Visibility follows the complete directory, not the bounded public-listing cache.
+export const isListingPublic = (property, agents) => property.listing?.state === "published" && (property.owner?.type === "admin" || agents.some((agent) => agent.id === property.owner?.id));
+
 export const statusLabel = (status) => (status === "Sale" ? "For Sale" : "For Rent");
 
 export const getInitials = (name) =>
@@ -40,6 +43,7 @@ export const buildAgents = (properties) => {
     const ratings = agent.properties.map((p) => p.meta?.rating).filter(Boolean);
     return {
       ...agent,
+      propertyCount: agent.properties.length,
       rating: ratings.length ? ratings.reduce((sum, r) => sum + r, 0) / ratings.length : null,
       saleCount: agent.properties.filter((p) => p.property.status === "Sale").length,
       rentCount: agent.properties.filter((p) => p.property.status === "Rent").length,
@@ -57,7 +61,7 @@ export const buildAgents = (properties) => {
 export const mergeAgents = (directory, properties) => {
   const withListings = new Map(buildAgents(properties).map((a) => [String(a.id), a]));
   if (!directory) return [...withListings.values()];
-  const empty = { rating: null, saleCount: 0, rentCount: 0, views: 0, locations: [], properties: [] };
+  const empty = { propertyCount: 0, rating: null, saleCount: 0, rentCount: 0, views: 0, locations: [], properties: [] };
   return directory.map((d) => ({ ...empty, ...withListings.get(d.id), ...d }));
 };
 

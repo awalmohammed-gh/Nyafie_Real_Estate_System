@@ -32,6 +32,16 @@ export const searchProperties = async (params = {}) => {
   return { ...data, items: data.items.map(mapProperty) };
 };
 
+// Load only referenced listings, with bounded batches even for a long inquiry history.
+export const getPropertiesByIds = async (ids) => {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const items = [];
+  for (let start = 0; start < unique.length; start += 48) {
+    items.push(...(await searchProperties({ ids: unique.slice(start, start + 48), limit: 48 })).items);
+  }
+  return items;
+};
+
 // Filter options and headline numbers computed in MongoDB (types, areas with counts, totals)
 export const getPropertyFacets = async (params = {}) => (await client.get("/properties/facets", { params: cleanParams(params) })).data;
 

@@ -6,6 +6,7 @@ import Agents from './Agents';
 import PropertyPerPage from './PropertyPerPage';
 import NotFound from './NotFound';
 import PageLoader from '../components/ui/PageLoader';
+import RequireAuth from '../components/auth/RequireAuth';
 
 const PAGES = { properties: Properties, listings: Listings, agents: Agents };
 const DEFAULT_SLUGS = { properties: 'properties', listings: 'listings', agents: 'agents' };
@@ -24,7 +25,7 @@ const SlugPage = () => {
   const page = Object.keys(PAGES).find((name) => settings.slugs[name] === key);
   if (page) {
     const Page = PAGES[page];
-    return <Page />;
+    return page === 'agents' ? <RequireAuth><Page /></RequireAuth> : <Page />;
   }
   if (key === 'sale' || key === 'rent') return <PropertyPerPage status={key} />;
 

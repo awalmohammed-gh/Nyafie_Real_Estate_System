@@ -8,7 +8,7 @@ export const cookieName = (session) => {
 const cookieOptions = () => ({
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  sameSite: process.env.COOKIE_SAME_SITE || "lax",
   path: "/",
 });
 

@@ -15,6 +15,7 @@ import BuyNowPanel from "../components/offer/BuyNowPanel";
 import NotFound from "./NotFound";
 import { formatType, getPriceParts, statusLabel } from "../utils/property";
 import { buildWhatsAppLink, ownerWhatsAppNumber } from "../utils/whatsapp";
+import { propertyUrl } from "../utils/siteUrl";
 
 const COPY = {
   rent: { title: "Proceed with Rental", intro: "Confirm availability with the agent, then review your rental details and total before paying online." },
@@ -59,7 +60,7 @@ const PropertyAction = ({ mode }) => {
   const availability = property.listing.availability;
   const isOwnListing = Boolean(user) && ((isAdminListing && user.role === "admin") || property.ownerUserId === user.id);
   const whatsappNumber = ownerWhatsAppNumber(property, settings);
-  const whatsappLink = buildWhatsAppLink(whatsappNumber, property, `${window.location.origin}/house/${property.id}`);
+  const whatsappLink = buildWhatsAppLink(whatsappNumber, property, propertyUrl(property.id, settings));
 
   // Rent Now only fits rentals, Buy Now only fits sales
   const wrongType = (mode === "rent" && isForSale) || (mode === "buy" && !isForSale);

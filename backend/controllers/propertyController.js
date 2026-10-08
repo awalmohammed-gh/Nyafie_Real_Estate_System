@@ -84,12 +84,20 @@ export const validateForPublishing = (p) => {
 /**
  * GET /api/agents/public -> agents customers can contact: active account and (when Admin Settings
  * require it) an active subscription, whether or not they have published a listing yet.
- * Only public profile fields; listing stats are added by the frontend from the public listings.
+ * Only public profile fields; complete listing statistics are aggregated on the server.
  */
 export const listPublicAgents = async (_req, res) => {
   const ids = (await visibleAgentIds()).map((a) => a.id);
-  const agents = await User.find({ _id: { $in: ids } }).select(PUBLIC_AGENT_FIELDS).sort({ createdAt: 1 });
-  ok(res, agents.map(publicAgent));
+  const [agents, statistics] = await Promise.all([
+    User.find({ _id: { $in: ids } }).select(PUBLIC_AGENT_FIELDS).sort({ createdAt: 1 }),
+    Property.aggregate([
+      { $match: { ownerType: "agent", owner: { $in: ids }, status: "published", availability: { $in: ["Available", "Under Offer"] } } },
+      { $sort: { createdAt: -1 } },
+      { $group: { _id: "$owner", propertyCount: { $sum: 1 }, saleCount: { $sum: { $cond: [{ $eq: ["$listingType", "Sale"] }, 1, 0] } }, rentCount: { $sum: { $cond: [{ $eq: ["$listingType", "Rent"] }, 1, 0] } }, locations: { $addToSet: "$location.neighbourhood" }, rating: { $avg: { $cond: [{ $gt: ["$ratingCount", 0] }, "$ratingAverage", null] } }, coverImage: { $first: { $arrayElemAt: ["$images", 0] } } } },
+    ]),
+  ]);
+  const byOwner = new Map(statistics.map(({ _id, ...stats }) => [String(_id), stats]));
+  ok(res, agents.map((agent) => ({ ...publicAgent(agent), propertyCount: 0, saleCount: 0, rentCount: 0, locations: [], rating: null, ...byOwner.get(String(agent._id)) })));
 };
 
 const { ObjectId } = mongoose.Types;
@@ -146,7 +154,7 @@ const publicBase = (agents) => ({ status: "published", $or: [{ ownerType: "admin
 
 /**
  * GET /api/properties (public)
- * Without `page`: every public listing (used for favourites and the agents directory).
+ * Without `page`: up to 48 public listings for the shared property cache.
  * With `page`: filtered, sorted and paginated -> { items, total, page, pages, limit }.
  * The default "recommended" order puts HomeBase listings first, then agents with
  * priority visibility, then everyone else (newest first within each group).
@@ -161,8 +169,8 @@ export const listPublicProperties = async (req, res) => {
   ];
 
   if (req.query.page === undefined) {
-    const docs = await Property.aggregate([{ $match: filter }, ...recommended, { $project: { _rank: 0 } }]);
-    return ok(res, await presentProperties(docs.map((d) => Property.hydrate(d))));
+    const docs = await Property.aggregate([{ $match: filter }, ...recommended, { $limit: 48 }, { $project: { _rank: 0 } }]);
+    return ok(res, await presentProperties(docs.slice(0, 48).map((d) => Property.hydrate(d)), { includeAgentDetails: Boolean(req.user) }));
   }
 
   const limit = Math.min(48, Math.max(1, Math.round(number(req.query.limit) || 12)));
@@ -175,7 +183,7 @@ export const listPublicProperties = async (req, res) => {
       ? Property.find(filter).sort(sort).skip(skip).limit(limit)
       : Property.aggregate([{ $match: filter }, ...recommended, { $skip: skip }, { $limit: limit }, { $project: { _rank: 0 } }]).then((rows) => rows.map((d) => Property.hydrate(d))),
   ]);
-  ok(res, { items: await presentProperties(docs), total, page, pages: Math.max(1, Math.ceil(total / limit)), limit });
+  ok(res, { items: await presentProperties(docs, { includeAgentDetails: Boolean(req.user) }), total, page, pages: Math.max(1, Math.ceil(total / limit)), limit });
 };
 
 /**
@@ -244,7 +252,7 @@ export const relatedProperties = async (req, res) => {
 
   // Not enough close matches: fill with other listings of the same type (sale/rent)
   const fill = similar.length < limit ? await Property.find({ $and: [base, { _id: { $nin: similar.map((p) => p._id) } }] }).sort({ createdAt: -1 }).limit(limit - similar.length) : [];
-  ok(res, await presentProperties([...similar, ...fill]));
+  ok(res, await presentProperties([...similar, ...fill], { includeAgentDetails: Boolean(req.user) }));
 };
 
 const isOwner = (property, user) => user && String(property.owner) === String(user._id);
@@ -257,7 +265,7 @@ export const getProperty = async (req, res) => {
   const { query } = await publicQuery();
   const visible = await Property.exists({ _id: property._id, ...query });
   if (!visible) return fail(res, 404, "Property not found.");
-  ok(res, (await presentProperties([property]))[0]);
+  ok(res, (await presentProperties([property], { includeAgentDetails: Boolean(req.user) }))[0]);
 };
 
 // POST /api/properties/:id/view

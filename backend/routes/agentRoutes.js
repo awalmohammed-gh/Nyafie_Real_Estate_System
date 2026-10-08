@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { dashboard, agentInquiries, agentUpdateInquiry } from "../controllers/agentController.js";
-import { protectAgent, protectAgentSession } from "../middleware/authMiddleware.js";
+import { protect, protectAgent, protectAgentSession } from "../middleware/authMiddleware.js";
 import { getApplication, saveApplication, submitApplication, updateAgentProfile } from "../controllers/agentApplicationController.js";
 import { agentOnly } from "../middleware/agentMiddleware.js";
 import { listConversations } from "../controllers/chatController.js";
@@ -11,8 +11,8 @@ import { listPublicAgents } from "../controllers/propertyController.js";
 
 const router = Router();
 
-// Public: the agents directory customers see (declared before the agent-only guard below)
-router.get("/public", listPublicAgents);
+// Directory profiles require a signed-in session; agent workspace guards follow below.
+router.get("/public", protect, listPublicAgents);
 router.get("/application", protectAgentSession, getApplication);
 router.put("/application", protectAgentSession, saveApplication);
 router.post("/application/submit", protectAgentSession, submitApplication);

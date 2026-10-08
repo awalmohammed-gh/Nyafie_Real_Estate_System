@@ -42,7 +42,7 @@ import { usePlatform } from "../context/usePlatform";
 import StartChatModal from "../components/chat/StartChatModal";
 import WhatsAppIcon from "../components/ui/WhatsAppIcon";
 import StatusBadge from "../components/ui/StatusBadge";
-import SignInRequiredModal from "../components/property/SignInRequiredModal";
+import SignInRequiredModal, { SignInPrompt } from "../components/property/SignInRequiredModal";
 import PropertyGallery from "../components/property/PropertyGallery";
 import PropertyReviews from "../components/reviews/PropertyReviews";
 import {
@@ -51,6 +51,8 @@ import {
   ownerWhatsAppNumber,
 } from "../utils/whatsapp";
 import { formatDate } from "../utils/date";
+import { propertyUrl } from "../utils/siteUrl";
+import PageMetadata from "../components/brand/PageMetadata";
 import {
   formatType,
   getInitials,
@@ -77,13 +79,13 @@ const PropertiesDetails = () => {
   const [copied, setCopied] = useState(false);
 
   // The property is always loaded from the API by its database id
-  const detail = useApiQuery(`property:${id}`, () =>
+  const detail = useApiQuery(`property:${id}:${user?.id || "guest"}`, () =>
     propertyApi.getPropertyById(id),
   );
   const property = detail.data;
   const agentOwnerId =
-    property?.owner.type === "agent" ? property.ownerUserId : null;
-  const related = useApiQuery(`related:${id}`, () =>
+    user && property?.owner.type === "agent" ? property.ownerUserId : null;
+  const related = useApiQuery(`related:${id}:${user?.id || "guest"}`, () =>
     propertyApi.getRelatedProperties(id, 3),
   );
   // How many public listings the agent has (counted on the server)
@@ -154,13 +156,13 @@ const PropertiesDetails = () => {
   const whatsappLink = buildWhatsAppLink(
     whatsappNumber,
     property,
-    window.location.href,
+    propertyUrl(id, settings),
   );
   const listingCount = agentListings.data?.total;
   const emailLink = buildPropertyEmailLink(
     ownerEmail,
     property,
-    `${window.location.origin}/house/${id}`,
+    propertyUrl(id, settings),
   );
   const hasCoordinates =
     Number.isFinite(place.latitude) && Number.isFinite(place.longitude);
@@ -263,7 +265,7 @@ const PropertiesDetails = () => {
   const similar = related.data || []; // from GET /properties/:id/related
 
   const handleShare = async () => {
-    const url = window.location.href;
+    const url = propertyUrl(id, settings);
     try {
       if (navigator.share) {
         await navigator.share({ title, url });
@@ -291,6 +293,7 @@ const PropertiesDetails = () => {
 
   return (
     <div className="bg-white pb-32 lg:pb-16">
+      <PageMetadata title={`${title} | ${siteName}`} description={description.replace(/\s+/g, " ").slice(0, 160)} image={images[0]} />
       <div className="container-page pt-5 sm:pt-7">
         <nav
           aria-label="Breadcrumb"
@@ -661,7 +664,7 @@ const PropertiesDetails = () => {
                   </button>
                 </div>
               )}
-              <div className="mt-5 border-t border-gray-100 pt-5">
+              {isAdminListing || user ? <div className="mt-5 border-t border-gray-100 pt-5">
                 <p className="text-xs text-gray-500">Listed by</p>
                 <div className="mt-3 flex items-center gap-3">
                   {agent.profileImage && !isAdminListing ? (
@@ -775,7 +778,7 @@ const PropertiesDetails = () => {
                     <ChevronRight aria-hidden="true" className="h-3.5 w-3.5" />
                   </Link>
                 )}
-              </div>
+              </div> : <div className="mt-5 border-t border-gray-100 pt-5"><SignInPrompt returnTo={location.pathname + location.search} message="Sign in or create an account to view this agent's profile and contact details." /></div>}
               <p className="mt-4 flex items-start gap-2 border-t border-gray-100 pt-4 text-xs leading-5 text-gray-500">
                 <ShieldCheck
                   aria-hidden="true"

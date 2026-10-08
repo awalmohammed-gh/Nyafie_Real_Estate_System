@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { siteUrl } from "../config/runtime.js";
 import { schemaOptions } from "../utils/schemaOptions.js";
 
 // Every system setting and its default. Only keys listed here are ever read or saved.
@@ -110,6 +111,8 @@ export const getSettings = async () => {
   // The WhatsApp number used to come from ADMIN_WHATSAPP_NUMBER; it stays the fallback until one is saved
   if (!merged.contact.whatsapp) merged.contact.whatsapp = process.env.ADMIN_WHATSAPP_NUMBER || "";
   cachedSiteName = merged.general.siteName;
+  if (process.env.PUBLIC_SITE_URL) merged.seo.baseUrl = siteUrl();
+  if (process.env.VERCEL_ENV === "preview") merged.seo.allowIndexing = false;
   return merged;
 };
 

@@ -20,13 +20,17 @@ export const ensureAdmin = async () => {
     return;
   }
 
-  // An existing account with that email is promoted; otherwise a new admin is created
+  // Never promote an existing customer or agent during deployment bootstrap.
   const existing = await User.findOne({ email });
   if (existing) {
-    existing.set({ role: "admin", isActive: true, password });
-    await existing.save();
+    throw new Error("ADMIN_EMAIL belongs to a non-admin account. Use a dedicated admin email.");
   } else {
-    await User.create({ firstName: "Platform", lastName: "Admin", email, password, role: "admin" });
+    try {
+      await User.create({ firstName: "Platform", lastName: "Admin", email, password, role: "admin" });
+    } catch (error) {
+      // Concurrent cold starts may both try to create the same first admin.
+      if (error.code !== 11000 || !await User.exists({ email, role: "admin" })) throw error;
+    }
   }
   console.log(`Admin account created for ${email}`);
 };

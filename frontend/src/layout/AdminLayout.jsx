@@ -12,6 +12,7 @@ import {
   Layers,
   LayoutDashboard,
   MessageCircle,
+  Mail,
   Settings,
   Star,
   UserCog,
@@ -62,6 +63,7 @@ const groups = [
     label: "Communication",
     items: [
       { label: "Inquiries", to: "/admin/inquiries", icon: Inbox, badge: "inquiries" },
+      { label: "Contact messages", to: "/admin/contact-messages", icon: Mail },
       { label: "Messages", to: "/admin/messages", icon: MessageCircle, badge: "messages" },
       { label: "Reviews", to: "/admin/reviews", icon: Star, badge: "reviews" },
     ],

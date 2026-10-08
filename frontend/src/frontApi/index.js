@@ -16,3 +16,4 @@ export * as paymentApi from "./paymentApi";
 export * as saleRequestApi from "./saleRequestApi";
 export * as notificationApi from "./notificationApi";
 export * as reviewApi from "./reviewApi";
+export * as contactApi from "./contactApi";

@@ -11,13 +11,18 @@ import NotFound from './NotFound';
 import PageLoader from '../components/ui/PageLoader';
 import './agents.css';
 import './agent/workspace.css';
+import { propertyApi } from '../frontApi';
+import { useApiQuery } from '../hooks/useApiQuery';
+import SkeletonGrid from '../components/ui/SkeletonGrid';
 
 const CATEGORIES = [{ label: 'All homes', value: 'All' }, { label: 'For sale', value: 'Sale' }, { label: 'To rent', value: 'Rent' }];
 
 const AgentProfile = ({ agent }) => {
   const { paths, siteName } = usePlatform();
   const [category, setCategory] = useState('All');
-  const listings = agent.properties.filter((property) => category === 'All' || property.property.status === category);
+  const [page, setPage] = useState(1);
+  const result = useApiQuery(`agent-listings:${agent.id}:${category}:${page}`, () => propertyApi.searchProperties({ owner: agent.id, availability: ['Available', 'Under Offer'], listingType: category === 'All' ? undefined : category, page, limit: 12 }));
+  const listings = result.data?.items || [];
   const areas = agent.locations.filter(Boolean);
   const firstName = agent.name.split(' ')[0];
 
@@ -37,7 +42,7 @@ const AgentProfile = ({ agent }) => {
             <Link to={paths.agents} className="agents-back-link"><ArrowLeft size={16} aria-hidden="true" />All agents</Link>
           </div>
           <dl className="agent-profile-stats">
-            {[{ value: agent.properties.length, label: 'Homes listed' }, { value: agent.saleCount, label: 'For sale' }, { value: agent.rentCount, label: 'To rent' }, { value: areas.length, label: 'Neighbourhoods' }].map(({ value, label }) => <div key={label}><dt>{label}</dt><dd>{value.toLocaleString()}</dd></div>)}
+            {[{ value: agent.propertyCount, label: 'Homes listed' }, { value: agent.saleCount, label: 'For sale' }, { value: agent.rentCount, label: 'To rent' }, { value: areas.length, label: 'Neighbourhoods' }].map(({ value, label }) => <div key={label}><dt>{label}</dt><dd>{value.toLocaleString()}</dd></div>)}
           </dl>
         </div>
       </header>
@@ -63,20 +68,21 @@ const AgentProfile = ({ agent }) => {
           <div className="agents-section-heading"><div><p className="agents-eyebrow">Find your next place</p><h2 id="agent-listings-title">Homes with {firstName}</h2></div></div>
           <div className="agent-profile-listing-toolbar">
             <div className="agents-segments" role="group" aria-label="Filter homes by listing type">
-              {CATEGORIES.map(({ label, value }) => <button key={value} type="button" aria-pressed={category === value} className={category === value ? 'is-active' : ''} onClick={() => setCategory(value)}>{label} <span>{value === 'All' ? agent.properties.length : value === 'Sale' ? agent.saleCount : agent.rentCount}</span></button>)}
+              {CATEGORIES.map(({ label, value }) => <button key={value} type="button" aria-pressed={category === value} className={category === value ? 'is-active' : ''} onClick={() => { setCategory(value); setPage(1); }}>{label} <span>{value === 'All' ? agent.propertyCount : value === 'Sale' ? agent.saleCount : agent.rentCount}</span></button>)}
             </div>
-            <p role="status" aria-live="polite" aria-atomic="true">{listings.length} {listings.length === 1 ? 'home' : 'homes'}</p>
+            <p role="status" aria-live="polite" aria-atomic="true">{result.loading ? 'Loading homes...' : `${result.data?.total || 0} homes`}</p>
           </div>
-          {listings.length > 0 ? (
+          {result.loading ? <SkeletonGrid count={3} /> : result.error ? <div role="alert" className="agents-empty"><p>{result.error}</p><button type="button" onClick={result.reload} className="agents-button agents-button-primary">Retry</button></div> : listings.length > 0 ? (
             <div className="agent-homes-grid">{listings.map((property) => <HouseCard key={property.id} house={property} />)}</div>
           ) : (
             <div className="agents-empty">
               <span className="agents-empty-icon"><Building2 size={27} aria-hidden="true" /></span>
               <h3>{category === 'All' ? 'A new chapter is on the way.' : 'No homes in this category yet.'}</h3>
               <p>{category === 'All' ? `${firstName} has no published homes right now. Get in touch to discuss what you’re looking for.` : 'Explore all homes or contact the agent about your search.'}</p>
-              {category !== 'All' && <button type="button" className="agents-button agents-button-primary" onClick={() => setCategory('All')}>Explore all homes</button>}
+              {category !== 'All' && <button type="button" className="agents-button agents-button-primary" onClick={() => { setCategory('All'); setPage(1); }}>Explore all homes</button>}
             </div>
           )}
+          {result.data?.pages > 1 && <nav aria-label="Agent listings pages" className="mt-6 flex items-center justify-center gap-4"><button type="button" disabled={page === 1 || result.loading} onClick={() => setPage((current) => current - 1)} className="btn btn-light">Previous</button><span className="text-sm text-gray-600">Page {page} of {result.data.pages}</span><button type="button" disabled={page >= result.data.pages || result.loading} onClick={() => setPage((current) => current + 1)} className="btn btn-light">Next</button></nav>}
         </section>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { mergeAgents } from "../utils/property";
+import { isListingPublic, mergeAgents } from "../utils/property";
 import { readStorage, writeStorage } from "../utils/storage";
 import { RealEstateContext } from "./realEstateContext";
 import { useAuth } from "./useAuth";
@@ -18,7 +18,7 @@ export const RealEstateProvider = ({ children }) => {
   const userId = user?.id;
 
   const [properties, setProperties] = useState([]);
-  const [agentDirectory, setAgentDirectory] = useState(undefined); // undefined = loading, null = unavailable
+  const [agentDirectory, setAgentDirectory] = useState(undefined);
   const [propertiesLoading, setPropertiesLoading] = useState(true);
   const [listings, setListings] = useState([]);
   const [listingsLoading, setListingsLoading] = useState(false);
@@ -28,7 +28,6 @@ export const RealEstateProvider = ({ children }) => {
   const [savedIds, setSavedIds] = useState([]);
 
   const refreshProperties = useCallback(async () => {
-    agentApi.getPublicAgents().then(setAgentDirectory, () => setAgentDirectory(null));
     try {
       setProperties(await propertyApi.getProperties());
     } finally {
@@ -57,7 +56,19 @@ export const RealEstateProvider = ({ children }) => {
   // reload public listings whenever the admin user list is refreshed
   useEffect(() => {
     refreshProperties().catch(() => {});
-  }, [refreshProperties, users]);
+  }, [refreshProperties, users, userId]);
+
+  // Agent profiles are visible only to the current signed-in account.
+  // Ignore requests that finish after logout or an account switch.
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    agentApi.getPublicAgents().then(
+      (data) => active && setAgentDirectory({ userId, data }),
+      () => active && setAgentDirectory({ userId, data: null }),
+    );
+    return () => { active = false; };
+  }, [userId, users, properties]);
 
   // Reload role-specific data whenever the signed-in account changes
   useEffect(() => {
@@ -76,8 +87,9 @@ export const RealEstateProvider = ({ children }) => {
     await Promise.all([refreshProperties(), refreshListings()]);
   }, [refreshProperties, refreshListings]);
 
-  const agents = useMemo(() => mergeAgents(agentDirectory, properties), [agentDirectory, properties]);
-  const agentsLoading = propertiesLoading || agentDirectory === undefined;
+  const directory = agentDirectory?.userId === userId ? agentDirectory?.data : undefined;
+  const agents = useMemo(() => userId ? mergeAgents(directory, properties) : [], [userId, directory, properties]);
+  const agentsLoading = Boolean(userId) && (propertiesLoading || directory === undefined);
 
   const addListing = useCallback(
     async (data) => {
@@ -147,7 +159,7 @@ export const RealEstateProvider = ({ children }) => {
   );
 
   const findProperty = useCallback((id) => listings.find((p) => p.id === id) || properties.find((p) => p.id === id), [listings, properties]);
-  const isPubliclyVisible = useCallback((property) => properties.some((p) => p.id === property.id), [properties]);
+  const isPubliclyVisible = useCallback((property) => isListingPublic(property, agents), [agents]);
 
   const favorites = userId ? savedIds : guestFavorites;
 

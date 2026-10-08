@@ -2,9 +2,9 @@ import { usePlatform } from "../../context/usePlatform";
 import { splitBrandName } from "../../utils/brand";
 
 const SIZES = {
-  sm: { mark: "h-8 w-8 rounded-lg text-sm", text: "text-sm", img: "h-8" },
-  md: { mark: "h-9 w-9 rounded-xl text-base", text: "text-xl sm:text-2xl", img: "h-9" },
-  lg: { mark: "h-9 w-9 rounded-xl text-base", text: "text-2xl", img: "h-10" },
+  sm: { mark: "h-9 w-9 rounded-lg text-sm", text: "text-sm", img: "h-9" },
+  md: { mark: "h-10 w-10 rounded-xl text-base", text: "text-xl sm:text-2xl", img: "h-10" },
+  lg: { mark: "h-11 w-11 rounded-xl text-base", text: "text-2xl", img: "h-11" },
 };
 
 /**
@@ -24,7 +24,7 @@ const BrandLogo = ({ tone = "light", size = "md", compact = false, subtitle, cla
   if (image && !compact) {
     return (
       <span className={`flex min-w-0 items-center gap-2.5 ${className}`}>
-        <img src={image} alt={siteName} className={`${s.img} w-auto max-w-44 object-contain`} />
+        <img src={image} alt={siteName} className={`${s.img} w-auto max-w-48 object-contain`} />
         {subtitle && <span className={`text-[11px] font-medium ${inverse ? mutedText : "text-gray-500"}`}>{subtitle}</span>}
       </span>
     );

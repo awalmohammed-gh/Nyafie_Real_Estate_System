@@ -3,7 +3,7 @@ import { useAuth } from "../../context/useAuth";
 import PageLoader from "../ui/PageLoader";
 
 // Signed-out visitors are sent to the login page and returned here afterwards
-const RequireAuth = () => {
+const RequireAuth = ({ children }) => {
   const { ready, isAuthenticated } = useAuth();
   const location = useLocation();
 
@@ -11,7 +11,7 @@ const RequireAuth = () => {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   }
-  return <Outlet />;
+  return children || <Outlet />;
 };
 
 export default RequireAuth;

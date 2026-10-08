@@ -198,7 +198,7 @@ test("role session isolation", async (t) => {
       assert.equal(response.status, 503);
       assert.equal(response.headers.getSetCookie().length, 0);
     });
-    await t.test("production cookies stay secure and cross-site compatible", () => {
+    await t.test("production cookies stay secure and same-site by default", () => {
       const previous = process.env.NODE_ENV;
       process.env.NODE_ENV = "production";
       try {
@@ -206,7 +206,7 @@ test("role session isolation", async (t) => {
           assert.equal(name, `${session}_token`);
           assert.equal(options.httpOnly, true);
           assert.equal(options.secure, true);
-          assert.equal(options.sameSite, "none");
+          assert.equal(options.sameSite, "lax");
           // Admin sessions last 12 hours; customer and agent sessions a week
           assert.equal(options.maxAge, session === "admin" ? 43200000 : 604800000);
         } }, accounts[0]._id, session);
