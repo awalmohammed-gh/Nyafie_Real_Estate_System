@@ -1,6 +1,6 @@
 # HomeBase deployment guide
 
-HomeBase remains a Vite 8 / React 19 SPA with React Router 7, an Express 5 API, Mongoose 9 / MongoDB, Cloudinary images, and Paystack **test** payments. No Next.js migration is required. The canonical production origin is **https://homeb-real-estate.vercel.app**.
+HomeBase remains a Vite 8 / React 19 SPA with React Router 7, an Express 5 API, Mongoose 9 / MongoDB, Cloudinary images, and Paystack **test** payments. No Next.js migration is required. The canonical production origin is **https://real-estate-home-phi.vercel.app**.
 
 The repository is prepared for deployment. No Vercel production deployment or production browser/payment verification has been performed in this session. Local checks and the remaining production checks are listed below.
 
@@ -30,14 +30,14 @@ Both `.env.example` files contain empty assignments only. Actual local `.env` fi
 | `NODE_ENV` | Yes | `production` |
 | `MONGODB_URI` | Yes | Production Atlas connection string for a dedicated HomeBase database user. Include the intended database in the URI or set `MONGODB_DB`. |
 | `MONGODB_DB` | If the URI does not select the intended database | Production database name. Overrides the database in the URI when supplied. |
-| `PUBLIC_SITE_URL` | Yes | `https://homeb-real-estate.vercel.app` |
+| `PUBLIC_SITE_URL` | Yes | `https://real-estate-home-phi.vercel.app` |
 | `JWT_KEY` | Yes | A fresh randomly generated secret of at least 32 characters; use a separate value for Preview. Production refuses shorter values. |
 | `CLOUD_NAME` | Yes | Production Cloudinary cloud name. |
 | `CLOUD_API_KEY` | Yes | Cloudinary API key, backend only. |
 | `CLOUD_SECRET_KEY` | Yes | Cloudinary API secret, backend only. |
 | `Test_Secret_Key` | Required for online payments | Paystack **test** secret key (`sk_test_` prefix). Missing or live keys disable checkout. |
 | `Test_Public_Key` | Optional | Paystack test public key for the admin configuration summary. Checkout currently uses the authorization URL returned by the backend. |
-| `CLIENT_URL` | Optional | `https://homeb-real-estate.vercel.app`. Defaults to the canonical origin. Additional origins must be an exact comma-separated list of HTTPS origins with no paths; no wildcard. |
+| `CLIENT_URL` | Optional | `https://real-estate-home-phi.vercel.app`. Defaults to the canonical origin. Additional origins must be an exact comma-separated list of HTTPS origins with no paths; no wildcard. |
 | `COOKIE_SAME_SITE` | Optional | Leave unset or use `lax` for this same-domain architecture. |
 | `ADMIN_EMAIL` | Required to create the first admin in a fresh database | A dedicated admin email that does not belong to an existing customer or agent. |
 | `ADMIN_PSD` | Required with `ADMIN_EMAIL` for initial bootstrap | Strong initial admin password. The minimum accepted length is 8 characters. Remove both bootstrap variables after creating and verifying the admin account. |
@@ -52,7 +52,7 @@ The application uses one signing secret (`JWT_KEY`) with separate customer, agen
 | Variable | Value |
 | --- | --- |
 | `VITE_API_URL` | `/api` |
-| `VITE_PUBLIC_SITE_URL` | `https://homeb-real-estate.vercel.app` |
+| `VITE_PUBLIC_SITE_URL` | `https://real-estate-home-phi.vercel.app` |
 
 These are public build-time values. Redeploy the frontend after changing them.
 
@@ -99,7 +99,7 @@ Public listing queries are bounded (48 maximum per page); the agent profile pagi
 3. In Vercel, import that GitHub repository into the intended account/team. Choose root directory `./` and retain the committed `vercel.json`. Configure `platform-redesign` as the production branch if deploying this branch directly; otherwise merge the reviewed branch into the project's production branch first.
 4. Set the project framework to **Services** and verify the two service roots/frameworks and Node 24.x settings against the table above. Add the Production and Preview environment variables to the correct environments before building. Do not use `frontend` as the project root.
 5. Deploy. Inspect both service build logs and backend runtime logs. Confirm that the backend binding was injected and MongoDB/Cloudinary initialization succeeds. Visit `/api/health` and expect HTTP 200 with `{ "success": true, "service": "HomeBase" }`.
-6. In project Domains, confirm this project owns `homeb-real-estate.vercel.app`. Naming the project does not guarantee that hostname is available. If Vercel assigns a different domain, update both canonical URL variables and `CLIENT_URL` to the actual chosen domain and redeploy before sharing links.
+6. In project Domains, confirm this project owns `real-estate-home-phi.vercel.app`. Naming the project does not guarantee that hostname is available. If Vercel assigns a different domain, update both canonical URL variables and `CLIENT_URL` to the actual chosen domain and redeploy before sharing links.
 7. Sign in through `/admin/login`, review settings, property publication rules and subscription requirements, and check the payment summary says Paystack test and active. Verify the first admin account, then remove its bootstrap variables and redeploy. MongoDB retains the account.
 8. Complete the production checks below using dedicated test accounts and Paystack's test checkout. Keep the project in test operation until those checks pass. Roll back the whole deployment if a release breaks a verified flow.
 
