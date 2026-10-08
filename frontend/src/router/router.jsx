@@ -2,6 +2,7 @@ import { AdminLogin, AgentLayout, OnboardingLayout, Onboarding, ApplicationStatu
 import {createBrowserRouter, createRoutesFromElements, Navigate, Route} from 'react-router-dom'
 import SessionLayout from '../layout/SessionLayout'
 import SystemLayout from '../layout/SystemLayout'
+import RouteError from '../components/ui/RouteError'
 import RequireAuth from '../components/auth/RequireAuth'
 import RequireAgent from '../components/auth/RequireAgent'
 import RequireAgentSession from '../components/auth/RequireAgentSession'
@@ -10,7 +11,7 @@ import RequireAdmin from '../components/auth/RequireAdmin'
 
 const router = createBrowserRouter(
     createRoutesFromElements(
-        <Route element={<SessionLayout />}>
+        <Route element={<SessionLayout />} errorElement={<RouteError />}>
          <Route path='/' element={<SystemLayout />}>
             <Route index element={<Home />} />
             <Route path='house/:id' element={<PropertiesDetails />} />
