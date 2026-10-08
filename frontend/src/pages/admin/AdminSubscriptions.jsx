@@ -10,7 +10,7 @@ import FilterTabs from "../../components/ui/FilterTabs";
 import SearchInput from "../../components/ui/SearchInput";
 import StatusBadge from "../../components/ui/StatusBadge";
 import ActionMenu from "../../components/ui/ActionMenu";
-import Modal from "../../components/ui/Modal";
+import SidePanel from "../../components/ui/SidePanel";
 import EmptyState from "../../components/ui/EmptyState";
 import { formatDate } from "../../utils/date";
 import { formatCedis } from "../../utils/reports";
@@ -127,7 +127,7 @@ const AdminSubscriptions = () => {
         )}
       />
 
-      <Modal
+      <SidePanel
         open={Boolean(viewing)}
         onClose={() => setViewingId(null)}
         title="Subscription details"
@@ -178,7 +178,7 @@ const AdminSubscriptions = () => {
             </div>
           </div>
         )}
-      </Modal>
+      </SidePanel>
 
       <SubscriptionDialogs action={action} onClose={() => setAction(null)} />
     </>

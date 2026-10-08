@@ -18,8 +18,9 @@ export const getAgentPermissions = ({ user, plans, settings, listings }) => {
   // When the admin turns off "Require subscription", agents fall back to the default plan
   const subscriptionWaived = isAgent && !settings.agent.requireSubscription && !subscription.isActive;
   const planId = subscriptionWaived ? settings.agent.defaultPlan : user?.subscription?.planId;
-  const plan = plans.find((p) => p.id === planId) || null;
-  const isActive = isAgent && !isSuspended && Boolean(plan) && (subscription.isActive || subscriptionWaived);
+  const plan = plans.find((p) => p.id === planId) || (subscriptionWaived ? [...plans].filter((p) => p.active).sort((a, b) => a.price - b.price)[0] : null) || null;
+  const isApproved = user?.agentApplication?.status === "approved";
+  const isActive = isAgent && isApproved && !isSuspended && Boolean(plan) && (subscription.isActive || subscriptionWaived);
 
   const mine = listings.filter((p) => p.owner?.type === "agent" && p.owner.id === user?.id);
   const activeCount = mine.filter((p) => COUNTED_STATES.includes(p.listing.state)).length;
@@ -66,10 +67,10 @@ export const getAgentPermissions = ({ user, plans, settings, listings }) => {
     canCreateDraft: isActive,
     canAddProperty: isActive && settings.property.allowAgentPublishing && !limitReached,
     canEditProperty: isActive,
-    canDeleteProperty: isAgent && !isSuspended,
+    canDeleteProperty: isAgent && isApproved && !isSuspended,
     canFeatureProperty: isActive && featuredLimit > 0 && featuredCount < featuredLimit,
     canUseFeatured: isActive && featuredLimit > 0,
-    canViewInquiries: isAgent,
+    canViewInquiries: isAgent && isApproved && !isSuspended,
     canManageInquiries: isActive && plan?.inquiryManagement === "full",
     canViewAnalytics: isActive,
     canViewInquiryStats: isActive && (analytics === "standard" || analytics === "advanced"),

@@ -44,6 +44,22 @@ export const newReference = (prefix = "HB") =>
 // GHS -> pesewas: Paystack amounts are always in the currency's subunit
 export const toSubunit = (amount) => Math.round(amount * 100);
 
+const STILL_PROCESSING = ["ongoing", "pending", "processing", "queued"];
+
+/**
+ * "paid" | "pending" | "failed" for one transaction, as Paystack itself reports it.
+ * "paid" also requires the exact reference and at least the expected amount in GHS.
+ * Abandoned checkouts count as failed (retryable); they are re-checked later in case
+ * the customer still completes them.
+ */
+export const paystackPaymentStatus = async (reference, amount) => {
+  const result = await paystack(`/transaction/verify/${encodeURIComponent(reference)}`);
+  const tx = result.data;
+  if (!result.status || !tx) return "failed";
+  if (tx.status === "success") return tx.reference === reference && tx.amount >= toSubunit(amount) && tx.currency === "GHS" ? "paid" : "failed";
+  return STILL_PROCESSING.includes(tx.status) ? "pending" : "failed";
+};
+
 // Asks Paystack whether this exact transaction succeeded for at least the expected amount (GHS)
 export const isPaystackPaid = async (reference, amount) => {
   const result = await paystack(`/transaction/verify/${encodeURIComponent(reference)}`);

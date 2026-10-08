@@ -1,25 +1,30 @@
+import { setAuthCookie } from "../utils/generateToken.js";
 import Plan from "../models/Plan.js";
 import Subscription from "../models/Subscription.js";
 import User from "../models/User.js";
 import { loadUser } from "./authController.js";
 import { subscriptionState } from "../utils/permissions.js";
 import { ok, fail } from "../utils/response.js";
-import { paymentMode as paystackMode, paystack, newReference, isPaystackPaid } from "../utils/paystack.js";
+import { paymentMode as paystackMode, paystack, newReference, paystackPaymentStatus } from "../utils/paystack.js";
 import { getSettings } from "../models/Setting.js";
+import { submitReadyApplication } from "./agentApplicationController.js";
 
 // Subscription payments need Paystack and the admin's "subscription payments" switch
 const paymentMode = async () => (paystackMode() === "paystack" && (await getSettings()).payments.subscriptionsEnabled ? "paystack" : "disabled");
 
 const DAY = 24 * 60 * 60 * 1000;
+// Unfinished payments are re-checked with Paystack for this long after checkout started
+const RECHECK_WINDOW = 2 * DAY;
 
 /**
- * Activates a paid subscription and makes the user an agent. The server
+ * Activates a paid subscription without changing identity or approval. The server
  * calculates the dates: renewing the same active plan extends it, anything
  * else starts today and replaces the previous plan.
  */
 export const activateSubscription = async (subscription, extra = {}) => {
   const user = await User.findById(subscription.user).populate("subscription");
   const plan = await Plan.findById(subscription.plan);
+  if (!user || user.role !== "agent" || !plan) throw new Error("An agent account and valid plan are required.");
   const current = user.subscription;
   const renewing = current && subscriptionState(current).isActive && String(current.plan) === String(plan._id) && !current._id.equals(subscription._id);
 
@@ -39,9 +44,26 @@ export const activateSubscription = async (subscription, extra = {}) => {
   }
 
   user.subscription = subscription._id;
-  if (user.role !== "admin") user.role = "agent";
   await user.save();
+  await submitReadyApplication(user);
   return user;
+};
+
+/**
+ * Re-checks the agent's latest unpaid payment with Paystack and records what Paystack says.
+ * Catches agents who paid but closed the tab before returning to the site, and checkouts that
+ * finished processing later. Only Paystack's answer can activate a subscription.
+ */
+export const reconcileLatestPayment = async (user) => {
+  const attempt = await Subscription.findOne({ user: user._id }).sort({ createdAt: -1 });
+  if (!attempt || !["pending", "failed"].includes(attempt.paymentStatus)) return;
+  if (paystackMode() !== "paystack" || Date.now() - attempt.createdAt.getTime() > RECHECK_WINDOW) return;
+  const status = await paystackPaymentStatus(attempt.paymentReference, attempt.amount).catch(() => null);
+  if (status === "paid") await activateSubscription(attempt);
+  else if (status && status !== attempt.paymentStatus) {
+    attempt.paymentStatus = status;
+    await attempt.save();
+  }
 };
 
 // GET /api/subscriptions/current
@@ -52,7 +74,9 @@ export const currentSubscription = async (req, res) => {
 
 // POST /api/subscriptions/initialize { planId, method } -> starts a payment
 export const initializePayment = async (req, res) => {
-  if (req.user.role === "admin") return fail(res, 403, "Admins manage plans from the admin console.");
+  if (req.user.role !== "agent") return fail(res, 403, "Create an agent account before choosing an agent subscription.");
+  if (!req.user.isActive || ["rejected", "suspended"].includes(req.user.agentApplication?.status)) return fail(res, 403, "Check your agent application status before making a payment.");
+  if (!req.user.agentApplication?.profileCompletedAt) return fail(res, 400, "Complete your agent profile before making a payment.");
   if ((await paymentMode()) === "disabled") return fail(res, 503, "Subscription payments are not available right now.");
 
   const plan = await Plan.findById(req.body.planId).catch(() => null);
@@ -79,7 +103,7 @@ export const initializePayment = async (req, res) => {
       amount: Math.round(plan.price * 100), // pesewas
       currency: "GHS",
       reference,
-      callback_url: `${process.env.CLIENT_URL}/agent/checkout?reference=${reference}`,
+      callback_url: `${process.env.CLIENT_URL}${req.user.agentApplication?.status === "approved" ? "/agent/subscription/checkout" : "/agent/checkout"}?reference=${reference}`,
       metadata: { userId: String(req.user._id), planId: String(plan._id) },
     }),
   });
@@ -94,22 +118,35 @@ export const initializePayment = async (req, res) => {
 
 // POST /api/subscriptions/verify { reference } -> the server confirms the payment itself
 export const verifyPayment = async (req, res) => {
-  const subscription = await Subscription.findOne({ paymentReference: req.body.reference, user: req.user._id });
+  const { reference } = req.body;
+  if (typeof reference !== "string" || !reference || reference.length > 100) return fail(res, 404, "Payment not found.");
+  const subscription = await Subscription.findOne({ paymentReference: reference, user: req.user._id });
   if (!subscription) return fail(res, 404, "Payment not found.");
 
   // Idempotent: verifying twice (e.g. a page refresh) returns the same result
-  if (subscription.paymentStatus === "paid") return ok(res, await loadUser(req.user._id), "Subscription already active");
-
-  if (paystackMode() === "disabled") return fail(res, 503, "Payments are not configured yet.");
-  const paid = await isPaystackPaid(subscription.paymentReference, subscription.amount);
-
-  if (!paid) {
-    subscription.paymentStatus = "failed";
-    await subscription.save();
-    return fail(res, 402, "Your payment was not successful. Please try again.");
+  if (subscription.paymentStatus === "paid") {
+    await submitReadyApplication(req.user);
+    if (req.user.role === "agent") setAuthCookie(res, req.user._id, "agent");
+    return ok(res, await loadUser(req.user._id), "Payment already confirmed. Agent approval remains a separate requirement.");
   }
 
-  await activateSubscription(subscription);
+  if (paystackMode() === "disabled") return fail(res, 503, "Payments are not configured yet.");
+  const status = await paystackPaymentStatus(subscription.paymentReference, subscription.amount);
+
+  // Still processing (e.g. a mobile money prompt): nothing is activated until Paystack confirms
+  if (status === "pending") {
+    subscription.paymentStatus = "pending";
+    await subscription.save();
+    return ok(res, { paymentPending: true, reference: subscription.paymentReference }, "We are waiting for confirmation of your subscription payment.", 202);
+  }
+  if (status !== "paid") {
+    subscription.paymentStatus = "failed";
+    await subscription.save();
+    return fail(res, 402, "Your payment was not completed. Your account and profile are saved, so you can try again.");
+  }
+
+  const agent = await activateSubscription(subscription);
+  setAuthCookie(res, agent._id, "agent");
   ok(res, await loadUser(req.user._id), "Subscription activated");
 };
 

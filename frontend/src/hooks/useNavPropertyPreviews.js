@@ -1,11 +1,11 @@
 import { useCallback, useRef, useState } from "react";
 import { propertyApi } from "../frontApi";
 
-export const PREVIEW_LIMIT = 4;
+export const PREVIEW_LIMIT = 2;
 
 /**
- * Loads a few live listings (MongoDB -> GET /api/properties) for the navbar's Properties menu.
- * Nothing is fetched until the menu is first opened; call ensureLoaded() when it opens.
+ * Loads two live listings for Find Property only.
+ * One bounded request on first desktop open; subsequent opens reuse it.
  */
 export const useNavPropertyPreviews = () => {
   const [state, setState] = useState({ status: "idle", items: [] });

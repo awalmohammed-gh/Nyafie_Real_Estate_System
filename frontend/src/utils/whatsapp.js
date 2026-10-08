@@ -44,4 +44,11 @@ export const buildWhatsAppLink = (phone, property, pageUrl, offerAmount) => {
 
 // The owner's WhatsApp number: the listing agent's phone, or the business number (Admin Settings) for admin listings
 export const ownerWhatsAppNumber = (property, settings) =>
-  property.owner.type === "admin" ? settings.contact?.whatsapp || settings.contact?.phone : property.agent.phone;
+  property.owner.type === "admin" ? settings.contact?.whatsapp || settings.contact?.phone : property.agent.whatsapp || property.agent.phone;
+
+export const buildPropertyEmailLink = (email, property, pageUrl) => {
+  if (!email) return null;
+  const subject = `Inquiry about ${property.title} (${property.id})`;
+  const body = `Hello, I'm interested in "${property.title}". Is it still available?\n\nProperty reference: ${property.id}\n${pageUrl || ""}`;
+  return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+};

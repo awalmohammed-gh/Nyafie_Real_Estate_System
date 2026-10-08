@@ -2,9 +2,15 @@ import client from "./client";
 import { inquiryStatusToApi, mapInquiry, mapPayment, mapProperty, mapUser, toApiProperty } from "./mappers";
 
 export const getAdminDashboard = async () => (await client.get("/admin/dashboard")).data;
+// Platform performance chart: monthly totals for the last 3, 6 or 12 months and the period before
+export const getPerformance = async (months) => (await client.get("/admin/performance", { params: { months } })).data;
+// Sidebar badge counters
+export const getAdminCounts = async () => (await client.get("/admin/counts")).data;
 
 export const getUsers = async () => (await client.get("/admin/users")).data.map(mapUser);
 export const getAgents = async () => (await client.get("/admin/agents")).data.map(mapUser);
+export const getAgentApplications = async () => (await client.get("/admin/agent-applications")).data.map(mapUser);
+export const reviewAgentApplication = async (id, action, rejectionReason = "") => mapUser((await client.patch(`/admin/agent-applications/${id}`, { action, rejectionReason })).data);
 export const updateUser = async (id, changes) => mapUser((await client.put(`/admin/users/${id}`, changes)).data);
 export const setUserStatus = (id, status) => client.patch(`/admin/users/${id}/status`, { status });
 export const deleteUser = (id) => client.delete(`/admin/users/${id}`);
@@ -45,3 +51,10 @@ export const updateSettings = async (section, values) => (await client.put(`/adm
 export const getPaymentStatus = async () => (await client.get("/admin/settings/payment-status")).data;
 // The signed-in admin's own name, phone and sign-in email (email changes need the current password)
 export const updateAccount = async (details) => mapUser((await client.put("/admin/account", details)).data);
+
+// A download must not export the empty arrays shown while the page is loading.
+// Reject the whole snapshot if any of its authenticated requests fails.
+export const getReportSnapshot = async () => {
+  const [users, listings, inquiries, payments] = await Promise.all([getUsers(), getAllProperties(), getAllInquiries(), getSubscriptions()]);
+  return { users, listings, inquiries, payments };
+};

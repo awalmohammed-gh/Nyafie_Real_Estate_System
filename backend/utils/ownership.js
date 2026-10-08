@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Property from "../models/Property.js";
 import { siteName } from "../models/Setting.js";
+import { publicQuery } from "./marketplace.js";
 
 export const same = (a, b) => Boolean(a && b) && String(a._id || a) === String(b._id || b);
 
@@ -23,7 +24,8 @@ export const isOwnListing = (property, user) => same(property.owner, user) || (p
 // A published property, or null. Owner, price and listing type always come from here, never from the request.
 export const loadPublishedProperty = async (id) => {
   if (!mongoose.isValidObjectId(id)) return null;
-  return Property.findOne({ _id: id, status: "published" });
+  const { query } = await publicQuery();
+  return Property.findOne({ _id: id, ...query });
 };
 
 export const ownerName = (record) =>

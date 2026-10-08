@@ -13,6 +13,7 @@ import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { formatPrice, formatType, getListingStatus, statusLabel } from "../../utils/property";
 import { formatDate, formatRelative } from "../../utils/date";
 import { usePlatform } from "../../context/usePlatform";
+import WorkspaceStats from "../../components/agent/WorkspaceStats";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
@@ -158,8 +159,14 @@ const PropertyManage = () => {
       {state === "rejected" && <Notice tone="red"><strong className="font-semibold">Rejected:</strong> {property.listing.rejectionReason || "Please review the listing details and resubmit."}</Notice>}
       {state === "suspended" && <Notice tone="red">This listing has been hidden by {siteName}. Contact support for details.</Notice>}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <WorkspaceStats className="mb-6" items={[
+        { label: "Property views", value: (property.meta?.views || 0).toLocaleString(), note: "Customer interest in this listing" },
+        { label: "Inquiries", value: inquiries.length, note: "Customers asking for details", to: `/agent/inquiries?property=${property.id}` },
+        { label: "Offers", value: propertyOffers.length, note: "Price offers received", to: `/agent/offers?property=${property.id}` },
+        { label: isSale ? "Purchase requests" : "Rental requests", value: loading ? "—" : requests.length, note: "Customers taking the next step", to: `${isSale ? "/agent/sale-requests" : "/agent/rentals"}?property=${property.id}` },
+      ]} />
+      <div className="grid gap-6 xl:grid-cols-3">
+        <div className="space-y-6 xl:col-span-2">
           <Panel bodyClassName="p-3">
             <img src={images[activeImage] || images[0]} alt={property.title} className="aspect-video w-full rounded-lg bg-gray-100 object-cover" />
             {images.length > 1 && (

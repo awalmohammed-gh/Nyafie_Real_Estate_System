@@ -1,9 +1,12 @@
 import mongoose from "mongoose";
 import Property from "../models/Property.js";
+import Review from "../models/Review.js";
 import User from "../models/User.js";
-import { getSettings, siteName } from "../models/Setting.js";
+import { siteName } from "../models/Setting.js";
 import { notifyAdmins } from "../utils/notify.js";
-import { COUNTED_STATES, subscriptionState } from "../utils/permissions.js";
+import { COUNTED_STATES } from "../utils/permissions.js";
+import { PUBLIC_AGENT_FIELDS, publicAgent, presentProperties, publicQuery, visibleAgentIds } from "../utils/marketplace.js";
+export { publicQuery, visibleAgentIds } from "../utils/marketplace.js";
 import { resolveImages } from "../utils/uploadImages.js";
 import { ok, fail } from "../utils/response.js";
 
@@ -24,7 +27,14 @@ export const pickPropertyFields = (body) => {
       neighbourhood: String(body.location.neighbourhood || "").trim(),
       city: String(body.location.city || "").trim(),
       region: String(body.location.region || "").trim(),
+      country: String(body.location.country || "Ghana").trim(),
+      digitalAddress: String(body.location.digitalAddress || "").trim().slice(0, 30),
     };
+    for (const [key, min, max] of [["latitude", -90, 90], ["longitude", -180, 180]]) {
+      const raw = body.location[key];
+      const value = Number(raw);
+      out.location[key] = raw !== "" && raw != null && Number.isFinite(value) && value >= min && value <= max ? value : null;
+    }
   }
   if (Array.isArray(body.amenities)) out.amenities = body.amenities.map((a) => String(a).trim()).filter(Boolean).slice(0, 40);
   if (body.availability !== undefined && ["Available", "Under Offer", "Sold", "Rented"].includes(body.availability)) {
@@ -63,9 +73,9 @@ export const validateForPublishing = (p) => {
   if (!p.title || p.title.length < 3) return "Give the property a title (at least 3 characters).";
   if (!p.description || p.description.length < 30) return "Describe the property in at least 30 characters.";
   if (!p.propertyType) return "Choose a property type.";
-  if (!(p.price > 0)) return "Enter a price greater than 0.";
+  if (!Number.isFinite(p.price) || !(p.price > 0)) return "Enter a price greater than 0.";
   if (!p.location?.neighbourhood || !p.location?.city || !p.location?.address) return "Complete the property location.";
-  if (!(p.area > 0)) return "Enter the floor area.";
+  if (!Number.isFinite(p.area) || !(p.area > 0)) return "Enter the floor area.";
   if (!p.images?.length) return "Add at least one photo before publishing.";
   if (!p.contact?.phone || !/^\S+@\S+\.\S+$/.test(p.contact?.email || "")) return "Add a contact phone number and email.";
   return null;
@@ -78,25 +88,8 @@ export const validateForPublishing = (p) => {
  */
 export const listPublicAgents = async (_req, res) => {
   const ids = (await visibleAgentIds()).map((a) => a.id);
-  const agents = await User.find({ _id: { $in: ids } }).select("firstName lastName phone email createdAt").sort({ createdAt: 1 });
-  ok(res, agents.map((a) => ({ id: String(a._id), name: `${a.firstName} ${a.lastName}`, phone: a.phone || "", email: a.email, joinedAt: a.createdAt })));
-};
-
-// Agents whose listings may be public: active account + active subscription
-const visibleAgentIds = async () => {
-  const settings = await getSettings();
-  const agents = await User.find({ role: "agent", isActive: true }).populate({ path: "subscription", populate: { path: "plan" } });
-  return agents
-    .filter((a) => !settings.agent.requireSubscription || subscriptionState(a.subscription).isActive)
-    .map((a) => ({ id: a._id, priority: Boolean(a.subscription?.plan?.priorityVisibility) }));
-};
-
-const publicQuery = async () => {
-  const agents = await visibleAgentIds();
-  return {
-    agents,
-    query: { status: "published", $or: [{ ownerType: "admin" }, { owner: { $in: agents.map((a) => a.id) } }] },
-  };
+  const agents = await User.find({ _id: { $in: ids } }).select(PUBLIC_AGENT_FIELDS).sort({ createdAt: 1 });
+  ok(res, agents.map(publicAgent));
 };
 
 const { ObjectId } = mongoose.Types;
@@ -111,8 +104,8 @@ const SORTS = {
   priceAsc: { price: 1, createdAt: -1 },
   priceDesc: { price: -1, createdAt: -1 },
   popular: { views: -1, createdAt: -1 },
-  rating: { rating: -1, createdAt: -1 },
-  featured: { isFeatured: -1, rating: -1, createdAt: -1 }, // featured listings first (homepage)
+  rating: { ratingAverage: -1, ratingCount: -1, createdAt: -1 }, // from published customer reviews
+  featured: { isFeatured: -1, ratingAverage: -1, createdAt: -1 }, // featured listings first (homepage)
 };
 
 /**
@@ -121,17 +114,19 @@ const SORTS = {
  * minPrice, maxPrice, bedrooms, bathrooms (minimums), featured, owner, ids, exclude.
  * ObjectIds are cast explicitly because the recommended sort runs as an aggregation.
  */
-const buildPublicFilter = (q, base) => {
+export const buildPublicFilter = (q, base) => {
   const and = [base];
   const search = String(q.search || "").trim().slice(0, 80);
   if (search) {
     const rx = new RegExp(escapeRegex(search), "i");
-    and.push({ $or: [{ title: rx }, { description: rx }, { propertyType: rx }, { "location.neighbourhood": rx }, { "location.city": rx }, { "location.address": rx }] });
+    and.push({ $or: [{ title: rx }, { description: rx }, { propertyType: rx }, { "location.neighbourhood": rx }, { "location.city": rx }, { "location.region": rx }, { "location.address": rx }] });
   }
-  if (["Sale", "Rent"].includes(q.listingType)) and.push({ listingType: q.listingType });
+  const listingType = q.listingType || ({ rent: "Rent", sale: "Sale" })[q.purpose];
+  if (["Sale", "Rent"].includes(listingType)) and.push({ listingType });
   if (list(q.type).length) and.push({ propertyType: { $in: list(q.type).map(exact) } });
   if (q.area) and.push({ "location.neighbourhood": exact(String(q.area)) });
   if (q.city) and.push({ "location.city": exact(String(q.city)) });
+  if (q.region) and.push({ "location.region": exact(String(q.region)) });
   const availability = list(q.availability).filter((a) => ["Available", "Under Offer", "Sold", "Rented"].includes(a));
   if (availability.length) and.push({ availability: { $in: availability } });
   const minPrice = number(q.minPrice);
@@ -147,7 +142,7 @@ const buildPublicFilter = (q, base) => {
 };
 
 // Mongo filter for "published and publicly visible" with ObjectIds cast for aggregations
-const publicBase = (agents) => ({ status: "published", $or: [{ ownerType: "admin" }, { owner: { $in: agents.map((a) => new ObjectId(String(a.id))) } }] });
+const publicBase = (agents) => ({ status: "published", $or: [{ ownerType: "admin" }, { ownerType: "agent", owner: { $in: agents.map((a) => new ObjectId(String(a.id))) } }] });
 
 /**
  * GET /api/properties (public)
@@ -167,7 +162,7 @@ export const listPublicProperties = async (req, res) => {
 
   if (req.query.page === undefined) {
     const docs = await Property.aggregate([{ $match: filter }, ...recommended, { $project: { _rank: 0 } }]);
-    return ok(res, docs.map((d) => Property.hydrate(d)));
+    return ok(res, await presentProperties(docs.map((d) => Property.hydrate(d))));
   }
 
   const limit = Math.min(48, Math.max(1, Math.round(number(req.query.limit) || 12)));
@@ -180,7 +175,7 @@ export const listPublicProperties = async (req, res) => {
       ? Property.find(filter).sort(sort).skip(skip).limit(limit)
       : Property.aggregate([{ $match: filter }, ...recommended, { $skip: skip }, { $limit: limit }, { $project: { _rank: 0 } }]).then((rows) => rows.map((d) => Property.hydrate(d))),
   ]);
-  ok(res, { items: docs, total, page, pages: Math.max(1, Math.ceil(total / limit)), limit });
+  ok(res, { items: await presentProperties(docs), total, page, pages: Math.max(1, Math.ceil(total / limit)), limit });
 };
 
 /**
@@ -196,14 +191,16 @@ export const propertyFacets = async (req, res) => {
     {
       $facet: {
         types: [{ $group: { _id: "$propertyType", count: { $sum: 1 } } }, { $sort: { _id: 1 } }],
+        regions: [{ $match: { "location.region": { $nin: ["", null] } } }, { $group: { _id: "$location.region", count: { $sum: 1 } } }, { $sort: { _id: 1 } }],
+        cities: [{ $match: { "location.city": { $nin: ["", null] } } }, { $group: { _id: { city: "$location.city", region: "$location.region" }, count: { $sum: 1 } } }, { $sort: { "_id.city": 1 } }],
         areas: [
           { $match: { "location.neighbourhood": { $ne: "" } } },
           { $sort: { views: -1 } },
-          { $group: { _id: "$location.neighbourhood", city: { $first: "$location.city" }, image: { $first: { $arrayElemAt: ["$images", 0] } }, count: { $sum: 1 }, views: { $sum: "$views" } } },
+          { $group: { _id: "$location.neighbourhood", city: { $first: "$location.city" }, region: { $first: "$location.region" }, image: { $first: { $arrayElemAt: ["$images", 0] } }, count: { $sum: 1 }, views: { $sum: "$views" } } },
           { $sort: { count: -1, views: -1, _id: 1 } },
         ],
         listingTypes: [{ $group: { _id: "$listingType", count: { $sum: 1 }, minPrice: { $min: "$price" }, maxPrice: { $max: "$price" } } }],
-        totals: [{ $group: { _id: null, total: { $sum: 1 }, avgRating: { $avg: "$rating" }, agents: { $addToSet: { $cond: [{ $eq: ["$ownerType", "agent"] }, "$owner", null] } } } }],
+        totals: [{ $group: { _id: null, total: { $sum: 1 }, avgRating: { $avg: { $cond: [{ $gt: ["$ratingCount", 0] }, "$ratingAverage", null] } }, agents: { $addToSet: { $cond: [{ $eq: ["$ownerType", "agent"] }, "$owner", null] } } } }],
       },
     },
   ]);
@@ -217,7 +214,9 @@ export const propertyFacets = async (req, res) => {
     agents: agents.length, // available agents (same rule as the public agents directory), with or without listings
     avgRating: totals.avgRating ? Math.round(totals.avgRating * 10) / 10 : null,
     types: facet.types.map((t) => ({ value: t._id, count: t.count })),
-    areas: facet.areas.map((a) => ({ name: a._id, city: a.city, image: a.image || "", count: a.count, views: a.views })),
+    regions: facet.regions.map((r) => ({ name: r._id, count: r.count })),
+    cities: facet.cities.map((c) => ({ name: c._id.city, region: c._id.region, count: c.count })),
+    areas: facet.areas.map((a) => ({ name: a._id, city: a.city, region: a.region, image: a.image || "", count: a.count, views: a.views })),
   });
 };
 
@@ -229,6 +228,7 @@ export const relatedProperties = async (req, res) => {
   const property = mongoose.isValidObjectId(req.params.id) ? await Property.findById(req.params.id) : null;
   if (!property) return fail(res, 404, "Property not found.");
   const { agents } = await publicQuery();
+  if (!await Property.exists({ $and: [publicBase(agents), { _id: property._id }] })) return fail(res, 404, "Property not found.");
   const base = { $and: [publicBase(agents), { listingType: property.listingType, _id: { $ne: property._id } }] };
   const limit = Math.min(12, Math.max(1, Math.round(number(req.query.limit) || 3)));
 
@@ -244,7 +244,7 @@ export const relatedProperties = async (req, res) => {
 
   // Not enough close matches: fill with other listings of the same type (sale/rent)
   const fill = similar.length < limit ? await Property.find({ $and: [base, { _id: { $nin: similar.map((p) => p._id) } }] }).sort({ createdAt: -1 }).limit(limit - similar.length) : [];
-  ok(res, [...similar, ...fill]);
+  ok(res, await presentProperties([...similar, ...fill]));
 };
 
 const isOwner = (property, user) => user && String(property.owner) === String(user._id);
@@ -253,11 +253,11 @@ const isOwner = (property, user) => user && String(property.owner) === String(us
 export const getProperty = async (req, res) => {
   const property = await Property.findById(req.params.id).catch(() => null);
   if (!property) return fail(res, 404, "Property not found.");
-  if (req.user?.role === "admin" || isOwner(property, req.user)) return ok(res, property);
+  if (req.user?.role === "admin" || isOwner(property, req.user)) return ok(res, (await presentProperties([property]))[0]);
   const { query } = await publicQuery();
   const visible = await Property.exists({ _id: property._id, ...query });
   if (!visible) return fail(res, 404, "Property not found.");
-  ok(res, property);
+  ok(res, (await presentProperties([property]))[0]);
 };
 
 // POST /api/properties/:id/view
@@ -270,7 +270,7 @@ export const recordView = async (req, res) => {
 
 // GET /api/properties/my (agent)
 export const myProperties = async (req, res) => {
-  ok(res, await Property.find({ owner: req.user._id }).sort({ createdAt: -1 }));
+  ok(res, await presentProperties(await Property.find({ owner: req.user._id }).sort({ createdAt: -1 })));
 };
 
 const limitMessage = (access) =>
@@ -288,6 +288,7 @@ export const createProperty = async (req, res) => {
   const { access } = req;
   const intent = req.body.status === "draft" ? "draft" : "submit";
   const fields = pickPropertyFields(req.body);
+  if (fields.listingType === "Sale") fields.pricePeriod = "total";
   const images = Array.isArray(req.body.images) ? req.body.images : [];
 
   if (!fields.title || fields.title.length < 3) return fail(res, 400, "Give the property a title (at least 3 characters).");
@@ -301,7 +302,7 @@ export const createProperty = async (req, res) => {
     if (access.activeCount >= access.propertyLimit) return fail(res, 403, limitMessage(access));
   }
 
-  const contact = { name: `${req.user.firstName} ${req.user.lastName}`, phone: req.user.phone, email: req.user.email, ...fields.contact };
+  const contact = { name: `${req.user.firstName} ${req.user.lastName}`, phone: req.user.phone, email: req.user.email };
   const draft = {
     listingType: "Sale",
     propertyType: "Apartment",
@@ -349,9 +350,12 @@ export const updateProperty = async (req, res) => {
   if (!property) return;
 
   const fields = pickPropertyFields(req.body);
+  fields.contact = { id: String(req.user._id), name: `${req.user.firstName} ${req.user.lastName}`, phone: req.user.phone, email: req.user.email };
+  if ((fields.listingType ?? property.listingType) === "Sale") fields.pricePeriod = "total";
   const optionProblem = checkPropertyOptions(fields, access.settings, property);
   if (optionProblem) return fail(res, 400, optionProblem);
   const images = req.body.images !== undefined ? req.body.images : null;
+  if (images && !Array.isArray(images)) return fail(res, 400, "Images must be a list.");
   if (images && images.length > access.imageLimit) {
     return fail(res, 400, `Your ${access.plan.name} plan allows up to ${access.imageLimit} photos per property.`);
   }
@@ -372,11 +376,11 @@ export const updateProperty = async (req, res) => {
   Object.assign(property, fields);
   if (fields.contact) property.contact = { ...fields.contact, id: String(req.user._id) };
   if (images) property.images = await resolveImages(images);
+  if (COUNTED_STATES.includes(status)) {
+    const problem = validateForPublishing(property);
+    if (problem) return fail(res, 400, problem);
+  }
   if (status !== property.status) {
-    if (COUNTED_STATES.includes(status)) {
-      const problem = validateForPublishing(property);
-      if (problem) return fail(res, 400, problem);
-    }
     property.status = status;
     if (status === "pending") notifyReview(property, req.user);
     if (status !== "rejected") property.rejectionReason = "";
@@ -411,6 +415,9 @@ export const deleteProperty = async (req, res) => {
     return fail(res, 403, "You can only delete your own properties.");
   }
   await property.deleteOne();
-  await User.updateMany({ savedProperties: property._id }, { $pull: { savedProperties: property._id } });
+  await Promise.all([
+    User.updateMany({ savedProperties: property._id }, { $pull: { savedProperties: property._id } }),
+    Review.deleteMany({ property: property._id }),
+  ]);
   ok(res, null, "Property deleted");
 };

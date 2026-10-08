@@ -21,26 +21,38 @@ import rentalRoutes from "./routes/rentalRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import saleRequestRoutes from "./routes/saleRequestRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import reviewRoutes from "./routes/reviewRoutes.js";
 import { listConversations } from "./controllers/chatController.js";
-import { protect } from "./middleware/authMiddleware.js";
+import { protectCustomer } from "./middleware/authMiddleware.js";
+import { allowedOrigins, checkJwtKey, limits, originCheck, rejectOperatorKeys, securityHeaders } from "./middleware/security.js";
 
 
 //app config
 const app = express()
 const port = process.env.PORT || 4000;
-const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
 
 if (!process.env.JWT_KEY) {
    console.error("JWT_KEY is not set in backend/.env");
    process.exit(1);
 }
+if (!checkJwtKey()) process.exit(1); // production refuses a short, guessable signing key
 
 
 //middleware
-// Property photos arrive as compressed data URIs, so allow larger JSON bodies
-app.use(express.json({ limit: "30mb" }));
+app.disable("x-powered-by");
+// Behind a reverse proxy (Render, Railway, Nginx...) set TRUST_PROXY=1 so rate limits see real client IPs
+if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
+app.use(securityHeaders);
+app.use(cors({ origin: allowedOrigins(), credentials: true }));
+app.use("/api", limits.api);
+// Photos arrive as compressed data URIs, so only the endpoints that take images accept large bodies
+const IMAGE_UPLOADS = /^\/api\/(properties(\/[a-f\d]{24})?|admin\/properties(\/[a-f\d]{24})?|agents\/(application|profile)|admin\/settings\/[a-z]+)$/i;
+const largeJson = express.json({ limit: "30mb" });
+const smallJson = express.json({ limit: "1mb" });
+app.use((req, res, next) => (["POST", "PUT"].includes(req.method) && IMAGE_UPLOADS.test(req.path) ? largeJson : smallJson)(req, res, next));
+app.use(rejectOperatorKeys);
 app.use(cookieParser());
-app.use(cors({ origin: clientUrl, credentials: true }));
+app.use("/api", originCheck);
 
 
 //database & media storage
@@ -60,6 +72,14 @@ app.get('/' , (req , res)=>{
    res.send('HomeBase API is running')
 })
 
+// Brute-force and abuse limits on sensitive endpoints (before the routes they protect)
+app.post("/api/auth/admin/login", limits.adminLogin);
+app.post(["/api/auth/login", "/api/auth/customer/login", "/api/auth/agent/login"], limits.login);
+app.post(["/api/auth/register", "/api/auth/customer/register", "/api/auth/agent/register"], limits.register);
+app.put(["/api/auth/me/password", "/api/auth/customer/me/password", "/api/auth/agent/me/password", "/api/auth/admin/me/password", "/api/admin/account"], limits.password);
+app.use(["/api/payments", "/api/subscriptions/initialize", "/api/subscriptions/verify"], limits.payments);
+app.post(["/api/inquiries", "/api/offers", "/api/rentals", "/api/sale-requests", "/api/conversations", "/api/properties/:id/reviews"], limits.contact);
+
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/properties", propertyRoutes);
@@ -75,7 +95,8 @@ app.use("/api/rentals", rentalRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/sale-requests", saleRequestRoutes);
 app.use("/api/notifications", notificationRoutes);
-app.get("/api/messages", protect, listConversations("customer")); // conversations the user started
+app.use("/api/reviews", reviewRoutes);
+app.get("/api/messages", protectCustomer, listConversations("customer")); // conversations the user started
 
 app.use("/api", (req, res) => res.status(404).json({ success: false, message: "Endpoint not found." }));
 

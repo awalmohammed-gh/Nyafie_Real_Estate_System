@@ -77,7 +77,7 @@ const Profile = () => {
                 Agent
               </p>
               <div className="mt-4 flex items-center justify-between rounded-2xl bg-gray-50 p-4 text-sm">
-                <span className="font-semibold text-gray-900">{user.subscription.planName} plan</span>
+                <span className="font-semibold text-gray-900">{user.subscription?.planName || "No"} plan</span>
                 <StatusBadge status={isActive ? "Active" : "Expired"} />
               </div>
               <Link to="/agent/dashboard" className="btn btn-light mt-4 w-full">

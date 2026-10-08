@@ -1,17 +1,26 @@
-import { Bath, Bed, Heart, MapPin, Maximize2, Star } from 'lucide-react';
+import { BadgeCheck, Bath, Bed, Heart, MapPin, Maximize2, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useRealEstate } from '../../context/useRealEstate';
-import { formatLocation, formatType, getPriceParts, statusLabel } from '../../utils/property';
+import { formatLocation, formatType, getInitials, getPriceParts, statusLabel } from '../../utils/property';
+import { usePlatform } from '../../context/usePlatform';
 
 const HouseCard = ({ house }) => {
   const { isFavorite, toggleFavorite } = useRealEstate();
+  const { siteName } = usePlatform();
   const { id, title, location, property, media, meta } = house;
   const { value, period } = getPriceParts(house);
   const liked = isFavorite(id);
   const isForSale = property.status === "Sale";
+  const isAgent = house.owner?.type === "agent";
+  const agentName = isAgent ? house.agent?.name || "Agent" : siteName;
+  const unavailable = ["Sold", "Rented"].includes(house.listing?.availability);
+  const identity = <>
+    {house.agent?.profileImage && isAgent ? <img src={house.agent.profileImage} alt="" loading="lazy" className="h-8 w-8 shrink-0 rounded-full object-cover" /> : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700">{getInitials(agentName)}</span>}
+    <span className="min-w-0"><span className="block text-[10px] text-gray-500">Listed by</span><span className="flex items-center gap-1 truncate text-xs font-semibold text-gray-700">{agentName}{isAgent && house.agent?.verified && <BadgeCheck aria-label="Approved agent" className="h-3.5 w-3.5 shrink-0 text-brand-600" />}</span></span>
+  </>;
 
   return (
-    <article className="@container group relative flex h-full flex-col overflow-hidden rounded-3xl bg-white ring-1 ring-gray-200/80 transition duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-500/10 hover:ring-brand-200">
+    <article className="@container group relative flex h-full flex-col overflow-hidden rounded-3xl bg-white ring-1 ring-gray-200/80 glass-hover [--glass-lift:3px]">
       {/* Image */}
       <div className="relative aspect-4/3 overflow-hidden bg-gray-100">
         <img
@@ -19,13 +28,13 @@ const HouseCard = ({ house }) => {
           alt={title}
           loading="lazy"
           decoding="async"
-          className="h-full w-full object-cover transition duration-700 ease-out group-hover:scale-105"
+          className="h-full w-full object-cover transition duration-700 ease-out group-hover:scale-105 group-hover:contrast-[1.03] group-hover:saturate-[1.08] group-has-focus-visible:scale-105"
         />
         <div className="absolute inset-0 bg-linear-to-t from-gray-950/70 via-transparent to-transparent" />
 
         <span className="absolute top-4 left-4 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-gray-900 shadow-sm backdrop-blur">
           <span className={`h-1.5 w-1.5 rounded-full ${isForSale ? "bg-emerald-500" : "bg-sky-500"}`} />
-          {statusLabel(property.status)}
+          {unavailable ? house.listing.availability : statusLabel(property.status)}
         </span>
 
         <button
@@ -50,15 +59,16 @@ const HouseCard = ({ house }) => {
           <span className="text-xs font-semibold tracking-wider text-brand-600 uppercase">
             {formatType(property.type)}
           </span>
-          {meta?.rating && (
-            <span className="flex items-center gap-1 text-sm font-semibold text-gray-700">
-              <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+          {meta?.ratingCount > 0 && (
+            <span className="flex items-center gap-1 text-sm font-semibold text-gray-700" aria-label={`Rated ${meta.rating.toFixed(1)} out of 5 from ${meta.ratingCount} ${meta.ratingCount === 1 ? "rating" : "ratings"}`}>
+              <Star aria-hidden="true" className="h-4 w-4 fill-amber-400 text-amber-400" />
               {meta.rating.toFixed(1)}
+              <span className="font-normal text-gray-400">({meta.ratingCount})</span>
             </span>
           )}
         </div>
 
-        <h3 className="text-lg font-bold text-gray-900 transition-colors group-hover:text-brand-600">
+        <h3 className="text-lg font-bold text-gray-900 transition-colors group-hover:text-brand-600 group-has-focus-visible:text-brand-600">
           {/* Stretched link: the whole card is clickable, the heart button sits above it */}
           <Link to={`/house/${id}`} className="after:absolute after:inset-0">
             {title}
@@ -89,6 +99,9 @@ const HouseCard = ({ house }) => {
               {property.size.value} {property.size.unit}
             </span>
           )}
+        </div>
+        <div className="mt-4 border-t border-gray-100 pt-3">
+          {isAgent && house.agent?.id ? <Link to={`/agents/${house.agent.id}`} className="relative z-10 flex min-h-11 items-center gap-2.5 rounded-lg hover:text-brand-600" aria-label={`View ${agentName}'s profile`}>{identity}</Link> : <div className="flex min-h-11 items-center gap-2.5">{identity}</div>}
         </div>
       </div>
     </article>

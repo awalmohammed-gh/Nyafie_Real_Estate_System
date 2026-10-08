@@ -2,8 +2,8 @@ import PropertyBrowser from '../components/PropertyBrowser';
 import NotFound from './NotFound';
 
 const descriptions = {
-  sale: "Explore our properties available for sale. Whether you're looking to buy your dream home or invest, find listings with detailed information, photos, and features to help you make the best choice.",
-  rent: "Explore our properties available for rent. From short stays to long-term leases, find a place that fits your lifestyle and budget.",
+  sale: "A space to call your own. Explore homes for sale and picture your next chapter.",
+  rent: "Short stays or fresh starts. Find a rental that fits the way you live.",
 };
 
 // /sale and /rent (routed by SlugPage)
@@ -16,9 +16,8 @@ const PropertyPerPage = ({ status }) => {
     <PropertyBrowser
       key={key}
       fixedListingType={key === 'sale' ? 'Sale' : 'Rent'}
-      title={`For ${status} Properties`}
+      title={`Homes for ${key === 'sale' ? 'Sale' : 'Rent'}`}
       description={descriptions[key]}
-      heroImage="/cateHeroImg.jpg"
     />
   );
 };

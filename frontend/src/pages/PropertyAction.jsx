@@ -17,8 +17,8 @@ import { formatType, getPriceParts, statusLabel } from "../utils/property";
 import { buildWhatsAppLink, ownerWhatsAppNumber } from "../utils/whatsapp";
 
 const COPY = {
-  rent: { title: "Rent This Property", intro: "Tell us about your rental, review the total, then pay securely online with Paystack." },
-  buy: { title: "Buy This Property", intro: "Negotiate with an offer, or request to buy at the asking price. Payment is made at the office, never online." },
+  rent: { title: "Proceed with Rental", intro: "Confirm availability with the agent, then review your rental details and total before paying online." },
+  buy: { title: "Discuss This Property", intro: "Contact the listing agent, negotiate with an offer, or register your interest. Agree on the final amount and sale arrangements directly with the agent or owner." },
   offer: { title: "Make an Offer", intro: "Propose your price. The owner can accept, decline or counter, and you can negotiate in chat." },
 };
 
@@ -81,7 +81,7 @@ const PropertyAction = ({ mode }) => {
         <p>This property is {isForSale ? "for sale" : "for rent"}.</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Link to={isForSale ? `/checkout/buy/${property.id}` : `/checkout/rent/${property.id}`} className="btn btn-primary">
-            {isForSale ? "Buy Now" : "Rent Now"}
+            {isForSale ? "Request to buy" : "Rent Now"}
           </Link>
           <Link to={`/make-offer/${property.id}`} className="btn btn-light">Make Offer</Link>
         </div>
@@ -163,9 +163,9 @@ const PropertyAction = ({ mode }) => {
               <p className="text-xs font-semibold tracking-wider text-gray-500 uppercase">Listed by</p>
               <p className="mt-2 flex items-center gap-2 font-bold text-gray-900">
                 {ownerName}
-                <BadgeCheck className="h-4 w-4 text-brand-500" />
+                {!isAdminListing && property.agent.verified && <BadgeCheck className="h-4 w-4 text-brand-500" />}
               </p>
-              <p className="text-sm text-brand-700">{isAdminListing ? "Platform Admin" : "Verified Agent"}</p>
+              <p className="text-sm text-brand-700">{isAdminListing ? "Platform listing" : property.agent.verified ? "Approved Agent" : "Listing Agent"}</p>
               {user && !isOwnListing && (
                 <>
                   <p className="mt-4 text-sm font-medium text-gray-700">Need more information?</p>

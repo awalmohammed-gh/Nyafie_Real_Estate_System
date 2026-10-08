@@ -18,9 +18,9 @@ const SubscriptionBanner = () => {
   if (restriction === "suspended") {
     banner = { tone: "red", icon: Ban, title: "Your agent account is suspended.", text: `Your listings are hidden and agent tools are locked. Contact ${siteName} support to restore access.` };
   } else if (restriction === "expired") {
-    banner = { tone: "red", icon: AlertTriangle, title: `Your ${sub.planName} subscription expired on ${formatDate(sub.expiryDate)}.`, text: "Your listings are hidden from the public and you can't publish or edit properties until you renew. Your account and data are safe.", cta: "Renew Subscription", to: `/agent/checkout?plan=${sub.planId}` };
+    banner = { tone: "red", icon: AlertTriangle, title: `Your ${sub.planName} subscription expired on ${formatDate(sub.expiryDate)}.`, text: "Your listings are hidden from the public and you can't publish or edit properties until you renew. Your account and data are safe.", cta: "Renew Subscription", to: `/agent/subscription/checkout?plan=${sub.planId}` };
   } else if (restriction === "cancelled") {
-    banner = { tone: "red", icon: AlertTriangle, title: "Your subscription was cancelled.", text: "Your properties are kept but hidden. Renew to reactivate your agent tools.", cta: "Renew Subscription", to: `/agent/checkout?plan=${sub.planId}` };
+    banner = { tone: "red", icon: AlertTriangle, title: "Your subscription was cancelled.", text: "Your properties are kept but hidden. Renew to reactivate your agent tools.", cta: "Renew Subscription", to: `/agent/subscription/checkout?plan=${sub.planId}` };
   } else if (restriction === "pending") {
     banner = { tone: "amber", icon: Hourglass, title: "Your payment is being confirmed.", text: `Your ${sub.planName} plan starts as soon as ${siteName} confirms your ${sub.paymentMethod?.toLowerCase() || "payment"}.` };
   } else if (subscription.expiringSoon) {

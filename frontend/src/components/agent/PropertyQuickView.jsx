@@ -91,7 +91,7 @@ const PropertyQuickView = ({ property: p, status, interest, perms, onClose, onDe
                 [Eye, "Views", interest.views, null],
                 [Inbox, "Inquiries", interest.inquiries, `/agent/inquiries?property=${p.id}`],
                 [HandCoins, "Offers", interest.offers, `/agent/offers?property=${p.id}`],
-                [KeyRound, "Requests", interest.requests, p.property.status === "Sale" ? "/agent/sale-requests" : "/agent/rentals"],
+                [KeyRound, "Requests", interest.requests, `${p.property.status === "Sale" ? "/agent/sale-requests" : "/agent/rentals"}?property=${p.id}`],
               ].map(([Icon, label, value, to]) => {
                 const body = (
                   <>

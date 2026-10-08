@@ -41,7 +41,7 @@ const IMAGE_TYPES = ["png", "jpeg", "webp", "svg+xml", "x-icon", "vnd.microsoft.
  * A branding image: keeps an existing URL, clears it with "", or uploads a new data URI
  * (sent by the settings page) to Cloudinary and returns the stored URL.
  */
-const image = async (value, label, maxKB, current) => {
+const image = async (value, label, maxKB, current, folder = "homebase/branding") => {
   const v = String(value ?? "").trim();
   if (!v || v === current) return v;
   const match = /^data:image\/([a-z+.-]+);base64,/.exec(v);
@@ -51,8 +51,43 @@ const image = async (value, label, maxKB, current) => {
   }
   if (!IMAGE_TYPES.includes(match[1])) fail(`${label} must be a PNG, JPG, WebP, SVG or ICO file.`);
   if ((v.length - match[0].length) * 0.75 > maxKB * 1024) fail(`${label} must be smaller than ${maxKB >= 1024 ? `${maxKB / 1024}MB` : `${maxKB}KB`}.`);
-  const result = await cloudinary.uploader.upload(v, { folder: "homebase/branding", resource_type: "image" });
+  const result = await cloudinary.uploader.upload(v, { folder, resource_type: "image" });
   return result.secure_url;
+};
+
+// Hero buttons link to a page of this site ("/rent", "/properties?type=Villa") or a full https:// address
+const link = (value, label) => {
+  const v = String(value ?? "").trim();
+  if (!v || (v.startsWith("/") && !v.startsWith("//") && !/\s/.test(v) && v.length <= 200)) return v;
+  return url(v, label);
+};
+
+const HERO_POSITIONS = ["center", "top", "bottom", "left", "right"];
+const BUILT_IN_HERO_IMAGES = defaultSettings.hero.slides.map((s) => s.image);
+const HERO_ID = /^[a-z0-9-]{1,40}$/;
+
+const heroSlide = async (b, n, current) => {
+  const name = `Slide ${n}`;
+  const id = HERO_ID.test(String(b.id)) ? String(b.id) : `slide-${Date.now().toString(36)}-${n}`;
+  const saved = current.find((s) => s.id === id);
+  const img = BUILT_IN_HERO_IMAGES.includes(b.image) ? b.image : await image(b.image, `${name} image`, 5120, saved?.image, "homebase/hero");
+  const slide = {
+    id,
+    active: bool(b.active),
+    image: img,
+    position: HERO_POSITIONS.includes(b.position) ? b.position : "center",
+    label: text(b.label, `${name} label`, 40),
+    title: text(b.title, `${name} title`, 90, { required: true }),
+    description: text(b.description, `${name} description`, 220),
+    primaryText: text(b.primaryText, `${name} button text`, 30),
+    primaryLink: link(b.primaryLink, `${name} button link`),
+    secondaryText: text(b.secondaryText, `${name} second button text`, 30),
+    secondaryLink: link(b.secondaryLink, `${name} second button link`),
+  };
+  if (slide.active && !slide.image) fail(`${name} needs a background image before it can be shown.`);
+  if (Boolean(slide.primaryText) !== Boolean(slide.primaryLink)) fail(`${name}: give the button both its text and a link, or leave both empty.`);
+  if (Boolean(slide.secondaryText) !== Boolean(slide.secondaryLink)) fail(`${name}: give the second button both its text and a link, or leave both empty.`);
+  return slide;
 };
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -139,11 +174,22 @@ const validators = {
 
   payments: async (b) => ({ rentalsEnabled: bool(b.rentalsEnabled), subscriptionsEnabled: bool(b.subscriptionsEnabled) }),
 
+  // Slides are saved in display order; images upload one at a time to keep Cloudinary requests small
+  hero: async (b, current) => {
+    const input = Array.isArray(b.slides) ? b.slides : [];
+    if (input.length > 8) fail("Up to 8 hero slides.");
+    const slides = [];
+    for (const [i, slide] of input.entries()) slides.push(await heroSlide(slide || {}, i + 1, current.slides || []));
+    if (new Set(slides.map((s) => s.id)).size !== slides.length) fail("Each hero slide needs its own id.");
+    return { slides };
+  },
+
   notifications: async (b) => Object.fromEntries(Object.keys(defaultSettings.notifications).map((k) => [k, bool(b[k])])),
 };
 
 // Returns the cleaned section, or throws a 400 HttpError with a message for the admin
 export const validateSection = (section, body, current) => {
-  if (!validators[section]) throw new HttpError(404, "Unknown settings section.");
+  // Own keys only: "__proto__", "constructor" and the like never reach a validator
+  if (typeof section !== "string" || !Object.hasOwn(validators, section)) throw new HttpError(404, "Unknown settings section.");
   return validators[section](body || {}, current[section]);
 };

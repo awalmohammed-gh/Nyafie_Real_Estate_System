@@ -21,6 +21,7 @@ import { useViewMode } from "../../hooks/useViewMode";
 import PropertyTile from "../../components/dashboard/PropertyTile";
 import ViewToggle from "../../components/dashboard/ViewToggle";
 import PropertyQuickView from "../../components/agent/PropertyQuickView";
+import WorkspaceStats from "../../components/agent/WorkspaceStats";
 
 const tabs = [
   { id: "all", label: "All" },
@@ -41,6 +42,7 @@ const MyProperties = () => {
   const [propertyType, setPropertyType] = useState("all");
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState("latest");
   const [deleting, setDeleting] = useState(null);
   const [view, setView] = useViewMode("agent-properties");
   const inquiryCount = (p) => myInquiries.filter((i) => i.propertyId === p.id).length;
@@ -51,7 +53,7 @@ const MyProperties = () => {
     .filter((p) => listingType === "all" || p.property.status === listingType)
     .filter((p) => propertyType === "all" || p.property.type === propertyType)
     .filter((p) => !search || `${p.title} ${p.location.name} ${p.location.city} ${p.property.type}`.toLowerCase().includes(search))
-    .sort((a, b) => new Date(b.listing.createdAt) - new Date(a.listing.createdAt));
+    .sort((a, b) => sort === "views" ? (b.meta?.views || 0) - (a.meta?.views || 0) : sort === "oldest" ? new Date(a.listing.createdAt) - new Date(b.listing.createdAt) : new Date(b.listing.createdAt) - new Date(a.listing.createdAt));
   const count = (id) => myProperties.filter((p) => id === "all" || p.listing.state === id).length;
 
   // A published listing is only truly live when the agent is in good standing
@@ -158,6 +160,13 @@ const MyProperties = () => {
         }
       />
 
+      <WorkspaceStats className="mb-6" items={[
+        { label: "All properties", value: myProperties.length, note: "Your complete portfolio" },
+        { label: "Live on the website", value: myProperties.filter(isPubliclyVisible).length, note: "Visible to customers" },
+        { label: "In review", value: count("pending"), note: "Waiting for approval" },
+        { label: "Drafts", value: count("draft"), note: "Ready for your next update" },
+      ]} />
+
       {perms.isActive && perms.limitReached && (
         <div className="mb-6">
           <LockedFeature compact title={limitCopy.title} description={`${limitCopy.description} You can still save drafts.`} cta={limitCopy.cta} />
@@ -173,9 +182,13 @@ const MyProperties = () => {
         />
       ) : (
         <>
-          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="workspace-toolbar">
+            <div className="workspace-toolbar-top">
             <FilterTabs label="Listing status" value={tab} onChange={setTab} tabs={tabs.map((t) => ({ ...t, count: count(t.id) }))} />
-            <div className="flex gap-2">
+            <div className="flex items-center gap-3"><span className="text-xs text-gray-500" role="status">{rows.length} {rows.length === 1 ? "property" : "properties"}</span><ViewToggle value={view} onChange={setView} /></div>
+            </div>
+            <div className="workspace-filters">
+              <SearchInput value={query} onChange={setQuery} placeholder="Search by title, area or city" />
               <select value={listingType} onChange={(e) => setListingType(e.target.value)} aria-label="Filter by listing type" className="field w-36 py-2">
                 <option value="all">Sale & rent</option>
                 <option value="Sale">For sale</option>
@@ -187,8 +200,8 @@ const MyProperties = () => {
                   {types.map((t) => <option key={t} value={t}>{formatType(t)}</option>)}
                 </select>
               )}
-              <SearchInput value={query} onChange={setQuery} placeholder="Search properties" className="flex-1 lg:w-64" />
-              <ViewToggle value={view} onChange={setView} />
+              <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort properties" className="field py-2"><option value="latest">Newest first</option><option value="oldest">Oldest first</option><option value="views">Most viewed</option></select>
+              {(query || tab !== "all" || listingType !== "all" || propertyType !== "all") && <button type="button" className="btn btn-light text-xs" onClick={() => { setQuery(""); setTab("all"); setListingType("all"); setPropertyType("all"); }}>Reset filters</button>}
             </div>
           </div>
 
@@ -212,6 +225,7 @@ const MyProperties = () => {
             )
           ) : (
           <DataTable
+            tableFrom="xl"
             columns={columns}
             rows={rows}
             minWidth={900}
@@ -248,6 +262,7 @@ const MyProperties = () => {
       )}
 
       <PropertyQuickView
+        key={viewed?.id || "closed"}
         property={viewed}
         status={viewed && statusOf(viewed)}
         interest={viewed ? interestFor(viewed) : {}}

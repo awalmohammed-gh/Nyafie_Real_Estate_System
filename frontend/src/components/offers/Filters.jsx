@@ -11,7 +11,7 @@ const RANGES = [
 const Filters = ({ isAdmin, owners = [], ownerId, setOwnerId, properties = [], propertyId, setPropertyId, range, setRange }) => {
   const { siteName } = usePlatform();
   return (
-  <div className="mb-4 grid gap-2 sm:grid-cols-3">
+  <div className={isAdmin ? "mb-4 grid gap-2 sm:grid-cols-3" : "workspace-toolbar grid gap-3 sm:grid-cols-2"}>
     {isAdmin && (
       <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} aria-label="Filter by agent" className="field py-2">
         <option value="all">All agents & {siteName}</option>

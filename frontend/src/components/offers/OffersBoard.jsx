@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Check, Eye, HandCoins, Loader2, MessageCircle, Repeat, X } from "lucide-react";
 import DataTable from "../ui/DataTable";
 import EmptyState from "../ui/EmptyState";
 import FilterTabs from "../ui/FilterTabs";
-import Modal from "../ui/Modal";
+import SidePanel from "../ui/SidePanel";
+import WorkspaceStats from "../agent/WorkspaceStats";
 import { ErrorState, TableSkeleton } from "../dashboard/States";
 import StatusSteps from "./StatusSteps";
 import Filters from "./Filters";
@@ -26,12 +27,11 @@ const ghs = (value) => `₵${Number(value).toLocaleString()}`;
  */
 const OffersBoard = ({ scope }) => {
   const isAdmin = scope === "admin";
+  // Records open in a side panel for admins and agents alike (stage, payment, history, next action)
+  const Detail = SidePanel;
   const run = useAsyncAction();
-  const { reload } = useTransactions();
+  const { offers, loading, error: loadError, reload, updateTransaction } = useTransactions();
   const [params] = useSearchParams();
-  const [attempt, setAttempt] = useState(0);
-  const [offers, setOffers] = useState(null);
-  const [loadError, setLoadError] = useState("");
   const [status, setStatus] = useState("All");
   const [query, setQuery] = useState("");
   const [ownerId, setOwnerId] = useState("all");
@@ -41,16 +41,9 @@ const OffersBoard = ({ scope }) => {
   const [counter, setCounter] = useState({ amount: "", message: "", show: false });
   const [busy, setBusy] = useState("");
 
-  useEffect(() => {
-    (isAdmin ? offerApi.getAdminOffers() : offerApi.getAgentOffers()).then(setOffers).catch((err) => setLoadError(err.message));
-  }, [isAdmin, attempt]);
-
-  const retry = () => {
-    setLoadError("");
-    setAttempt((a) => a + 1);
-  };
+  const retry = reload;
   if (loadError) return <ErrorState title="Couldn't load offers" message={loadError} onRetry={retry} />;
-  if (!offers) return <TableSkeleton />;
+  if (loading) return <TableSkeleton />;
 
   const owners = [...new Map(offers.map((o) => [o.owner.id, o.owner])).values()];
   const scoped = offers
@@ -71,7 +64,7 @@ const OffersBoard = ({ scope }) => {
   const whatsapp = open?.customer.phone && toWhatsAppNumber(open.customer.phone);
 
   const replace = (updated) => {
-    setOffers((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+    updateTransaction("offers", updated);
     reload(); // refresh dashboard counts and sidebar badges
   };
 
@@ -131,6 +124,12 @@ const OffersBoard = ({ scope }) => {
 
   return (
     <>
+      {!isAdmin && <WorkspaceStats className="mb-6" items={[
+        { label: "All offers", value: offers.length, note: "Across your properties" },
+        { label: "Needs a response", value: offers.filter((o) => ["Pending", "Countered"].includes(o.status)).length, note: "Keep negotiations moving" },
+        { label: "Accepted", value: offers.filter((o) => o.status === "Accepted").length, note: "Ready for the next step" },
+        { label: "Closed", value: offers.filter((o) => ["Rejected", "Withdrawn"].includes(o.status)).length, note: "Completed negotiations" },
+      ]} />}
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <FilterTabs
           label="Offer status"
@@ -144,8 +143,10 @@ const OffersBoard = ({ scope }) => {
       <Filters isAdmin={isAdmin} owners={owners} ownerId={ownerId} setOwnerId={setOwnerId} properties={propertyOptions} propertyId={propertyId} setPropertyId={setPropertyId} range={range} setRange={setRange} />
 
       <DataTable
+        tableFrom={isAdmin ? "md" : "xl"}
         columns={columns}
         rows={rows}
+        onRowClick={(o) => setOpenId(o.id)}
         minWidth={isAdmin ? 920 : 800}
         empty={
           <EmptyState
@@ -171,7 +172,7 @@ const OffersBoard = ({ scope }) => {
         )}
       />
 
-      <Modal
+      <Detail
         open={Boolean(open)}
         onClose={() => {
           setOpenId(null);
@@ -201,6 +202,7 @@ const OffersBoard = ({ scope }) => {
         {open && (
           <div className="space-y-5">
             <StatusSteps kind="offer" status={open.status.toLowerCase()} />
+            <div className="rounded-xl bg-brand-50 p-4"><p className="workspace-eyebrow">Offer summary</p><p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{ghs(open.amount)}</p><p className="mt-2 text-xs text-gray-500">Asking {ghs(open.askingPrice)}{open.askingPrice > 0 && ` · ${Math.abs(Math.round((open.amount - open.askingPrice) / open.askingPrice * 100))}% ${open.amount >= open.askingPrice ? "above or equal to" : "below"} asking price`}</p></div>
             <Link to={`/house/${open.property.id}`} className="flex items-center gap-3 rounded-lg p-2 ring-1 ring-gray-200 transition hover:ring-brand-200">
               {open.property.image && <img src={open.property.image} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />}
               <div className="min-w-0">
@@ -288,7 +290,7 @@ const OffersBoard = ({ scope }) => {
             )}
           </div>
         )}
-      </Modal>
+      </Detail>
     </>
   );
 };

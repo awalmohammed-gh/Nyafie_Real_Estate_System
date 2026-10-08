@@ -1,47 +1,43 @@
-import { useState } from "react";
-import { AlertCircle, Eye, EyeOff, Loader2, Lock, Mail, Phone, User } from "lucide-react";
+import { useId, useState } from "react";
+import { AlertCircle, ArrowRight, Loader2, Mail, Phone, User } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
+import { AuthField, AuthPasswordField } from "./AuthField";
 
-const IconField = ({ icon: Icon, children }) => (
-  <div className="relative">
-    <Icon className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-gray-400" />
-    {children}
-  </div>
-);
-
-const emptyForm = { firstName: "", lastName: "", email: "", phone: "", password: "", termsAgree: false };
+const emptyForm = { fullName: "", firstName: "", lastName: "", email: "", phone: "", password: "", confirmPassword: "", termsAgree: false };
 
 const AuthForm = ({ initialMode = "login", onSuccess, onModeChange }) => {
-  const { login, register } = useAuth();
-  const [mode, setMode] = useState(initialMode);
-  const [showPassword, setShowPassword] = useState(false);
+  const { login, register, domain } = useAuth();
+  const [localMode, setLocalMode] = useState(initialMode);
+  const mode = onModeChange ? initialMode : localMode;
   const [formData, setFormData] = useState(emptyForm);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  // Follow the route when /login and /register switch without remounting the form
-  const [prevInitial, setPrevInitial] = useState(initialMode);
-  if (initialMode !== prevInitial) {
-    setPrevInitial(initialMode);
-    setMode(initialMode);
-  }
+  const errorId = useId();
   const isSignup = mode === "signup";
+  const isAgent = domain === "agent";
 
   const switchMode = (next) => {
-    setMode(next);
+    if (next === mode) return;
+    setLocalMode(next);
     onModeChange?.(next);
     setError("");
   };
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
+  const handleChange = (event) => {
+    const { name, value, type, checked } = event.target;
+    setFormData((previous) => ({ ...previous, [name]: type === "checkbox" ? checked : value }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (submitting) return;
     setError("");
     if (isSignup && formData.password.length < 8) {
       setError("Use at least 8 characters for your password.");
+      return;
+    }
+    if (isSignup && isAgent && formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match.");
       return;
     }
     setSubmitting(true);
@@ -49,95 +45,50 @@ const AuthForm = ({ initialMode = "login", onSuccess, onModeChange }) => {
       const user = isSignup ? await register(formData) : await login(formData);
       onSuccess?.(user, mode);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "We couldn't complete your request. Please try again.");
       setSubmitting(false);
     }
   };
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-1 rounded-full bg-gray-100 p-1">
-        {[
-          { value: "login", label: "Sign In" },
-          { value: "signup", label: "Create Account" },
-        ].map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => switchMode(tab.value)}
-            aria-pressed={mode === tab.value}
-            className={`rounded-full py-2 text-sm font-semibold transition ${
-              mode === tab.value ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-900"
-            }`}
-          >
-            {tab.label}
-          </button>
+      <div className="auth-mode-tabs" role="group" aria-label="Sign in or create an account">
+        {[{ value: "login", label: "Sign in" }, { value: "signup", label: "Create account" }].map((tab) => (
+          <button key={tab.value} type="button" disabled={submitting} onClick={() => switchMode(tab.value)} aria-pressed={mode === tab.value} className={mode === tab.value ? "is-active" : ""}>{tab.label}</button>
         ))}
       </div>
 
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate={false}>
-        {isSignup && (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <IconField icon={User}>
-                <input name="firstName" placeholder="First name" aria-label="First name" autoComplete="given-name" value={formData.firstName} onChange={handleChange} required className="field pl-10" />
-              </IconField>
-              <IconField icon={User}>
-                <input name="lastName" placeholder="Last name" aria-label="Last name" autoComplete="family-name" value={formData.lastName} onChange={handleChange} required className="field pl-10" />
-              </IconField>
-            </div>
-            <IconField icon={Phone}>
-              <input type="tel" name="phone" placeholder="Phone (optional)" aria-label="Phone" autoComplete="tel" value={formData.phone} onChange={handleChange} className="field pl-10" />
-            </IconField>
-          </>
-        )}
+      <form onSubmit={handleSubmit} className="auth-form" aria-busy={submitting} aria-describedby={error ? errorId : undefined}>
+        <fieldset disabled={submitting} className="auth-fields">
+          {isSignup && (
+            <>
+              {isAgent ? (
+                <AuthField label="Full name" icon={User} name="fullName" placeholder="Your full name" autoComplete="name" value={formData.fullName} onChange={handleChange} required maxLength={160} />
+              ) : (
+                <div className="auth-field-row">
+                  <AuthField label="First name" icon={User} name="firstName" placeholder="First name" autoComplete="given-name" value={formData.firstName} onChange={handleChange} required />
+                  <AuthField label="Last name" icon={User} name="lastName" placeholder="Last name" autoComplete="family-name" value={formData.lastName} onChange={handleChange} required />
+                </div>
+              )}
+              <AuthField label={isAgent ? "Phone number" : "Phone number (optional)"} icon={Phone} type="tel" name="phone" placeholder="e.g. 024 123 4567" autoComplete="tel" value={formData.phone} onChange={handleChange} required={isAgent} />
+            </>
+          )}
+          <AuthField label="Email address" icon={Mail} type="email" name="email" placeholder="you@example.com" autoComplete={isSignup ? "email" : "username"} value={formData.email} onChange={handleChange} required />
+          <AuthPasswordField label="Password" name="password" placeholder={isSignup ? "Create a password" : "Enter your password"} autoComplete={isSignup ? "new-password" : "current-password"} value={formData.password} onChange={handleChange} required minLength={isSignup ? 8 : undefined} hint={isSignup ? "Use at least 8 characters." : undefined} />
+          {isSignup && isAgent && <AuthPasswordField label="Confirm password" name="confirmPassword" placeholder="Enter your password again" autoComplete="new-password" value={formData.confirmPassword} onChange={handleChange} required />}
+          {isSignup && (
+            <label className="auth-terms"><input type="checkbox" name="termsAgree" checked={formData.termsAgree} onChange={handleChange} required /><span>I agree to the Terms of Service and Privacy Policy.</span></label>
+          )}
+        </fieldset>
 
-        <IconField icon={Mail}>
-          <input type="email" name="email" placeholder="Email address" aria-label="Email address" autoComplete="email" value={formData.email} onChange={handleChange} required className="field pl-10" />
-        </IconField>
+        {error && <p id={errorId} role="alert" className="auth-error"><AlertCircle size={18} aria-hidden="true" />{error}</p>}
 
-        <IconField icon={Lock}>
-          <input
-            type={showPassword ? "text" : "password"}
-            name="password"
-            placeholder={isSignup ? "Password (8+ characters)" : "Password"}
-            aria-label="Password"
-            autoComplete={isSignup ? "new-password" : "current-password"}
-            value={formData.password}
-            onChange={handleChange}
-            required
-            className="field pr-11 pl-10"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword((prev) => !prev)}
-            aria-label={showPassword ? "Hide password" : "Show password"}
-            className="absolute top-1/2 right-3 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-gray-400 hover:text-gray-700"
-          >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        </IconField>
-
-        {isSignup && (
-          <label className="flex items-start gap-3 text-sm text-gray-600">
-            <input type="checkbox" name="termsAgree" checked={formData.termsAgree} onChange={handleChange} required className="mt-0.5 h-4 w-4 shrink-0 rounded accent-brand-500" />
-            I agree to the Terms of Service and Privacy Policy
-          </label>
-        )}
-
-        {error && (
-          <p role="alert" className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            {error}
-          </p>
-        )}
-
-        <button type="submit" disabled={submitting} className="btn btn-primary w-full py-3.5">
-          {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-          {isSignup ? "Create Account" : "Sign In"}
+        <button type="submit" disabled={submitting} className="auth-submit">
+          <span>{submitting ? isSignup ? "Creating your account…" : "Signing you in…" : isSignup ? "Create account" : isAgent ? "Sign in as agent" : "Sign in"}</span>
+          {submitting ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <ArrowRight size={18} aria-hidden="true" />}
         </button>
+        {isSignup && isAgent && <p className="auth-onboarding-note">Next: complete your profile and submit your application. Your dashboard opens after admin approval and any required subscription.</p>}
       </form>
-
     </div>
   );
 };

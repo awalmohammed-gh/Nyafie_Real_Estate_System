@@ -7,7 +7,7 @@ import {
   markRead,
   closeConversation,
 } from "../controllers/chatController.js";
-import { protect } from "../middleware/authMiddleware.js";
+import { protect, protectCustomer } from "../middleware/authMiddleware.js";
 
 const router = Router();
 
@@ -15,7 +15,7 @@ const router = Router();
 // checked in the controller (customer, owning agent, or admin for admin listings)
 router.use(protect);
 router.get("/", listConversations());
-router.post("/", createConversation);
+router.post("/", protectCustomer, createConversation);
 router.get("/:id", getConversation);
 router.post("/:id/messages", sendMessage);
 router.put("/:id/read", markRead);

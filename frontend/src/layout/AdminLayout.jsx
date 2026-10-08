@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   MessageCircle,
   Settings,
+  Star,
   UserCog,
   Users,
   Wallet,
@@ -22,6 +23,8 @@ import { usePlatform } from "../context/usePlatform";
 import { TransactionsProvider } from "../context/TransactionsProvider";
 import { useTransactions } from "../context/useTransactions";
 import { useUnreadMessages } from "../hooks/useUnreadMessages";
+import { useUnseenReviews } from "../hooks/useUnseenReviews";
+import { usePendingApplications } from "../hooks/usePendingApplications";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
 import { DashboardSkeleton } from "../components/dashboard/States";
 import NotificationBell from "../components/ui/NotificationBell";
@@ -41,8 +44,9 @@ const groups = [
   {
     label: "Real estate",
     items: [
-      { label: "Properties", to: "/admin/properties", icon: Building2, badge: "review" },
+      { label: "Properties", to: "/admin/properties", icon: Building2, badge: "review", urgent: true },
       { label: "Agents", to: "/admin/agents", icon: UserCog },
+      { label: "Agent Applications", to: "/admin/agent-applications", icon: ClipboardCheck, badge: "applications", urgent: true },
       { label: "Customers", to: "/admin/customers", icon: Users },
     ],
   },
@@ -59,6 +63,7 @@ const groups = [
     items: [
       { label: "Inquiries", to: "/admin/inquiries", icon: Inbox, badge: "inquiries" },
       { label: "Messages", to: "/admin/messages", icon: MessageCircle, badge: "messages" },
+      { label: "Reviews", to: "/admin/reviews", icon: Star, badge: "reviews" },
     ],
   },
   {
@@ -80,12 +85,16 @@ const AdminShell = () => {
   const { plansLoading, settingsReady } = usePlatform();
   const { pending } = useTransactions();
   const unreadMessages = useUnreadMessages("admin");
+  const newReviews = useUnseenReviews();
+  const pendingApplications = usePendingApplications();
   const review = listings.filter((p) => p.listing.state === "pending").length;
 
   const badges = {
     review,
+    applications: pendingApplications,
     inquiries: inquiries.filter((i) => i.status === "New").length,
     messages: unreadMessages,
+    reviews: newReviews,
     offers: pending.offers,
     rentals: pending.rentals,
     sales: pending.sales,
@@ -106,13 +115,13 @@ const AdminShell = () => {
             to="/admin/properties?status=pending"
             title="Properties awaiting review"
             aria-label={`${review} properties awaiting review`}
-            className="relative grid h-9 w-9 place-items-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+            className="relative grid h-10 w-10 place-items-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900"
           >
             <ClipboardCheck className="h-5 w-5" />
             {review > 0 && <span className="absolute top-1 right-1 min-w-4 rounded-full bg-amber-500 px-1 text-center text-[10px] leading-4 font-bold text-white">{review}</span>}
           </Link>
           <NotificationBell />
-          <Link to="/" title="View website" aria-label="View website" className="hidden h-9 w-9 place-items-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 sm:grid">
+          <Link to="/" title="View website" aria-label="View website" className="hidden h-10 w-10 place-items-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 sm:grid">
             <ExternalLink className="h-4.5 w-4.5" />
           </Link>
           <span className="mx-1 hidden h-6 w-px bg-gray-200 sm:block" />

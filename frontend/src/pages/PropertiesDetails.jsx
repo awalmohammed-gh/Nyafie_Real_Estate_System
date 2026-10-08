@@ -1,21 +1,22 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { AnimatePresence, motion } from "motion/react";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import {
   Bath,
   Bed,
   Building2,
   Check,
   CheckCircle2,
-  ChevronLeft,
   ChevronRight,
   Eye,
   HandCoins,
   KeyRound,
-  ShoppingBag,
   Heart,
-  Images,
-  Lock,
   Mail,
   MessageSquare,
   MessageCircle,
@@ -27,7 +28,6 @@ import {
   Share2,
   ShieldCheck,
   Star,
-  X,
 } from "lucide-react";
 import { useRealEstate } from "../context/useRealEstate";
 import HouseCard from "../components/card/HouseCard";
@@ -43,12 +43,20 @@ import StartChatModal from "../components/chat/StartChatModal";
 import WhatsAppIcon from "../components/ui/WhatsAppIcon";
 import StatusBadge from "../components/ui/StatusBadge";
 import SignInRequiredModal from "../components/property/SignInRequiredModal";
-import { useLockBodyScroll } from "../hooks/useLockBodyScroll";
-import { buildWhatsAppLink, ownerWhatsAppNumber } from "../utils/whatsapp";
+import PropertyGallery from "../components/property/PropertyGallery";
+import PropertyReviews from "../components/reviews/PropertyReviews";
+import {
+  buildPropertyEmailLink,
+  buildWhatsAppLink,
+  ownerWhatsAppNumber,
+} from "../utils/whatsapp";
 import { formatDate } from "../utils/date";
-import { formatType, getInitials, getPriceParts, statusLabel } from "../utils/property";
-
-const COUNTRY = "Ghana"; // every HomeBase listing is in Ghana (prices in GHS, +233 numbers)
+import {
+  formatType,
+  getInitials,
+  getPriceParts,
+  statusLabel,
+} from "../utils/property";
 
 const PropertiesDetails = () => {
   const { id } = useParams();
@@ -62,60 +70,76 @@ const PropertiesDetails = () => {
   // comes back with ?action=... so the dialog they wanted opens straight away.
   const [dialog, setDialog] = useState(null);
   const [signInFor, setSignInFor] = useState(null);
+  const [signInRating, setSignInRating] = useState(0); // the star a guest picked before being asked to sign in
+  const [reviewSummary, setReviewSummary] = useState(null); // live from the reviews section
   const viewedRef = useRef(null);
-  const [activeImage, setActiveImage] = useState(0);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // The property is always loaded from the API by its database id
-  const detail = useApiQuery(`property:${id}`, () => propertyApi.getPropertyById(id));
+  const detail = useApiQuery(`property:${id}`, () =>
+    propertyApi.getPropertyById(id),
+  );
   const property = detail.data;
-  const agentOwnerId = property?.owner.type === "agent" ? property.ownerUserId : null;
-  const related = useApiQuery(`related:${id}`, () => propertyApi.getRelatedProperties(id, 3));
+  const agentOwnerId =
+    property?.owner.type === "agent" ? property.ownerUserId : null;
+  const related = useApiQuery(`related:${id}`, () =>
+    propertyApi.getRelatedProperties(id, 3),
+  );
   // How many public listings the agent has (counted on the server)
-  const agentListings = useApiQuery(`agent-count:${agentOwnerId}`, () => (agentOwnerId ? propertyApi.searchProperties({ owner: agentOwnerId, limit: 1 }) : Promise.resolve(null)));
-  const imageCount = property?.media.images.length || 0;
-
-  useLockBodyScroll(lightboxOpen);
+  const agentListings = useApiQuery(`agent-count:${agentOwnerId}`, () =>
+    agentOwnerId
+      ? propertyApi.searchProperties({
+          owner: agentOwnerId,
+          availability: ["Available", "Under Offer"],
+          limit: 1,
+        })
+      : Promise.resolve(null),
+  );
 
   // Count one view per visit for agent listings (not the owner viewing their own listing)
   useEffect(() => {
     if (!property || viewedRef.current === id) return;
     viewedRef.current = id;
-    if (property.owner?.type === "agent" && property.owner.id !== user?.id) recordView(id);
+    if (property.owner?.type === "agent" && property.owner.id !== user?.id)
+      recordView(id);
   }, [id, property, user, recordView]);
-
-  // Keyboard controls for the fullscreen gallery
-  useEffect(() => {
-    if (!lightboxOpen) return;
-    const onKey = (event) => {
-      if (event.key === "Escape") setLightboxOpen(false);
-      if (event.key === "ArrowRight") setActiveImage((i) => (i + 1) % imageCount);
-      if (event.key === "ArrowLeft") setActiveImage((i) => (i - 1 + imageCount) % imageCount);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [lightboxOpen, imageCount]);
 
   if (detail.loading) return <PageLoader label="Loading property..." />;
   if (detail.error) {
     // 404: missing, unpublished or hidden. Anything else: the request failed, so offer a retry.
-    if (/not found/i.test(detail.error)) return <NotFound message="Property not found. It may have been removed or is no longer listed." />;
+    if (/not found/i.test(detail.error))
+      return (
+        <NotFound message="Property not found. It may have been removed or is no longer listed." />
+      );
     return (
       <div className="container-page grid min-h-[60vh] place-items-center py-16">
         <div role="alert" className="max-w-md text-center">
-          <h1 className="text-xl font-bold text-gray-900">Unable to load this property</h1>
+          <h1 className="text-xl font-bold text-gray-900">
+            Unable to load this property
+          </h1>
           <p className="mt-2 text-gray-600">{detail.error}</p>
-          <button onClick={detail.reload} className="btn btn-primary mt-6">Retry</button>
+          <button onClick={detail.reload} className="btn btn-primary mt-6">
+            Retry
+          </button>
         </div>
       </div>
     );
   }
 
-  const { title, description, location: place, property: details, features, media, agent, meta } = property;
+  const {
+    title,
+    description,
+    location: place,
+    property: details,
+    features,
+    media,
+    agent,
+    meta,
+  } = property;
   const { value, period } = getPriceParts(property);
   const images = media.images;
+  const canExpandDescription = description.length > 180;
   const liked = isFavorite(id);
   const isForSale = details.status === "Sale";
 
@@ -127,19 +151,76 @@ const PropertiesDetails = () => {
   const ownerPhone = isAdminListing ? settings.contact.phone : agent.phone;
   const ownerEmail = isAdminListing ? settings.contact.email : agent.email;
   const whatsappNumber = ownerWhatsAppNumber(property, settings);
-  const whatsappLink = buildWhatsAppLink(whatsappNumber, property, window.location.href);
-  const listingCount = agentListings.data?.total || 1;
-  const isOwnListing = Boolean(user) && ((isAdminListing && user.role === "admin") || property.ownerUserId === user.id);
-  // Rent Now needs a free property; Buy Now and offers are welcome until it is sold/rented
-  const canPrimary = isForSale ? availability !== "Sold" : availability === "Available";
+  const whatsappLink = buildWhatsAppLink(
+    whatsappNumber,
+    property,
+    window.location.href,
+  );
+  const listingCount = agentListings.data?.total;
+  const emailLink = buildPropertyEmailLink(
+    ownerEmail,
+    property,
+    `${window.location.origin}/house/${id}`,
+  );
+  const hasCoordinates =
+    Number.isFinite(place.latitude) && Number.isFinite(place.longitude);
+  const mapQuery = hasCoordinates
+    ? `${place.latitude},${place.longitude}`
+    : [place.address, place.name, place.city, place.region, place.country]
+        .filter(Boolean)
+        .join(", ");
+  const mapLink = mapQuery
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`
+    : null;
+  const isOwnListing =
+    Boolean(user) &&
+    ((isAdminListing && user.role === "admin") ||
+      property.ownerUserId === user.id);
+  // Rentals need an available property; purchase requests and offers follow the existing sale rules.
+  const canRent =
+    availability === "Available" &&
+    settings.payments.rentalsAvailable &&
+    property.pricing.currency === "GHS";
+  const canPrimary = isForSale || canRent;
   const canMakeOffer = !unavailable;
-  const primaryLabel = isForSale ? "Buy Now" : "Rent Now";
-  const flowPaths = { buy: `/checkout/buy/${id}`, rent: `/checkout/rent/${id}`, offer: `/make-offer/${id}` };
+  const primaryLabel = isForSale
+    ? isAdminListing
+      ? "Contact owner"
+      : "Contact Agent"
+    : "Proceed with rental";
+  const flowPaths = {
+    buy: `/checkout/buy/${id}`,
+    rent: `/checkout/rent/${id}`,
+    offer: `/make-offer/${id}`,
+  };
   const contactLabel = isAdminListing ? siteName : "Agent";
 
   // The dialog opened by a click, or the one a returning guest asked for
-  const resumeAction = user && !isOwnListing ? searchParams.get("action") : null;
-  const activeDialog = dialog ?? (["chat", "inquiry"].includes(resumeAction) ? resumeAction : null);
+  const resumeAction =
+    user && !isOwnListing ? searchParams.get("action") : null;
+  const activeDialog =
+    dialog ??
+    (["chat", "inquiry"].includes(resumeAction) ? resumeAction : null);
+
+  // A guest who picked a star comes back from sign-in with ?action=review&rating=N
+  const resumeRating =
+    user && searchParams.get("action") === "review"
+      ? Math.min(
+          5,
+          Math.max(0, Math.round(Number(searchParams.get("rating")) || 0)),
+        )
+      : null;
+  const clearResume = () => setSearchParams({}, { replace: true });
+  const requireSignInToReview = (rating = 0) => {
+    setSignInRating(rating);
+    setSignInFor("review");
+  };
+  const reviewReturnTo = `${location.pathname}?action=review${signInRating ? `&rating=${signInRating}` : ""}#reviews`;
+  // Header rating: the reviews section's latest numbers once loaded, otherwise the stored ones
+  const ratingCount = reviewSummary
+    ? reviewSummary.count
+    : meta?.ratingCount || 0;
+  const ratingAverage = reviewSummary ? reviewSummary.average : meta?.rating;
 
   const closeDialog = () => {
     setDialog(null);
@@ -152,24 +233,30 @@ const PropertiesDetails = () => {
     setSignInFor(action);
   };
 
-  // Rent Now / Buy Now / Make Offer continue on their own pages, which reload the property from the backend
+  // Rentals, purchase requests and offers continue on their own pages, which reload the property from the backend
   const startFlow = (flow) => {
     if (user) navigate(flowPaths[flow]);
     else setSignInFor(flow);
   };
-  const startPrimary = () => startFlow(isForSale ? "buy" : "rent");
-
-  const openLightbox = (index) => {
-    setActiveImage(index);
-    setLightboxOpen(true);
-  };
-
-  const stepImage = (step) => setActiveImage((i) => (i + step + images.length) % images.length);
+  const startPrimary = () =>
+    isForSale ? requireAuth("chat") : startFlow("rent");
 
   const specs = [
-    details.bedrooms != null && { icon: Bed, label: "Bedrooms", value: details.bedrooms },
-    details.bathrooms != null && { icon: Bath, label: "Bathrooms", value: details.bathrooms },
-    details.size && { icon: Maximize2, label: "Size", value: `${details.size.value} ${details.size.unit}` },
+    details.bedrooms != null && {
+      icon: Bed,
+      label: "Bedrooms",
+      value: details.bedrooms,
+    },
+    details.bathrooms != null && {
+      icon: Bath,
+      label: "Bathrooms",
+      value: details.bathrooms,
+    },
+    details.size?.value > 0 && {
+      icon: Maximize2,
+      label: "Size",
+      value: `${details.size.value} ${details.size.unit}`,
+    },
     { icon: Building2, label: "Type", value: formatType(details.type) },
   ].filter(Boolean);
 
@@ -190,422 +277,546 @@ const PropertiesDetails = () => {
     }
   };
 
-  // WhatsApp is a link for signed-in customers and a sign-in prompt for guests
-  const whatsAppAction = (className, children) =>
-    user ? (
-      <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className={className}>
-        {children}
-      </a>
-    ) : (
-      <button onClick={() => setSignInFor("whatsapp")} className={className}>
-        {children}
-      </button>
-    );
-
-  const sideImages = images.slice(1, 5);
+  // Agents' published business contact details are public; account messaging requires sign-in.
+  const whatsAppAction = (className, children) => (
+    <a
+      href={whatsappLink}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={className}
+    >
+      {children}
+    </a>
+  );
 
   return (
-    <div className="bg-linear-to-b from-brand-50/60 via-white to-white pb-36 lg:pb-12">
-      <div className="container-page pt-6 sm:pt-10">
-        {/* Breadcrumb */}
-        <nav aria-label="Breadcrumb" className="mb-6 flex flex-wrap items-center gap-1.5 text-sm text-gray-500">
-          <Link to="/" className="hover:text-brand-600">Home</Link>
-          <ChevronRight className="h-3.5 w-3.5" />
-          <Link to={isForSale ? "/sale" : "/rent"} className="hover:text-brand-600">{statusLabel(details.status)}</Link>
-          <ChevronRight className="h-3.5 w-3.5" />
-          <span className="truncate font-medium text-gray-900">{title}</span>
+    <div className="bg-white pb-32 lg:pb-16">
+      <div className="container-page pt-5 sm:pt-7">
+        <nav
+          aria-label="Breadcrumb"
+          className="mb-5 flex min-w-0 items-center gap-2 text-xs text-gray-500 sm:text-sm"
+        >
+          <Link to="/" className="shrink-0 hover:text-brand-600">
+            Home
+          </Link>
+          <ChevronRight aria-hidden="true" className="h-3 w-3 shrink-0" />
+          <Link
+            to={isForSale ? "/sale" : "/rent"}
+            className="shrink-0 hover:text-brand-600"
+          >
+            {statusLabel(details.status)}
+          </Link>
+          <ChevronRight aria-hidden="true" className="h-3 w-3 shrink-0" />
+          <span className="truncate text-gray-700">{title}</span>
         </nav>
 
-        {availability !== "Available" && (
-          <p className={`mb-6 flex items-start gap-3 rounded-2xl p-4 text-sm ring-1 ${unavailable ? "bg-gray-900 text-white ring-gray-900" : "bg-amber-50 text-amber-900 ring-amber-100"}`}>
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
-            {unavailable
-              ? `This property has been ${availability.toLowerCase()} and is no longer available. You can still contact the owner about similar properties.`
-              : "This property is under offer. You can still contact the owner to register your interest."}
-          </p>
-        )}
-
-        {/* Gallery */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className={`grid gap-3 ${sideImages.length ? "lg:grid-cols-4 lg:grid-rows-2" : ""}`}
-        >
-          <div className={`group relative overflow-hidden rounded-3xl bg-gray-100 ${sideImages.length ? "lg:col-span-2 lg:row-span-2" : ""}`}>
-            <button onClick={() => openLightbox(activeImage)} aria-label="Open gallery" className="block h-full w-full">
-              <img
-                src={images[activeImage]}
-                alt={title}
-                fetchPriority="high"
-                className={`h-full w-full object-cover transition duration-700 group-hover:scale-[1.03] aspect-4/3 sm:aspect-16/10 ${sideImages.length ? "lg:aspect-auto lg:min-h-112" : "lg:aspect-21/9"}`}
-              />
-            </button>
-            <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-gray-900/50 via-transparent to-gray-900/10" />
-
-            {/* Status chips */}
-            <div className="pointer-events-none absolute top-4 left-4 flex flex-wrap gap-2">
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold shadow-sm backdrop-blur ${isForSale ? "bg-emerald-50/95 text-emerald-700" : "bg-sky-50/95 text-sky-700"}`}>
+        <header className="mb-7 flex flex-col gap-5 border-b border-gray-100 pb-6 lg:flex-row lg:items-end lg:justify-between lg:gap-8">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3 text-xs font-medium sm:text-sm">
+              <span className="font-semibold text-brand-600">
                 {statusLabel(details.status)}
               </span>
+              <span
+                aria-hidden="true"
+                className="h-1 w-1 rounded-full bg-gray-300"
+              />
+              <span className="text-gray-500">{formatType(details.type)}</span>
+              <StatusBadge status={availability} />
               {meta?.isFeatured && (
-                <span className="flex items-center gap-1 rounded-full bg-brand-500 px-3 py-1 text-xs font-semibold text-white shadow-sm">
-                  <Star className="h-3 w-3 fill-white" />
+                <span className="inline-flex items-center gap-1 text-gray-500">
+                  <Star aria-hidden="true" className="h-3.5 w-3.5" />
                   Featured
                 </span>
               )}
             </div>
-
-            {/* Save / share */}
-            <div className="absolute top-4 right-4 flex gap-2">
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight text-balance text-gray-900 sm:text-3xl lg:text-4xl">
+              {title}
+            </h1>
+            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-gray-500">
+              <span className="flex items-center gap-1.5">
+                <MapPin aria-hidden="true" className="h-4 w-4 shrink-0" />
+                {[...new Set([place.name, place.city].filter(Boolean))].join(
+                  ", ",
+                ) || "Location on request"}
+              </span>
+              {ratingCount > 0 && (
+                <a
+                  href="#reviews"
+                  className="flex items-center gap-1.5 hover:text-brand-700"
+                >
+                  <Star
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 fill-amber-400 text-amber-400"
+                  />
+                  <span className="font-medium text-gray-700">
+                    {ratingAverage.toFixed(1)}
+                  </span>
+                  ({ratingCount} {ratingCount === 1 ? "rating" : "ratings"})
+                </a>
+              )}
+              {Boolean(meta?.views) && (
+                <span className="flex items-center gap-1.5">
+                  <Eye aria-hidden="true" className="h-4 w-4" />
+                  {meta.views.toLocaleString()} views
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-end justify-between gap-6 lg:shrink-0 lg:flex-col lg:items-end lg:gap-4">
+            <div>
+              <p className="text-xs text-gray-500 lg:text-right">
+                {isForSale ? "Asking price" : "Rent"}
+              </p>
+              <p
+                className={`mt-1 text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl ${unavailable ? "line-through opacity-60" : ""}`}
+              >
+                {value}
+                {period && (
+                  <span className="ml-1 text-sm font-normal tracking-normal text-gray-500">
+                    {period}
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => toggleFavorite(id)}
                 aria-pressed={liked}
                 aria-label={liked ? "Remove from saved" : "Save property"}
-                className="grid h-10 w-10 place-items-center rounded-full bg-white/90 text-gray-900 shadow-sm backdrop-blur transition hover:scale-105 hover:bg-white"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm text-gray-600 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
               >
-                <Heart className={`h-4 w-4 ${liked ? "fill-brand-500 text-brand-500" : ""}`} />
+                <Heart
+                  aria-hidden="true"
+                  className={`h-4 w-4 ${liked ? "fill-brand-500 text-brand-500" : ""}`}
+                />
+                <span className="hidden sm:inline">
+                  {liked ? "Saved" : "Save"}
+                </span>
               </button>
               <button
+                type="button"
                 onClick={handleShare}
                 aria-label={copied ? "Link copied" : "Share property"}
-                className="grid h-10 w-10 place-items-center rounded-full bg-white/90 text-gray-900 shadow-sm backdrop-blur transition hover:scale-105 hover:bg-white"
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm text-gray-600 transition-colors hover:bg-gray-50"
               >
-                {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Share2 className="h-4 w-4" />}
+                {copied ? (
+                  <Check
+                    aria-hidden="true"
+                    className="h-4 w-4 text-emerald-600"
+                  />
+                ) : (
+                  <Share2 aria-hidden="true" className="h-4 w-4" />
+                )}
+                <span className="hidden sm:inline">
+                  {copied ? "Copied" : "Share"}
+                </span>
               </button>
             </div>
-
-            {/* Mobile arrows + counter */}
-            {images.length > 1 && (
-              <>
-                <div className="absolute inset-x-3 top-1/2 flex -translate-y-1/2 justify-between lg:hidden">
-                  <button onClick={() => stepImage(-1)} aria-label="Previous image" className="grid h-9 w-9 place-items-center rounded-full bg-white/90 text-gray-900 shadow-sm backdrop-blur">
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <button onClick={() => stepImage(1)} aria-label="Next image" className="grid h-9 w-9 place-items-center rounded-full bg-white/90 text-gray-900 shadow-sm backdrop-blur">
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
-                <button
-                  onClick={() => openLightbox(activeImage)}
-                  className="absolute right-4 bottom-4 flex items-center gap-1.5 rounded-full bg-gray-900/70 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur transition hover:bg-gray-900/85"
-                >
-                  <Images className="h-3.5 w-3.5" />
-                  {activeImage + 1} / {images.length}
-                </button>
-              </>
-            )}
           </div>
+        </header>
 
-          {sideImages.map((image, i) => {
-            const index = i + 1;
-            const isLast = i === sideImages.length - 1 && images.length > 5;
-            return (
-              <button
-                key={image}
-                onClick={() => openLightbox(index)}
-                aria-label={`Show image ${index + 1}`}
-                className="group relative hidden overflow-hidden rounded-3xl bg-gray-100 lg:block"
-              >
-                <img src={image} alt="" loading="lazy" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
-                {isLast && (
-                  <span className="absolute inset-0 grid place-items-center bg-gray-900/55 text-sm font-semibold text-white backdrop-blur-[2px]">
-                    +{images.length - 5} photos
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </motion.div>
-
-        {/* Mobile thumbnails */}
-        {images.length > 1 && (
-          <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar lg:hidden">
-            {images.map((image, index) => (
-              <button
-                key={image}
-                onClick={() => setActiveImage(index)}
-                aria-label={`Show image ${index + 1}`}
-                className={`h-16 w-20 shrink-0 overflow-hidden rounded-xl ring-2 transition ${index === activeImage ? "ring-brand-500" : "ring-transparent opacity-60 hover:opacity-100"}`}
-              >
-                <img src={image} alt="" className="h-full w-full object-cover" />
-              </button>
-            ))}
-          </div>
+        {availability !== "Available" && (
+          <p
+            role="status"
+            className={`mb-6 flex items-start gap-3 rounded-lg border p-4 text-sm ${unavailable ? "border-gray-200 bg-gray-50 text-gray-700" : "border-amber-200 bg-amber-50 text-amber-900"}`}
+          >
+            <AlertCircle
+              aria-hidden="true"
+              className="mt-0.5 h-4 w-4 shrink-0"
+            />
+            {unavailable
+              ? `This property has been ${availability.toLowerCase()} and is no longer available. Contact the owner about similar properties.`
+              : "This property is under offer. You can still contact the owner to register your interest."}
+          </p>
         )}
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-3 lg:gap-12">
-          {/* Main column */}
-          <div className="lg:col-span-2">
-            {/* Title */}
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
-              <div className="flex flex-wrap gap-2">
-                <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1 ${isForSale ? "bg-emerald-50 text-emerald-700 ring-emerald-100" : "bg-sky-50 text-sky-700 ring-sky-100"}`}>
-                  {statusLabel(details.status)}
-                </span>
-                <span className="inline-flex rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 capitalize ring-1 ring-brand-100">
-                  {formatType(details.type)}
-                </span>
-                <StatusBadge status={availability} className="px-3 py-1" />
-              </div>
-              <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-balance text-gray-900 sm:text-4xl">{title}</h1>
-              <p className="mt-2 text-2xl font-extrabold tracking-tight text-brand-600 lg:hidden">
-                {value}
-                {period && <span className="text-base font-medium text-gray-500">{period}</span>}
-              </p>
-              <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-gray-600">
-                <span className="flex items-center gap-1.5">
-                  <MapPin className="h-4 w-4 text-brand-500" />
-                  {[place.name, place.city].filter(Boolean).join(", ")}
-                </span>
-                {meta?.rating && (
-                  <span className="flex items-center gap-1.5">
-                    <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                    <span className="font-semibold text-gray-900">{meta.rating.toFixed(1)}</span> rating
-                  </span>
-                )}
-                {meta?.views && (
-                  <span className="flex items-center gap-1.5">
-                    <Eye className="h-4 w-4" />
-                    {meta.views.toLocaleString()} views
-                  </span>
-                )}
-              </div>
-            </motion.div>
-
-            {/* Key specs */}
-            <Reveal className="mt-8 grid grid-cols-2 divide-gray-100 overflow-hidden rounded-3xl bg-white ring-1 ring-gray-100 shadow-sm sm:grid-cols-4 sm:divide-x">
-              {specs.map((spec) => (
-                <div key={spec.label} className="flex items-center gap-3 p-4 sm:flex-col sm:items-start sm:p-5">
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand-600">
-                    <spec.icon className="h-5 w-5" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-lg font-bold text-gray-900 capitalize">{spec.value}</span>
-                    <span className="block text-xs text-gray-500">{spec.label}</span>
-                  </span>
-                </div>
-              ))}
-            </Reveal>
-
-            {/* Key details */}
-            <Reveal className="mt-6 rounded-3xl bg-white p-6 ring-1 ring-gray-100 sm:p-8">
-              <SectionHeading>Overview</SectionHeading>
-              <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 text-sm sm:grid-cols-3">
-                {[
-                  ["Listing type", statusLabel(details.status)],
-                  ["Property type", formatType(details.type)],
-                  [isForSale ? "Asking price" : "Rent", `${value}${period}`],
-                  ["Availability", availability],
-                  ["Listed on", property.listing.createdAt ? formatDate(property.listing.createdAt) : "—"],
-                  ["Property ID", id.slice(-8).toUpperCase()],
-                ].map(([label, text]) => (
-                  <div key={label}>
-                    <dt className="text-xs font-medium tracking-wide text-gray-500 uppercase">{label}</dt>
-                    <dd className="mt-0.5 font-semibold text-gray-900 capitalize">{text}</dd>
+        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem] xl:gap-10">
+          <div className="min-w-0">
+            <PropertyGallery key={property.id} images={images} title={title} />
+            <section
+              aria-labelledby="property-specs-heading"
+              className="mt-6 border-y border-gray-200 py-5"
+            >
+              <h2 id="property-specs-heading" className="sr-only">
+                Property at a glance
+              </h2>
+              <dl className="grid grid-cols-2 gap-x-5 gap-y-5 sm:grid-cols-4">
+                {specs.map((spec) => (
+                  <div
+                    key={spec.label}
+                    className="flex min-w-0 items-start gap-3"
+                  >
+                    <spec.icon
+                      aria-hidden="true"
+                      className="mt-1 h-5 w-5 shrink-0 text-gray-400"
+                    />
+                    <div className="min-w-0">
+                      <dt className="text-xs text-gray-500">{spec.label}</dt>
+                      <dd className="mt-1 text-sm font-semibold leading-relaxed break-words text-gray-900 sm:text-base">
+                        {spec.value}
+                      </dd>
+                    </div>
                   </div>
                 ))}
               </dl>
-            </Reveal>
+            </section>
 
-            <Reveal className="mt-6 rounded-3xl bg-white p-6 ring-1 ring-gray-100 sm:p-8">
-              <SectionHeading>About this property</SectionHeading>
-              <p className={`mt-4 leading-relaxed whitespace-pre-line text-gray-600 ${expanded ? "" : "line-clamp-5"}`}>{description}</p>
-              <button
-                onClick={() => setExpanded((prev) => !prev)}
-                className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-800"
+            <section
+              className="border-b border-gray-200 py-7 sm:py-8"
+              aria-labelledby="property-description-heading"
+            >
+              <h2
+                id="property-description-heading"
+                className="text-lg font-semibold tracking-tight text-gray-900 sm:text-xl"
               >
-                {expanded ? "Show less" : "Read more"}
-                <ChevronRight className={`h-4 w-4 transition ${expanded ? "-rotate-90" : "rotate-90"}`} />
-              </button>
-            </Reveal>
+                About this property
+              </h2>
+              <p
+                id="property-description"
+                className={`mt-4 text-sm leading-7 whitespace-pre-line text-gray-600 sm:text-base ${expanded || !canExpandDescription ? "" : "line-clamp-5"}`}
+              >
+                {description ||
+                  "Contact the owner for more information about this property."}
+              </p>
+              {canExpandDescription && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((prev) => !prev)}
+                  aria-expanded={expanded}
+                  aria-controls="property-description"
+                  className="mt-2 inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-700"
+                >
+                  {expanded ? "Read less" : "Read full description"}
+                  <ChevronRight
+                    aria-hidden="true"
+                    className={`h-4 w-4 transition-transform ${expanded ? "-rotate-90" : "rotate-90"}`}
+                  />
+                </button>
+              )}
+            </section>
 
             {features?.length > 0 && (
-              <Reveal className="mt-6 rounded-3xl bg-white p-6 ring-1 ring-gray-100 sm:p-8">
-                <SectionHeading>What This Property Offers</SectionHeading>
-                <ul className="mt-5 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+              <section
+                className="border-b border-gray-200 py-7 sm:py-8"
+                aria-labelledby="property-amenities-heading"
+              >
+                <h2
+                  id="property-amenities-heading"
+                  className="text-lg font-semibold tracking-tight text-gray-900 sm:text-xl"
+                >
+                  Amenities & features
+                </h2>
+                <ul className="mt-5 grid gap-x-8 gap-y-4 sm:grid-cols-2">
                   {features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-3 text-sm font-medium text-gray-800">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-50">
-                        <CheckCircle2 className="h-4 w-4 text-brand-500" />
-                      </span>
-                      {feature}
+                    <li
+                      key={feature}
+                      className="flex items-start gap-3 text-sm text-gray-700"
+                    >
+                      <CheckCircle2
+                        aria-hidden="true"
+                        className="mt-0.5 h-4 w-4 shrink-0 text-brand-500"
+                      />
+                      <span>{feature}</span>
                     </li>
                   ))}
                 </ul>
-              </Reveal>
+              </section>
             )}
 
-            <Reveal className="mt-6 rounded-3xl bg-white p-6 ring-1 ring-gray-100 sm:p-8">
-              <SectionHeading>Location</SectionHeading>
-              <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-center">
-                <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-linear-to-br from-brand-500 to-brand-700 text-white shadow-lg shadow-brand-500/25">
-                  <MapPin className="h-7 w-7" />
-                </span>
-                <dl className="grid flex-1 grid-cols-2 gap-4 text-sm">
-                  {/* Area-level details only; the exact address is shared by the owner directly */}
-                  {[
-                    ["Area", place.name],
-                    ["City", place.city],
-                    ["Region", place.region],
-                    ["Country", COUNTRY],
-                  ].map(([label, text]) => (
-                    <div key={label}>
-                      <dt className="text-xs font-medium tracking-wide text-gray-500 uppercase">{label}</dt>
-                      <dd className="mt-0.5 font-semibold text-gray-900">{text || "—"}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
-            </Reveal>
+            <section
+              className="border-b border-gray-200 py-7 sm:py-8"
+              aria-labelledby="property-location-heading"
+            >
+              <h2
+                id="property-location-heading"
+                className="text-lg font-semibold tracking-tight text-gray-900 sm:text-xl"
+              >
+                The neighbourhood
+              </h2>
+              <p className="mt-2 text-sm text-gray-500">
+                Explore the location and arrange a viewing with the listing
+                agent.
+              </p>
+              <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5 text-sm sm:grid-cols-4">
+                {[
+                  ["Area", place.name],
+                  ["City", place.city],
+                  ["Region", place.region],
+                  ["Country", place.country],
+                  ["Address", place.address],
+                  ["Digital address", place.digitalAddress],
+                ].map(([label, text]) => (
+                  <div key={label}>
+                    <dt className="text-xs text-gray-500">{label}</dt>
+                    <dd className="mt-1 font-medium text-gray-900">
+                      {text || "Not provided"}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              {mapLink && (
+                <a
+                  href={mapLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-medium text-brand-600"
+                >
+                  <MapPin className="h-4 w-4" />
+                  {hasCoordinates
+                    ? "View property on map"
+                    : "Explore location on map"}
+                </a>
+              )}
+            </section>
+            <section
+              className="py-7 sm:py-8"
+              aria-labelledby="property-listing-heading"
+            >
+              <h2
+                id="property-listing-heading"
+                className="text-lg font-semibold tracking-tight text-gray-900 sm:text-xl"
+              >
+                Listing details
+              </h2>
+              <dl className="mt-5 grid grid-cols-2 gap-6 text-sm">
+                <div>
+                  <dt className="text-xs text-gray-500">Listed on</dt>
+                  <dd className="mt-1 font-medium text-gray-900">
+                    {property.listing.createdAt
+                      ? formatDate(property.listing.createdAt)
+                      : "Not provided"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-gray-500">Property reference</dt>
+                  <dd className="mt-1 font-medium text-gray-900">
+                    {id.slice(-8).toUpperCase()}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+
+            <PropertyReviews
+              key={property.id}
+              propertyId={property.id}
+              user={user}
+              onRequireSignIn={requireSignInToReview}
+              resumeRating={resumeRating}
+              onResumeHandled={clearResume}
+              onSummary={setReviewSummary}
+            />
           </div>
 
-          {/* Sidebar */}
-          <aside className="lg:col-span-1">
-            <div className="space-y-5 lg:sticky lg:top-28">
-              <div className="overflow-hidden rounded-3xl bg-white shadow-xl ring-1 shadow-brand-900/5 ring-gray-100">
-                {/* Price header */}
-                <div className="relative bg-linear-to-br from-brand-500 to-brand-800 p-6 text-white">
-                  <div className="pointer-events-none absolute -top-10 -right-10 h-32 w-32 rounded-full bg-white/10" />
-                  <div className="relative flex items-center justify-between gap-3">
-                    <p className="text-xs font-bold tracking-wider text-brand-100 uppercase">{statusLabel(details.status)}</p>
-                    {availability !== "Available" && <StatusBadge status={availability} />}
-                  </div>
-                  <p className={`relative mt-1 ${unavailable ? "line-through decoration-2 opacity-70" : ""}`}>
-                    <span className="text-3xl font-extrabold tracking-tight">{value}</span>
-                    {period && <span className="text-base font-medium text-brand-100">{period}</span>}
-                  </p>
-                </div>
-
-                <div className="p-6">
-                  {isOwnListing ? (
-                    <p className="rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">This is your listing. Offers, rentals and chats from customers appear in your dashboard.</p>
-                  ) : (
-                    <>
-                      {/* Main action matches the listing: Rent Now for rentals, Buy Now for sales */}
-                      <div className="grid gap-3">
-                        <button onClick={startPrimary} disabled={!canPrimary} className="btn btn-primary w-full py-3.5 text-base">
-                          {isForSale ? <ShoppingBag className="h-5 w-5" /> : <KeyRound className="h-5 w-5" />}
-                          {primaryLabel}
-                        </button>
-                        <button onClick={() => startFlow("offer")} disabled={!canMakeOffer} className="btn btn-light w-full py-3">
-                          <HandCoins className="h-4 w-4" />
-                          Make Offer
-                        </button>
-                      </div>
-                      <p className="mt-2.5 text-center text-xs text-gray-500">
-                        {!canPrimary
-                          ? `This property is ${availability.toLowerCase()}. You can still contact the owner.`
-                          : isForSale
-                            ? "Request to buy, or offer your price. Payment is made at the office, never online."
-                            : "Rent now and pay securely online, or offer your price first."}
-                      </p>
-
-                      <div className={`mt-5 grid gap-3 border-t border-dashed border-gray-200 pt-5 ${whatsappLink ? "grid-cols-2" : ""}`}>
-                        <button onClick={() => requireAuth("chat")} className="btn btn-light px-3">
-                          <MessageCircle className="h-4 w-4" />
-                          Chat with {contactLabel}
-                        </button>
-                        {whatsappLink &&
-                          whatsAppAction(
-                            "btn bg-emerald-600 px-3 text-white hover:bg-emerald-700",
-                            <>
-                              <WhatsAppIcon />
-                              WhatsApp
-                            </>
-                          )}
-                      </div>
-                      <button
-                        onClick={() => requireAuth("inquiry")}
-                        className="mx-auto mt-4 flex items-center gap-1.5 text-sm font-semibold text-gray-500 transition hover:text-brand-700"
-                      >
-                        <MessageSquare className="h-4 w-4" />
-                        Prefer email? Send an inquiry
-                      </button>
-                    </>
-                  )}
-
-                  <p className="mt-5 flex items-center justify-center gap-1.5 border-t border-gray-100 pt-4 text-xs text-gray-500">
-                    <ShieldCheck className="h-3.5 w-3.5 text-brand-500" />
-                    {isForSale ? "Always view a property before paying anything" : `Rental payments are verified by ${siteName}`}
-                  </p>
-                </div>
-              </div>
-
-              {/* Owner */}
-              <div className="rounded-3xl bg-white p-6 ring-1 ring-gray-100">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold tracking-wider text-gray-500 uppercase">Listed by</p>
-                  <StatusBadge status={isAdminListing ? `${siteName} listing` : "Agent listing"} tone={isAdminListing ? "gray" : "brand"} dot={false} />
-                </div>
-                <div className="mt-4 flex items-center gap-4">
-                  <span className="relative grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-linear-to-br from-brand-400 to-brand-700 text-lg font-bold text-white">
-                    {isAdminListing ? <BadgeCheck className="h-7 w-7" /> : getInitials(ownerName)}
-                    <span className="absolute -right-1 -bottom-1 grid h-5 w-5 place-items-center rounded-full bg-white">
-                      <BadgeCheck className="h-4 w-4 text-brand-500" />
-                    </span>
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate font-bold text-gray-900">{ownerName}</span>
-                    <span className="block text-sm font-medium text-brand-700">{isAdminListing ? "Platform Admin" : "Verified Agent"}</span>
-                    {!isAdminListing && (
-                      <span className="block text-xs text-gray-500">{`${listingCount} ${listingCount === 1 ? "listing" : "listings"} on ${siteName}`}</span>
-                    )}
-                  </span>
-                </div>
-                <p className="mt-4 text-xs text-gray-500">Your offers and messages go directly to {isAdminListing ? `the ${siteName} team` : ownerName}.</p>
-                {!user && (ownerPhone || ownerEmail) && (
+          <aside className="min-w-0 lg:sticky lg:top-24">
+            <section
+              id="property-contact"
+              tabIndex={-1}
+              aria-labelledby="property-contact-heading"
+              className="scroll-mt-24 rounded-xl border border-gray-200 bg-white p-5 shadow-sm shadow-gray-900/3 xl:p-6"
+            >
+              <h2
+                id="property-contact-heading"
+                className="text-lg font-semibold tracking-tight text-gray-900"
+              >
+                Your next steps
+              </h2>
+              {isOwnListing ? (
+                <p className="mt-4 rounded-lg bg-gray-50 p-4 text-sm leading-relaxed text-gray-600">
+                  This is your listing. Customer offers, rentals and messages
+                  appear in your dashboard.
+                </p>
+              ) : (
+                <div className="mt-4">
                   <button
-                    onClick={() => setSignInFor("contact")}
-                    className="mt-4 flex w-full items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 text-left text-sm text-gray-600 transition hover:bg-brand-50 hover:text-brand-700"
+                    type="button"
+                    onClick={startPrimary}
+                    disabled={!canPrimary}
+                    className={`${primaryActionClass} w-full`}
                   >
-                    <Lock className="h-4 w-4 shrink-0 text-brand-500" />
-                    Sign in to see contact details
+                    {isForSale ? (
+                      <MessageCircle aria-hidden="true" className="h-4 w-4" />
+                    ) : (
+                      <KeyRound aria-hidden="true" className="h-4 w-4" />
+                    )}
+                    {primaryLabel}
                   </button>
+                  <p className="mt-3 text-xs leading-5 text-gray-500">
+                    {isForSale
+                      ? "This is the asking price. Discuss the final amount and arrange the sale directly with the agent or owner."
+                      : availability !== "Available"
+                        ? `This property is ${availability.toLowerCase()}. Contact the agent about other options.`
+                        : !canRent
+                          ? "Online rental payments are unavailable for this listing. Contact the agent to discuss your rental."
+                          : "Confirm availability with the agent, then review your rental dates and total before paying online."}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => startFlow("offer")}
+                    disabled={!canMakeOffer}
+                    className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 text-sm font-medium text-gray-700 underline decoration-gray-300 underline-offset-4 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <HandCoins aria-hidden="true" className="h-4 w-4" />
+                    Make an offer
+                  </button>
+                </div>
+              )}
+              <div className="mt-5 border-t border-gray-100 pt-5">
+                <p className="text-xs text-gray-500">Listed by</p>
+                <div className="mt-3 flex items-center gap-3">
+                  {agent.profileImage && !isAdminListing ? (
+                    <img
+                      src={agent.profileImage}
+                      alt=""
+                      className="h-11 w-11 shrink-0 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-50 text-sm font-semibold text-brand-700">
+                      {getInitials(ownerName)}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-semibold text-gray-900">
+                      {isAdminListing ? (
+                        ownerName
+                      ) : (
+                        <Link
+                          to={`/agents/${agent.id}`}
+                          className="hover:text-brand-600"
+                        >
+                          {ownerName}
+                        </Link>
+                      )}
+                    </p>
+                    {agent.companyName && !isAdminListing && (
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        {agent.companyName}
+                      </p>
+                    )}
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      {isAdminListing
+                        ? `${siteName} team`
+                        : listingCount != null
+                          ? `${listingCount} ${listingCount === 1 ? "listing" : "listings"} on ${siteName}`
+                          : "Independent listing agent"}
+                    </p>
+                  </div>
+                </div>
+                {!isAdminListing && agent.verified && (
+                  <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-brand-700">
+                    <BadgeCheck className="h-4 w-4" />
+                    Approved agent
+                  </p>
                 )}
-                {user && (ownerPhone || ownerEmail) && (
-                  <div className="mt-5 space-y-2 text-sm">
+                {!isOwnListing && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => requireAuth("chat")}
+                      className={`${secondaryActionClass} mt-5 w-full`}
+                    >
+                      <MessageCircle aria-hidden="true" className="h-4 w-4" />
+                      Chat with {contactLabel}
+                    </button>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-5 text-xs">
+                      {whatsappLink &&
+                        whatsAppAction(
+                          "inline-flex min-h-11 items-center gap-1.5 font-medium text-gray-600 hover:text-brand-700",
+                          <>
+                            <WhatsAppIcon className="h-3.5 w-3.5" />
+                            WhatsApp
+                          </>,
+                        )}
+                      <button
+                        type="button"
+                        onClick={() => requireAuth("inquiry")}
+                        className="inline-flex min-h-11 items-center gap-1.5 font-medium text-gray-600 hover:text-brand-700"
+                      >
+                        <MessageSquare
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5"
+                        />
+                        Send inquiry / arrange viewing
+                      </button>
+                    </div>
+                  </>
+                )}
+                {(ownerPhone || ownerEmail) && (
+                  <div className="mt-3 space-y-1 text-sm">
                     {ownerPhone && (
-                      <a href={`tel:${ownerPhone.replace(/\s+/g, "")}`} className="flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 text-gray-700 transition hover:bg-brand-50 hover:text-brand-700">
-                        <Phone className="h-4 w-4 shrink-0 text-brand-500" />
+                      <a
+                        href={`tel:${ownerPhone.replace(/\s+/g, "")}`}
+                        className="flex min-h-11 items-center gap-2 text-gray-600 hover:text-brand-700"
+                      >
+                        <Phone
+                          aria-hidden="true"
+                          className="h-4 w-4 shrink-0"
+                        />
                         {ownerPhone}
                       </a>
                     )}
-                    {ownerEmail && (
-                      <a href={`mailto:${ownerEmail}`} className="flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 break-all text-gray-700 transition hover:bg-brand-50 hover:text-brand-700">
-                        <Mail className="h-4 w-4 shrink-0 text-brand-500" />
+                    {emailLink && (
+                      <a
+                        href={emailLink}
+                        className="flex min-h-11 items-center gap-2 break-all text-gray-600 hover:text-brand-700"
+                      >
+                        <Mail aria-hidden="true" className="h-4 w-4 shrink-0" />
                         {ownerEmail}
                       </a>
                     )}
                   </div>
                 )}
                 {!isAdminListing && (
-                  <Link to={`/agent/${agent.id}`} className="btn btn-light mt-5 w-full">
-                    View agent profile
-                    <ChevronRight className="h-4 w-4" />
+                  <Link
+                    to={`/agents/${agent.id}`}
+                    className="mt-2 inline-flex min-h-11 items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
+                  >
+                    View agent profile & listings
+                    <ChevronRight aria-hidden="true" className="h-3.5 w-3.5" />
                   </Link>
                 )}
               </div>
-            </div>
+              <p className="mt-4 flex items-start gap-2 border-t border-gray-100 pt-4 text-xs leading-5 text-gray-500">
+                <ShieldCheck
+                  aria-hidden="true"
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                />
+                {isForSale
+                  ? "View the property before making any payment."
+                  : `Rental payments are verified by ${siteName}.`}
+              </p>
+            </section>
           </aside>
         </div>
 
-        {/* Similar */}
         {similar.length > 0 && (
-          <section className="mt-20">
-            <div className="mb-8 flex items-end justify-between gap-4">
+          <section
+            className="mt-12 border-t border-gray-200 pt-8 sm:mt-16 sm:pt-10"
+            aria-labelledby="similar-properties-heading"
+          >
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-brand-600">More to explore</p>
-                <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl">Similar properties</h2>
+                <p className="text-xs font-medium text-gray-500">
+                  Keep exploring
+                </p>
+                <h2
+                  id="similar-properties-heading"
+                  className="mt-1 text-xl font-semibold tracking-tight text-gray-900 sm:text-2xl"
+                >
+                  Similar properties
+                </h2>
               </div>
-              <Link to={isForSale ? "/sale" : "/rent"} className="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-800">
+              <Link
+                to={isForSale ? "/sale" : "/rent"}
+                className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-700"
+              >
                 View all
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight aria-hidden="true" className="h-4 w-4" />
               </Link>
             </div>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {similar.map((item, index) => (
-                <Reveal key={item.id} delay={index * 0.08} className="h-full">
+                <Reveal key={item.id} delay={index * 0.06} className="h-full">
                   <HouseCard house={item} />
                 </Reveal>
               ))}
@@ -613,132 +824,78 @@ const PropertiesDetails = () => {
           </section>
         )}
       </div>
-
-      {/* Fullscreen gallery */}
-      <AnimatePresence>
-        {lightboxOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Property photos"
-            className="fixed inset-0 z-50 flex flex-col bg-gray-950/95 backdrop-blur-sm"
-            onClick={() => setLightboxOpen(false)}
-          >
-            <div className="flex items-center justify-between p-4 text-white" onClick={(event) => event.stopPropagation()}>
-              <span className="text-sm font-medium text-gray-300">
-                {activeImage + 1} / {images.length}
-              </span>
-              <button onClick={() => setLightboxOpen(false)} aria-label="Close gallery" className="grid h-10 w-10 place-items-center rounded-full bg-white/10 transition hover:bg-white/20">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="relative flex min-h-0 flex-1 items-center justify-center px-4 sm:px-16">
-              <motion.img
-                key={images[activeImage]}
-                initial={{ opacity: 0, scale: 0.97 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.25 }}
-                src={images[activeImage]}
-                alt={`${title} photo ${activeImage + 1}`}
-                onClick={(event) => event.stopPropagation()}
-                className="max-h-full max-w-full rounded-2xl object-contain"
-              />
-              {images.length > 1 && (
-                <>
-                  <button
-                    onClick={(event) => { event.stopPropagation(); stepImage(-1); }}
-                    aria-label="Previous image"
-                    className="absolute left-3 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20 sm:left-5"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={(event) => { event.stopPropagation(); stepImage(1); }}
-                    aria-label="Next image"
-                    className="absolute right-3 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20 sm:right-5"
-                  >
-                    <ChevronRight className="h-5 w-5" />
-                  </button>
-                </>
-              )}
-            </div>
-            {images.length > 1 && (
-              <div className="flex justify-center gap-2 overflow-x-auto p-4 no-scrollbar" onClick={(event) => event.stopPropagation()}>
-                {images.map((image, index) => (
-                  <button
-                    key={image}
-                    onClick={() => setActiveImage(index)}
-                    aria-label={`Show image ${index + 1}`}
-                    className={`h-14 w-20 shrink-0 overflow-hidden rounded-lg ring-2 transition ${index === activeImage ? "ring-brand-400" : "ring-transparent opacity-50 hover:opacity-100"}`}
-                  >
-                    <img src={image} alt="" className="h-full w-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <InquiryModal key={property.id} property={property} open={activeDialog === "inquiry"} onClose={closeDialog} />
-      <StartChatModal key={`chat-${property.id}`} property={property} ownerName={ownerName} open={activeDialog === "chat"} onClose={closeDialog} />
+      <InquiryModal
+        key={property.id}
+        property={property}
+        open={activeDialog === "inquiry"}
+        onClose={closeDialog}
+      />
+      <StartChatModal
+        key={`chat-${property.id}`}
+        property={property}
+        ownerName={ownerName}
+        open={activeDialog === "chat"}
+        onClose={closeDialog}
+      />
       <SignInRequiredModal
         open={Boolean(signInFor)}
         onClose={() => setSignInFor(null)}
+        message={
+          signInFor === "review"
+            ? "Please sign in to rate or review this property."
+            : undefined
+        }
         returnTo={
-          flowPaths[signInFor]
-            ? flowPaths[signInFor]
-            : ["chat", "inquiry"].includes(signInFor)
-              ? `${location.pathname}?action=${signInFor}`
-              : location.pathname
+          signInFor === "review"
+            ? reviewReturnTo
+            : flowPaths[signInFor]
+              ? flowPaths[signInFor]
+              : ["chat", "inquiry"].includes(signInFor)
+                ? `${location.pathname}?action=${signInFor}`
+                : location.pathname
         }
       />
-
-      {/* Phones: price and the main actions stay within reach */}
       {!isOwnListing && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-lg lg:hidden">
-          <div className="mb-2 flex items-baseline justify-between">
-            <p className={unavailable ? "text-gray-400 line-through" : ""}>
-              <span className="text-lg font-extrabold text-gray-900">{value}</span>
-              {period && <span className="text-xs font-medium text-gray-500">{period}</span>}
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
+          <div className="mb-2 flex items-baseline justify-between gap-3">
+            <p
+              className={`text-lg font-semibold tracking-tight text-gray-900 ${unavailable ? "line-through opacity-60" : ""}`}
+            >
+              {value}
+              {period && (
+                <span className="ml-1 text-xs font-normal tracking-normal text-gray-500">
+                  {period}
+                </span>
+              )}
             </p>
-            <span className="text-xs font-semibold text-gray-500 uppercase">{statusLabel(details.status)}</span>
+            <span className="text-xs text-gray-500">
+              {statusLabel(details.status)}
+            </span>
           </div>
-          <div className="flex gap-2">
-            <button onClick={startPrimary} disabled={!canPrimary} className="btn btn-primary flex-1 px-3 py-2.5">
-              {isForSale ? <ShoppingBag className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={startPrimary}
+              disabled={!canPrimary}
+              className={`${primaryActionClass} min-w-0 flex-1 px-3 text-sm`}
+            >
               {primaryLabel}
             </button>
-            <button onClick={() => startFlow("offer")} disabled={!canMakeOffer} className="btn btn-light flex-1 px-3 py-2.5">
-              <HandCoins className="h-4 w-4" />
-              Offer
-            </button>
-            {whatsappLink &&
-              whatsAppAction(
-                "btn bg-emerald-600 px-3 py-2.5 text-white hover:bg-emerald-700",
-                <>
-                  <WhatsAppIcon />
-                  <span className="sr-only sm:not-sr-only">WhatsApp</span>
-                </>
-              )}
-            <button onClick={() => requireAuth("chat")} aria-label={`Chat with ${contactLabel}`} className="btn btn-light px-3 py-2.5">
-              <MessageCircle className="h-4 w-4" />
-            </button>
+            <a
+              href="#property-contact"
+              className={`${secondaryActionClass} shrink-0 px-4 text-sm`}
+            >
+              <MessageCircle aria-hidden="true" className="h-4 w-4" />
+              Contact
+            </a>
           </div>
         </div>
       )}
     </div>
   );
 };
-
-const SectionHeading = ({ children }) => (
-  <h2 className="flex items-center gap-3 text-xl font-bold text-gray-900 sm:text-2xl">
-    <span className="h-6 w-1.5 rounded-full bg-brand-500" />
-    {children}
-  </h2>
-);
-
+const primaryActionClass =
+  "inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400";
+const secondaryActionClass =
+  "inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700";
 export default PropertiesDetails;

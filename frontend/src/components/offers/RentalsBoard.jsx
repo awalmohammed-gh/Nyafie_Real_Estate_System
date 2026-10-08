@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { BadgeCheck, Eye, KeyRound, MessageCircle } from "lucide-react";
 import DataTable from "../ui/DataTable";
 import EmptyState from "../ui/EmptyState";
 import FilterTabs from "../ui/FilterTabs";
-import Modal from "../ui/Modal";
+import SidePanel from "../ui/SidePanel";
+import WorkspaceStats from "../agent/WorkspaceStats";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import { ErrorState, TableSkeleton } from "../dashboard/States";
 import StatusSteps from "./StatusSteps";
@@ -20,7 +21,13 @@ import { formatDate, isWithinDays } from "../../utils/date";
 import { toWhatsAppNumber } from "../../utils/whatsapp";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
-const STATUSES = ["Paid", "Confirmed", "Active", "Pending", "Payment Pending", "Completed", "Cancelled"];
+const FILTERS = [
+  { id: "All", label: "All", match: () => true },
+  { id: "Action", label: "Needs action", match: (r) => ["Paid", "Confirmed"].includes(r.status) },
+  { id: "Payment", label: "Awaiting payment", match: (r) => ["Pending", "Payment Pending"].includes(r.status) },
+  { id: "Active", label: "Active", match: (r) => r.status === "Active" },
+  { id: "Closed", label: "Closed", match: (r) => ["Completed", "Cancelled"].includes(r.status) },
+];
 
 // The next steps the owner can take from each status (mirrors the server's rules)
 const ACTIONS = {
@@ -40,15 +47,14 @@ const ACTIONS = {
 // Rental bookings. scope "agent": own listings only (enforced by the API); "admin": every rental.
 const RentalsBoard = ({ scope }) => {
   const isAdmin = scope === "admin";
+  // Records open in a side panel for admins and agents alike (stage, payment, history, next action)
+  const Detail = SidePanel;
   const run = useAsyncAction();
-  const { reload } = useTransactions();
+  const { rentals, loading, error: loadError, reload, updateTransaction } = useTransactions();
   const [params] = useSearchParams();
-  const [attempt, setAttempt] = useState(0);
   const [propertyId, setPropertyId] = useState(params.get("property") || "all");
   const [ownerId, setOwnerId] = useState("all");
   const [range, setRange] = useState("all");
-  const [rentals, setRentals] = useState(null);
-  const [loadError, setLoadError] = useState("");
   const [status, setStatus] = useState("All");
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState(null);
@@ -56,16 +62,9 @@ const RentalsBoard = ({ scope }) => {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    (isAdmin ? rentalApi.getAdminRentals() : rentalApi.getAgentRentals()).then(setRentals).catch((err) => setLoadError(err.message));
-  }, [isAdmin, attempt]);
-
-  const retry = () => {
-    setLoadError("");
-    setAttempt((a) => a + 1);
-  };
+  const retry = reload;
   if (loadError) return <ErrorState title="Couldn't load rentals" message={loadError} onRetry={retry} />;
-  if (!rentals) return <TableSkeleton />;
+  if (loading) return <TableSkeleton />;
 
   const owners = [...new Map(rentals.map((r) => [r.owner.id, r.owner])).values()];
   const propertyOptions = [...new Map(rentals.map((r) => [r.property.id, r.property])).values()];
@@ -76,9 +75,9 @@ const RentalsBoard = ({ scope }) => {
 
   const q = query.trim().toLowerCase();
   const rows = scoped
-    .filter((r) => status === "All" || r.status === status)
+    .filter(FILTERS.find((f) => f.id === status).match)
     .filter((r) => !q || `${r.contactName} ${r.property.title} ${r.reference || ""}`.toLowerCase().includes(q));
-  const counts = { All: scoped.length, ...Object.fromEntries(STATUSES.map((s) => [s, scoped.filter((r) => r.status === s).length])) };
+  const counts = Object.fromEntries(FILTERS.map((f) => [f.id, scoped.filter(f.match).length]));
   const open = openId && rentals.find((r) => r.id === openId);
   const chatLink = open?.conversationId && (isAdmin ? open.ownerType === "admin" && `/admin/messages?c=${open.conversationId}` : `/agent/messages?c=${open.conversationId}`);
   const whatsapp = open && toWhatsAppNumber(open.contactPhone);
@@ -91,7 +90,7 @@ const RentalsBoard = ({ scope }) => {
       description: `${rental.contactName} has been notified.`,
     });
     if (ok) {
-      setRentals((prev) => prev.map((r) => (r.id === result.id ? result : r)));
+      updateTransaction("rentals", result);
       reload(); // refresh dashboard counts and sidebar badges
     }
     setBusy(false);
@@ -132,7 +131,6 @@ const RentalsBoard = ({ scope }) => {
       ),
     },
     { key: "amount", header: "Amount", render: (r) => <span className="font-bold whitespace-nowrap text-gray-900">{ghs(r.amount)}</span> },
-    { key: "reference", header: "Reference", render: (r) => <span className="font-mono text-xs text-gray-500">{r.reference || "—"}</span> },
     { key: "payment", header: "Payment", render: (r) => <StatusBadge status={r.paymentStatus} dot={false} /> },
     { key: "status", header: "Rental", render: (r) => <StatusBadge status={r.status} /> },
     { key: "paid", header: "Date paid", render: (r) => <span className="whitespace-nowrap text-gray-600">{r.paidAt ? formatDate(r.paidAt) : "—"}</span> },
@@ -151,15 +149,23 @@ const RentalsBoard = ({ scope }) => {
 
   return (
     <>
+      {!isAdmin && <WorkspaceStats className="mb-6" items={[
+        { label: "Needs action", value: rentals.filter(FILTERS[1].match).length, note: "Confirm or prepare move-in" },
+        { label: "Awaiting payment", value: rentals.filter(FILTERS[2].match).length, note: "Payment not yet completed" },
+        { label: "Active rentals", value: rentals.filter(FILTERS[3].match).length, note: "Customers have moved in" },
+        { label: "Completed", value: rentals.filter((r) => r.status === "Completed").length, note: "Finished rental bookings" },
+      ]} />}
       <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <FilterTabs label="Rental status" value={status} onChange={setStatus} tabs={["All", ...STATUSES].map((s) => ({ id: s, label: s, count: counts[s] }))} />
+        <FilterTabs label="Rental status" value={status} onChange={setStatus} tabs={FILTERS.map((f) => ({ id: f.id, label: f.label, count: counts[f.id] }))} />
         <SearchInput value={query} onChange={setQuery} placeholder="Search rentals" className="lg:w-72" />
       </div>
       <Filters isAdmin={isAdmin} owners={owners} ownerId={ownerId} setOwnerId={setOwnerId} properties={propertyOptions} propertyId={propertyId} setPropertyId={setPropertyId} range={range} setRange={setRange} />
       <DataTable
+        tableFrom={isAdmin ? "md" : "xl"}
         columns={columns}
         rows={rows}
-        minWidth={1040}
+        minWidth={860}
+        onRowClick={(r) => setOpenId(r.id)}
         empty={
           <EmptyState
             icon={KeyRound}
@@ -189,7 +195,7 @@ const RentalsBoard = ({ scope }) => {
         )}
       />
 
-      <Modal
+      <Detail
         open={Boolean(open)}
         onClose={() => setOpenId(null)}
         size="lg"
@@ -217,6 +223,7 @@ const RentalsBoard = ({ scope }) => {
         {open && (
           <div className="space-y-5">
             <StatusSteps kind="rental" status={open.statusKey} />
+            <div className="rounded-xl bg-brand-50 p-4"><p className="workspace-eyebrow">Rental summary</p><p className="mt-2 text-2xl font-semibold text-gray-900">{ghs(open.amount)}</p><p className="mt-2 text-sm text-gray-600">Move-in {formatDate(open.startDate)} · Until {formatDate(open.endDate)}</p><div className="mt-3 flex gap-2"><StatusBadge status={open.paymentStatus} /><StatusBadge status={open.status} /></div></div>
             <Link to={`/house/${open.property.id}`} className="flex items-center gap-3 rounded-lg p-2 ring-1 ring-gray-200 transition hover:ring-brand-200">
               {open.property.image && <img src={open.property.image} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />}
               <div className="min-w-0">
@@ -262,7 +269,7 @@ const RentalsBoard = ({ scope }) => {
             </div>
           </div>
         )}
-      </Modal>
+      </Detail>
 
       <ConfirmDialog
         open={Boolean(confirm)}

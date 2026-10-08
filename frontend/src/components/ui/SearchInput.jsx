@@ -9,7 +9,7 @@ const SearchInput = ({ value, onChange, placeholder = "Search", className = "" }
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       aria-label={placeholder}
-      className="field rounded-full py-2 pl-10"
+      className="field min-h-11 rounded-xl py-2 pl-10"
     />
   </div>
 );

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowRight, ArrowUp, Clock, Heart, Mail, MapPin, Phone } from 'lucide-react';
+import { ArrowUpRight, ArrowUp, Clock, Mail, MapPin, Phone } from 'lucide-react';
 import { usePlatform } from '../context/usePlatform';
 import BrandLogo from '../components/brand/BrandLogo';
 import SocialLinks from '../components/brand/SocialLinks';
@@ -42,8 +42,6 @@ const Footer = () => {
   const { settings, siteName, paths } = usePlatform();
   const contactItems = businessContactItems(settings.contact);
   const explore = exploreLinks.map((link) => ({ ...link, path: link.page ? paths[link.page] : link.path }));
-  const [email, setEmail] = useState('');
-  const [subscribed, setSubscribed] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
@@ -52,51 +50,22 @@ const Footer = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleSubscribe = (e) => {
-    e.preventDefault();
-    // TODO: send the email to the backend once a newsletter endpoint exists
-    setSubscribed(true);
-    setEmail('');
-  };
-
   return (
     <footer className="bg-gray-950 text-white">
       <div className="container-page pt-16 pb-8 sm:pt-20">
-        {/* Newsletter */}
-        <div className="mb-14 grid gap-8 rounded-3xl bg-white/5 p-6 ring-1 ring-white/10 sm:p-10 lg:grid-cols-2 lg:items-center">
+        <div className="mb-10 flex flex-col justify-between gap-5 border-b border-white/10 pb-8 sm:flex-row sm:items-center">
           <div>
-            <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Get new listings first</h2>
-            <p className="mt-2 text-gray-400">
-              Subscribe to get updates on new properties and exclusive offers.
+            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">Keep the places you love.</h2>
+            <p className="mt-2 text-sm text-gray-400">
+              Your favourites, together in one shortlist.
             </p>
           </div>
-          {subscribed ? (
-            <p className="rounded-2xl bg-brand-500/15 px-5 py-4 text-sm font-medium text-brand-200">
-              Thank you for subscribing! We'll keep you posted.
-            </p>
-          ) : (
-            <form onSubmit={handleSubscribe} className="flex flex-col gap-3 sm:flex-row">
-              <label htmlFor="newsletter-email" className="sr-only">Email address</label>
-              <input
-                id="newsletter-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                required
-                className="min-w-0 flex-1 rounded-full bg-white/10 px-5 py-3 text-sm text-white ring-1 ring-white/10 transition outline-none placeholder:text-gray-500 focus:ring-2 focus:ring-brand-500"
-              />
-              <button type="submit" className="btn btn-primary">
-                Subscribe
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </form>
-          )}
+          <Link to="/account/saved" className="inline-flex min-h-11 items-center gap-4 self-start text-sm font-semibold text-brand-200 transition-colors hover:text-white sm:self-auto">Open your shortlist <ArrowUpRight className="h-5 w-5" aria-hidden="true" /></Link>
         </div>
 
         {/* Links */}
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-12">
-          <div className="sm:col-span-2 lg:col-span-4">
+        <div className="grid grid-cols-2 gap-10 lg:grid-cols-12">
+          <div className="col-span-2 lg:col-span-4">
             <Link to="/" className="inline-flex">
               <BrandLogo tone="dark" size="lg" />
             </Link>
@@ -113,7 +82,7 @@ const Footer = () => {
             <LinkColumn title="Services" links={serviceLinks} />
           </div>
 
-          <div className="sm:col-span-2 lg:col-span-4">
+          <div className="col-span-2 lg:col-span-4">
             <h3 className="mb-4 text-sm font-semibold tracking-wider text-white uppercase">Contact</h3>
             <ul className="space-y-4">
               {contactItems.map(({ kind, lines, href }) => {
@@ -142,11 +111,8 @@ const Footer = () => {
         </div>
 
         {/* Bottom bar */}
-        <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 text-center text-sm text-gray-500 sm:flex-row sm:text-left">
+        <div className="mt-14 flex items-center justify-center border-t border-white/10 pt-8 text-center text-sm text-gray-500">
           <p>© {new Date().getFullYear()} {siteName}. All rights reserved.</p>
-          <p className="flex items-center gap-1.5">
-            Made with <Heart className="h-4 w-4 fill-red-500 text-red-500" /> in Ghana
-          </p>
         </div>
       </div>
 

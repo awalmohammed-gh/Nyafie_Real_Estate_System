@@ -20,7 +20,9 @@ export const resolveImages = async (images = []) => {
         const result = await cloudinary.uploader.upload(image, { folder: "homebase/properties", resource_type: "image" });
         return result.secure_url;
       }
-      if (/^https?:\/\//.test(image) || image.startsWith("/")) return image;
+      // Already-stored images: https URLs (Cloudinary) or the site's own /paths. Never plain http,
+      // protocol-relative "//host" URLs, other schemes, or overlong strings.
+      if (image.length <= 2048 && (/^https:\/\/[^\s"'<>]+$/.test(image) || /^\/(?!\/)[^\s"'<>]*$/.test(image))) return image;
       throw new HttpError(400, "Invalid image.");
     })
   );

@@ -1,98 +1,59 @@
-import { Link, Navigate, ScrollRestoration, useLocation, useNavigate } from "react-router-dom";
-import { motion } from "motion/react";
-import { ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Navigate, ScrollRestoration, useLocation, useNavigate } from "react-router-dom";
+import { Building2, House } from "lucide-react";
 import AuthForm from "../../components/auth/AuthForm";
+import AuthLayout from "../../components/auth/AuthLayout";
 import { useAuth } from "../../context/useAuth";
 import { useToast } from "../../context/useToast";
-import heroImage from "../../assets/heroBg2.jpg";
 import { usePlatform } from "../../context/usePlatform";
-import BrandLogo from "../../components/brand/BrandLogo";
+import PageLoader from "../../components/ui/PageLoader";
+import { agentDestination, authRedirectDestination, sessionDestination } from "../../utils/sessionDomain";
 
-const perks = [
-  "Save properties and come back to them anytime",
-  "Track every inquiry you send to agents",
-  "Become an agent and list your own properties",
-];
-
-// Standalone, full-screen sign in / sign up (rendered outside the site layout,
-// so there is no navbar or footer). Protected routes send users here with the
-// page to return to in `state.from`.
 const AuthPage = ({ mode = "login" }) => {
   const { siteName } = usePlatform();
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, ready, domain, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from;
-  // voluntary: the user chose to sign in from the navbar (vs. being sent by a protected page)
   const voluntary = Boolean(location.state?.voluntary);
-  const destination = (role) => (role === "admin" && (voluntary || !from) ? "/admin/dashboard" : from || "/");
+  const redirect = authRedirectDestination({ isAuthenticated, explicitSignIn: location.state?.explicitSignIn, domain, user, from });
+  const isAgent = domain === "agent";
+  const isSignup = mode === "signup";
 
-  // Admins land on their console unless they were sent here from a specific page
-  if (isAuthenticated) return <Navigate to={destination(isAdmin ? "admin" : "user")} replace />;
+  if (!ready) return <PageLoader fullScreen label="Checking your session..." />;
+  if (redirect) return <Navigate to={redirect} replace />;
 
-  const handleSuccess = (user, usedMode) => {
-    toast({ title: usedMode === "signup" ? `Welcome to ${siteName}, ${user.firstName}!` : `Welcome back, ${user.firstName}` });
-    navigate(destination(user.role), { replace: true });
+  const handleSuccess = (nextUser, usedMode) => {
+    toast({ title: usedMode === "signup" ? `Welcome to ${siteName}, ${nextUser.firstName}!` : `Welcome back, ${nextUser.firstName}` });
+    navigate(isAgent ? agentDestination(nextUser, from) : sessionDestination(domain, from), { replace: true });
   };
 
-  // Keep the URL in sync with the Sign In / Create Account tabs
-  const handleModeChange = (next) =>
-    navigate(next === "signup" ? "/register" : "/login", { replace: true, state: location.state });
+  const handleModeChange = (next) => navigate((next === "signup" ? "/register" : "/login") + (isAgent ? "?account=agent" : ""), { replace: true, state: location.state });
+
+  const handleAccountChange = (account) => {
+    if (account === domain) return;
+    navigate((isSignup ? "/register" : "/login") + (account === "agent" ? "?account=agent" : ""), {
+      replace: true,
+      state: { ...location.state, explicitSignIn: true },
+    });
+  };
 
   return (
-    <div className="grid min-h-dvh bg-white lg:grid-cols-2">
+    <AuthLayout domain={domain}>
       <ScrollRestoration />
-
-      {/* Form column */}
-      <div className="flex min-h-dvh flex-col px-4 py-6 sm:px-8 lg:px-12">
-        <div className="flex items-center justify-between gap-4">
-          <Link to="/" className="min-w-0">
-            <BrandLogo />
-          </Link>
-          <Link to={from || "/"} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 hover:text-gray-900">
-            <ArrowLeft className="h-4 w-4" />
-            Back to site
-          </Link>
-        </div>
-
-        <div className="flex flex-1 items-center justify-center py-10">
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
-            className="w-full max-w-md"
-          >
-            <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-              {mode === "signup" ? "Create your account" : "Welcome back"}
-            </h1>
-            <p className="mt-2 mb-8 text-gray-600">
-              {from && !voluntary ? "Please sign in to continue." : mode === "signup" ? `Join ${siteName} to find your dream home.` : `Sign in to your ${siteName} account.`}
-            </p>
-            <AuthForm initialMode={mode} onSuccess={handleSuccess} onModeChange={handleModeChange} />
-          </motion.div>
-        </div>
-
-        <p className="text-center text-xs text-gray-400">© {new Date().getFullYear()} {siteName}</p>
+      <div className="auth-account-picker" role="group" aria-label="Account type">
+        {[{ value: "customer", label: "Customer", icon: House }, { value: "agent", label: "Agent", icon: Building2 }].map(({ value, label, icon: Icon }) => (
+          <button key={value} type="button" aria-pressed={domain === value} onClick={() => handleAccountChange(value)} className={domain === value ? "is-active" : ""}><Icon size={17} aria-hidden="true" />{label}</button>
+        ))}
       </div>
-
-      {/* Image column (large screens) */}
-      <div className="relative hidden overflow-hidden bg-gray-900 lg:block">
-        <img src={heroImage} alt="" className="absolute inset-0 h-full w-full object-cover opacity-70" />
-        <div className="absolute inset-0 bg-linear-to-t from-gray-950 via-gray-950/40 to-brand-900/20" />
-        <div className="absolute inset-x-0 bottom-0 p-12">
-          <h2 className="max-w-md text-3xl font-extrabold tracking-tight text-balance text-white xl:text-4xl">Your home search, organised.</h2>
-          <ul className="mt-6 space-y-3">
-            {perks.map((perk) => (
-              <li key={perk} className="flex items-center gap-3 text-gray-200">
-                <CheckCircle2 className="h-5 w-5 shrink-0 text-brand-300" />
-                {perk}
-              </li>
-            ))}
-          </ul>
-        </div>
+      <div className="auth-heading">
+        <span className="auth-eyebrow">{isAgent ? "Agent workspace" : "Your home journey"}</span>
+        <h1>{isSignup ? isAgent ? "Open new doors." : "Find your place." : "Welcome back."}</h1>
+        <p>{isSignup ? isAgent ? "Create your account. Your next opportunity starts here." : "A home you love starts with an account of your own." : from && !voluntary ? "Sign in to continue where you left off." : isAgent ? "Sign in to your agent account and take your next step." : "Your saved homes and conversations are waiting for you."}</p>
+        {isAgent && isSignup && <span className="auth-step"><span>01</span>Account creation <span className="auth-step-divider" />Step 1 of 4</span>}
       </div>
-    </div>
+      <AuthForm key={domain} initialMode={mode} onSuccess={handleSuccess} onModeChange={handleModeChange} />
+    </AuthLayout>
   );
 };
 

@@ -83,6 +83,9 @@ export const mapUser = (u) =>
     status: u.isActive === false ? "suspended" : "active",
     createdAt: u.createdAt,
     preferences: u.preferences || {},
+    agentApplication: u.agentApplication || null,
+    // Agents only: next onboarding step and statuses, computed by the server
+    onboarding: u.onboarding || null,
     savedProperties: (u.savedProperties || []).map(String),
     subscription: mapSubscription(u.subscription),
     savedCount: u.savedCount ?? (u.savedProperties || []).length,
@@ -105,6 +108,10 @@ export const mapProperty = (p) => ({
     city: p.location?.city || "",
     region: p.location?.region || "",
     address: p.location?.address || "",
+    country: p.location?.country || "Ghana",
+    digitalAddress: p.location?.digitalAddress || "",
+    latitude: p.location?.latitude ?? null,
+    longitude: p.location?.longitude ?? null,
   },
   property: {
     type: p.propertyType,
@@ -116,12 +123,18 @@ export const mapProperty = (p) => ({
   features: p.amenities || [],
   media: { images: p.images || [] },
   agent: {
-    id: p.contact?.id || idOf(p.owner),
-    name: p.contact?.name || "",
-    phone: p.contact?.phone || "",
-    email: p.contact?.email || "",
+    id: p.agent?.id || idOf(p.owner),
+    name: p.agent?.name || p.contact?.name || "Agent",
+    phone: p.agent?.phone ?? p.contact?.phone ?? "",
+    email: p.agent?.email ?? p.contact?.email ?? "",
+    whatsapp: p.agent?.whatsapp || p.agent?.phone || p.contact?.phone || "",
+    profileImage: p.agent?.profileImage || "",
+    companyName: p.agent?.companyName || "",
+    joinedAt: p.agent?.joinedAt,
+    verified: p.agent?.verified === true,
   },
-  meta: { isFeatured: Boolean(p.isFeatured), rating: p.rating ?? null, views: p.views || 0 },
+  // rating: average of published customer reviews (null until the first one)
+  meta: { isFeatured: Boolean(p.isFeatured), rating: p.ratingCount ? p.ratingAverage : null, ratingCount: p.ratingCount || 0, views: p.views || 0 },
   owner: { type: p.ownerType, id: p.ownerType === "admin" ? "admin" : idOf(p.owner) },
   ownerUserId: idOf(p.owner),
   listing: {
@@ -140,6 +153,7 @@ export const toApiProperty = (p) => {
   if (p.title !== undefined) out.title = p.title;
   if (p.description !== undefined) out.description = p.description;
   if (p.pricing) {
+    if (p.pricing.currency !== undefined) out.currency = p.pricing.currency;
     out.price = p.pricing.amount ?? p.pricing.perMonth ?? p.pricing.perNight ?? 0;
     out.pricePeriod = p.pricing.amount != null ? "total" : p.pricing.perNight != null ? "night" : "month";
   }
@@ -151,7 +165,7 @@ export const toApiProperty = (p) => {
     if (p.property.size) out.area = p.property.size.value;
   }
   if (p.location) {
-    out.location = { address: p.location.address, neighbourhood: p.location.name, city: p.location.city, region: p.location.region };
+    out.location = { address: p.location.address, neighbourhood: p.location.name, city: p.location.city, region: p.location.region, country: p.location.country, digitalAddress: p.location.digitalAddress, latitude: p.location.latitude, longitude: p.location.longitude };
   }
   if (p.features) out.amenities = p.features;
   if (p.media) out.images = p.media.images;
@@ -178,6 +192,7 @@ export const mapInquiry = (i) => ({
   email: i.email,
   phone: i.phone || "",
   message: i.message,
+  conversationId: idOf(i.conversation),
   status: STATUS_TO_UI[i.status] || i.status,
   createdAt: i.createdAt,
 });

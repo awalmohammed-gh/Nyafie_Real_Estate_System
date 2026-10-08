@@ -15,7 +15,9 @@ const SIZES = {
 const BrandLogo = ({ tone = "light", size = "md", compact = false, subtitle, className = "" }) => {
   const { settings, siteName } = usePlatform();
   const { logo, logoDark } = settings.branding;
-  const image = tone === "dark" ? logoDark || logo : logo;
+  const inverse = tone === "dark" || tone === "violet";
+  const mutedText = tone === "violet" ? "text-white/70" : "text-gray-400";
+  const image = inverse ? logoDark || logo : logo;
   const s = SIZES[size];
   const [first, second] = splitBrandName(siteName);
 
@@ -23,7 +25,7 @@ const BrandLogo = ({ tone = "light", size = "md", compact = false, subtitle, cla
     return (
       <span className={`flex min-w-0 items-center gap-2.5 ${className}`}>
         <img src={image} alt={siteName} className={`${s.img} w-auto max-w-44 object-contain`} />
-        {subtitle && <span className={`text-[11px] font-medium ${tone === "dark" ? "text-gray-400" : "text-gray-500"}`}>{subtitle}</span>}
+        {subtitle && <span className={`text-[11px] font-medium ${inverse ? mutedText : "text-gray-500"}`}>{subtitle}</span>}
       </span>
     );
   }
@@ -40,10 +42,10 @@ const BrandLogo = ({ tone = "light", size = "md", compact = false, subtitle, cla
       {!compact && (
         <span className="min-w-0 leading-tight">
           <span className={`block truncate font-extrabold tracking-tight ${s.text}`}>
-            <span className={tone === "dark" ? "text-white" : "text-gray-900"}>{first}</span>
-            <span className={tone === "dark" ? "text-brand-400" : "text-brand-500"}>{second}</span>
+            <span className={inverse ? "text-white" : "text-gray-900"}>{first}</span>
+            <span className={tone === "violet" ? "text-brand-200" : tone === "dark" ? "text-brand-400" : "text-brand-500"}>{second}</span>
           </span>
-          {subtitle && <span className={`block text-[11px] font-medium ${tone === "dark" ? "text-gray-400" : "text-gray-400"}`}>{subtitle}</span>}
+          {subtitle && <span className={`block text-[11px] font-medium ${mutedText}`}>{subtitle}</span>}
         </span>
       )}
     </span>

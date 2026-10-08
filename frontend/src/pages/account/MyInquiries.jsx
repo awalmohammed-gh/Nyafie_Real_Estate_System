@@ -12,6 +12,7 @@ import { usePlatform } from "../../context/usePlatform";
 const statusHelp = {
   New: "Waiting for the agent to respond",
   Contacted: "The agent has been in touch",
+  "In Progress": "You're discussing this property with the agent",
   Closed: "This conversation is closed",
 };
 
@@ -20,7 +21,7 @@ const MyInquiries = () => {
   const { user } = useAuth();
   const { inquiries, findProperty } = useRealEstate();
   const mine = inquiries
-    .filter((inq) => inq.userId === user.id || inq.email.toLowerCase() === user.email.toLowerCase())
+    .filter((inq) => inq.userId === user.id)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   return (
@@ -57,6 +58,7 @@ const MyInquiries = () => {
                   <p className="mt-2 text-xs text-gray-400">
                     Sent {formatRelative(inquiry.createdAt)} · {statusHelp[inquiry.status]}
                   </p>
+                  {inquiry.conversationId && <Link to={`/account/messages?c=${inquiry.conversationId}`} className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-medium text-brand-600"><MessageSquare className="h-4 w-4" />Continue conversation with agent</Link>}
                 </div>
               </li>
             );
