@@ -14,6 +14,8 @@ import { formatPrice, formatType, getListingStatus, statusLabel } from "../../ut
 import { formatDate, formatRelative } from "../../utils/date";
 import { usePlatform } from "../../context/usePlatform";
 import WorkspaceStats from "../../components/agent/WorkspaceStats";
+import HotelInventory from "../../components/agent/HotelInventory";
+import { isHotel } from "../../utils/hotel";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
@@ -201,6 +203,7 @@ const PropertyManage = () => {
               ]}
             />
           </Panel>
+          {isHotel(property) && <HotelInventory property={property} bookings={rentals.filter((r) => r.property.id === property.id)} />}
 
           <Panel title="Description & amenities">
             <p className="text-sm leading-relaxed whitespace-pre-line text-gray-700">{property.description || "No description yet."}</p>

@@ -11,6 +11,8 @@ import StartChatModal from "../components/chat/StartChatModal";
 import { SignInPrompt } from "../components/property/SignInRequiredModal";
 import OfferForm from "../components/offer/OfferForm";
 import RentalCheckout from "../components/offer/RentalCheckout";
+import HotelCheckout from "../components/offer/HotelCheckout";
+import { isHotel } from "../utils/hotel";
 import BuyNowPanel from "../components/offer/BuyNowPanel";
 import NotFound from "./NotFound";
 import { formatType, getPriceParts, statusLabel } from "../utils/property";
@@ -54,6 +56,7 @@ const PropertyAction = ({ mode }) => {
   const { title, location: place, property: details, features, media } = property;
   const { value, period } = getPriceParts(property);
   const isForSale = details.status === "Sale";
+  const hotel = isHotel(property);
   const isAdminListing = property.owner.type === "admin";
   const ownerName = isAdminListing ? settings.general.siteName : property.agent.name;
   const contactLabel = isAdminListing ? "Owner" : "Agent";
@@ -67,14 +70,14 @@ const PropertyAction = ({ mode }) => {
   const available = mode === "rent" ? availability === "Available" : mode === "buy" ? availability !== "Sold" : !["Sold", "Rented"].includes(availability);
 
   const specs = [
-    details.bedrooms != null && { icon: Bed, label: "Bedrooms", value: details.bedrooms },
-    details.bathrooms != null && { icon: Bath, label: "Bathrooms", value: details.bathrooms },
+    !hotel && details.bedrooms != null && { icon: Bed, label: "Bedrooms", value: details.bedrooms },
+    !hotel && details.bathrooms != null && { icon: Bath, label: "Bathrooms", value: details.bathrooms },
     details.size?.value > 0 && { icon: Maximize2, label: "Size", value: `${details.size.value} ${details.size.unit}` },
     { icon: Building2, label: "Type", value: formatType(details.type) },
   ].filter(Boolean);
 
   let panel;
-  if (!user) panel = <SignInPrompt returnTo={location.pathname} />;
+  if (!user) panel = <SignInPrompt returnTo={location.pathname + location.search} />;
   else if (isOwnListing) panel = <p className="rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">This is your own listing.</p>;
   else if (wrongType)
     panel = (
@@ -88,13 +91,14 @@ const PropertyAction = ({ mode }) => {
         </div>
       </div>
     );
-  else if (!available)
+  else if (hotel && mode !== "rent") panel = <Link to={`/house/${property.id}#choose-room`} className="btn btn-primary">Choose a hotel room</Link>;
+  else if (!available && !(hotel && new URLSearchParams(location.search).has("booking")))
     panel = (
       <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">
         This property is {availability.toLowerCase()} and can't be {mode === "rent" ? "rented" : mode === "buy" ? "bought" : "offered on"} right now. You can still chat with {ownerName}.
       </p>
     );
-  else if (mode === "rent") panel = <RentalCheckout property={property} ownerName={ownerName} />;
+  else if (mode === "rent") panel = hotel ? <HotelCheckout key={property.id + location.search} property={property} ownerName={ownerName} /> : <RentalCheckout property={property} ownerName={ownerName} />;
   else if (mode === "buy") panel = <BuyNowPanel property={property} ownerName={ownerName} whatsappLink={whatsappLink} onChat={() => setChatOpen(true)} />;
   else panel = <OfferForm property={property} ownerName={ownerName} whatsappNumber={whatsappNumber} />;
 
@@ -105,8 +109,8 @@ const PropertyAction = ({ mode }) => {
           <ArrowLeft className="h-4 w-4" />
           Back to property
         </Link>
-        <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">{COPY[mode].title}</h1>
-        <p className="mt-2 text-gray-600">{COPY[mode].intro}</p>
+        <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">{hotel ? "Book your hotel stay" : COPY[mode].title}</h1>
+        <p className="mt-2 text-gray-600">{hotel ? "Choose your room, review what's included, and confirm your dates and guests before paying securely." : COPY[mode].intro}</p>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-5 lg:gap-8">
           {/* Property summary */}
@@ -145,7 +149,7 @@ const PropertyAction = ({ mode }) => {
 
                 {features.length > 0 && (
                   <>
-                    <h3 className="mt-5 text-xs font-bold tracking-wider text-gray-500 uppercase">What This Property Offers</h3>
+                    <h3 className="mt-5 text-xs font-bold tracking-wider text-gray-500 uppercase">{hotel ? "Hotel amenities" : "What This Property Offers"}</h3>
                     <ul className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
                       {features.map((f) => (
                         <li key={f} className="flex items-center gap-2 text-sm text-gray-700">

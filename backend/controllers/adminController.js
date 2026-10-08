@@ -22,6 +22,7 @@ import { resolveImages } from "../utils/uploadImages.js";
 import { updateInquiryStatus } from "./inquiryController.js";
 import { activateSubscription } from "./subscriptionController.js";
 import { ok, fail } from "../utils/response.js";
+import { prepareHotelFields, saveHotelProperty } from "../utils/hotel.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -199,6 +200,7 @@ const platformContact = (settings) => ({ id: "homebase", name: settings.general.
 export const createProperty = async (req, res) => {
   const settings = await getSettings();
   const fields = pickPropertyFields(req.body);
+  await prepareHotelFields(fields, req.body, null, settings.property.maxImages);
   const images = Array.isArray(req.body.images) ? req.body.images : [];
   if (!fields.title || fields.title.length < 3) return fail(res, 400, "Give the property a title (at least 3 characters).");
   const optionProblem = checkPropertyOptions(fields, settings);
@@ -233,6 +235,7 @@ export const updateProperty = async (req, res) => {
   if (!property) return fail(res, 404, "Property not found.");
   const settings = await getSettings();
   const fields = pickPropertyFields(req.body);
+  await prepareHotelFields(fields, req.body, property, settings.property.maxImages);
   const optionProblem = checkPropertyOptions(fields, settings, property);
   if (optionProblem) return fail(res, 400, optionProblem);
   if (fields.contact) fields.contact = { ...fields.contact, id: property.contact?.id || (property.ownerType === "admin" ? "homebase" : String(property.owner)) };
@@ -253,7 +256,11 @@ export const updateProperty = async (req, res) => {
     property.status = req.body.status;
   }
   if (req.body.isFeatured !== undefined && property.status === "published") property.isFeatured = Boolean(req.body.isFeatured);
-  await property.save();
+  if (["published", "pending"].includes(property.status)) {
+    const problem = validateForPublishing(property);
+    if (problem) return fail(res, 400, problem);
+  }
+  await saveHotelProperty(property);
   ok(res, property, "Property updated");
 };
 
@@ -265,6 +272,10 @@ export const setPropertyStatus = async (req, res) => {
 
   const property = await Property.findById(req.params.id).catch(() => null);
   if (!property) return fail(res, 404, "Property not found.");
+  if (["published", "pending"].includes(status)) {
+    const problem = validateForPublishing(property);
+    if (problem) return fail(res, 400, problem);
+  }
   property.status = status;
   property.rejectionReason = status === "rejected" ? rejectionReason.trim() : "";
   property.reviewedAt = new Date();

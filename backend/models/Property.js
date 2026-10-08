@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { schemaOptions } from "../utils/schemaOptions.js";
+import { roomTypeSchema } from "./roomTypeSchema.js";
 
 const propertySchema = new mongoose.Schema(
   {
@@ -26,6 +27,7 @@ const propertySchema = new mongoose.Schema(
     areaUnit: { type: String, default: "sqm" },
     amenities: [{ type: String, trim: true }],
     images: [{ type: String }], // Cloudinary (or static) URLs, never raw files
+    roomTypes: [roomTypeSchema],
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     ownerType: { type: String, enum: ["admin", "agent"], required: true },
     // Public contact shown on the listing (the agent, or a HomeBase staff member)
@@ -46,7 +48,7 @@ const propertySchema = new mongoose.Schema(
     ratingAverage: { type: Number, default: null, min: 1, max: 5 },
     ratingCount: { type: Number, default: 0, min: 0 },
   },
-  schemaOptions
+  { ...schemaOptions, optimisticConcurrency: true }
 );
 
 export default mongoose.models.Property || mongoose.model("Property", propertySchema);

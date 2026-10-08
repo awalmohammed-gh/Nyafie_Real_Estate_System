@@ -1,8 +1,10 @@
 import Notification from "../models/Notification.js";
+import User from "../models/User.js";
 import { getSettings } from "../models/Setting.js";
 
 // Notification type -> the Admin Settings switch that controls it for the admin team
 const ADMIN_SWITCH = { user: "newUsers", review: "propertyReviews", customer_review: "customerReviews", offer: "offers", rental: "rentals", sale: "sales", payment: "payments", message: "messages" };
+const CUSTOMER_SWITCH = { message: "inquiryUpdates", offer: "offerUpdates" };
 
 /**
  * Creates an in-app notification. With a `key`, an existing unread notification
@@ -23,7 +25,19 @@ const save = async (target, { type, title, message = "", link = "", key }) => {
 };
 
 // A specific account (customer or agent)
-export const notifyUser = (userId, payload) => save({ recipient: userId, audience: "user" }, payload);
+export const notifyUser = async (userId, payload) => {
+  const preference = CUSTOMER_SWITCH[payload.type];
+  if (preference) {
+    try {
+      const user = await User.findById(userId).select("role preferences").lean();
+      if (user?.role === "user" && user.preferences?.[preference] === false) return;
+    } catch (error) {
+      // A preference lookup failure must not interrupt the underlying transaction.
+      console.error("Notification preferences unavailable:", error.message);
+    }
+  }
+  return save({ recipient: userId, audience: "user" }, payload);
+};
 
 /**
  * The owner side of a listing record (offer, rental, sale request, conversation):

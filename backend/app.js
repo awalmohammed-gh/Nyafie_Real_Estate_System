@@ -99,6 +99,7 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
      if (err.name === "ValidationError") {
         return res.status(400).json({ success: false, message: Object.values(err.errors)[0]?.message || "Invalid data." });
      }
+     if (err.name === "VersionError") return res.status(409).json({ success: false, message: "This listing changed while you were editing. Reload it and try again." });
      if (err.type === "entity.too.large") {
         return res.status(413).json({ success: false, message: "Upload is too large. Try fewer or smaller photos." });
      }

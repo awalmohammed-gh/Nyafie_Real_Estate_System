@@ -23,7 +23,7 @@ const SavedProperties = () => {
   return (
     <AccountShell title="Saved Properties" description="Homes you've saved with the heart button.">
       {saved.loading && !saved.previous ? (
-        <SkeletonGrid count={3} />
+        <SkeletonGrid count={3} className="customer-saved-grid" />
       ) : saved.error ? (
         <div role="alert" className="rounded-3xl bg-red-50 px-6 py-12 text-center">
           <p className="font-semibold text-gray-900">Unable to load your saved properties</p>
@@ -31,7 +31,7 @@ const SavedProperties = () => {
           <button onClick={saved.reload} className="btn btn-primary mt-5">Retry</button>
         </div>
       ) : items.length ? (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="customer-saved-grid">
           {items.map((property, index) => (
             <Reveal key={property.id} delay={(index % 3) * 0.06} className="h-full">
               <HouseCard house={property} />

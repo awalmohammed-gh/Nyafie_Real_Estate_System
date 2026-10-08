@@ -14,5 +14,7 @@ export const forSession = (domain) => {
     logout: () => client.post(base + "/logout", {}, config),
     updateProfile: async (changes) => mapUser((await client.put(base + "/me", changes, config)).data),
     changePassword: (currentPassword, newPassword) => client.put(base + "/me/password", { currentPassword, newPassword }, config),
+    uploadProfilePhoto: async (image) => mapUser((await client.post(base + "/me/photo", { image }, config)).data),
+    removeProfilePhoto: async () => mapUser((await client.delete(base + "/me/photo", config)).data),
   };
 };

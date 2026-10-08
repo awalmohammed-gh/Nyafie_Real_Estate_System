@@ -9,6 +9,8 @@ import { PUBLIC_AGENT_FIELDS, publicAgent, presentProperties, publicQuery, visib
 export { publicQuery, visibleAgentIds } from "../utils/marketplace.js";
 import { resolveImages } from "../utils/uploadImages.js";
 import { ok, fail } from "../utils/response.js";
+import Rental from "../models/Rental.js";
+import { isHotel, prepareHotelFields, saveHotelProperty, validateHotelPublishing } from "../utils/hotel.js";
 
 const TYPES_OF_PRICE = ["total", "month", "night"];
 
@@ -70,6 +72,7 @@ export const checkPropertyOptions = (fields, settings, existing = null) => {
 
 // Checks required fields before a listing is submitted/published
 export const validateForPublishing = (p) => {
+  if (isHotel(p)) { const problem = validateHotelPublishing(p); if (problem) return problem; }
   if (!p.title || p.title.length < 3) return "Give the property a title (at least 3 characters).";
   if (!p.description || p.description.length < 30) return "Describe the property in at least 30 characters.";
   if (!p.propertyType) return "Choose a property type.";
@@ -296,6 +299,7 @@ export const createProperty = async (req, res) => {
   const { access } = req;
   const intent = req.body.status === "draft" ? "draft" : "submit";
   const fields = pickPropertyFields(req.body);
+  await prepareHotelFields(fields, req.body, null, access.imageLimit);
   if (fields.listingType === "Sale") fields.pricePeriod = "total";
   const images = Array.isArray(req.body.images) ? req.body.images : [];
 
@@ -358,6 +362,7 @@ export const updateProperty = async (req, res) => {
   if (!property) return;
 
   const fields = pickPropertyFields(req.body);
+  await prepareHotelFields(fields, req.body, property, access.imageLimit);
   fields.contact = { id: String(req.user._id), name: `${req.user.firstName} ${req.user.lastName}`, phone: req.user.phone, email: req.user.email };
   if ((fields.listingType ?? property.listingType) === "Sale") fields.pricePeriod = "total";
   const optionProblem = checkPropertyOptions(fields, access.settings, property);
@@ -394,7 +399,7 @@ export const updateProperty = async (req, res) => {
     if (status !== "rejected") property.rejectionReason = "";
     if (status !== "published") property.isFeatured = false;
   }
-  await property.save();
+  await saveHotelProperty(property);
   ok(res, property, status === "pending" ? "Submitted for review" : "Property updated");
 };
 
@@ -422,6 +427,7 @@ export const deleteProperty = async (req, res) => {
   if (req.user.role !== "admin" && !(req.user.role === "agent" && isOwner(property, req.user))) {
     return fail(res, 403, "You can only delete your own properties.");
   }
+  if (isHotel(property) && (property.roomTypes.length || await Rental.exists({ property: property._id }))) return fail(res, 409, "Archive this hotel by saving it as a draft. Its room types and booking history must be preserved.");
   await property.deleteOne();
   await Promise.all([
     User.updateMany({ savedProperties: property._id }, { $pull: { savedProperties: property._id } }),

@@ -5,11 +5,12 @@ import { canManageRecord, formatGHS, isOwnListing, loadPublishedProperty, ownerF
 import { notifyOwner, notifyUser } from "../utils/notify.js";
 import { cleanText, validateContact } from "../utils/validation.js";
 import { ok, fail } from "../utils/response.js";
+import { isHotel, quoteHotelRoom, hotelTransaction } from "../utils/hotel.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 export const PAYMENT_HOLD = 30 * 60 * 1000; // a checkout in progress holds the dates for 30 minutes
 const MAX_DAYS = 3 * 366;
-const PROPERTY_FIELDS = "title images location price pricePeriod listingType status availability owner ownerType contact";
+const PROPERTY_FIELDS = "title images location price pricePeriod propertyType listingType status availability owner ownerType contact";
 
 // What the owner side may move a rental to, from each status
 const TRANSITIONS = {
@@ -42,6 +43,7 @@ export const presentRental = (rental, user) => {
   const customer = rental.customer;
   return {
     ...r,
+    ...(rental.hotelId ? { customerId: String(customer?._id || customer) } : {}),
     customer: customer?._id ? { id: String(customer._id), name: `${customer.firstName} ${customer.lastName}` } : { id: String(customer) },
     owner: { id: rental.ownerType === "admin" ? "admin" : String(rental.owner?._id || rental.owner), name: ownerName(rental), type: rental.ownerType },
     conversation: rental.conversation ? String(rental.conversation) : null,
@@ -81,13 +83,18 @@ const todayUTC = () => {
  * database; the request only supplies the property id and the dates.
  * Returns { property, startDate, endDate, units, amount } or { status, error }.
  */
-export const quoteRental = async ({ propertyId, startDate: start, endDate: end }, user) => {
+export const quoteRental = async (body, user, options = {}) => {
+  const { propertyId, startDate: start, endDate: end } = body;
   const property = await loadPublishedProperty(propertyId);
   if (!property) return { status: 404, error: "This property is not available." };
   if (property.listingType !== "Rent") return { status: 400, error: "This property is for sale. Contact the listing agent or make an offer instead." };
   if (property.currency !== "GHS") return { status: 400, error: "Online rental payments support GHS only. Contact the agent to arrange this rental." };
   if (property.availability !== "Available") return { status: 400, error: "This property is not available for rent right now." };
   if (isOwnListing(property, user)) return { status: 400, error: "This is your own listing." };
+  if (isHotel(property)) {
+    try { return await quoteHotelRoom(property, body, options); }
+    catch (error) { if (error.status) return { status: error.status, error: error.message }; throw error; }
+  }
 
   const startDate = parseDay(start);
   const endDate = parseDay(end);
@@ -117,12 +124,15 @@ export const quoteRental = async ({ propertyId, startDate: start, endDate: end }
 // POST /api/rentals { propertyId, startDate, endDate, fullName, email, phone, currentAddress, occupants, notes }
 // Saves the rental request with a server-calculated amount. Payment starts separately (/api/payments/initialize).
 export const createRental = async (req, res) => {
-  const contact = validateContact(req.body, { requireAddress: true });
+  const contact = validateContact(req.body);
   if (contact.error) return fail(res, 400, contact.error);
 
   const quote = await quoteRental(req.body, req.user);
   if (quote.error) return fail(res, quote.status, quote.error);
   const { property, startDate, endDate, units, fees, amount } = quote;
+  if (quote.room) return createHotelRental(req, res, quote, contact);
+  const addressProblem = validateContact(req.body, { requireAddress: true });
+  if (addressProblem.error) return fail(res, 400, addressProblem.error);
 
   const fields = {
     owner: property.owner, // from the database, never the request
@@ -160,6 +170,29 @@ export const createRental = async (req, res) => {
   ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), "Rental details saved", 201);
 };
 
+const createHotelRental = async (req, res, quote, contact) => {
+  const { property, room } = quote;
+  const rental = await hotelTransaction(property._id, async (hotel, session) => {
+    const verified = await quoteHotelRoom(hotel, req.body, { session });
+    // Editing dates/rooms after opening checkout is forbidden. Each request has a
+    // separate immutable ID so an older successful charge cannot pay for new dates.
+    const doc = new Rental({
+      customer: req.user._id, property: hotel._id, hotelId: hotel._id,
+      owner: hotel.owner, ownerType: hotel.ownerType,
+      roomTypeId: verified.room._id, roomName: verified.room.name,
+      startDate: verified.startDate, endDate: verified.endDate,
+      pricePeriod: "night", unitPrice: verified.room.pricePerNight, units: verified.units,
+      numberOfRooms: verified.numberOfRooms, occupants: verified.guests,
+      amount: verified.amount, fees: 0, ...contact, notes: cleanText(req.body.notes),
+    });
+    addHistory(doc, req.user, `Hotel booking requested: ${verified.room.name}`);
+    await doc.save({ session });
+    return doc;
+  });
+  await notifyOwner(rental, { type: "rental", title: "New hotel booking request", message: `${contact.contactName} requested ${rental.numberOfRooms} ${room.name} room(s) at "${property.title}".`, path: "rentals" });
+  return ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), "Hotel booking details saved", 201);
+};
+
 // GET /api/rentals/my
 export const myRentals = async (req, res) => {
   const rentals = await populateRental(Rental.find({ customer: req.user._id }).sort({ createdAt: -1 }));
@@ -186,6 +219,18 @@ export const updateRentalStatus = async (req, res) => {
   const { status } = req.body;
   const allowed = TRANSITIONS[rental.status] || [];
   if (!allowed.includes(status)) return fail(res, 400, `A ${rental.status.replace("_", " ")} rental can't be changed to ${String(status || "that status").replace("_", " ")}.`);
+
+  if (rental.hotelId) {
+    await hotelTransaction(rental.hotelId, async (_hotel, session) => {
+      const current = await Rental.findById(rental._id).session(session);
+      if (!(TRANSITIONS[current.status] || []).includes(status)) { const error = new Error("Booking status changed. Reload and try again."); error.status = 409; throw error; }
+      current.status = status;
+      addHistory(current, req.user, cleanText(req.body.note, 300) || `Hotel booking ${STATUS_TEXT[status]}`);
+      await current.save({ session });
+    });
+    await notifyUser(rental.customer._id, { type: "status", title: `Hotel booking ${status}`, message: `Your ${rental.roomName} booking was ${status}.${status === "cancelled" && rental.paymentStatus === "paid" ? " Contact the hotel about your refund." : ""}`, link: "/account/rentals" });
+    return ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), "Hotel booking updated");
+  }
 
   const reason = cleanText(req.body.note, 300);
   rental.status = status;

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { ArrowRight, BadgeCheck, Loader2 } from "lucide-react";
 import AccountShell from "../../components/account/AccountShell";
+import CustomerProfileForm from "../../components/account/CustomerProfileForm";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { useAuth } from "../../context/useAuth";
 import { useToast } from "../../context/useToast";
@@ -19,6 +20,7 @@ const Profile = () => {
 
   // Admins have no customer profile; their account lives in the admin console
   if (isAdmin) return <Navigate to="/admin/settings" replace />;
+  if (!isAgent) return <AccountShell title="My profile" description="Your photo and personal details, all in one place."><div className="account-surface overflow-hidden"><CustomerProfileForm showPhoto /></div></AccountShell>;
 
   const handleSubmit = async (e) => {
     e.preventDefault();

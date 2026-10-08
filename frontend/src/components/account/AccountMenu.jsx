@@ -28,7 +28,7 @@ import {
 import { useAuth } from "../../context/useAuth";
 import { useScrim } from "../../hooks/useScrim";
 import { useToast } from "../../context/useToast";
-import { getInitials } from "../../utils/property";
+import UserAvatar from "./UserAvatar";
 import { canAccessAgent } from "../../utils/sessionDomain";
 
 const userItems = [
@@ -132,8 +132,8 @@ const AccountMenu = ({ onAuth, compact = false, onDark = false }) => {
         } ${open ? (onDark ? "bg-white/15" : "bg-gray-100") : ""}`}
       >
         {isAuthenticated ? (
-          <span className="relative grid h-10 w-10 place-items-center rounded-full bg-brand-500 text-sm font-bold text-white">
-            {getInitials(user.name)}
+          <span className="relative">
+            <UserAvatar user={user} className="h-10 w-10 text-sm" />
             {isAgent && (
               <span className={`absolute -right-0.5 -bottom-0.5 h-3.5 w-3.5 rounded-full ring-2 ring-white ${inactiveAgent ? "bg-amber-400" : "bg-emerald-500"}`} />
             )}
@@ -164,9 +164,7 @@ const AccountMenu = ({ onAuth, compact = false, onDark = false }) => {
             {isAuthenticated ? (
               <>
                 <div className="flex items-center gap-3 border-b border-gray-100 p-4">
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-500 text-sm font-bold text-white">
-                    {getInitials(user.name)}
-                  </span>
+                  <UserAvatar user={user} className="h-11 w-11 text-sm" />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="truncate font-semibold text-gray-900">{user.name}</p>

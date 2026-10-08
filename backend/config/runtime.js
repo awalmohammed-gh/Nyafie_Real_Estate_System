@@ -18,6 +18,8 @@ export const siteUrl = () => {
 export const clientOrigins = () => [...new Set([
   ...(process.env.CLIENT_URL || siteUrl()).split(",").map((value) => normalizeOrigin(value.trim())),
   siteUrl(),
+  // Vite binds to 127.0.0.1; both loopback names are valid for local development.
+  ...(!production() ? ["http://localhost:5173", "http://127.0.0.1:5173"] : []),
   ...(process.env.VERCEL_ENV === "preview" ? [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL].filter(Boolean).map((host) => normalizeOrigin(`https://${host}`)) : []),
 ].filter(Boolean))];
 
