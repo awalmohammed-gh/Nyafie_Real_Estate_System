@@ -12,7 +12,13 @@ const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 const toDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const shift = (day, { days = 0, months = 0 }) => {
   const d = new Date(`${day}T00:00:00`);
-  d.setMonth(d.getMonth() + months);
+  if (months) {
+    const originalDay = d.getDate();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + months);
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(originalDay, lastDay));
+  }
   d.setDate(d.getDate() + days);
   return toDay(d);
 };
@@ -33,7 +39,7 @@ const ErrorNote = ({ children }) => children && <p role="alert" className="round
 // backend) -> Pay Online with Paystack. Nothing here decides the amount charged.
 const RentalCheckout = ({ property, ownerName }) => {
   const { siteName, settings } = usePlatform();
-  const paymentsOff = !settings.payments.rentalsEnabled; // switched off in Admin Settings > Payment Settings
+  const paymentsOff = !settings.payments.rentalsAvailable || property.pricing.currency !== "GHS";
   const { user } = useAuth();
   const { value: price, period } = getPriceParts(property);
   const pricePeriod = property.pricing.perNight != null ? "night" : property.pricing.perMonth != null ? "month" : "total";

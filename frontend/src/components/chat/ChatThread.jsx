@@ -145,7 +145,7 @@ const ChatThread = ({ conversationId, onBack, onChanged }) => {
       )}
 
       {/* Messages */}
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-gray-50/60 p-4">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-gray-50/60 p-4">
         {messages.map((m, i) => {
           const mine = m.senderId === user?.id;
           const newDay = i === 0 || new Date(m.createdAt).toDateString() !== new Date(messages[i - 1].createdAt).toDateString();

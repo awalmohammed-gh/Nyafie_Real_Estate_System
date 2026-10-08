@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { BadgeCheck, Building, CheckCircle2, Eye, Loader2, MessageCircle, Wallet } from "lucide-react";
 import DataTable from "../ui/DataTable";
 import EmptyState from "../ui/EmptyState";
 import FilterTabs from "../ui/FilterTabs";
-import Modal from "../ui/Modal";
+import SidePanel from "../ui/SidePanel";
+import WorkspaceStats from "../agent/WorkspaceStats";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import { ErrorState, TableSkeleton } from "../dashboard/States";
 import StatusSteps from "./StatusSteps";
@@ -42,14 +43,13 @@ const TABS = [
 const SaleRequestsBoard = ({ scope }) => {
   const { siteName } = usePlatform();
   const isAdmin = scope === "admin";
+  // Records open in a side panel for admins and agents alike (stage, payment, history, next action)
+  const Detail = SidePanel;
   const run = useAsyncAction();
-  const { reload } = useTransactions();
+  const { sales: requests, loading, error: loadError, reload, updateTransaction } = useTransactions();
   const [params] = useSearchParams();
-  const [attempt, setAttempt] = useState(0);
   const [propertyId, setPropertyId] = useState(params.get("property") || "all");
   const [range, setRange] = useState("all");
-  const [requests, setRequests] = useState(null);
-  const [loadError, setLoadError] = useState("");
   const [tab, setTab] = useState("open");
   const [query, setQuery] = useState("");
   const [ownerId, setOwnerId] = useState("all");
@@ -60,16 +60,9 @@ const SaleRequestsBoard = ({ scope }) => {
   const [paidAmount, setPaidAmount] = useState("");
   const [busy, setBusy] = useState("");
 
-  useEffect(() => {
-    (isAdmin ? saleRequestApi.getAdminSaleRequests() : saleRequestApi.getAgentSaleRequests()).then(setRequests).catch((err) => setLoadError(err.message));
-  }, [isAdmin, attempt]);
-
-  const retry = () => {
-    setLoadError("");
-    setAttempt((a) => a + 1);
-  };
+  const retry = reload;
   if (loadError) return <ErrorState title="Couldn't load sale requests" message={loadError} onRetry={retry} />;
-  if (!requests) return <TableSkeleton />;
+  if (loading) return <TableSkeleton />;
 
   const owners = [...new Map(requests.map((r) => [r.owner.id, r.owner])).values()];
   const propertyOptions = [...new Map(requests.map((r) => [r.property.id, r.property])).values()];
@@ -89,7 +82,7 @@ const SaleRequestsBoard = ({ scope }) => {
   const whatsapp = open && toWhatsAppNumber(open.contactPhone);
 
   const replace = (updated) => {
-    setRequests((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    updateTransaction("sales", updated);
     reload(); // refresh dashboard counts and sidebar badges
   };
   const openRequest = (id) => {
@@ -179,6 +172,12 @@ const SaleRequestsBoard = ({ scope }) => {
 
   return (
     <>
+      {!isAdmin && <WorkspaceStats className="mb-6" items={[
+        { label: "Open requests", value: requests.filter(TABS[0].match).length, note: "Your current buyer pipeline" },
+        { label: "Awaiting payment", value: requests.filter(TABS[1].match).length, note: "Office payment outstanding" },
+        { label: "Payment received", value: requests.filter((r) => r.paymentStatusKey === "confirmed" && !CLOSED.includes(r.statusKey)).length, note: "Ready to complete the sale" },
+        { label: "Completed sales", value: requests.filter(TABS[2].match).length, note: "Successfully closed requests" },
+      ]} />}
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <FilterTabs label="Request status" value={tab} onChange={setTab} tabs={TABS.map((t) => ({ id: t.id, label: t.label, count: scoped.filter(t.match).length }))} />
         <SearchInput value={query} onChange={setQuery} placeholder="Search requests" className="lg:w-72" />
@@ -186,14 +185,16 @@ const SaleRequestsBoard = ({ scope }) => {
       <Filters isAdmin={isAdmin} owners={owners} ownerId={ownerId} setOwnerId={setOwnerId} properties={propertyOptions} propertyId={propertyId} setPropertyId={setPropertyId} range={range} setRange={setRange} />
 
       <DataTable
+        tableFrom={isAdmin ? "md" : "xl"}
         columns={columns}
         rows={rows}
+        onRowClick={(r) => openRequest(r.id)}
         minWidth={isAdmin ? 980 : 900}
         empty={
           <EmptyState
             icon={Building}
             title={requests.length ? "No requests here" : "No sale requests yet"}
-            description={requests.length ? "Try a different filter." : "When customers tap Buy Now on your properties for sale, their requests appear here."}
+            description={requests.length ? "Try a different filter." : "Customers' purchase inquiries about your sale listings appear here. Discuss the price and next steps with them."}
           />
         }
         mobileCard={(r) => (
@@ -213,7 +214,7 @@ const SaleRequestsBoard = ({ scope }) => {
         )}
       />
 
-      <Modal
+      <Detail
         open={Boolean(open)}
         onClose={() => setOpenId(null)}
         size="lg"
@@ -241,6 +242,7 @@ const SaleRequestsBoard = ({ scope }) => {
         {open && (
           <div className="space-y-5">
             <StatusSteps kind="sale" status={open.statusKey} />
+            <div className="rounded-xl bg-brand-50 p-4"><p className="workspace-eyebrow">Purchase summary</p><p className="mt-2 text-2xl font-semibold text-gray-900">{ghs(open.askingPrice)}</p><div className="mt-3 flex flex-wrap gap-2"><StatusBadge status={open.status} /><StatusBadge status={open.paymentStatus} /></div><p className="mt-3 text-xs leading-relaxed text-gray-600">{closed ? "This request is closed. Its history is available below." : paymentConfirmed ? "Payment is confirmed. Complete the sale when the handover is finished." : "Follow up with the buyer and confirm payment only after it is received."}</p></div>
             <Link to={`/house/${open.property.id}`} className="flex items-center gap-3 rounded-lg p-2 ring-1 ring-gray-200 transition hover:ring-brand-200">
               {open.property.image && <img src={open.property.image} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />}
               <div className="min-w-0">
@@ -342,7 +344,7 @@ const SaleRequestsBoard = ({ scope }) => {
             </div>
           </div>
         )}
-      </Modal>
+      </Detail>
 
       <ConfirmDialog
         open={Boolean(confirm)}

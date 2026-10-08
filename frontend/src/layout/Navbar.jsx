@@ -1,27 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ChevronDown, Heart, Menu, X } from 'lucide-react';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
+import { useScrim } from '../hooks/useScrim';
+import ScrimProvider from '../components/ui/ScrimProvider';
 import { useAuth } from '../context/useAuth';
 import { useRealEstate } from '../context/useRealEstate';
 import { usePlatform } from '../context/usePlatform';
 import BrandLogo from '../components/brand/BrandLogo';
 import AccountMenu from '../components/account/AccountMenu';
 import NotificationBell from '../components/ui/NotificationBell';
-import { PropertyPreviewGrid, PropertyPreviewList } from '../components/nav/PropertyPreviews';
+import { PropertyCategoryMenu } from '../components/nav/PropertyCategoryMenu';
+import { usePropertyCategories } from '../hooks/usePropertyCategories';
 import { useNavPropertyPreviews } from '../hooks/useNavPropertyPreviews';
+import { FindPropertyLinks, FindPropertyMegaMenu } from '../components/nav/FindPropertyMenu';
+import { buildFindPropertyLinks } from '../utils/findPropertyNavigation';
 
-// Listing-type pages: all listings (URL set in Admin Settings), /rent and /sale (PropertyPerPage)
-const buildLinks = (paths) => {
-  const listingLinks = [
-    { name: "All Listings", path: paths.listings, description: "Every property for sale and rent" },
-    { name: "For Rent", path: "/rent", description: "Monthly and short stays" },
-    { name: "For Sale", path: "/sale", description: "Homes ready to own" },
-  ];
+// Find Property links share the unified catalogue and its existing query schema.
+const buildLinks = (paths, propertyTypes) => {
+  const listingLinks = buildFindPropertyLinks(paths.listings, propertyTypes);
   const navLinks = [
     { name: "Home", path: "/" },
-    { name: "Listings", menu: "listings", matches: listingLinks.map((l) => l.path) },
+    { name: "Find Property", menu: "listings", matches: [paths.listings, "/rent", "/sale"] },
     { name: "Properties", menu: "properties", matches: [paths.properties, "/house/"] },
     { name: "Agents", path: paths.agents },
     { name: "Contact", path: "/contact" },
@@ -30,11 +31,13 @@ const buildLinks = (paths) => {
 };
 
 const CLOSE_DELAY = 150; // lets the pointer cross the gap between a trigger and its panel
+const OPEN_DELAY = 90; // hover intent: brushing past a menu item on the way elsewhere doesn't open it (or flash the scrim)
+// Fade in with a slight rise; quick enough to feel instant, slow enough to read as motion
 const panelMotion = {
-  initial: { opacity: 0, y: 4 },
+  initial: { opacity: 0, y: 8 },
   animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: 4 },
-  transition: { duration: 0.15, ease: "easeOut" },
+  exit: { opacity: 0, y: 8 },
+  transition: { duration: 0.22, ease: "easeOut" },
 };
 
 const Logo = ({ onDark = false }) => (
@@ -51,10 +54,30 @@ const pillClass = (active, onDark = false) =>
       : active ? "bg-brand-50 text-brand-600" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
   }`;
 
-const drawerLinkClass = ({ isActive }) =>
-  `block rounded-xl px-3 py-3 text-base font-semibold transition-colors ${
-    isActive ? "bg-brand-50 text-brand-600" : "text-gray-700 hover:bg-gray-50"
+// Mobile sheet rows: 48px touch targets; the active page gets brand text and a slim left bar
+const sheetRowClass = (active) =>
+  `relative flex min-h-12 w-full items-center justify-between gap-3 rounded-lg px-3 text-[0.9375rem] font-medium transition-colors ${
+    active
+      ? "text-brand-700 before:absolute before:inset-y-3 before:left-0 before:w-0.5 before:rounded-full before:bg-brand-500"
+      : "text-gray-800 hover:bg-gray-50 active:bg-gray-100"
   }`;
+
+// The sheet slides down out of the header; reduced motion gets a plain fade
+const SHEET_EASE = [0.22, 1, 0.36, 1];
+const sheetMotion = (reduce) =>
+  reduce
+    ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.15 } }
+    : {
+        initial: { y: "-100%", opacity: 0 },
+        animate: { y: 0, opacity: 1, transition: { duration: 0.32, ease: SHEET_EASE } },
+        exit: { y: "-100%", opacity: 0, transition: { duration: 0.24, ease: [0.4, 0, 1, 1] } },
+      };
+const accordionMotion = (reduce) => ({
+  initial: { height: 0, opacity: 0 },
+  animate: { height: "auto", opacity: 1 },
+  exit: { height: 0, opacity: 0 },
+  transition: { duration: reduce ? 0 : 0.24, ease: SHEET_EASE },
+});
 
 // Saved properties, with the same count the heart buttons on cards update
 const WishlistLink = ({ count, onClick, className = "", onDark = false }) => (
@@ -76,24 +99,53 @@ const WishlistLink = ({ count, onClick, className = "", onDark = false }) => (
 
 // overHero: the page starts with a dark hero. The navbar then overlays it with no background
 // until the visitor scrolls; on other pages it is solid from the start.
-const Navbar = ({ onAuth, overHero = false }) => {
+const NavbarContent = ({ onAuth, overHero = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [openMenu, setOpenMenu] = useState(null); // desktop: "listings" | "properties" | null
   const [expanded, setExpanded] = useState(null); // mobile drawer section
   const { isAuthenticated } = useAuth();
   const { favorites } = useRealEstate();
-  const { paths } = usePlatform();
-  const { listingLinks, navLinks } = buildLinks(paths);
+  const { paths, settings } = usePlatform();
+  const { listingLinks, navLinks } = buildLinks(paths, settings.property.propertyTypes);
   const { pathname, search } = useLocation();
   const previews = useNavPropertyPreviews();
+  const categories = usePropertyCategories();
   const navRef = useRef(null);
+  const drawerRef = useRef(null);
+  const mobileTriggerRef = useRef(null);
   const closeTimer = useRef(null);
+  const openTimer = useRef(null);
+
+  const reduceMotion = useReducedMotion();
 
   useLockBodyScroll(isOpen);
+  // The mobile sheet blurs the page behind it with the same scrim as the desktop menus;
+  // tapping the blurred page closes it
+  useScrim(isOpen, () => {
+    setIsOpen(false);
+    setExpanded(null);
+    mobileTriggerRef.current?.focus();
+  });
+
+  // The sheet only exists below the desktop breakpoint: growing the window closes it
+  // (otherwise the page would stay scroll-locked behind a hidden menu)
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const desktop = window.matchMedia("(min-width: 64rem)");
+    const onChange = (e) => e.matches && (setIsOpen(false), setExpanded(null));
+    desktop.addEventListener("change", onChange);
+    return () => desktop.removeEventListener("change", onChange);
+  }, [isOpen]);
+  // Blur the page behind an open desktop menu; clicking the blurred page closes it
+  useScrim(Boolean(openMenu), () => {
+    clearTimeout(closeTimer.current);
+    clearTimeout(openTimer.current);
+    setOpenMenu(null);
+  });
 
   // Transparent while a hero is behind the navbar and the page is at the top
-  const onDark = overHero && !scrolled;
+  const onDark = overHero && !scrolled && !isOpen;
 
   // Any navigation (including back/forward) closes open menus
   const routeKey = pathname + search;
@@ -102,6 +154,7 @@ const Navbar = ({ onAuth, overHero = false }) => {
     setLastRoute(routeKey);
     setOpenMenu(null);
     setIsOpen(false);
+    setExpanded(null);
   }
 
   useEffect(() => {
@@ -113,42 +166,113 @@ const Navbar = ({ onAuth, overHero = false }) => {
 
   useEffect(() => {
     if (!openMenu) return undefined;
-    const handlePointer = (e) => !navRef.current?.contains(e.target) && setOpenMenu(null);
-    const handleKey = (e) => e.key === "Escape" && setOpenMenu(null);
+    const dismiss = () => {
+      clearTimeout(closeTimer.current);
+      clearTimeout(openTimer.current);
+      setOpenMenu(null);
+    };
+    const handlePointer = (e) => !navRef.current?.contains(e.target) && dismiss();
+    const handleKey = (e) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      navRef.current?.querySelector(`[aria-controls="nav-menu-${openMenu}"]`)?.focus();
+      dismiss();
+    };
+    const desktop = window.matchMedia("(min-width: 64rem)");
+    const handleResize = (e) => !e.matches && dismiss();
+    desktop.addEventListener("change", handleResize);
     document.addEventListener("pointerdown", handlePointer);
     document.addEventListener("keydown", handleKey);
     return () => {
       document.removeEventListener("pointerdown", handlePointer);
       document.removeEventListener("keydown", handleKey);
+      desktop.removeEventListener("change", handleResize);
     };
   }, [openMenu]);
 
-  useEffect(() => () => clearTimeout(closeTimer.current), []);
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const frame = requestAnimationFrame(() => drawerRef.current?.querySelector('a[href], button')?.focus());
+    const handleKey = (e) => {
+      if (e.key === "Escape") {
+        setIsOpen(false);
+        setExpanded(null);
+        mobileTriggerRef.current?.focus();
+      }
+      if (e.key === "Tab") {
+        const links = [mobileTriggerRef.current, ...(drawerRef.current?.querySelectorAll('a[href], button:not([disabled])') || [])].filter(Boolean);
+        const first = links[0];
+        const last = links[links.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [isOpen]);
+
+  useEffect(() => () => {
+    clearTimeout(closeTimer.current);
+    clearTimeout(openTimer.current);
+  }, []);
+
+  useEffect(() => {
+    clearTimeout(closeTimer.current);
+    clearTimeout(openTimer.current);
+  }, [routeKey]);
 
   const showMenu = (menu) => {
     clearTimeout(closeTimer.current);
-    if (menu === "properties") previews.ensureLoaded();
+    clearTimeout(openTimer.current);
+    if (menu === 'listings') previews.ensureLoaded();
     setOpenMenu(menu);
   };
   const hideMenu = () => {
+    clearTimeout(openTimer.current);
     clearTimeout(closeTimer.current);
-    closeTimer.current = setTimeout(() => setOpenMenu(null), CLOSE_DELAY);
+    closeTimer.current = setTimeout(() => {
+      // Moving the mouse away must not dismiss links a keyboard user is navigating.
+      if (!navRef.current?.querySelector('[id^="nav-menu-"]')?.contains(document.activeElement)) setOpenMenu(null);
+    }, CLOSE_DELAY);
   };
   const closeAll = () => {
     clearTimeout(closeTimer.current);
+    clearTimeout(openTimer.current);
+    if (isOpen) mobileTriggerRef.current?.focus();
     setOpenMenu(null);
     setIsOpen(false);
+    setExpanded(null);
   };
 
   // Hover opens menus for mouse users only; touch and keyboard use click
   const hoverHandlers = (menu) => ({
-    onPointerEnter: (e) => e.pointerType === "mouse" && showMenu(menu),
+    onPointerEnter: (e) => {
+      if (e.pointerType !== "mouse") return;
+      // Moving between menus switches straight away; opening the first one waits a moment
+      if (openMenu) return showMenu(menu);
+      clearTimeout(closeTimer.current);
+      clearTimeout(openTimer.current);
+      openTimer.current = setTimeout(() => showMenu(menu), OPEN_DELAY);
+    },
     onPointerLeave: (e) => e.pointerType === "mouse" && hideMenu(),
-    onBlur: (e) => !e.currentTarget.contains(e.relatedTarget) && setOpenMenu(null),
+    onBlur: (e) => {
+      if (!e.currentTarget.contains(e.relatedTarget)) {
+        clearTimeout(closeTimer.current);
+        clearTimeout(openTimer.current);
+        setOpenMenu(null);
+      }
+    },
   });
 
   const toggleSection = (menu) => {
-    if (menu === "properties") previews.ensureLoaded();
     setExpanded((prev) => (prev === menu ? null : menu));
   };
 
@@ -157,7 +281,7 @@ const Navbar = ({ onAuth, overHero = false }) => {
   return (
     <header
       className={`${overHero ? "fixed inset-x-0" : "sticky"} top-0 z-50 w-full border-b transition-[background-color,border-color,box-shadow] duration-300 ease-out ${
-        onDark ? "border-transparent bg-transparent" : scrolled ? "border-gray-200/80 bg-white shadow-sm shadow-gray-900/5" : "border-transparent bg-white"
+        onDark ? "border-transparent bg-transparent" : isOpen ? "border-gray-100 bg-white" : scrolled ? "border-gray-200/80 bg-white shadow-sm shadow-gray-900/5" : "border-transparent bg-white"
       }`}
     >
       <nav ref={navRef} className="container-page relative flex h-16 items-center justify-between gap-4 lg:h-20">
@@ -177,57 +301,41 @@ const Navbar = ({ onAuth, overHero = false }) => {
             }
 
             const open = openMenu === link.menu;
-            const isMega = link.menu === "properties";
             return (
               // Full-height item so the pointer stays "inside" on its way down to the panel.
-              // The Listings dropdown anchors to its trigger; the mega-menu anchors to the nav.
-              <li key={link.name} className={`flex h-full items-center ${isMega ? "" : "relative"}`} {...hoverHandlers(link.menu)}>
+              // Both wide panels anchor to the navbar container, keeping them inside the viewport.
+              <li key={link.name} className="flex h-full items-center" {...hoverHandlers(link.menu)}>
                 <button
                   type="button"
-                  onClick={() => (open ? setOpenMenu(null) : showMenu(link.menu))}
+                  onClick={() => (open ? closeAll() : showMenu(link.menu))}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'ArrowDown') return;
+                    e.preventDefault();
+                    showMenu(link.menu);
+                    requestAnimationFrame(() => navRef.current?.querySelector(`#nav-menu-${link.menu} a[href]`)?.focus());
+                  }}
                   aria-expanded={open}
                   aria-controls={`nav-menu-${link.menu}`}
                   className={pillClass(open || isSectionActive(link), onDark)}
                 >
                   {link.name}
-                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+                  <ChevronDown aria-hidden="true" className={`h-4 w-4 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
                 </button>
 
                 <AnimatePresence>
                   {open && (
                     <motion.div
                       id={`nav-menu-${link.menu}`}
-                      {...panelMotion}
-                      className={
-                        isMega
-                          ? "absolute top-full left-1/2 z-40 w-[min(60rem,calc(100%-4rem))] -translate-x-1/2"
-                          : "absolute top-full left-1/2 z-40 w-72 -translate-x-1/2"
-                      }
+                      role="region"
+                      aria-label={link.name}
+                      {...(reduceMotion ? { ...panelMotion, initial: { opacity: 0 }, exit: { opacity: 0 }, transition: { duration: 0.12 } } : panelMotion)}
+                      className={`absolute top-full left-1/2 z-40 -translate-x-1/2 ${link.menu === 'listings' ? 'w-[min(56rem,calc(100%_-_4rem))]' : 'w-[min(48rem,calc(100%_-_4rem))]'}`}
                     >
-                      <div className="overflow-hidden rounded-2xl bg-white shadow-lg ring-1 shadow-gray-900/8 ring-gray-200/80">
-                        {isMega ? (
-                          <PropertyPreviewGrid previews={previews} onNavigate={closeAll} />
+                      <div className="glass-panel max-h-[calc(100dvh-6rem)] overflow-y-auto overscroll-contain rounded-xl border border-gray-200/70 shadow-xl shadow-gray-900/8">
+                        {link.menu === 'properties' ? (
+                          <PropertyCategoryMenu categories={categories} onNavigate={closeAll} />
                         ) : (
-                          <ul className="p-2">
-                            {listingLinks.map((sublink) => (
-                              <li key={sublink.path}>
-                                <NavLink
-                                  to={sublink.path}
-                                  onClick={closeAll}
-                                  className={({ isActive }) =>
-                                    `block rounded-xl px-4 py-3 transition-colors ${isActive ? "bg-brand-50" : "hover:bg-gray-50"}`
-                                  }
-                                >
-                                  {({ isActive }) => (
-                                    <>
-                                      <span className={`block text-sm font-semibold ${isActive ? "text-brand-600" : "text-gray-900"}`}>{sublink.name}</span>
-                                      <span className="block text-xs text-gray-500">{sublink.description}</span>
-                                    </>
-                                  )}
-                                </NavLink>
-                              </li>
-                            ))}
-                          </ul>
+                          <FindPropertyMegaMenu links={listingLinks} previews={previews} onNavigate={closeAll} />
                         )}
                       </div>
                     </motion.div>
@@ -252,151 +360,124 @@ const Navbar = ({ onAuth, overHero = false }) => {
           <WishlistLink count={favorites.length} className="hidden h-10 w-10 sm:grid" onDark={onDark} />
           <AccountMenu onAuth={onAuth} compact onDark={onDark} />
           <button
-            onClick={() => setIsOpen(true)}
-            aria-label="Open menu"
+            ref={mobileTriggerRef}
+            type="button"
+            onClick={() => (isOpen ? closeAll() : setIsOpen(true))}
+            aria-label={isOpen ? "Close menu" : "Open menu"}
             aria-expanded={isOpen}
-            className={`grid h-10 w-10 place-items-center rounded-full transition-colors ${onDark ? "text-white hover:bg-white/10" : "text-gray-700 hover:bg-gray-100"}`}
+            aria-controls="mobile-nav"
+            className={`grid h-11 w-11 place-items-center rounded-full transition-colors ${onDark ? "text-white hover:bg-white/10" : "text-gray-700 hover:bg-gray-100"}`}
           >
-            <Menu className="h-6 w-6" />
+            <span className="relative h-6 w-6" aria-hidden="true">
+              <Menu className={`absolute inset-0 h-6 w-6 transition duration-200 ease-out ${isOpen ? "scale-75 rotate-90 opacity-0" : ""}`} />
+              <X className={`absolute inset-0 h-6 w-6 transition duration-200 ease-out ${isOpen ? "" : "scale-75 -rotate-90 opacity-0"}`} />
+            </span>
           </button>
         </div>
       </nav>
 
-      {/* Mobile drawer */}
-      <AnimatePresence>
-        {isOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden">
+      {/*
+        Mobile navigation: a sheet that slides down out of the header. The clip box starts at
+        the header's bottom edge, so the sheet appears from underneath the bar and never
+        extends past the viewport (100dvh avoids the mobile address-bar jump).
+      */}
+      <div className="pointer-events-none absolute inset-x-0 top-[calc(100%+1px)] h-[calc(100dvh-4rem-1px)] overflow-hidden lg:hidden">
+        <AnimatePresence>
+          {isOpen && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={closeAll}
-              className="absolute inset-0 bg-gray-950/50 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="absolute inset-y-0 right-0 flex h-dvh w-[85%] max-w-sm flex-col bg-white shadow-2xl"
+              id="mobile-nav"
+              ref={drawerRef}
+              {...sheetMotion(reduceMotion)}
+              className="pointer-events-auto max-h-full overflow-y-auto overscroll-contain border-b border-gray-200/80 bg-white shadow-[0_18px_36px_-18px_rgb(15_23_42/0.25)]"
             >
-              <div className="flex h-16 items-center justify-between border-b border-gray-100 px-5">
-                <Logo />
-                <button
-                  onClick={closeAll}
-                  aria-label="Close menu"
-                  className="grid h-10 w-10 place-items-center rounded-full text-gray-700 hover:bg-gray-100"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
+              <nav aria-label="Main navigation" className="container-page pt-2 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+                <ul className="-mx-3 divide-y divide-gray-100">
+                  {navLinks.map((link) => {
+                    if (!link.menu) {
+                      return (
+                        <li key={link.name} className="py-1">
+                          <NavLink to={link.path} end={link.path === "/"} onClick={closeAll} className={({ isActive }) => sheetRowClass(isActive)}>
+                            {link.name}
+                          </NavLink>
+                        </li>
+                      );
+                    }
 
-              <div className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
-                {navLinks.map((link) => {
-                  if (!link.menu) {
+                    // Tapping a section only expands it; the sheet stays open
+                    const open = expanded === link.menu;
                     return (
-                      <NavLink key={link.name} to={link.path} end={link.path === "/"} onClick={closeAll} className={drawerLinkClass}>
-                        {link.name}
-                      </NavLink>
-                    );
-                  }
-
-                  const open = expanded === link.menu;
-                  return (
-                    <div key={link.name}>
-                      <button
-                        type="button"
-                        onClick={() => toggleSection(link.menu)}
-                        aria-expanded={open}
-                        className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-base font-semibold transition-colors ${
-                          isSectionActive(link) ? "text-brand-600" : "text-gray-700"
-                        } hover:bg-gray-50`}
+                      <li
+                        key={link.name}
+                        className="py-1"
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape" && open) {
+                            e.stopPropagation();
+                            setExpanded(null);
+                            e.currentTarget.querySelector('button')?.focus();
+                          }
+                        }}
                       >
-                        {link.name}
-                        <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
-                      </button>
-                      <AnimatePresence initial={false}>
-                        {open && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2, ease: "easeOut" }}
-                            className="overflow-hidden"
-                          >
-                            <div className="ml-3 border-l border-gray-100 pl-2">
-                              {link.menu === "properties" ? (
-                                <PropertyPreviewList previews={previews} onNavigate={closeAll} />
-                              ) : (
-                                listingLinks.map((sublink) => (
-                                  <NavLink
-                                    key={sublink.path}
-                                    to={sublink.path}
-                                    onClick={closeAll}
-                                    className={({ isActive }) =>
-                                      `block rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${
-                                        isActive ? "bg-brand-50 text-brand-600" : "text-gray-600 hover:bg-gray-50"
-                                      }`
-                                    }
-                                  >
-                                    {sublink.name}
-                                  </NavLink>
-                                ))
-                              )}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  );
-                })}
+                        <button
+                          type="button"
+                          onClick={() => toggleSection(link.menu)}
+                          aria-expanded={open}
+                          aria-controls={`mobile-nav-menu-${link.menu}`}
+                          className={sheetRowClass(isSectionActive(link))}
+                        >
+                          {link.name}
+                          <ChevronDown aria-hidden="true" className={`h-5 w-5 text-gray-400 transition-transform duration-200 ease-out ${open ? "rotate-180 text-gray-600" : ""}`} />
+                        </button>
+                        <AnimatePresence initial={false}>
+                          {open && (
+                            <motion.div id={`mobile-nav-menu-${link.menu}`} {...accordionMotion(reduceMotion)} className="overflow-hidden">
+                              <div className="ml-3 border-l border-gray-100 pt-1 pb-2 pl-2">
+                                {link.menu === "properties" ? (
+                                  <PropertyCategoryMenu categories={categories} onNavigate={closeAll} compact />
+                                ) : (
+                                  <FindPropertyLinks links={listingLinks} onNavigate={closeAll} compact />
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </li>
+                    );
+                  })}
+                  <li className="py-1">
+                    <NavLink to="/account/saved" onClick={closeAll} className={({ isActive }) => sheetRowClass(isActive)}>
+                      <span className="flex items-center gap-3">
+                        <Heart aria-hidden="true" className="h-5 w-5 text-gray-400" />
+                        Wishlist
+                      </span>
+                      {favorites.length > 0 && <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700 tabular-nums">{favorites.length}</span>}
+                    </NavLink>
+                  </li>
+                </ul>
 
-                <div className="my-3 border-t border-gray-100" />
-                <Link
-                  to="/account/saved"
-                  onClick={closeAll}
-                  className="flex items-center justify-between rounded-xl px-3 py-3 text-base font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-                >
-                  <span className="flex items-center gap-3">
-                    <Heart className="h-5 w-5 text-gray-400" />
-                    Wishlist
-                  </span>
-                  {favorites.length > 0 && (
-                    <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand-600">{favorites.length}</span>
-                  )}
-                </Link>
-              </div>
-
-              {!isAuthenticated && (
-                <div className="grid gap-3 border-t border-gray-100 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={() => {
-                        closeAll();
-                        onAuth("login");
-                      }}
-                      className="btn btn-light w-full"
-                    >
+                {!isAuthenticated && (
+                  <div className="mt-3 grid grid-cols-2 gap-3 border-t border-gray-100 pt-4">
+                    <button type="button" onClick={() => { closeAll(); onAuth("login"); }} className="btn btn-primary w-full py-3 shadow-none">
                       Sign In
                     </button>
-                    <button
-                      onClick={() => {
-                        closeAll();
-                        onAuth("signup");
-                      }}
-                      className="btn btn-light w-full"
-                    >
+                    <button type="button" onClick={() => { closeAll(); onAuth("signup"); }} className="btn btn-light w-full py-3">
                       Create Account
                     </button>
                   </div>
-                </div>
-              )}
+                )}
+              </nav>
             </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
+      </div>
     </header>
   );
 };
+
+// The navigation and every menu in it share one page scrim
+const Navbar = (props) => (
+  <ScrimProvider>
+    <NavbarContent {...props} />
+  </ScrimProvider>
+);
 
 export default Navbar;

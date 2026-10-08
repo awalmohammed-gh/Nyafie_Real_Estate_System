@@ -30,7 +30,7 @@ const toForm = (property, user, contact) => {
   if (!property) {
     return {
       title: "", description: "", type: "", listingType: "Sale", price: "", rentPeriod: "month",
-      neighbourhood: "", city: "", region: "Greater Accra", address: "",
+      neighbourhood: "", city: "", region: "Greater Accra", address: "", country: "Ghana", digitalAddress: "", latitude: "", longitude: "",
       bedrooms: "", bathrooms: "", area: "", amenities: [], availability: "Available",
       contactName: contact?.name ?? user.name, contactPhone: contact?.phone ?? (user.phone || ""), contactEmail: contact?.email ?? user.email,
     };
@@ -47,6 +47,10 @@ const toForm = (property, user, contact) => {
     city: location.city,
     region: location.region,
     address: location.address,
+    country: location.country || "Ghana",
+    digitalAddress: location.digitalAddress || "",
+    latitude: location.latitude ?? "",
+    longitude: location.longitude ?? "",
     bedrooms: String(d.bedrooms ?? ""),
     bathrooms: String(d.bathrooms ?? ""),
     area: String(d.size?.value ?? ""),
@@ -170,6 +174,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
 
   const [form, setForm] = useState(() => {
     const initial = toForm(existing, user, isAdminEditor ? platformContact : null);
+    if (!isAdminEditor) Object.assign(initial, { contactName: user.name, contactPhone: user.phone || "", contactEmail: user.email });
     if (!existing && !rentPeriods.includes(initial.rentPeriod)) initial.rentPeriod = rentPeriods[0];
     return initial;
   });
@@ -202,7 +207,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
         title={copy.title}
         description={copy.description}
         cta={copy.cta}
-        to={user.subscription ? `/agent/checkout?plan=${user.subscription.planId}` : "/agent/plans"}
+        to={user.subscription ? `/agent/subscription/checkout?plan=${user.subscription.planId}` : "/agent/subscription/plans"}
       />
     );
   }
@@ -236,6 +241,10 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
 
   const validate = (mode) => {
     const e = {};
+    for (const [key, min, max] of [["latitude", -90, 90], ["longitude", -180, 180]]) {
+      if (form[key] !== "" && (!Number.isFinite(Number(form[key])) || Number(form[key]) < min || Number(form[key]) > max)) e[key] = `Enter a value between ${min} and ${max}.`;
+    }
+    if ((form.latitude === "") !== (form.longitude === "")) e.latitude = "Provide both coordinates or leave both empty.";
     if (form.title.trim().length < 3) e.title = "Give the property a title (at least 3 characters).";
     if (mode === "publish") {
       if (form.description.trim().length < 30) e.description = "Describe the property in at least 30 characters.";
@@ -267,7 +276,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
       title: form.title.trim(),
       description: form.description.trim(),
       pricing,
-      location: { name: form.neighbourhood.trim(), city: form.city.trim(), region: form.region, address: form.address.trim() },
+      location: { name: form.neighbourhood.trim(), city: form.city.trim(), region: form.region, address: form.address.trim(), country: form.country.trim(), digitalAddress: form.digitalAddress.trim(), latitude: form.latitude === "" ? null : Number(form.latitude), longitude: form.longitude === "" ? null : Number(form.longitude) },
       property: {
         type: form.type || "Apartment",
         status: form.listingType,
@@ -383,7 +392,8 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
       )}
 
       {/* Progress on small screens (the checklist sits beside the form on large ones) */}
-      <div className="sticky top-14 z-20 -mx-4 mb-6 border-b border-gray-200 bg-gray-50/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:hidden">
+      {!isAdminEditor && <nav aria-label="Listing sections" className="workspace-toolbar mb-6"><div className="flex items-center justify-between gap-3"><p className="workspace-eyebrow">Build your listing</p><span className="text-xs text-gray-500">{readyCount} of {checklist.length} ready</span></div><div className="mt-3 flex gap-2 overflow-x-auto pb-1">{checklist.map((c, index) => <button key={c.id} type="button" onClick={() => jumpTo(c.id)} className={`inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${c.done ? "border-brand-200 bg-brand-50 text-brand-700" : "border-gray-200 bg-white text-gray-500"}`}><span className="grid h-4 w-4 place-items-center">{c.done ? <Check className="h-3 w-3" /> : index + 1}</span>{c.label}</button>)}</div></nav>}
+      <div className="sticky top-14 z-20 -mx-4 mb-6 border-b border-gray-200 bg-gray-50/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 xl:hidden">
         <div className="flex items-center justify-between text-xs">
           <span className="font-medium text-gray-700">Ready to publish</span>
           <span className="text-gray-500 tabular-nums">{readyCount} of {checklist.length}</span>
@@ -393,7 +403,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
         </div>
       </div>
 
-      <form onSubmit={(e) => e.preventDefault()} className="grid gap-8 pb-28 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]" noValidate>
+      <form onSubmit={(e) => e.preventDefault()} className="grid gap-8 pb-28 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]" noValidate>
         <div className="min-w-0 space-y-10">
           {/* 01 What are you listing */}
           <Chapter id="chapter-basics" number={next()} title="What are you listing?" description="Customers filter by these first.">
@@ -481,7 +491,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
           <Chapter id="chapter-price" number={next()} title={form.listingType === "Sale" ? "Asking price" : "Rent"} description={form.listingType === "Sale" ? "Buyers can make offers below or above this." : "Tenants pay this online when their rental is confirmed."}>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
               <div className="flex-1">
-                <label htmlFor="price-input" className="text-sm font-medium text-gray-700">Price in Ghana cedi</label>
+                <label htmlFor="price-input" className="text-sm font-medium text-gray-700">{form.listingType === "Sale" ? "Asking price" : "Rental amount"} in Ghana cedi (GHS)</label>
                 <div className={`mt-1.5 flex items-center overflow-hidden rounded-xl border bg-white focus-within:ring-4 ${errors.price ? "border-red-300 focus-within:ring-red-500/10" : "border-gray-200 focus-within:border-brand-500 focus-within:ring-brand-500/10"}`}>
                   <span className="pl-4 text-2xl font-semibold text-gray-400">₵</span>
                   <input
@@ -520,7 +530,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
           )}
 
           {/* 05 Location */}
-          <Chapter id="chapter-location" number={next()} title="Where is it?" description="Customers see the neighbourhood and city. The street address is only shared once you're in touch.">
+          <Chapter id="chapter-location" number={next()} title="Where is it?" description="These details appear publicly on the listing. Add coordinates to show the property's map location.">
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
               <Field label="Street address" error={errors.address} className="sm:col-span-2">
                 <input {...inputProps("address")} placeholder="e.g. 12 Palm Street" />
@@ -533,11 +543,16 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
               </Field>
               <Field label="Region">
                 <select {...bind("region")} className="field mt-1.5">
+                  {form.region && !REGIONS.includes(form.region) && <option value={form.region}>{form.region}</option>}
                   {REGIONS.map((r) => (
                     <option key={r}>{r}</option>
                   ))}
                 </select>
               </Field>
+              <Field label="Country"><input {...inputProps("country")} maxLength={100} /></Field>
+              <Field label="GhanaPost GPS / digital address (optional)"><input {...inputProps("digitalAddress")} maxLength={30} placeholder="e.g. GA-123-4567" /></Field>
+              <Field label="Latitude (optional)" error={errors.latitude}><input {...inputProps("latitude")} type="number" step="any" min={-90} max={90} /></Field>
+              <Field label="Longitude (optional)" error={errors.longitude}><input {...inputProps("longitude")} type="number" step="any" min={-180} max={180} /></Field>
             </div>
           </Chapter>
 
@@ -600,23 +615,24 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
           </Chapter>
 
           {/* 07 Contact */}
-          <Chapter id="chapter-contact" number={next()} title="Who customers contact" description="Shown on the listing so buyers and tenants can reach you.">
+          <Chapter id="chapter-contact" number={next()} title="Who customers contact" description={isAdminEditor ? "Shown on the listing so buyers and tenants can reach you." : "Your agent profile is linked automatically. Update your contact details in your profile."}>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
               <Field label="Contact name">
-                <input {...bind("contactName")} className="field mt-1.5" />
+                <input {...bind("contactName")} readOnly={!isAdminEditor} className="field mt-1.5" />
               </Field>
               <Field label="Phone" error={errors.contactPhone}>
-                <input {...inputProps("contactPhone")} type="tel" />
+                <input {...inputProps("contactPhone")} readOnly={!isAdminEditor} type="tel" />
               </Field>
               <Field label="Email" error={errors.contactEmail}>
-                <input {...inputProps("contactEmail")} type="email" />
+                <input {...inputProps("contactEmail")} readOnly={!isAdminEditor} type="email" />
               </Field>
             </div>
+            {!isAdminEditor && <Link to="/agent/settings" className="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-brand-600">Manage your agent profile</Link>}
           </Chapter>
         </div>
 
         {/* Live listing card + checklist */}
-        <aside className="hidden lg:block">
+        <aside className="hidden xl:block">
           <div className="sticky top-20 space-y-4">
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
               <p className="flex items-center gap-1.5 border-b border-gray-100 px-4 py-2.5 text-xs font-medium text-gray-500">

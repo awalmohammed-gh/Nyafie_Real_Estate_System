@@ -1,20 +1,28 @@
 import jwt from "jsonwebtoken";
 
-const WEEK = 7 * 24 * 60 * 60 * 1000;
+export const SESSION_ROLES = Object.freeze({ customer: "user", agent: "agent", admin: "admin" });
+export const cookieName = (session) => {
+  if (!Object.hasOwn(SESSION_ROLES, session)) throw new Error("Unknown session domain");
+  return session + "_token";
+};
+const cookieOptions = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  path: "/",
+});
 
-// Signs a JWT and stores it in an HTTP-only cookie (never readable by frontend JS)
-export const setAuthCookie = (res, userId) => {
-  const token = jwt.sign({ id: userId }, process.env.JWT_KEY, { expiresIn: "7d" });
-  const production = process.env.NODE_ENV === "production";
-  res.cookie("token", token, {
-    httpOnly: true,
-    secure: production,
-    sameSite: production ? "none" : "lax",
-    maxAge: WEEK,
+// Admin sessions are short-lived: the console holds the most power. Customers and agents stay signed in for a week.
+const HOUR = 60 * 60 * 1000;
+const SESSION_LIFETIME = Object.freeze({ customer: 7 * 24 * HOUR, agent: 7 * 24 * HOUR, admin: 12 * HOUR });
+
+// Both the signed claims and cookie identify a single session domain.
+export const setAuthCookie = (res, userId, session) => {
+  const name = cookieName(session);
+  const lifetime = SESSION_LIFETIME[session];
+  const token = jwt.sign({ id: String(userId), role: SESSION_ROLES[session], session }, process.env.JWT_KEY, {
+    algorithm: "HS256", expiresIn: Math.floor(lifetime / 1000),
   });
+  res.cookie(name, token, { ...cookieOptions(), maxAge: lifetime });
 };
-
-export const clearAuthCookie = (res) => {
-  const production = process.env.NODE_ENV === "production";
-  res.clearCookie("token", { httpOnly: true, secure: production, sameSite: production ? "none" : "lax" });
-};
+export const clearAuthCookie = (res, session) => res.clearCookie(cookieName(session), cookieOptions());

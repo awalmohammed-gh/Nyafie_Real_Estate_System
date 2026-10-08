@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Building, Building2, CreditCard, HandCoins, Inbox, KeyRound, LayoutDashboard, MessageCircle, LifeBuoy, PlusSquare, Settings, UserCircle } from "lucide-react";
+import { Building, Building2, CreditCard, HandCoins, Inbox, KeyRound, LayoutDashboard, MessageCircle, LifeBuoy, PlusSquare, Settings } from "lucide-react";
 import { useUnreadMessages } from "../hooks/useUnreadMessages";
 import { useAgent } from "../hooks/useAgent";
 import { useRealEstate } from "../context/useRealEstate";
@@ -12,24 +12,25 @@ import AccountMenu from "../components/account/AccountMenu";
 import NotificationBell from "../components/ui/NotificationBell";
 import SubscriptionBanner from "../components/agent/SubscriptionBanner";
 import SidebarAccount from "../components/dashboard/SidebarAccount";
+import "../pages/agent/workspace.css";
 
 // Built around the agent's day: their listings and customers first, then requests, account and help.
-// Only routes that exist for agents (Profile and Settings are shared account pages).
+// Each item points to an agent workspace route or the public support page.
 const groups = [
   {
-    label: "Main",
+    label: "Workspace",
     items: [
       { label: "Overview", to: "/agent/dashboard", icon: LayoutDashboard },
       // Includes a property's own page, but not "Add Property"
       { label: "My Properties", to: "/agent/properties", icon: Building2, match: (l) => l.pathname.startsWith("/agent/properties") && l.pathname !== "/agent/properties/add" },
       { label: "Add Property", to: "/agent/properties/add", icon: PlusSquare, end: true },
-      { label: "Offers", to: "/agent/offers", icon: HandCoins, badge: "offers" },
-      { label: "Inquiries", to: "/agent/inquiries", icon: Inbox, badge: "inquiries" },
     ],
   },
   {
-    label: "Requests",
+    label: "Customers",
     items: [
+      { label: "Inquiries", to: "/agent/inquiries", icon: Inbox, badge: "inquiries" },
+      { label: "Offers", to: "/agent/offers", icon: HandCoins, badge: "offers" },
       { label: "Rental Requests", to: "/agent/rentals", icon: KeyRound, badge: "rentals" },
       { label: "Sale Requests", to: "/agent/sale-requests", icon: Building, badge: "sales" },
       { label: "Messages", to: "/agent/messages", icon: MessageCircle, badge: "messages" },
@@ -39,8 +40,7 @@ const groups = [
     label: "Account",
     items: [
       { label: "Subscription", to: "/agent/subscription", icon: CreditCard },
-      { label: "Profile", to: "/account/profile", icon: UserCircle },
-      { label: "Settings", to: "/account/settings", icon: Settings },
+      { label: "Settings", to: "/agent/settings", icon: Settings },
     ],
   },
   {
@@ -61,7 +61,7 @@ const PlanSummary = () => {
         {plan?.name || user.subscription?.planName || "No"} plan
       </p>
       <p className="mt-0.5 text-[11px] text-gray-500">
-        {isSuspended ? "Account suspended" : isActive ? `${subscription.daysRemaining} days left · ${permissions.activeCount}/${permissions.propertyLimit} listings` : "Renew to restore your listings"}
+        {isSuspended ? "Account suspended" : isActive ? `${user.subscription ? `${subscription.daysRemaining} days left · ` : ""}${permissions.activeCount}/${permissions.propertyLimit} listings` : "Renew to restore your listings"}
       </p>
     </Link>
   );

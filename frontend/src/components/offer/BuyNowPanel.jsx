@@ -6,14 +6,12 @@ import WhatsAppIcon from "../ui/WhatsAppIcon";
 import { useAuth } from "../../context/useAuth";
 import { saleRequestApi } from "../../frontApi";
 import { getPriceParts } from "../../utils/property";
-import { usePlatform } from "../../context/usePlatform";
 
 // Buy Now (sale properties). Two ways forward:
 //  A. make an offer or chat with the owner to negotiate
 //  B. submit a purchase request at the asking price
 // No payment happens online: the owner sends instructions and the customer pays at the office.
 const BuyNowPanel = ({ property, ownerName, whatsappLink, onChat }) => {
-  const { siteName } = usePlatform();
   const { user } = useAuth();
   const [form, setForm] = useState({ fullName: user?.name || "", email: user?.email || "", phone: user?.phone || "", message: "" });
   const [error, setError] = useState("");
@@ -49,7 +47,7 @@ const BuyNowPanel = ({ property, ownerName, whatsappLink, onChat }) => {
         <p className="mt-5 flex items-start gap-3 rounded-2xl bg-amber-50 p-4 text-left text-sm text-amber-900">
           <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
           <span>
-            <strong className="font-semibold">Please do not make any payment until you receive confirmation.</strong> Payment for a property purchase is made at the {siteName} office, following the instructions you'll receive.
+            <strong className="font-semibold">This records your interest and does not complete a sale.</strong> Agree on the final amount, viewing, documents and payment arrangements directly with {ownerName}.
           </span>
         </p>
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -71,7 +69,7 @@ const BuyNowPanel = ({ property, ownerName, whatsappLink, onChat }) => {
           <HandCoins className="h-5 w-5 text-brand-500" />
           Want to negotiate first?
         </h2>
-        <p className="mt-1 text-sm text-gray-600">Make an offer below the asking price, or talk to {ownerName} about the property.</p>
+        <p className="mt-1 text-sm text-gray-600">Propose your price, or talk to {ownerName} about the property.</p>
         <div className={`mt-4 grid gap-2 ${whatsappLink ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           <Link to={`/make-offer/${property.id}`} className="btn btn-primary px-3">
             <HandCoins className="h-4 w-4" />
@@ -97,7 +95,7 @@ const BuyNowPanel = ({ property, ownerName, whatsappLink, onChat }) => {
           Submit a purchase request
         </h2>
         <p className="-mt-2 text-sm text-gray-500">
-          Request to buy at the asking price of <span className="font-semibold text-gray-900">{price}</span>. Your details are filled in from your account.
+          Register interest in this listing. The asking price is <span className="font-semibold text-gray-900">{price}</span>; the final amount is agreed with the agent or owner.
         </p>
         <label className="block text-sm">
           <span className="mb-1.5 block font-medium text-gray-700">Full name</span>
@@ -121,7 +119,7 @@ const BuyNowPanel = ({ property, ownerName, whatsappLink, onChat }) => {
         </label>
         <p className="flex items-start gap-2 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
-          No payment is taken online. Payment is made at the office after {ownerName} confirms your request.
+          No purchase payment is taken online. {ownerName} will discuss the sale and payment arrangements with you.
         </p>
         {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
         <button type="submit" disabled={sending} className="btn btn-primary w-full py-4 text-base">

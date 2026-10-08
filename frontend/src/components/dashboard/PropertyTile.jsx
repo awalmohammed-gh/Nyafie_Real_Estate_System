@@ -25,7 +25,7 @@ const PropertyTile = ({ property: p, status, owner, metrics, actions, onOpen, in
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, delay: Math.min(index, 8) * 0.03, ease: "easeOut" }}
-      className="group relative flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white transition-shadow hover:shadow-md hover:shadow-gray-900/5"
+      className="group relative flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white glass-hover [--glass-shadow:0_8px_24px_-12px_rgb(17_24_39/0.16)] has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-brand-500"
     >
       <div className="relative aspect-16/10 overflow-hidden bg-gray-100">
         {image ? (

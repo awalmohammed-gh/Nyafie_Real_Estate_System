@@ -200,6 +200,7 @@ export const PaymentsTab = () => {
 const NOTIFICATIONS = [
   { key: "newUsers", label: "New accounts", description: "Someone signs up." },
   { key: "propertyReviews", label: "Listings to review", description: "An agent submits a listing for approval." },
+  { key: "customerReviews", label: "Customer reviews", description: "A customer rates or reviews a property." },
   { key: "offers", label: "Offers", description: "Offers made or withdrawn on admin listings." },
   { key: "rentals", label: "Rental requests", description: "New rental requests on admin listings." },
   { key: "sales", label: "Purchase requests", description: "New or cancelled purchase requests on admin listings." },

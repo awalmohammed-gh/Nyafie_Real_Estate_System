@@ -9,7 +9,7 @@ const AdminStat = ({ icon: Icon, label, value, change, changeLabel = "vs last 30
     <>
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-medium text-gray-500">{label}</p>
-        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${toneClass}`}>
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${toneClass}`} aria-hidden="true">
           <Icon className="h-4.5 w-4.5" />
         </span>
       </div>
@@ -36,9 +36,9 @@ const AdminStat = ({ icon: Icon, label, value, change, changeLabel = "vs last 30
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: index * 0.03, duration: 0.2 }}>
       {to ? (
-        <Link to={to} className="block h-full rounded-lg bg-white p-5 ring-1 ring-slate-200 transition-colors hover:bg-gray-50">{content}</Link>
+        <Link to={to} className="admin-card block h-full p-4 transition-colors hover:border-gray-300 sm:p-5">{content}</Link>
       ) : (
-        <div className="h-full rounded-lg bg-white p-5 ring-1 ring-slate-200">{content}</div>
+        <div className="admin-card h-full p-4 sm:p-5">{content}</div>
       )}
     </motion.div>
   );

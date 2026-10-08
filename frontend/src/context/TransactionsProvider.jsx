@@ -18,6 +18,9 @@ export const TransactionsProvider = ({ scope, children }) => {
   const [data, setData] = useState({ offers: [], rentals: [], sales: [] });
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [error, setError] = useState("");
+  const updateTransaction = useCallback((kind, updated) => {
+    setData((current) => ({ ...current, [kind]: current[kind].map((item) => item.id === updated.id ? updated : item) }));
+  }, []);
 
   // State only changes in the promise callbacks, after the requests finish
   const reload = useCallback(
@@ -49,6 +52,7 @@ export const TransactionsProvider = ({ scope, children }) => {
       loading: status === "loading",
       error: status === "error" ? error : "",
       reload,
+      updateTransaction,
       // What needs a response from the owner side
       pending: {
         offers: offers.filter((o) => o.status === "Pending").length,
@@ -57,7 +61,7 @@ export const TransactionsProvider = ({ scope, children }) => {
         officePayments: sales.filter((s) => s.statusKey === "payment_pending").length,
       },
     };
-  }, [data, status, error, reload]);
+  }, [data, status, error, reload, updateTransaction]);
 
   return <TransactionsContext.Provider value={value}>{children}</TransactionsContext.Provider>;
 };

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useBlocker, useSearchParams } from "react-router-dom";
-import { Bell, Building2, CreditCard, Globe, Palette, Phone, Search, UserRound, Users } from "lucide-react";
+import { Bell, Building2, CreditCard, Globe, Images, Palette, Phone, Search, UserRound, Users } from "lucide-react";
 import { usePlatform } from "../../context/usePlatform";
 import { UnsavedContext } from "../../hooks/useSettingsForm";
 import AdminPageTitle from "../../components/admin/AdminPageTitle";
@@ -8,11 +8,13 @@ import { Callout } from "../../components/admin/settings/SettingsUI";
 import { BrandingTab, GeneralTab, SeoTab } from "./settings/SiteTabs";
 import { AgentsTab, ContactTab, NotificationsTab, PaymentsTab, PropertyTab } from "./settings/BusinessTabs";
 import { AccountTab } from "./settings/AccountTab";
+import { HeroTab } from "./settings/HeroTab";
 
 const SECTIONS = [
   { group: "Website", items: [
     { id: "general", label: "General", icon: Globe, Tab: GeneralTab },
     { id: "branding", label: "Branding", icon: Palette, Tab: BrandingTab },
+    { id: "hero", label: "Homepage Hero", icon: Images, Tab: HeroTab },
     { id: "seo", label: "SEO & URLs", icon: Search, Tab: SeoTab },
     { id: "contact", label: "Contact & Business", icon: Phone, Tab: ContactTab },
   ] },
@@ -36,11 +38,13 @@ const AdminSettings = () => {
   const [params, setParams] = useSearchParams();
   const [unsaved] = useState(() => new Set());
   const active = ALL.find((s) => s.id === params.get("tab")) || ALL[0];
+  // Sections stay mounted once opened, so unsaved edits survive switching between them
+  const [visited, setVisited] = useState(() => new Set([active.id]));
+  const mounted = visited.has(active.id) ? visited : new Set([...visited, active.id]);
 
   const open = (id) => {
     if (id === active.id) return;
-    if (unsaved.size && !window.confirm(LEAVE_MESSAGE)) return;
-    unsaved.clear();
+    setVisited((prev) => new Set(prev).add(id));
     setParams({ tab: id }, { replace: true });
   };
 
@@ -66,7 +70,6 @@ const AdminSettings = () => {
     document.querySelector("[data-settings-tab][aria-current]")?.scrollIntoView({ block: "nearest", inline: "center" });
   }, [active.id]);
 
-  const { Tab } = active;
 
   return (
     <UnsavedContext.Provider value={unsaved}>
@@ -98,8 +101,8 @@ const AdminSettings = () => {
                           onClick={() => open(id)}
                           data-settings-tab
                           aria-current={isActive ? "page" : undefined}
-                          className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
-                            isActive ? "bg-white text-gray-900 shadow-sm ring-1 ring-slate-200" : "text-gray-600 hover:bg-slate-100 hover:text-gray-900"
+                          className={`flex min-h-10 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap ring-1 transition-[background-color,color,box-shadow] duration-250 ease-out ${
+                            isActive ? "bg-white text-gray-900 shadow-sm ring-slate-200" : "text-gray-600 ring-transparent hover:bg-white/70 hover:text-gray-900 hover:shadow-sm hover:ring-slate-200/70 focus-visible:bg-white/70 focus-visible:text-gray-900"
                           }`}
                         >
                           <Icon className={`h-4 w-4 ${isActive ? "text-brand-600" : "text-gray-400"}`} />
@@ -115,7 +118,11 @@ const AdminSettings = () => {
         </nav>
 
         <div className="min-w-0">
-          <Tab key={active.id} />
+          {ALL.filter((section) => mounted.has(section.id)).map(({ id, Tab }) => (
+            <div key={id} hidden={id !== active.id}>
+              <Tab />
+            </div>
+          ))}
         </div>
       </div>
     </UnsavedContext.Provider>

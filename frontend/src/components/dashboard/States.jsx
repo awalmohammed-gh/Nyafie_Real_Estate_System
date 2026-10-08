@@ -27,21 +27,21 @@ export const TableSkeleton = ({ rows = 6, columns = 5 }) => (
 export const DashboardSkeleton = () => (
   <div aria-busy="true" aria-label="Loading">
     <div className="mb-6 space-y-2">
-      <span className="block h-6 w-48 animate-pulse rounded bg-gray-200/70" />
-      <span className="block h-3.5 w-72 animate-pulse rounded bg-gray-200/60" />
+      <span className="block h-3 w-32 animate-pulse rounded bg-gray-200/70" />
+      <span className="block h-6 w-56 animate-pulse rounded bg-gray-200/70" />
+      <span className="block h-3.5 w-72 max-w-full animate-pulse rounded bg-gray-200/60" />
     </div>
-    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-100 lg:grid-cols-4">
+    <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
       {Array.from({ length: 4 }, (_, i) => (
-        <div key={i} className="space-y-2 bg-white px-5 py-4">
-          <span className="block h-2.5 w-20 animate-pulse rounded bg-gray-100" />
-          <span className="block h-6 w-12 animate-pulse rounded bg-gray-100" />
+        <div key={i} className="admin-card space-y-3 p-4 sm:p-5">
+          <span className="block h-3 w-24 animate-pulse rounded bg-gray-100" />
+          <span className="block h-7 w-20 animate-pulse rounded bg-gray-100" />
+          <span className="block h-2.5 w-36 animate-pulse rounded bg-gray-100" />
         </div>
       ))}
     </div>
-    <div className="mt-6 grid gap-6 lg:grid-cols-3">
-      <div className="h-64 animate-pulse rounded-xl border border-gray-200 bg-white lg:col-span-2" />
-      <div className="h-64 animate-pulse rounded-xl border border-gray-200 bg-white" />
-    </div>
+    <div className="admin-card mt-6 h-40 animate-pulse" />
+    <div className="admin-card mt-6 h-96 animate-pulse" />
   </div>
 );
 

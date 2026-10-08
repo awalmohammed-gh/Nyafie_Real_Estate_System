@@ -4,6 +4,7 @@ import { readStorage, writeStorage } from "../utils/storage";
 import { RealEstateContext } from "./realEstateContext";
 import { useAuth } from "./useAuth";
 import { propertyApi, agentApi, adminApi, inquiryApi, userApi } from "../frontApi";
+import { canAccessAgent } from "../utils/sessionDomain";
 
 const GUEST_FAVORITES_KEY = "homebase:favorites";
 
@@ -13,7 +14,7 @@ const GUEST_FAVORITES_KEY = "homebase:favorites";
 //  - inquiries:  sent (customers), received (agents) or all (admins)
 export const RealEstateProvider = ({ children }) => {
   const { user, users, refreshUser } = useAuth();
-  const role = user?.role;
+  const role = user?.role === "agent" && !canAccessAgent(user) ? undefined : user?.role;
   const userId = user?.id;
 
   const [properties, setProperties] = useState([]);
@@ -65,8 +66,8 @@ export const RealEstateProvider = ({ children }) => {
   }, [userId, refreshListings, refreshInquiries]);
 
   useEffect(() => {
-    if (userId) userApi.getSavedProperties().then(setSavedIds).catch(() => {});
-  }, [userId]);
+    if (userId && role === "user") userApi.getSavedProperties().then(setSavedIds).catch(() => {});
+  }, [userId, role]);
 
   useEffect(() => void writeStorage(GUEST_FAVORITES_KEY, guestFavorites), [guestFavorites]);
 

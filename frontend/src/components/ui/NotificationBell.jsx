@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { Bell, Building, CheckCheck, ClipboardCheck, CreditCard, HandCoins, KeyRound, MessageCircle, RefreshCw, UserPlus } from "lucide-react";
+import { Bell, Building, CheckCheck, ClipboardCheck, CreditCard, HandCoins, KeyRound, MessageCircle, RefreshCw, Star, UserPlus } from "lucide-react";
 import { notificationApi } from "../../frontApi";
+import { useScrim } from "../../hooks/useScrim";
 import { timeAgo } from "../../utils/date";
 
 const POLL_MS = 30000;
-const ICONS = { message: MessageCircle, offer: HandCoins, rental: KeyRound, sale: Building, payment: CreditCard, status: RefreshCw, user: UserPlus, review: ClipboardCheck };
+const ICONS = { message: MessageCircle, offer: HandCoins, rental: KeyRound, sale: Building, payment: CreditCard, status: RefreshCw, user: UserPlus, review: ClipboardCheck, customer_review: Star };
 
 // In-app notifications for the signed-in account (customers, agents and admins)
 // onDark: white icon for the transparent navbar over a hero
@@ -15,6 +16,7 @@ const NotificationBell = ({ className = "", onDark = false }) => {
   const [data, setData] = useState({ items: [], unread: 0 });
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
+  useScrim(open, () => setOpen(false)); // page blur on the public site (no-op in the dashboards)
 
   const load = useCallback(() => notificationApi.getNotifications().then(setData).catch(() => {}), []);
 
@@ -83,7 +85,7 @@ const NotificationBell = ({ className = "", onDark = false }) => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.97 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="absolute top-full right-0 z-50 mt-3 w-[min(22rem,calc(100vw-2rem))] origin-top-right overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 shadow-gray-900/10 ring-gray-100"
+            className="absolute top-full right-0 z-50 mt-3 w-[min(22rem,calc(100vw-2rem))] origin-top-right overflow-hidden rounded-2xl glass-panel shadow-2xl ring-1 shadow-gray-900/10 ring-gray-100"
           >
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
               <p className="font-semibold text-gray-900">Notifications</p>
@@ -97,7 +99,7 @@ const NotificationBell = ({ className = "", onDark = false }) => {
             {data.items.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-gray-500">You're all caught up.</p>
             ) : (
-              <ul className="max-h-96 overflow-y-auto">
+              <ul className="max-h-96 overflow-y-auto overscroll-contain">
                 {data.items.map((item) => {
                   const Icon = ICONS[item.type] || Bell;
                   return (

@@ -35,8 +35,38 @@ export const defaultSettings = {
   },
   agent: { requireSubscription: true, defaultPlan: "" },
   payments: { rentalsEnabled: true, subscriptionsEnabled: true },
+  // Homepage hero slides, shown in this order. Built-in images live in frontend/public/hero;
+  // uploaded ones are Cloudinary URLs. Titles may wrap one phrase in *asterisks* for the serif accent.
+  hero: {
+    slides: [
+      {
+        id: "modern-living", active: true, image: "/hero/modern-living.jpg", position: "center",
+        label: "Modern living", title: "Light-filled homes made for *everyday* living.",
+        description: "Open-plan apartments and modern homes with room to breathe, in neighbourhoods close to everything you need.",
+        primaryText: "View apartments", primaryLink: "/properties?type=Apartment", secondaryText: "Browse all homes", secondaryLink: "/listings",
+      },
+      {
+        id: "furnished-bedroom", active: true, image: "/hero/furnished-bedroom.jpg", position: "center",
+        label: "Ready to move in", title: "Furnished rentals, ready *when you are.*",
+        description: "Settle in from day one with fully furnished homes on monthly terms. Just bring your suitcase.",
+        primaryText: "Browse rentals", primaryLink: "/rent", secondaryText: "", secondaryLink: "",
+      },
+      {
+        id: "heritage-villa", active: true, image: "/hero/heritage-villa.jpg", position: "center",
+        label: "Homes with character", title: "Heritage homes with a *story* to tell.",
+        description: "Grand verandas, shuttered windows and gardens to gather in. Find a house worth staying in for generations.",
+        primaryText: "View homes for sale", primaryLink: "/sale", secondaryText: "Talk to our team", secondaryLink: "/contact",
+      },
+      {
+        id: "resort-pool", active: true, image: "/hero/resort-pool.jpg", position: "center",
+        label: "Short stays", title: "Resort-style living, *by the night.*",
+        description: "Serviced hotel apartments with pools, palms and everything taken care of, for holidays, work trips or a little time away.",
+        primaryText: "Explore short stays", primaryLink: "/properties?type=Hotel-Apartment", secondaryText: "", secondaryLink: "",
+      },
+    ],
+  },
   // In-app notifications for the admin team (the bell in the admin console)
-  notifications: { newUsers: true, propertyReviews: true, offers: true, rentals: true, sales: true, payments: true, messages: true },
+  notifications: { newUsers: true, propertyReviews: true, customerReviews: true, offers: true, rentals: true, sales: true, payments: true, messages: true },
 };
 
 // A single settings document managed from the admin console

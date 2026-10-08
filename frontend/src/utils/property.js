@@ -2,10 +2,11 @@ export const getPrice = (property) =>
   property.pricing.amount || property.pricing.perMonth || property.pricing.perNight || 0;
 
 export const getPriceParts = (property) => {
-  const { amount, perMonth, perNight } = property.pricing;
-  if (amount) return { value: `₵${amount.toLocaleString()}`, period: "" };
-  if (perNight) return { value: `₵${perNight.toLocaleString()}`, period: "/night" };
-  return { value: `₵${(perMonth || 0).toLocaleString()}`, period: "/month" };
+  const { amount, perMonth, perNight, currency = "GHS" } = property.pricing;
+  const prefix = currency === "GHS" ? "₵" : `${currency} `;
+  if (amount != null) return { value: `${prefix}${amount.toLocaleString()}`, period: "" };
+  if (perNight != null) return { value: `${prefix}${perNight.toLocaleString()}`, period: "/night" };
+  return { value: `${prefix}${(perMonth || 0).toLocaleString()}`, period: "/month" };
 };
 
 export const formatPrice = (property) => {
@@ -30,7 +31,7 @@ export const buildAgents = (properties) => {
   const map = new Map();
   properties.forEach((property) => {
     // HomeBase (admin) listings are shown as the platform, not as an agent
-    if (!property.agent || property.agent.id === "homebase") return;
+    if (!property.agent || property.owner?.type !== "agent" || ["Sold", "Rented"].includes(property.listing?.availability)) return;
     if (!map.has(property.agent.id)) map.set(property.agent.id, { ...property.agent, properties: [] });
     map.get(property.agent.id).properties.push(property);
   });
@@ -57,11 +58,11 @@ export const mergeAgents = (directory, properties) => {
   const withListings = new Map(buildAgents(properties).map((a) => [String(a.id), a]));
   if (!directory) return [...withListings.values()];
   const empty = { rating: null, saleCount: 0, rentCount: 0, views: 0, locations: [], properties: [] };
-  return directory.map((d) => ({ ...empty, ...withListings.get(d.id), id: d.id, name: d.name, phone: d.phone, email: d.email, joinedAt: d.joinedAt }));
+  return directory.map((d) => ({ ...empty, ...withListings.get(d.id), ...d }));
 };
 
 // "East Legon, Accra", but just "Kumasi" when the neighbourhood is the city
-export const formatLocation = ({ name, city }) => (name === city ? name : `${name}, ${city}`);
+export const formatLocation = ({ name, city }) => [...new Set([name, city].filter(Boolean))].join(", ");
 
 export const LISTING_STATE_LABELS = {
   draft: "Draft",

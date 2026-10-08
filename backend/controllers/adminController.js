@@ -11,6 +11,8 @@ import Payment from "../models/Payment.js";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import Notification from "../models/Notification.js";
+import Review from "../models/Review.js";
+import { syncPropertyRating } from "../utils/reviews.js";
 import Setting, { getSettings } from "../models/Setting.js";
 import { validateSection } from "../utils/settingsValidation.js";
 import { paymentStatus } from "../utils/paystack.js";
@@ -22,34 +24,6 @@ import { activateSubscription } from "./subscriptionController.js";
 import { ok, fail } from "../utils/response.js";
 
 const DAY = 24 * 60 * 60 * 1000;
-
-// ---------- Dashboard ----------
-
-// GET /api/admin/dashboard
-export const dashboard = async (_req, res) => {
-  const [users, properties, inquiries, subscriptions] = await Promise.all([
-    User.find({ role: { $ne: "admin" } }).populate("subscription").select("role isActive subscription createdAt"),
-    Property.find().select("status ownerType owner"),
-    Inquiry.countDocuments(),
-    Subscription.find().select("status paymentStatus amount expiresAt"),
-  ]);
-  const agents = users.filter((u) => u.role === "agent");
-  const agentStates = agents.map((a) => subscriptionState(a.subscription).status);
-
-  ok(res, {
-    totalUsers: users.length,
-    totalAgents: agents.length,
-    activeAgents: agents.filter((a, i) => a.isActive && agentStates[i] === "active").length,
-    expiredAgents: agentStates.filter((s) => s === "expired").length,
-    totalProperties: properties.length,
-    publishedProperties: properties.filter((p) => p.status === "published").length,
-    pendingProperties: properties.filter((p) => p.status === "pending").length,
-    totalInquiries: inquiries,
-    activeSubscriptions: agentStates.filter((s) => s === "active").length,
-    expiredSubscriptions: agentStates.filter((s) => s === "expired").length,
-    revenue: subscriptions.filter((s) => s.paymentStatus === "paid").reduce((sum, s) => sum + s.amount, 0),
-  });
-};
 
 // ---------- Users ----------
 
@@ -87,8 +61,10 @@ export const updateUser = async (req, res) => {
   const user = await User.findById(req.params.id).catch(() => null);
   if (!user) return fail(res, 404, "User not found.");
   const { firstName, lastName, email, phone } = req.body;
+  const invalidText = (value, max) => value !== undefined && (typeof value !== "string" || value.trim().length > max);
+  if (invalidText(firstName, 80) || invalidText(lastName, 80) || invalidText(phone, 30)) return fail(res, 400, "Check the name and phone fields.");
   if (email !== undefined) {
-    if (!/^\S+@\S+\.\S+$/.test(email)) return fail(res, 400, "Enter a valid email address.");
+    if (typeof email !== "string" || email.length > 254 || !/^\S+@\S+\.\S+$/.test(email)) return fail(res, 400, "Enter a valid email address.");
     if (await User.exists({ email: email.toLowerCase(), _id: { $ne: user._id } })) return fail(res, 409, "Another account already uses this email.");
     user.email = email;
   }
@@ -104,6 +80,8 @@ export const setUserStatus = async (req, res) => {
   const user = await User.findById(req.params.id).catch(() => null);
   if (!user) return fail(res, 404, "User not found.");
   if (user.role === "admin") return fail(res, 403, "Admin accounts can't be suspended.");
+  if (!["active", "suspended"].includes(req.body.status)) return fail(res, 400, "Choose active or suspended.");
+  if (user.role === "agent") return fail(res, 400, "Manage agent approval and suspension from Agent Applications.");
   user.isActive = req.body.status !== "suspended";
   await user.save();
   ok(res, user, user.isActive ? "User activated" : "User suspended");
@@ -120,6 +98,7 @@ export const deleteUser = async (req, res) => {
   // successful payments and accepted offers (they appear as "Deleted user").
   const id = user._id;
   const conversations = await Conversation.find({ customer: id }).select("_id");
+  const reviewed = await Review.distinct("property", { user: id });
   await Promise.all([
     Offer.deleteMany({ customer: id, status: { $ne: "accepted" } }),
     Rental.deleteMany({ customer: id, paymentStatus: { $ne: "paid" } }),
@@ -129,7 +108,9 @@ export const deleteUser = async (req, res) => {
     Conversation.deleteMany({ customer: id }),
     Inquiry.deleteMany({ customer: id }),
     Notification.deleteMany({ recipient: id }),
+    Review.deleteMany({ user: id }),
   ]);
+  await Promise.all(reviewed.map((propertyId) => syncPropertyRating(propertyId)));
   await user.deleteOne();
   ok(res, null, "User deleted");
 };
@@ -142,7 +123,7 @@ const newReference = () => `HB-ADM-${Date.now().toString(36).toUpperCase()}-${cr
 export const manageSubscription = async (req, res) => {
   const { action, planId, days } = req.body;
   const user = await User.findById(req.params.id).populate("subscription").catch(() => null);
-  if (!user || user.role === "admin") return fail(res, 404, "Agent not found.");
+  if (!user || user.role !== "agent") return fail(res, 404, "Agent not found.");
   const current = user.subscription;
 
   if (action === "changePlan") {

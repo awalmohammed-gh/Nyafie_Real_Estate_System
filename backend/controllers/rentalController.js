@@ -56,7 +56,17 @@ export const addHistory = (doc, user, note = "") => doc.history.push({ status: d
 const parseDay = (value) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return null;
   const date = new Date(`${value}T00:00:00Z`);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? null : date;
+};
+
+// Charge whole calendar months, rounding only a partial final month up.
+// A year selected in checkout costs 12 months rather than ceil(365 / 30) = 13.
+export const rentalMonths = (start, end) => {
+  const months = (end.getUTCFullYear() - start.getUTCFullYear()) * 12 + end.getUTCMonth() - start.getUTCMonth();
+  const anniversary = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + months, 1));
+  const lastDay = new Date(Date.UTC(anniversary.getUTCFullYear(), anniversary.getUTCMonth() + 1, 0)).getUTCDate();
+  anniversary.setUTCDate(Math.min(start.getUTCDate(), lastDay));
+  return Math.max(1, months + (anniversary < end ? 1 : 0));
 };
 
 export const toDay = (date) => new Date(date).toISOString().slice(0, 10);
@@ -74,7 +84,8 @@ const todayUTC = () => {
 export const quoteRental = async ({ propertyId, startDate: start, endDate: end }, user) => {
   const property = await loadPublishedProperty(propertyId);
   if (!property) return { status: 404, error: "This property is not available." };
-  if (property.listingType !== "Rent") return { status: 400, error: "This property is for sale. Use Buy Now or Make Offer instead." };
+  if (property.listingType !== "Rent") return { status: 400, error: "This property is for sale. Contact the listing agent or make an offer instead." };
+  if (property.currency !== "GHS") return { status: 400, error: "Online rental payments support GHS only. Contact the agent to arrange this rental." };
   if (property.availability !== "Available") return { status: 400, error: "This property is not available for rent right now." };
   if (isOwnListing(property, user)) return { status: 400, error: "This is your own listing." };
 
@@ -98,7 +109,7 @@ export const quoteRental = async ({ propertyId, startDate: start, endDate: end }
   });
   if (clash) return { status: 409, error: "This property is already rented or booked for some of those dates. Try different dates." };
 
-  const units = property.pricePeriod === "night" ? days : property.pricePeriod === "month" ? Math.max(1, Math.ceil(days / 30)) : 1;
+  const units = property.pricePeriod === "night" ? days : property.pricePeriod === "month" ? rentalMonths(startDate, endDate) : 1;
   const fees = 0; // no rental fees are configured on the platform
   return { property, startDate, endDate, days, units, fees, amount: units * property.price + fees };
 };

@@ -1,11 +1,11 @@
 import mongoose from "mongoose";
 import Conversation from "../models/Conversation.js";
 import Message, { MAX_MESSAGE_LENGTH } from "../models/Message.js";
-import Property from "../models/Property.js";
 import Offer from "../models/Offer.js";
 import { notifyOwner, notifyUser } from "../utils/notify.js";
 import { ok, fail } from "../utils/response.js";
 import { siteName } from "../models/Setting.js";
+import { loadPublishedProperty } from "../utils/ownership.js";
 
 const same = (a, b) => a && b && String(a._id || a) === String(b._id || b);
 
@@ -150,8 +150,8 @@ export const createConversation = async (req, res) => {
   if (error) return fail(res, 400, error);
   if (!mongoose.isValidObjectId(req.body.propertyId)) return fail(res, 404, "Property not found.");
 
-  const property = await Property.findById(req.body.propertyId);
-  if (!property || property.status !== "published") return fail(res, 404, "This property is not available.");
+  const property = await loadPublishedProperty(req.body.propertyId);
+  if (!property) return fail(res, 404, "This property is not available.");
   if (same(property.owner, req.user) || (property.ownerType === "admin" && req.user.role === "admin")) {
     return fail(res, 400, "This is your own listing.");
   }

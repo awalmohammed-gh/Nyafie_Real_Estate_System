@@ -67,6 +67,7 @@ const AdminAgents = () => {
   const count = (fn) => agents.filter(fn).length;
 
   const actionsFor = (a) => [
+    { label: "View application", icon: Eye, onClick: () => navigate(`/admin/agent-applications?open=${a.id}`) },
     { label: "View agent", icon: Eye, onClick: () => setOpen(a.id) },
     { label: "Edit agent", icon: Pencil, onClick: () => setEditing(a) },
     { label: "Change plan", icon: Repeat, onClick: () => setSubAction({ type: "changePlan", agent: a }) },
@@ -77,7 +78,7 @@ const AdminAgents = () => {
     { label: "View inquiries", icon: Inbox, onClick: () => navigate(`/admin/inquiries?agent=${a.id}`) },
     a.status === "suspended"
       ? { label: "Activate agent", icon: CheckCircle2, onClick: () => setConfirm({ type: "activate", agent: a }) }
-      : { label: "Suspend agent", icon: Ban, danger: true, onClick: () => setConfirm({ type: "suspend", agent: a }) },
+      : { label: "Suspend agent", icon: Ban, danger: true, hidden: a.agentApplication?.status !== "approved", onClick: () => setConfirm({ type: "suspend", agent: a }) },
   ];
 
   const subBadge = (a) => <StatusBadge status={a.sub.statusLabel} tone={{ active: "green", expiring: "amber", expired: "red", cancelled: "gray", pending: "amber", none: "gray" }[a.sub.status]} />;
@@ -118,7 +119,7 @@ const AdminAgents = () => {
       align: "right",
       render: (a) => <span className={`tabular-nums ${newInquiries(a) ? "font-semibold text-amber-700" : "text-gray-500"}`}>{newInquiries(a)}</span>,
     },
-    { key: "account", header: "Account", render: (a) => <StatusBadge status={a.status === "suspended" ? "Suspended" : "Active"} tone={a.status === "suspended" ? "red" : "green"} /> },
+    { key: "account", header: "Application", render: (a) => <StatusBadge status={a.status === "suspended" ? "Suspended" : a.agentApplication?.status ? a.agentApplication.status.charAt(0).toUpperCase() + a.agentApplication.status.slice(1) : "Incomplete"} /> },
     { key: "actions", header: <span className="sr-only">Actions</span>, align: "right", render: (a) => <ActionMenu actions={actionsFor(a)} label={`Actions for ${a.name}`} /> },
   ];
 
@@ -209,7 +210,7 @@ const AdminAgents = () => {
           <div className="space-y-6">
             <div className="flex flex-wrap gap-2">
               {subBadge(viewed)}
-              <StatusBadge status={viewed.status === "suspended" ? "Suspended" : "Account active"} tone={viewed.status === "suspended" ? "red" : "green"} />
+              <StatusBadge status={viewed.status === "suspended" ? "Suspended" : viewed.agentApplication?.status ? viewed.agentApplication.status.charAt(0).toUpperCase() + viewed.agentApplication.status.slice(1) : "Incomplete"} />
             </div>
 
             <div className="grid grid-cols-3 divide-x divide-gray-100 rounded-lg border border-gray-200 text-center">
@@ -295,7 +296,7 @@ const AdminAgents = () => {
               )}
               {viewed.status === "suspended" ? (
                 <button onClick={() => setConfirm({ type: "activate", agent: viewed })} className="btn btn-light"><CheckCircle2 className="h-4 w-4" />Activate agent</button>
-              ) : (
+              ) : viewed.agentApplication?.status === "approved" && (
                 <button onClick={() => setConfirm({ type: "suspend", agent: viewed })} className="btn btn-light text-red-600"><Ban className="h-4 w-4" />Suspend agent</button>
               )}
             </div>

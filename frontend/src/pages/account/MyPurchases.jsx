@@ -66,7 +66,7 @@ const MyPurchases = () => {
         <EmptyState
           icon={Building}
           title="No purchase requests yet"
-          description="Open a property for sale and tap “Buy Now” to request to buy it."
+          description="Open a property for sale to contact the listing agent, discuss the asking price or make an offer."
           action={<Link to="/sale" className="btn btn-primary">Browse properties for sale</Link>}
         />
       ) : (

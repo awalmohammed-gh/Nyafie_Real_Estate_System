@@ -26,8 +26,10 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
+import { useScrim } from "../../hooks/useScrim";
 import { useToast } from "../../context/useToast";
 import { getInitials } from "../../utils/property";
+import { canAccessAgent } from "../../utils/sessionDomain";
 
 const userItems = [
   { label: "My Profile", to: "/account/profile", icon: UserRound },
@@ -49,7 +51,7 @@ const adminItems = [
 ];
 
 const agentItems = [
-  { label: "My Profile", to: "/account/profile", icon: UserRound },
+  { label: "Settings", to: "/agent/settings", icon: Settings },
   { label: "Agent Dashboard", to: "/agent/dashboard", icon: LayoutDashboard },
   { label: "My Properties", to: "/agent/properties", icon: Building2 },
   { label: "Add Property", to: "/agent/properties/add", icon: PlusSquare },
@@ -59,7 +61,6 @@ const agentItems = [
   { label: "Sale Requests", to: "/agent/sale-requests", icon: Building },
   { label: "Messages", to: "/agent/messages", icon: MessageCircle },
   { label: "Subscription", to: "/agent/subscription", icon: CreditCard },
-  { label: "Settings", to: "/account/settings", icon: Settings },
 ];
 
 export const AgentBadge = ({ className = "" }) => (
@@ -101,17 +102,22 @@ const AccountMenu = ({ onAuth, compact = false, onDark = false }) => {
   }, [open]);
 
   const close = () => setOpen(false);
+  useScrim(open, close); // blurs the page behind it on the public site (no-op in the dashboards)
 
-  const handleLogout = () => {
-    close();
-    logout();
-    toast({ title: "You've been signed out", type: "info" });
-    if (pathname.startsWith("/account") || (pathname.startsWith("/agent/") && pathname !== "/agent/plans")) {
-      navigate("/");
+  const handleLogout = async () => {
+    try {
+      await logout();
+      close();
+      toast({ title: "You've been signed out", type: "info" });
+      if (pathname.startsWith("/account") || (pathname.startsWith("/agent/") && pathname !== "/agent/plans")) {
+        navigate(isAgent ? "/agent/login" : "/login");
+      }
+    } catch (error) {
+      toast({ title: "Could not sign out", description: error.message, type: "error" });
     }
   };
 
-  const items = isAdmin ? adminItems : isAgent ? agentItems : userItems;
+  const items = isAdmin ? adminItems : isAgent ? canAccessAgent(user) ? agentItems : [{ label: "Application status", to: "/agent/status", icon: ClipboardCheck }, { label: "Agent profile", to: "/agent/onboarding/profile", icon: UserRound }] : userItems;
 
   return (
     <div ref={containerRef} className="relative">
@@ -153,7 +159,7 @@ const AccountMenu = ({ onAuth, compact = false, onDark = false }) => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.97 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="absolute top-full right-0 z-50 mt-3 w-[min(18rem,calc(100vw-2rem))] origin-top-right overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 shadow-gray-900/10 ring-gray-100"
+            className="absolute top-full right-0 z-50 mt-3 w-[min(18rem,calc(100vw-2rem))] origin-top-right overflow-hidden rounded-2xl glass-panel shadow-2xl ring-1 shadow-gray-900/10 ring-gray-100"
           >
             {isAuthenticated ? (
               <>

@@ -13,6 +13,10 @@ export const subscribeToPlan = initializePayment;
 export const renewSubscription = initializePayment;
 export const changePlan = initializePayment;
 
-// The backend verifies the payment itself and returns the updated user
-export const verifyPayment = async (reference) => mapUser((await client.post("/subscriptions/verify", { reference })).data);
+// The backend verifies the payment itself and returns the updated user,
+// or { pending: true } while Paystack is still processing it
+export const verifyPayment = async (reference) => {
+  const data = (await client.post("/subscriptions/verify", { reference })).data;
+  return data?.paymentPending ? { pending: true, reference: data.reference } : mapUser(data);
+};
 export const cancelSubscription = async () => mapUser((await client.post("/subscriptions/cancel")).data);

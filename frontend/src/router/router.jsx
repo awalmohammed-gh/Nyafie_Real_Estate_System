@@ -1,8 +1,16 @@
 import {createBrowserRouter, createRoutesFromElements, Navigate, Route} from 'react-router-dom'
+import SessionLayout from '../layout/SessionLayout'
+import AdminLogin from '../pages/auth/AdminLogin'
 import SystemLayout from '../layout/SystemLayout'
 import AgentLayout from '../layout/AgentLayout'
+import OnboardingLayout from '../layout/OnboardingLayout'
 import RequireAuth from '../components/auth/RequireAuth'
 import RequireAgent from '../components/auth/RequireAgent'
+import RequireAgentSession from '../components/auth/RequireAgentSession'
+import OnboardingRedirect from '../components/auth/OnboardingRedirect'
+import Onboarding from '../pages/agent/Onboarding'
+import ApplicationStatus from '../pages/agent/ApplicationStatus'
+import AdminAgentApplications from '../pages/admin/AdminAgentApplications'
 import Home from '../pages/Home'
 import Contact from '../pages/Contact'
 import PropertiesDetails from '../pages/PropertiesDetails'
@@ -12,6 +20,7 @@ import AgentDetailsPage from '../pages/AgentDetailsPage'
 import NotFound from '../pages/NotFound'
 import AuthPage from '../pages/auth/AuthPage'
 import Profile from '../pages/account/Profile'
+import AgentProfile from '../pages/agent/Profile'
 import SavedProperties from '../pages/account/SavedProperties'
 import MyInquiries from '../pages/account/MyInquiries'
 import Settings from '../pages/account/Settings'
@@ -44,6 +53,7 @@ import AdminUsers from '../pages/admin/AdminUsers'
 import AdminAgents from '../pages/admin/AdminAgents'
 import AdminProperties from '../pages/admin/AdminProperties'
 import AdminInquiries from '../pages/admin/AdminInquiries'
+import AdminReviews from '../pages/admin/AdminReviews'
 import AdminSubscriptions from '../pages/admin/AdminSubscriptions'
 import AdminPlans from '../pages/admin/AdminPlans'
 import AdminReports from '../pages/admin/AdminReports'
@@ -52,7 +62,7 @@ import AdminPropertyEditor from '../pages/admin/AdminPropertyEditor'
 
 const router = createBrowserRouter(
     createRoutesFromElements(
-        <>
+        <Route element={<SessionLayout />}>
          <Route path='/' element={<SystemLayout />}>
             <Route index element={<Home />} />
             <Route path='house/:id' element={<PropertiesDetails />} />
@@ -64,12 +74,12 @@ const router = createBrowserRouter(
             {/* /properties, /listings, /agents (URLs set in Admin Settings) and /sale, /rent */}
             <Route path=':slug' element={<SlugPage />} />
             <Route path='agent/:id' element={<AgentDetailsPage />} />
+            <Route path='agents/:id' element={<AgentDetailsPage />} />
             <Route path='contact' element={<Contact />} />
 
-            {/* Becoming an agent: plans are public, checkout needs an account */}
+            {/* Becoming an agent: the plans page is public; onboarding has its own layout below */}
             <Route path='agent/plans' element={<Plans />} />
             <Route element={<RequireAuth />}>
-               <Route path='agent/checkout' element={<Checkout />} />
                <Route path='account/profile' element={<Profile />} />
                <Route path='account/saved' element={<SavedProperties />} />
                <Route path='account/inquiries' element={<MyInquiries />} />
@@ -85,9 +95,26 @@ const router = createBrowserRouter(
             <Route path='*' element={<NotFound />} />
          </Route>
 
+         {/* Agent onboarding: Account -> Profile -> Subscription -> Review, in a focused layout (no navbar or footer).
+             /agent/onboarding opens the step the server says is next */}
+         <Route element={<RequireAgentSession />}>
+            <Route element={<OnboardingLayout />}>
+               <Route path='agent/onboarding' element={<OnboardingRedirect />} />
+               <Route path='agent/onboarding/profile' element={<Onboarding />} />
+               <Route path='agent/onboarding/subscription' element={<Plans />} />
+               <Route path='agent/onboarding/plans' element={<Navigate to='/agent/onboarding/subscription' replace />} />
+               <Route path='agent/checkout' element={<Checkout />} />
+               <Route path='agent/status' element={<ApplicationStatus />} />
+            </Route>
+         </Route>
+
          {/* Full-screen auth pages (no navbar or footer) */}
          <Route path='login' element={<AuthPage mode="login" />} />
          <Route path='register' element={<AuthPage mode="signup" />} />
+
+         <Route path='agent/login' element={<AuthPage />} />
+         <Route path='agent/register' element={<AuthPage mode="signup" />} />
+         <Route path='admin/login' element={<AdminLogin />} />
 
          {/* Agent-only workspace */}
          <Route element={<RequireAgent />}>
@@ -103,6 +130,10 @@ const router = createBrowserRouter(
                <Route path='rentals' element={<AgentRentals />} />
                <Route path='sale-requests' element={<AgentSaleRequests />} />
                <Route path='messages' element={<AgentMessages />} />
+               <Route path='profile' element={<Navigate to='/agent/settings' replace />} />
+               <Route path='settings' element={<AgentProfile />} />
+               <Route path='subscription/plans' element={<Plans />} />
+               <Route path='subscription/checkout' element={<Checkout />} />
                <Route path='subscription' element={<Subscription />} />
             </Route>
          </Route>
@@ -114,8 +145,10 @@ const router = createBrowserRouter(
                <Route path='customers' element={<AdminUsers />} />
                <Route path='users' element={<Navigate to='/admin/customers' replace />} />
                <Route path='agents' element={<AdminAgents />} />
+               <Route path='agent-applications' element={<AdminAgentApplications />} />
                <Route path='properties' element={<AdminProperties />} />
                <Route path='inquiries' element={<AdminInquiries />} />
+               <Route path='reviews' element={<AdminReviews />} />
                <Route path='offers' element={<AdminOffers />} />
                <Route path='rentals' element={<AdminRentals />} />
                <Route path='sale-requests' element={<AdminSaleRequests />} />
@@ -129,7 +162,7 @@ const router = createBrowserRouter(
                <Route path='settings' element={<AdminSettings />} />
             </Route>
          </Route>
-        </>
+        </Route>
     )
 )
 

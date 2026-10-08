@@ -1,63 +1,24 @@
-import { Link } from 'react-router-dom';
-import { ArrowUpRight } from 'lucide-react';
+import { Link } from "react-router-dom";
+import { ArrowUpRight, MapPin } from "lucide-react";
 import { usePropertyFacets } from "../../hooks/usePropertyFacets";
-import SectionHeading from '../ui/SectionHeading';
-import Reveal from '../ui/Reveal';
 import { usePlatform } from "../../context/usePlatform";
-
-// Bento layout: the first tile is large, the rest fill in around it
-const tileClasses = [
-  "sm:col-span-2 sm:row-span-2",
-  "",
-  "",
-  "",
-  "",
-];
 
 const Neighbourhoods = () => {
   const { paths } = usePlatform();
   const facets = usePropertyFacets();
-  // Busiest areas first (already sorted by the server); hidden until there are listings
-  const neighbourhoods = (facets.data?.areas || []).slice(0, 5);
-  if (neighbourhoods.length === 0) return null;
+  const places = (facets.data?.areas || []).slice(0, 4);
+  if (!places.length) return null;
 
   return (
-    <section className="bg-gray-50 py-20 sm:py-28">
-      <div className="container-page">
-        <SectionHeading
-          eyebrow="Locations"
-          title="Explore by"
-          highlight="Neighbourhood"
-          description="From the calm of Aburi to the buzz of Airport City, find homes in the areas you love."
-        />
-
-        <div className="grid auto-rows-[13rem] gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:auto-rows-[15rem]">
-          {neighbourhoods.map((place, index) => (
-            <Reveal key={place.name} delay={index * 0.06} className={`h-full ${tileClasses[index] || ""}`}>
-              <Link
-                to={`${paths.properties}?area=${encodeURIComponent(place.name)}`}
-                className="group relative block h-full overflow-hidden rounded-3xl bg-gray-200"
-              >
-                <img
-                  src={place.image}
-                  alt={place.name}
-                  loading="lazy"
-                  className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-linear-to-t from-gray-950/80 via-gray-950/10 to-transparent" />
-                <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-5">
-                  <div>
-                    <h3 className="text-xl font-bold text-white">{place.name}</h3>
-                    <p className="text-sm text-gray-300">
-                      {place.city} · {place.count} {place.count === 1 ? "property" : "properties"}
-                    </p>
-                  </div>
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/15 text-white backdrop-blur transition group-hover:bg-white group-hover:text-gray-900">
-                    <ArrowUpRight className="h-5 w-5" />
-                  </span>
-                </div>
-              </Link>
-            </Reveal>
+    <section className="home-section home-places" aria-labelledby="places-heading">
+      <div className="container-page home-places-layout">
+        <div className="home-places-intro"><p className="home-eyebrow">02 / FIND YOUR CORNER</p><h2 id="places-heading" className="home-section-title">Love where<br />you <span className="home-serif">land.</span></h2><p>Start with a neighbourhood.<br />Discover the homes that put you there.</p><Link to={paths.listings} className="home-text-link">See every location <ArrowUpRight size={18} aria-hidden="true" /></Link><span className="home-places-coordinate"><MapPin size={15} aria-hidden="true" /> A place in Ghana. A place for you.</span></div>
+        <div className="home-places-grid">
+          {places.map((place, index) => (
+            <Link key={place.name} to={`${paths.listings}?area=${encodeURIComponent(place.name)}`} className="home-place" aria-label={`Explore ${place.name}: ${place.count} ${place.count === 1 ? "home" : "homes"}`}>
+              <div className="home-place-image">{place.image && <img src={place.image} alt={`A home in ${place.name}`} loading="lazy" decoding="async" />}<span className="home-place-number" aria-hidden="true">0{index + 1}</span><span className="home-place-open"><ArrowUpRight size={21} aria-hidden="true" /></span></div>
+              <div className="home-place-caption"><div><h3>{place.name}</h3><p>{place.city}</p></div><span>{place.count} {place.count === 1 ? "home" : "homes"}</span></div>
+            </Link>
           ))}
         </div>
       </div>
