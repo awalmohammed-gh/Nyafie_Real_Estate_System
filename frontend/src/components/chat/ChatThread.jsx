@@ -90,7 +90,7 @@ const ChatThread = ({ conversationId, onBack, onChanged }) => {
     );
   }
 
-  const { conversation, messages } = data;
+  const { conversation, messages, offer } = data;
   const isOwnerSide = conversation.side === "owner";
   const counterpart = isOwnerSide ? conversation.customer : conversation.owner;
   const closed = conversation.status === "closed";
@@ -111,6 +111,13 @@ const ChatThread = ({ conversationId, onBack, onChanged }) => {
           <Link to={`/house/${conversation.property.id}`} className="block truncate text-sm text-brand-600 hover:underline">
             {conversation.property.title}
           </Link>
+          {offer && (
+            <p className="truncate text-xs text-gray-500">
+              Offer: <span className="font-semibold text-gray-900">₵{offer.amount.toLocaleString()}</span>
+              {offer.counterAmount && offer.status === "countered" && ` · Counter ₵${offer.counterAmount.toLocaleString()}`}
+              {` · ${offer.status}`}
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {isOwnerSide && counterpart?.phone && (
@@ -138,7 +145,7 @@ const ChatThread = ({ conversationId, onBack, onChanged }) => {
       )}
 
       {/* Messages */}
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-gray-50/60 p-4">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-gray-50/60 p-4">
         {messages.map((m, i) => {
           const mine = m.senderId === user?.id;
           const newDay = i === 0 || new Date(m.createdAt).toDateString() !== new Date(messages[i - 1].createdAt).toDateString();

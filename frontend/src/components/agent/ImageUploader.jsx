@@ -7,7 +7,8 @@ import { createId } from "../../utils/crypto";
 const MAX_SIZE_MB = 10;
 
 // Image entries: { id, src, name, status: "uploading" | "done" | "error", progress, error }
-// Upload progress is simulated while the image is compressed locally, since no backend exists yet.
+// Photos are compressed in the browser first (the bar tracks that step); they are uploaded to
+// Cloudinary by the backend when the listing is saved, and only the URLs are stored in MongoDB.
 // max: photo limit from the agent's plan (via the permission system); limitNote explains it
 const ImageUploader = ({ images, setImages, error, max = 8, limitNote }) => {
   const MAX_IMAGES = max;
@@ -81,11 +82,11 @@ const ImageUploader = ({ images, setImages, error, max = 8, limitNote }) => {
           handleFiles(e.dataTransfer.files);
         }}
         disabled={full}
-        className={`flex w-full flex-col items-center rounded-2xl border-2 border-dashed px-6 py-10 text-center transition disabled:cursor-not-allowed disabled:opacity-50 ${
+        className={`flex w-full flex-col items-center rounded-lg border-2 border-dashed px-6 py-10 text-center transition disabled:cursor-not-allowed disabled:opacity-50 ${
           dragging ? "border-brand-500 bg-brand-50" : error ? "border-red-300 bg-red-50/40" : "border-gray-200 hover:border-brand-300 hover:bg-gray-50"
         }`}
       >
-        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-brand-50 text-brand-500">
+        <span className="grid h-12 w-12 place-items-center rounded-lg bg-brand-50 text-brand-500">
           <ImagePlus className="h-6 w-6" />
         </span>
         <span className="mt-4 text-sm font-semibold text-gray-900">
@@ -127,7 +128,7 @@ const ImageUploader = ({ images, setImages, error, max = 8, limitNote }) => {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className="group relative aspect-4/3 overflow-hidden rounded-2xl bg-gray-100 ring-1 ring-gray-200"
+                className="group relative aspect-4/3 overflow-hidden rounded-lg bg-gray-100 ring-1 ring-gray-200"
               >
                 {img.src && <img src={img.src} alt={img.name} className="h-full w-full object-cover" />}
 

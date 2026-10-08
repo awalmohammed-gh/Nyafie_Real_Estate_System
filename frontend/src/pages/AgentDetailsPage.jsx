@@ -1,142 +1,101 @@
-import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { motion } from "motion/react";
-import { ChevronRight, Eye, Home, Mail, MapPin, Phone, Star } from "lucide-react";
-import { useRealEstate } from "../context/useRealEstate";
-import HouseCard from "../components/card/HouseCard";
-import Reveal from "../components/ui/Reveal";
-import NotFound from "./NotFound";
-import PageLoader from "../components/ui/PageLoader";
-import { getInitials } from "../utils/property";
+import { useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { ArrowLeft, ArrowUpRight, BadgeCheck, Building2, ChevronRight, Mail, MapPin, Phone, Star } from 'lucide-react';
+import WhatsAppIcon from '../components/ui/WhatsAppIcon';
+import { toWhatsAppNumber } from '../utils/whatsapp';
+import { useRealEstate } from '../context/useRealEstate';
+import { usePlatform } from '../context/usePlatform';
+import AgentAvatar from '../components/agent/AgentAvatar';
+import HouseCard from '../components/card/HouseCard';
+import NotFound from './NotFound';
+import PageLoader from '../components/ui/PageLoader';
+import './agents.css';
+import './agent/workspace.css';
+import { propertyApi } from '../frontApi';
+import { useApiQuery } from '../hooks/useApiQuery';
+import SkeletonGrid from '../components/ui/SkeletonGrid';
 
-const tabs = [
-  { label: "All", value: "All" },
-  { label: "For Sale", value: "Sale" },
-  { label: "For Rent", value: "Rent" },
-];
+const CATEGORIES = [{ label: 'All homes', value: 'All' }, { label: 'For sale', value: 'Sale' }, { label: 'To rent', value: 'Rent' }];
+
+const AgentProfile = ({ agent }) => {
+  const { paths, siteName } = usePlatform();
+  const [category, setCategory] = useState('All');
+  const [page, setPage] = useState(1);
+  const result = useApiQuery(`agent-listings:${agent.id}:${category}:${page}`, () => propertyApi.searchProperties({ owner: agent.id, availability: ['Available', 'Under Offer'], listingType: category === 'All' ? undefined : category, page, limit: 12 }));
+  const listings = result.data?.items || [];
+  const areas = agent.locations.filter(Boolean);
+  const firstName = agent.name.split(' ')[0];
+
+  return (
+    <div className="agents-page agent-profile-page">
+      <header className="agent-profile-header">
+        <div className="container-page">
+          <nav aria-label="Breadcrumb" className="agents-breadcrumb">
+            <Link to="/">Home</Link><ChevronRight size={14} aria-hidden="true" /><Link to={paths.agents}>Agents</Link><ChevronRight size={14} aria-hidden="true" /><span aria-current="page">{agent.name}</span>
+          </nav>
+          <div className="agent-profile-heading">
+            <div className="agent-profile-identity">
+              <AgentAvatar name={agent.name} image={agent.profileImage} large />
+              <div><p className="agents-eyebrow">Your local connection</p><h1>{agent.name}</h1><p className="agent-profile-subtitle">{agent.agentType === 'agency' && agent.companyName ? agent.companyName : 'Independent real estate agent'}{agent.joinedAt ? ` · On ${siteName} since ${new Date(agent.joinedAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}` : ''}</p></div>
+            </div>
+            {agent.verified && <span className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-700"><BadgeCheck size={17} aria-hidden="true" />Approved agent</span>}
+            <Link to={paths.agents} className="agents-back-link"><ArrowLeft size={16} aria-hidden="true" />All agents</Link>
+          </div>
+          <dl className="agent-profile-stats">
+            {[{ value: agent.propertyCount, label: 'Homes listed' }, { value: agent.saleCount, label: 'For sale' }, { value: agent.rentCount, label: 'To rent' }, { value: areas.length, label: 'Neighbourhoods' }].map(({ value, label }) => <div key={label}><dt>{label}</dt><dd>{value.toLocaleString()}</dd></div>)}
+          </dl>
+        </div>
+      </header>
+
+      <div className="container-page agent-profile-layout">
+        <aside className="agent-contact-panel" aria-labelledby="agent-contact-title">
+          <p className="agents-eyebrow">Make the connection</p><h2 id="agent-contact-title">Let’s talk about home.</h2>
+          <p>Interested in a listing? Contact {firstName} directly to ask a question or arrange a viewing.</p>
+          <div className="agent-contact-actions">
+            {agent.phone && <a href={`tel:${agent.phone.replace(/[^\d+]/g, '')}`} className="agents-button agents-button-primary"><Phone size={17} aria-hidden="true" /><span>{agent.phone}</span></a>}
+            {agent.email && <a href={`mailto:${agent.email}`} className="agents-button agents-button-outline"><Mail size={17} aria-hidden="true" />Email {firstName}<ArrowUpRight size={16} aria-hidden="true" /></a>}
+            {toWhatsAppNumber(agent.whatsapp || agent.phone) && <a href={`https://wa.me/${toWhatsAppNumber(agent.whatsapp || agent.phone)}?text=${encodeURIComponent(`Hello ${agent.name}, I'd like to discuss your property listings on ${siteName}.`)}`} target="_blank" rel="noopener noreferrer" className="agents-button agents-button-outline"><WhatsAppIcon />WhatsApp {firstName}</a>}
+          </div>
+          <div className="agent-contact-areas">
+            <h3><MapPin size={16} aria-hidden="true" />Neighbourhoods with listings</h3>
+            {areas.length ? <ul>{areas.map((area) => <li key={area}>{area}</li>)}</ul> : <p>Neighbourhoods will appear with the first listing.</p>}
+          </div>
+          {agent.rating != null && <div className="agent-profile-rating"><Star size={18} aria-hidden="true" /><div><strong>{agent.rating.toFixed(1)} <span>/ 5</span></strong><p>Average rating across reviewed properties</p></div></div>}
+        </aside>
+
+        <section className="agent-profile-listings" aria-labelledby="agent-listings-title">
+          {(agent.bio || agent.city || agent.companyName) && <section className="agent-public-about" aria-labelledby="agent-about-title"><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h2 id="agent-about-title">About {firstName}</h2>{agent.agencyLogo && <img src={agent.agencyLogo} alt={`${agent.companyName || 'Agency'} logo`} className="h-12 w-12 rounded-lg object-contain" />}</div>{agent.bio && <p>{agent.bio}</p>}<div className="mt-4 flex flex-wrap gap-3 text-xs text-gray-500">{(agent.city || agent.region) && <span className="inline-flex items-center gap-1.5"><MapPin size={14} />{[agent.city, agent.region].filter(Boolean).join(', ')}</span>}{agent.yearsExperience > 0 && <span>{agent.yearsExperience} {agent.yearsExperience === 1 ? 'year' : 'years'} of experience</span>}</div></section>}
+          <div className="agents-section-heading"><div><p className="agents-eyebrow">Find your next place</p><h2 id="agent-listings-title">Homes with {firstName}</h2></div></div>
+          <div className="agent-profile-listing-toolbar">
+            <div className="agents-segments" role="group" aria-label="Filter homes by listing type">
+              {CATEGORIES.map(({ label, value }) => <button key={value} type="button" aria-pressed={category === value} className={category === value ? 'is-active' : ''} onClick={() => { setCategory(value); setPage(1); }}>{label} <span>{value === 'All' ? agent.propertyCount : value === 'Sale' ? agent.saleCount : agent.rentCount}</span></button>)}
+            </div>
+            <p role="status" aria-live="polite" aria-atomic="true">{result.loading ? 'Loading homes...' : `${result.data?.total || 0} homes`}</p>
+          </div>
+          {result.loading ? <SkeletonGrid count={3} /> : result.error ? <div role="alert" className="agents-empty"><p>{result.error}</p><button type="button" onClick={result.reload} className="agents-button agents-button-primary">Retry</button></div> : listings.length > 0 ? (
+            <div className="agent-homes-grid">{listings.map((property) => <HouseCard key={property.id} house={property} />)}</div>
+          ) : (
+            <div className="agents-empty">
+              <span className="agents-empty-icon"><Building2 size={27} aria-hidden="true" /></span>
+              <h3>{category === 'All' ? 'A new chapter is on the way.' : 'No homes in this category yet.'}</h3>
+              <p>{category === 'All' ? `${firstName} has no published homes right now. Get in touch to discuss what you’re looking for.` : 'Explore all homes or contact the agent about your search.'}</p>
+              {category !== 'All' && <button type="button" className="agents-button agents-button-primary" onClick={() => { setCategory('All'); setPage(1); }}>Explore all homes</button>}
+            </div>
+          )}
+          {result.data?.pages > 1 && <nav aria-label="Agent listings pages" className="mt-6 flex items-center justify-center gap-4"><button type="button" disabled={page === 1 || result.loading} onClick={() => setPage((current) => current - 1)} className="btn btn-light">Previous</button><span className="text-sm text-gray-600">Page {page} of {result.data.pages}</span><button type="button" disabled={page >= result.data.pages || result.loading} onClick={() => setPage((current) => current + 1)} className="btn btn-light">Next</button></nav>}
+        </section>
+      </div>
+    </div>
+  );
+};
 
 const AgentDetailsPage = () => {
   const { id } = useParams();
-  const { agents, propertiesLoading } = useRealEstate();
-  const [selectedCategory, setSelectedCategory] = useState("All");
-
+  const { agents, agentsLoading } = useRealEstate();
   const agent = agents.find((item) => item.id === id);
-
-  if (!agent && propertiesLoading) return <PageLoader label="Loading agent..." />;
-
-  if (!agent) {
-    return <NotFound message="We couldn't find this agent." />;
-  }
-
-  const listings = agent.properties.filter(
-    (p) => selectedCategory === "All" || p.property.status === selectedCategory
-  );
-
-  const stats = [
-    { icon: Home, label: "Listings", value: agent.properties.length },
-    { icon: Star, label: "Avg. rating", value: agent.rating ? agent.rating.toFixed(1) : "N/A" },
-    { icon: Eye, label: "Total views", value: agent.views.toLocaleString() },
-    { icon: MapPin, label: "Areas", value: agent.locations.length },
-  ];
-
-  return (
-    <>
-      {/* Profile header */}
-      <section className="relative isolate overflow-hidden bg-gray-950">
-        <div className="absolute inset-0 -z-10 bg-linear-to-br from-brand-700/60 via-gray-950 to-gray-950" />
-        <div className="absolute -top-32 -right-32 -z-10 h-96 w-96 rounded-full bg-brand-500/30 blur-3xl" />
-
-        <div className="container-page py-12 sm:py-16">
-          <nav aria-label="Breadcrumb" className="mb-8 flex items-center gap-1.5 text-sm text-gray-400">
-            <Link to="/" className="hover:text-white">Home</Link>
-            <ChevronRight className="h-3.5 w-3.5" />
-            <Link to="/agents" className="hover:text-white">Agents</Link>
-            <ChevronRight className="h-3.5 w-3.5" />
-            <span className="text-white">{agent.name}</span>
-          </nav>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between"
-          >
-            <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-              <span className="grid h-24 w-24 shrink-0 place-items-center rounded-3xl bg-white text-3xl font-extrabold text-brand-600 shadow-2xl">
-                {getInitials(agent.name)}
-              </span>
-              <div>
-                <p className="text-sm font-semibold tracking-wider text-brand-300 uppercase">Real Estate Agent</p>
-                <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">{agent.name}</h1>
-                <p className="mt-2 flex items-start gap-1.5 text-gray-300">
-                  <MapPin className="mt-1 h-4 w-4 shrink-0 text-brand-400" />
-                  {agent.locations.join(" · ")}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <a href={`tel:${agent.phone.replace(/\s+/g, "")}`} className="btn btn-primary">
-                <Phone className="h-4 w-4" />
-                {agent.phone}
-              </a>
-              <a href={`mailto:${agent.email}`} className="btn bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20">
-                <Mail className="h-4 w-4" />
-                Send email
-              </a>
-            </div>
-          </motion.div>
-
-          <dl className="mt-12 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {stats.map((stat) => (
-              <div key={stat.label} className="rounded-2xl bg-white/5 p-5 ring-1 ring-white/10">
-                <stat.icon className="h-5 w-5 text-brand-300" />
-                <dd className="mt-3 text-2xl font-extrabold text-white">{stat.value}</dd>
-                <dt className="text-sm text-gray-400">{stat.label}</dt>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </section>
-
-      {/* Listings */}
-      <section className="container-page py-14 sm:py-20">
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl">
-            Listings by {agent.name.split(" ")[0]}
-          </h2>
-          <div role="tablist" className="flex w-fit gap-1 rounded-full bg-gray-100 p-1.5">
-            {tabs.map((tab) => (
-              <button
-                key={tab.value}
-                role="tab"
-                aria-selected={selectedCategory === tab.value}
-                onClick={() => setSelectedCategory(tab.value)}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                  selectedCategory === tab.value ? "bg-white text-brand-600 shadow-sm" : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {listings.length > 0 ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {listings.map((property, index) => (
-              <Reveal key={property.id} delay={(index % 3) * 0.08} className="h-full">
-                <HouseCard house={property} />
-              </Reveal>
-            ))}
-          </div>
-        ) : (
-          <p className="rounded-3xl bg-gray-50 px-6 py-16 text-center text-gray-500">
-            {agent.name.split(" ")[0]} has no listings in this category right now.
-          </p>
-        )}
-      </section>
-    </>
-  );
+  if (!agent && agentsLoading) return <PageLoader label="Loading agent…" />;
+  if (!agent) return <NotFound message="We couldn't find this agent." />;
+  return <AgentProfile key={agent.id} agent={agent} />;
 };
 
 export default AgentDetailsPage;

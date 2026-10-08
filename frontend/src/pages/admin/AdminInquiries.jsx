@@ -8,10 +8,11 @@ import DataTable from "../../components/ui/DataTable";
 import FilterTabs from "../../components/ui/FilterTabs";
 import SearchInput from "../../components/ui/SearchInput";
 import StatusBadge from "../../components/ui/StatusBadge";
-import Modal from "../../components/ui/Modal";
+import SidePanel from "../../components/ui/SidePanel";
 import EmptyState from "../../components/ui/EmptyState";
 import { formatDate, formatRelative, isWithinDays } from "../../utils/date";
 import { formatPrice } from "../../utils/property";
+import { usePlatform } from "../../context/usePlatform";
 
 const STATUSES = ["New", "Contacted", "In Progress", "Closed"];
 const RANGES = [
@@ -22,6 +23,7 @@ const RANGES = [
 ];
 
 const AdminInquiries = () => {
+  const { siteName } = usePlatform();
   const { inquiries, agents, findProperty, updateInquiryStatus } = useAdminData();
   const run = useAsyncAction();
   const [params, setParams] = useSearchParams();
@@ -32,7 +34,7 @@ const AdminInquiries = () => {
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState(null);
 
-  const ownerName = (inq) => (inq.ownerType === "admin" ? "HomeBase" : agents.find((a) => a.id === inq.ownerId)?.name || "Deleted agent");
+  const ownerName = (inq) => (inq.ownerType === "admin" ? siteName : agents.find((a) => a.id === inq.ownerId)?.name || "Deleted agent");
 
   const scoped = inquiries
     .filter((i) => agentId === "all" || (agentId === "admin" ? i.ownerType === "admin" : i.ownerId === agentId))
@@ -87,7 +89,7 @@ const AdminInquiries = () => {
 
   return (
     <>
-      <AdminPageTitle title="Inquiries" description="All customer inquiries across HomeBase and agent listings." />
+      <AdminPageTitle title="Inquiries" description={`All customer inquiries across ${siteName} and agent listings.`} />
 
       <div className="mb-5 flex flex-col gap-3">
         <FilterTabs
@@ -107,17 +109,17 @@ const AdminInquiries = () => {
               setParams(next, { replace: true });
             }}
             aria-label="Filter by agent"
-            className="field rounded-full"
+            className="field py-2"
           >
             <option value="all">All agents</option>
-            <option value="admin">HomeBase (admin listings)</option>
+            <option value="admin">{siteName} (admin listings)</option>
             {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
-          <select value={propertyId} onChange={(e) => setPropertyId(e.target.value)} aria-label="Filter by property" className="field rounded-full">
+          <select value={propertyId} onChange={(e) => setPropertyId(e.target.value)} aria-label="Filter by property" className="field py-2">
             <option value="all">All properties</option>
             {propertyOptions.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
           </select>
-          <select value={range} onChange={(e) => setRange(e.target.value)} aria-label="Filter by date" className="field rounded-full">
+          <select value={range} onChange={(e) => setRange(e.target.value)} aria-label="Filter by date" className="field py-2">
             {RANGES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
         </div>
@@ -143,7 +145,7 @@ const AdminInquiries = () => {
         )}
       />
 
-      <Modal
+      <SidePanel
         open={Boolean(open)}
         onClose={() => setOpenId(null)}
         title={open ? `Inquiry from ${open.name}` : ""}
@@ -157,7 +159,7 @@ const AdminInquiries = () => {
       >
         {open && (
           <div className="space-y-5">
-            <dl className="grid grid-cols-1 gap-3 rounded-2xl bg-slate-50 p-4 text-sm sm:grid-cols-2">
+            <dl className="grid grid-cols-1 gap-3 rounded-lg bg-slate-50 p-4 text-sm sm:grid-cols-2">
               {[["Customer", open.name], ["Email", open.email], ["Phone", open.phone], ["Agent", ownerName(open)]].map(([label, value]) => (
                 <div key={label} className="min-w-0">
                   <dt className="text-gray-500">{label}</dt>
@@ -166,7 +168,7 @@ const AdminInquiries = () => {
               ))}
             </dl>
             {openProperty && (
-              <div className="flex items-center gap-3 rounded-2xl p-2 ring-1 ring-slate-200">
+              <div className="flex items-center gap-3 rounded-lg p-2 ring-1 ring-slate-200">
                 <img src={openProperty.media.images[0]} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-gray-900">{openProperty.title}</p>
@@ -174,7 +176,7 @@ const AdminInquiries = () => {
                 </div>
               </div>
             )}
-            <p className="rounded-2xl bg-brand-50/60 p-4 text-sm leading-relaxed whitespace-pre-line text-gray-700">{open.message}</p>
+            <p className="rounded-lg bg-brand-50/60 p-4 text-sm leading-relaxed whitespace-pre-line text-gray-700">{open.message}</p>
             <div>
               <p className="mb-2 text-sm font-semibold text-gray-900">Status</p>
               <div role="radiogroup" className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 sm:grid-cols-4">
@@ -193,7 +195,7 @@ const AdminInquiries = () => {
             </div>
           </div>
         )}
-      </Modal>
+      </SidePanel>
     </>
   );
 };

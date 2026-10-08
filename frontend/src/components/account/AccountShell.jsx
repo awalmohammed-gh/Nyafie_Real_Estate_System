@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Heart, MessageCircle, MessageSquare, Settings, UserRound } from "lucide-react";
+import { Building, HandCoins, Heart, KeyRound, MessageCircle, MessageSquare, Settings, UserRound } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { getInitials } from "../../utils/property";
 import { AgentBadge } from "./AccountMenu";
@@ -7,7 +7,10 @@ import { AgentBadge } from "./AccountMenu";
 const tabs = [
   { label: "Profile", to: "/account/profile", icon: UserRound },
   { label: "Saved", to: "/account/saved", icon: Heart },
-  { label: "Messages", to: "/account/messages", icon: MessageCircle },
+  { label: "Conversations", to: "/account/messages", icon: MessageCircle },
+  { label: "Offers", to: "/account/offers", icon: HandCoins },
+  { label: "Rentals", to: "/account/rentals", icon: KeyRound },
+  { label: "Purchases", to: "/account/purchases", icon: Building },
   { label: "Inquiries", to: "/account/inquiries", icon: MessageSquare },
   { label: "Settings", to: "/account/settings", icon: Settings },
 ];
@@ -15,6 +18,7 @@ const tabs = [
 // Shared header + tab navigation for the signed-in account pages
 const AccountShell = ({ title, description, children }) => {
   const { user, isAgent } = useAuth();
+  const accountTabs = isAgent ? tabs.filter((tab) => ["Profile", "Settings"].includes(tab.label)).map((tab) => ({ ...tab, to: tab.to.replace("/account/", "/agent/") })) : tabs;
 
   return (
     <div className="bg-gray-50 pb-16">
@@ -35,7 +39,7 @@ const AccountShell = ({ title, description, children }) => {
 
           <nav aria-label="Account" className="-mx-4 mt-6 overflow-x-auto px-4 no-scrollbar sm:mx-0 sm:px-0">
             <ul className="flex w-max gap-1">
-              {tabs.map((tab) => (
+              {accountTabs.map((tab) => (
                 <li key={tab.to}>
                   <NavLink
                     to={tab.to}

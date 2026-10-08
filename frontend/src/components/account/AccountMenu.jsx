@@ -4,10 +4,13 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle,
   BadgeCheck,
+  Building,
   Building2,
   ChevronDown,
   CreditCard,
+  HandCoins,
   Heart,
+  KeyRound,
   Inbox,
   LayoutDashboard,
   LogIn,
@@ -23,13 +26,18 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
+import { useScrim } from "../../hooks/useScrim";
 import { useToast } from "../../context/useToast";
 import { getInitials } from "../../utils/property";
+import { canAccessAgent } from "../../utils/sessionDomain";
 
 const userItems = [
   { label: "My Profile", to: "/account/profile", icon: UserRound },
   { label: "Saved Properties", to: "/account/saved", icon: Heart },
-  { label: "Messages", to: "/account/messages", icon: MessageCircle },
+  { label: "My Conversations", to: "/account/messages", icon: MessageCircle },
+  { label: "My Offers", to: "/account/offers", icon: HandCoins },
+  { label: "My Rentals", to: "/account/rentals", icon: KeyRound },
+  { label: "My Purchases", to: "/account/purchases", icon: Building },
   { label: "My Inquiries", to: "/account/inquiries", icon: MessageSquare },
   { label: "Become an Agent", to: "/agent/plans", icon: BadgeCheck, highlight: true, badge: "NEW" },
   { label: "Settings", to: "/account/settings", icon: Settings },
@@ -43,14 +51,16 @@ const adminItems = [
 ];
 
 const agentItems = [
-  { label: "My Profile", to: "/account/profile", icon: UserRound },
+  { label: "Settings", to: "/agent/settings", icon: Settings },
   { label: "Agent Dashboard", to: "/agent/dashboard", icon: LayoutDashboard },
   { label: "My Properties", to: "/agent/properties", icon: Building2 },
   { label: "Add Property", to: "/agent/properties/add", icon: PlusSquare },
   { label: "Property Inquiries", to: "/agent/inquiries", icon: Inbox },
+  { label: "Offers Received", to: "/agent/offers", icon: HandCoins },
+  { label: "Rental Requests", to: "/agent/rentals", icon: KeyRound },
+  { label: "Sale Requests", to: "/agent/sale-requests", icon: Building },
   { label: "Messages", to: "/agent/messages", icon: MessageCircle },
   { label: "Subscription", to: "/agent/subscription", icon: CreditCard },
-  { label: "Settings", to: "/account/settings", icon: Settings },
 ];
 
 export const AgentBadge = ({ className = "" }) => (
@@ -67,7 +77,8 @@ export const AdminBadge = ({ className = "" }) => (
   </span>
 );
 
-const AccountMenu = ({ onAuth, compact = false }) => {
+// onDark: light trigger for the transparent navbar over a hero (the dropdown itself stays white)
+const AccountMenu = ({ onAuth, compact = false, onDark = false }) => {
   const { user, isAuthenticated, isAgent, isAdmin, isActive, statusLabel, logout } = useAuth();
   const inactiveAgent = isAgent && !isActive;
   const { toast } = useToast();
@@ -91,17 +102,22 @@ const AccountMenu = ({ onAuth, compact = false }) => {
   }, [open]);
 
   const close = () => setOpen(false);
+  useScrim(open, close); // blurs the page behind it on the public site (no-op in the dashboards)
 
-  const handleLogout = () => {
-    close();
-    logout();
-    toast({ title: "You've been signed out", type: "info" });
-    if (pathname.startsWith("/account") || (pathname.startsWith("/agent/") && pathname !== "/agent/plans")) {
-      navigate("/");
+  const handleLogout = async () => {
+    try {
+      await logout();
+      close();
+      toast({ title: "You've been signed out", type: "info" });
+      if (pathname.startsWith("/account") || (pathname.startsWith("/agent/") && pathname !== "/agent/plans")) {
+        navigate(isAgent ? "/agent/login" : "/login");
+      }
+    } catch (error) {
+      toast({ title: "Could not sign out", description: error.message, type: "error" });
     }
   };
 
-  const items = isAdmin ? adminItems : isAgent ? agentItems : userItems;
+  const items = isAdmin ? adminItems : isAgent ? canAccessAgent(user) ? agentItems : [{ label: "Application status", to: "/agent/status", icon: ClipboardCheck }, { label: "Agent profile", to: "/agent/onboarding/profile", icon: UserRound }] : userItems;
 
   return (
     <div ref={containerRef} className="relative">
@@ -112,8 +128,8 @@ const AccountMenu = ({ onAuth, compact = false }) => {
         aria-expanded={open}
         aria-label={isAuthenticated ? `Account menu for ${user.name}` : "Account"}
         className={`flex items-center gap-2 rounded-full transition ${
-          isAuthenticated && !compact ? "py-1 pr-3 pl-1 hover:bg-gray-100" : ""
-        } ${open ? "bg-gray-100" : ""}`}
+          isAuthenticated && !compact ? `py-1 pr-3 pl-1 ${onDark ? "hover:bg-white/10" : "hover:bg-gray-100"}` : ""
+        } ${open ? (onDark ? "bg-white/15" : "bg-gray-100") : ""}`}
       >
         {isAuthenticated ? (
           <span className="relative grid h-10 w-10 place-items-center rounded-full bg-brand-500 text-sm font-bold text-white">
@@ -123,14 +139,14 @@ const AccountMenu = ({ onAuth, compact = false }) => {
             )}
           </span>
         ) : (
-          <span className="grid h-10 w-10 place-items-center rounded-full text-gray-700 ring-1 ring-gray-200 transition hover:bg-gray-100">
+          <span className={`grid h-10 w-10 place-items-center rounded-full ring-1 transition ${onDark ? "text-white ring-white/40 hover:bg-white/10" : "text-gray-700 ring-gray-200 hover:bg-gray-100"}`}>
             <UserRound className="h-5 w-5" />
           </span>
         )}
         {isAuthenticated && !compact && (
           <>
-            <span className="hidden max-w-32 truncate text-sm font-semibold text-gray-800 xl:block">{user.firstName}</span>
-            <ChevronDown className={`hidden h-4 w-4 text-gray-500 transition-transform xl:block ${open ? "rotate-180" : ""}`} />
+            <span className={`hidden max-w-32 truncate text-sm font-semibold xl:block ${onDark ? "text-white" : "text-gray-800"}`}>{user.firstName}</span>
+            <ChevronDown className={`hidden h-4 w-4 transition-transform xl:block ${onDark ? "text-white/70" : "text-gray-500"} ${open ? "rotate-180" : ""}`} />
           </>
         )}
       </button>
@@ -143,7 +159,7 @@ const AccountMenu = ({ onAuth, compact = false }) => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.97 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="absolute top-full right-0 z-50 mt-3 w-[min(18rem,calc(100vw-2rem))] origin-top-right overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 shadow-gray-900/10 ring-gray-100"
+            className="absolute top-full right-0 z-50 mt-3 w-[min(18rem,calc(100vw-2rem))] origin-top-right overflow-hidden rounded-2xl glass-panel shadow-2xl ring-1 shadow-gray-900/10 ring-gray-100"
           >
             {isAuthenticated ? (
               <>

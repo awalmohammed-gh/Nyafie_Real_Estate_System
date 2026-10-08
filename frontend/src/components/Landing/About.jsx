@@ -2,7 +2,8 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, CloudSun, HandMetal, House, Shield, Star } from 'lucide-react';
 import aboutImg from "../../assets/aboutImg.jpg";
 import Reveal from '../ui/Reveal';
-import { useRealEstate } from '../../context/useRealEstate';
+import { propertyApi } from "../../frontApi";
+import { useApiQuery } from "../../hooks/useApiQuery";
 
 const features = [
   {
@@ -28,9 +29,9 @@ const features = [
 ];
 
 const About = () => {
-  const { properties } = useRealEstate();
-  // A highly rated listing to show beside the main photo
-  const spotlight = [...properties].sort((a, b) => (b.meta?.rating || 0) - (a.meta?.rating || 0))[0];
+  // The highest-rated listing, shown beside the main photo (only when one has a rating)
+  const top = useApiQuery("home-top-rated", () => propertyApi.searchProperties({ sort: "rating", limit: 1 }));
+  const spotlight = top.data?.items.find((p) => p.meta?.rating);
 
   return (
     <section id="about" className="scroll-mt-20 py-20 sm:py-28">
@@ -49,7 +50,7 @@ const About = () => {
           {spotlight && (
             <Link
               to={`/house/${spotlight.id}`}
-              className="absolute -right-2 -bottom-8 hidden w-56 overflow-hidden rounded-2xl bg-white p-2 shadow-2xl ring-1 ring-gray-100 transition hover:-translate-y-1 sm:block lg:-right-10"
+              className="absolute -right-2 -bottom-8 hidden w-56 overflow-hidden rounded-2xl bg-white p-2 shadow-2xl ring-1 ring-gray-100 glass-hover [--glass-lift:3px] [--glass-shadow:0_25px_50px_-12px_rgb(62_7_102/0.25)] sm:block lg:-right-10"
             >
               <img src={spotlight.media.images[0]} alt={spotlight.title} loading="lazy" className="aspect-4/3 w-full rounded-xl object-cover" />
               <div className="p-2">
@@ -61,11 +62,6 @@ const About = () => {
               </div>
             </Link>
           )}
-
-          <div className="absolute top-6 -left-2 rounded-2xl bg-white/95 px-5 py-4 shadow-xl backdrop-blur sm:-left-6">
-            <p className="text-3xl font-extrabold text-brand-500">10+</p>
-            <p className="text-sm font-medium text-gray-600">Years of experience</p>
-          </div>
         </Reveal>
 
         {/* Content */}
@@ -100,15 +96,11 @@ const About = () => {
             ))}
           </div>
 
-          <Reveal delay={0.2} className="mt-10 flex flex-wrap items-center gap-6">
+          <Reveal delay={0.2} className="mt-10">
             <a href="#services" className="btn btn-primary">
               Our Services
               <ArrowRight className="h-4 w-4" />
             </a>
-            <div>
-              <p className="text-2xl font-extrabold text-gray-900">500+</p>
-              <p className="text-sm text-gray-500">Happy clients</p>
-            </div>
           </Reveal>
         </div>
       </div>

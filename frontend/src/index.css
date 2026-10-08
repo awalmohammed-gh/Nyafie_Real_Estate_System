@@ -30,6 +30,14 @@
   }
 }
 
+/* Workspace card (admin console, agent workspace): 16px radius, hairline border, faint shadow */
+@utility admin-card {
+  border-radius: 1rem;
+  border: 1px solid var(--color-gray-200);
+  background-color: #fff;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.04);
+}
+
 @utility no-scrollbar {
   scrollbar-width: none;
   &::-webkit-scrollbar {
@@ -38,13 +46,80 @@
 }
 
 @layer base {
+  /* Use the HomeBase violet for page and nested scrollbars. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-brand-500) var(--color-brand-50);
+  }
+
+  @supports not (scrollbar-color: auto) {
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--color-brand-50);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--color-brand-500);
+      border: 1px solid var(--color-brand-50);
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--color-brand-700);
+    }
+  }
+
+  .admin-workspace .workspace-sidebar-scroll {
+    scrollbar-color: rgb(255 255 255 / 0.4) transparent;
+  }
+
+  @supports not (scrollbar-color: auto) {
+    .admin-workspace .workspace-sidebar-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .admin-workspace .workspace-sidebar-scroll::-webkit-scrollbar-thumb {
+      background: rgb(255 255 255 / 0.4);
+      border: 0;
+    }
+    .admin-workspace .workspace-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+      background: rgb(255 255 255 / 0.65);
+    }
+  }
+
+  @media (forced-colors: active) {
+    *, .admin-workspace .workspace-sidebar-scroll {
+      scrollbar-width: auto;
+      scrollbar-color: auto;
+    }
+  }
+
+  /*
+   * Page scrolling stops at the top and bottom edges: no rubber-band bounce,
+   * no scroll chaining past the page and no sideways swipe "drift".
+   * Stray horizontal overflow is clipped with `overflow-x: clip` rather than
+   * `hidden`: `hidden` turns html/body into scroll containers, which breaks
+   * position: sticky (navbar, property sidebar, settings menu) and stops
+   * useLockBodyScroll from locking the page. Browsers without `clip` fall back to
+   * `hidden` on html only, which is still safe for sticky.
+   */
   html {
     scroll-behavior: smooth;
     -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+    overflow-x: clip;
   }
 
   body {
     @apply bg-white font-sans text-gray-900 antialiased;
+    overscroll-behavior: none;
+    overflow-x: clip;
+  }
+
+  @supports not (overflow-x: clip) {
+    html {
+      overflow-x: hidden;
+    }
   }
 
   button,
@@ -77,6 +152,85 @@
   }
 }
 
+/*
+ * Glass surfaces
+ * glass-panel: frosted background for floating menus (navbar dropdowns, mega menu).
+ *   Mostly opaque so text and photos stay crisp; borders and shadows stay per component.
+ * glass-hover: hover/keyboard-focus state for interactive cards: a small lift, a
+ *   translucent frosted surface, a soft brand edge (ring or border) and one soft shadow.
+ *   Tune per card with --glass-lift (default 2px) and --glass-shadow.
+ */
+@utility glass-panel {
+  background-color: rgb(255 255 255 / 0.92);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: white;
+  }
+}
+
+@utility glass-hover {
+  transition-property: background-color, border-color, box-shadow, translate, -webkit-backdrop-filter, backdrop-filter;
+  transition-duration: 250ms;
+  transition-timing-function: ease-out;
+
+  /* Real hover only, so a tap on a touch screen doesn't leave the card lifted */
+  @media (hover: hover) {
+    &:hover {
+      --tw-ring-color: var(--color-brand-200);
+      border-color: var(--color-brand-200);
+      background-color: rgb(255 255 255 / 0.8);
+      -webkit-backdrop-filter: blur(12px);
+      backdrop-filter: blur(12px);
+      --tw-shadow: var(--glass-shadow, 0 12px 32px -12px rgb(62 7 102 / 0.16));
+      box-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+      translate: 0 calc(var(--glass-lift, 2px) * -1);
+    }
+  }
+
+  /* Same feedback for keyboard users, on the card or on the link/button inside it */
+  &:focus-visible,
+  &:has(:focus-visible) {
+    --tw-ring-color: var(--color-brand-200);
+    border-color: var(--color-brand-200);
+    background-color: rgb(255 255 255 / 0.8);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    --tw-shadow: var(--glass-shadow, 0 12px 32px -12px rgb(62 7 102 / 0.16));
+    box-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+    translate: 0 calc(var(--glass-lift, 2px) * -1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &:hover,
+    &:focus-visible,
+    &:has(:focus-visible) {
+      translate: none;
+    }
+  }
+}
+
+/*
+ * Page scrim behind open navigation menus (components/ui/ScrimProvider.jsx).
+ * A light slate tint plus a soft blur: the page stays recognisable, the menu takes focus.
+ * The blur is constant and the element fades with opacity, which is far cheaper than
+ * animating backdrop-filter itself. Without backdrop-filter support it falls back to a dim.
+ */
+@utility scrim {
+  background-color: rgb(15 23 42 / 0.12);
+  -webkit-backdrop-filter: blur(6px) saturate(1.05);
+  backdrop-filter: blur(6px) saturate(1.05);
+  /* Touch screens: lighter, the menus there are small dropdowns */
+  @media (hover: none) {
+    background-color: rgb(15 23 42 / 0.1);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: rgb(15 23 42 / 0.28);
+  }
+}
+
 /* Buttons */
 @utility btn {
   @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold whitespace-nowrap transition duration-200 select-none active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
@@ -97,4 +251,44 @@
 /* Form fields */
 @utility field {
   @apply w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 transition outline-none placeholder:text-gray-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10;
+}
+
+/*
+ * Admin & agent dashboards (the layout root has the `dash` class).
+ * Work tools use tighter corners and flatter buttons than the marketing site;
+ * only shape changes here (never colours or sizes, which stay per component).
+ * Unlayered on purpose so it wins over the shared utilities above.
+ */
+.dash .btn {
+  border-radius: 0.5rem;
+}
+.dash .btn-primary {
+  box-shadow: none;
+}
+.dash .field {
+  border-radius: 0.5rem;
+}
+
+/*
+ * Countdown bar that fills over --progress-duration (landing Apartment Plans slideshow).
+ * The slideshow advances when the animation ends, so pausing the bar pauses the timer.
+ * It keeps its real length for reduced-motion visitors too (instead of the near-zero
+ * duration set above); otherwise the plans would flip instantly.
+ */
+@keyframes progress-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.progress-fill {
+  transform-origin: left;
+  animation: progress-fill var(--progress-duration, 6s) linear forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress-fill {
+    animation-duration: var(--progress-duration, 6s) !important;
+  }
 }

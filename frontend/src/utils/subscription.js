@@ -1,4 +1,4 @@
-import { daysUntil } from "./date";
+import { daysUntil } from "./date.js";
 
 export const EXPIRING_SOON_DAYS = 7;
 
@@ -20,8 +20,9 @@ export const getSubscriptionState = (subscription) => {
   const days = daysUntil(subscription.expiryDate);
   let status;
   if (subscription.status === "cancelled") status = "cancelled";
-  else if (subscription.status === "pending") status = "pending";
-  else if (days <= 0) status = "expired";
+  else if (subscription.status === "expired") status = "expired";
+  else if (subscription.status !== "active" || !["paid", "waived"].includes(subscription.paymentStatus)) status = "pending";
+  else if (!Number.isFinite(days) || days <= 0) status = "expired";
   else if (days <= EXPIRING_SOON_DAYS) status = "expiring";
   else status = "active";
 

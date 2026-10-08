@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Loader2, MessageSquare } from "lucide-react";
+import { Loader2, MessageSquare, RefreshCw } from "lucide-react";
+import SearchInput from "../ui/SearchInput";
+import { ErrorState } from "../dashboard/States";
 import { chatApi } from "../../frontApi";
 import ChatThread from "./ChatThread";
 import FilterTabs from "../ui/FilterTabs";
@@ -21,11 +23,16 @@ const MessagesInbox = ({ scope, emptyTitle, emptyDescription, emptyAction }) => 
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
+  const [query, setQuery] = useState("");
+  const [loadError, setLoadError] = useState("");
   const selectedId = params.get("c");
 
   const refresh = useCallback(async () => {
     try {
       setConversations(await chatApi.getConversations(scope));
+      setLoadError("");
+    } catch (err) {
+      setLoadError(err.message || "We couldn't load your conversations.");
     } finally {
       setLoading(false);
     }
@@ -51,7 +58,7 @@ const MessagesInbox = ({ scope, emptyTitle, emptyDescription, emptyAction }) => 
   };
   const visible = conversations.filter((c) =>
     filter === "unread" ? c.status === "open" && c.unread > 0 : filter === "closed" ? c.status === "closed" : c.status === "open"
-  );
+  ).filter((c) => { const counterpart = c.side === "owner" ? c.customer : c.owner; return !query.trim() || `${counterpart?.name} ${c.property.title} ${c.lastMessage}`.toLowerCase().includes(query.trim().toLowerCase()); });
 
   if (loading) {
     return (
@@ -62,14 +69,18 @@ const MessagesInbox = ({ scope, emptyTitle, emptyDescription, emptyAction }) => 
   }
 
   if (conversations.length === 0) {
+    if (loadError) return <ErrorState title="Messages couldn't be loaded" message={loadError} onRetry={refresh} />;
     return <EmptyState icon={MessageSquare} title={emptyTitle} description={emptyDescription} action={emptyAction} />;
   }
 
   return (
-    <div className="grid h-[calc(100dvh-13rem)] min-h-[28rem] grid-cols-1 overflow-hidden rounded-3xl bg-white ring-1 ring-gray-200 lg:grid-cols-[22rem_1fr]">
+    <div className="grid h-[calc(100dvh-13rem)] min-h-[28rem] grid-cols-1 overflow-hidden rounded-3xl bg-white ring-1 ring-gray-200 in-[.dash]:rounded-xl lg:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.6fr)]">
       {/* Conversation list (hidden on phones while a chat is open) */}
       <aside className={`min-h-0 flex-col border-gray-100 lg:flex lg:border-r ${selectedId ? "hidden" : "flex"}`}>
         <div className="border-b border-gray-100 p-3">
+          <div className="mb-3 flex items-center justify-between px-1"><h2 className="text-sm font-semibold text-gray-900">Conversations</h2><button type="button" onClick={refresh} aria-label="Refresh conversations" className="grid h-8 w-8 place-items-center rounded-lg text-gray-400 hover:bg-gray-50"><RefreshCw className="h-4 w-4" /></button></div>
+          <SearchInput value={query} onChange={setQuery} placeholder="Search conversations" className="mb-3" />
+          {loadError && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-2 text-xs text-red-700">{loadError}</p>}
           <FilterTabs
             value={filter}
             onChange={setFilter}
@@ -81,7 +92,7 @@ const MessagesInbox = ({ scope, emptyTitle, emptyDescription, emptyAction }) => 
             ]}
           />
         </div>
-        <ul className="min-h-0 flex-1 overflow-y-auto">
+        <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {visible.length === 0 && <li className="p-6 text-center text-sm text-gray-500">No conversations here.</li>}
           {visible.map((c) => {
             const counterpart = c.side === "owner" ? c.customer : c.owner;

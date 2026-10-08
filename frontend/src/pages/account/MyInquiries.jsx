@@ -7,19 +7,26 @@ import { useAuth } from "../../context/useAuth";
 import { useRealEstate } from "../../context/useRealEstate";
 import { formatRelative } from "../../utils/date";
 import { formatPrice } from "../../utils/property";
+import { usePlatform } from "../../context/usePlatform";
+import { propertyApi } from "../../frontApi";
+import { useApiQuery } from "../../hooks/useApiQuery";
 
 const statusHelp = {
   New: "Waiting for the agent to respond",
   Contacted: "The agent has been in touch",
+  "In Progress": "You're discussing this property with the agent",
   Closed: "This conversation is closed",
 };
 
 const MyInquiries = () => {
+  const { paths } = usePlatform();
   const { user } = useAuth();
   const { inquiries, findProperty } = useRealEstate();
   const mine = inquiries
-    .filter((inq) => inq.userId === user.id || inq.email.toLowerCase() === user.email.toLowerCase())
+    .filter((inq) => inq.userId === user.id)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const propertyIds = [...new Set(mine.map((inquiry) => inquiry.propertyId).filter(Boolean))].sort();
+  const referenced = useApiQuery(`inquiry-properties:${user.id}:${propertyIds.join(',')}`, () => propertyApi.getPropertiesByIds(propertyIds));
 
   return (
     <AccountShell title="My Inquiries" description="Messages you've sent about properties.">
@@ -28,12 +35,12 @@ const MyInquiries = () => {
           icon={MessageSquare}
           title="You haven't sent any inquiries"
           description="Open a property and use “Send inquiry” to contact the agent. Your messages will be tracked here."
-          action={<Link to="/listings" className="btn btn-primary">Find a property</Link>}
+          action={<Link to={paths.listings} className="btn btn-primary">Find a property</Link>}
         />
       ) : (
         <ul className="space-y-4">
           {mine.map((inquiry) => {
-            const property = findProperty(inquiry.propertyId);
+            const property = findProperty(inquiry.propertyId) || referenced.data?.find((item) => item.id === inquiry.propertyId);
             return (
               <li key={inquiry.id} className="flex flex-col gap-4 rounded-3xl bg-white p-4 ring-1 ring-gray-200 sm:flex-row sm:p-5">
                 {property ? (
@@ -41,12 +48,12 @@ const MyInquiries = () => {
                     <img src={property.media.images[0]} alt="" className="aspect-16/9 w-full rounded-2xl object-cover sm:h-24 sm:w-36" />
                   </Link>
                 ) : (
-                  <div className="grid h-24 w-36 shrink-0 place-items-center rounded-2xl bg-gray-100 text-xs text-gray-400">Removed</div>
+                  <div className="grid h-24 w-36 shrink-0 place-items-center rounded-2xl bg-gray-100 text-xs text-gray-400">{referenced.loading ? 'Loading...' : referenced.error ? 'Unavailable' : 'Removed'}</div>
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-bold text-gray-900">{property?.title || "Property no longer listed"}</p>
+                      <p className="font-bold text-gray-900">{property?.title || (referenced.loading ? 'Loading property...' : referenced.error ? 'Property could not be loaded' : 'Property no longer listed')}</p>
                       {property && <p className="text-sm text-gray-500">{formatPrice(property)} · {property.location.name}</p>}
                     </div>
                     <StatusBadge status={inquiry.status} />
@@ -55,6 +62,7 @@ const MyInquiries = () => {
                   <p className="mt-2 text-xs text-gray-400">
                     Sent {formatRelative(inquiry.createdAt)} · {statusHelp[inquiry.status]}
                   </p>
+                  {inquiry.conversationId && <Link to={`/account/messages?c=${inquiry.conversationId}`} className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-medium text-brand-600"><MessageSquare className="h-4 w-4" />Continue conversation with agent</Link>}
                 </div>
               </li>
             );

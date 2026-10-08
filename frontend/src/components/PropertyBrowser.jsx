@@ -1,335 +1,161 @@
-import { useState } from 'react';
-import { AnimatePresence, motion } from "motion/react";
-import { ChevronDown, Home, Search, SlidersHorizontal, X } from 'lucide-react';
-import HouseCard from './card/HouseCard';
-import PageHeader from './ui/PageHeader';
-import CtaBanner from './ui/CtaBanner';
-import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
-import { useRealEstate } from '../context/useRealEstate';
-import SkeletonGrid from './ui/SkeletonGrid';
-import { formatType, getPrice } from '../utils/property';
+import { useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { AlertCircle, ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Heart, House, MapPin, Search, SlidersHorizontal, X } from "lucide-react";
+import HouseCard from "./card/HouseCard";
+import ListingsBanner from "./property/ListingsBanner";
+import SkeletonGrid from "./ui/SkeletonGrid";
+import { PropertyFilterDialog, PropertyFilterPanel } from "./property/PropertyFilters";
+import { useApiQuery } from "../hooks/useApiQuery";
+import { usePropertyBrowseState } from "../hooks/usePropertyBrowseState";
+import { usePropertyFacets } from "../hooks/usePropertyFacets";
+import { usePlatform } from "../context/usePlatform";
+import { propertyApi } from "../frontApi";
+import { formatType } from "../utils/property";
+import "./property/catalogue.css";
 
-// Non-overlapping, sorted price buckets (GHS). Only buckets that contain at
-// least one of the current properties are shown.
-const PRICE_RANGES = [
-  { label: "Up to ₵2,000", min: 0, max: 2000 },
-  { label: "₵2,001 - ₵5,000", min: 2001, max: 5000 },
-  { label: "₵200k - ₵400k", min: 200000, max: 400000 },
-  { label: "₵400k - ₵700k", min: 400001, max: 700000 },
-  { label: "₵700k - ₵900k", min: 700001, max: 900000 },
+const PAGE_SIZE = 9;
+const INTENTS = [{ value: "", label: "All homes" }, { value: "Sale", label: "Buy" }, { value: "Rent", label: "Rent" }];
+const SORTS = [
+  { value: "", label: "Recommended" }, { value: "latest", label: "Newest first" },
+  { value: "priceAsc", label: "Price: low to high" }, { value: "priceDesc", label: "Price: high to low" },
+  { value: "popular", label: "Most viewed" }, { value: "rating", label: "Top rated" },
 ];
 
-const BEDROOM_OPTIONS = [0, 1, 2, 3, 4];
-
-const sorters = {
-  latest: null,
-  priceAsc: (a, b) => getPrice(a) - getPrice(b),
-  priceDesc: (a, b) => getPrice(b) - getPrice(a),
-  popular: (a, b) => (b.meta?.views || 0) - (a.meta?.views || 0),
-  rating: (a, b) => (b.meta?.rating || 0) - (a.meta?.rating || 0),
-};
-
-const Chip = ({ active, onClick, children }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    aria-pressed={active}
-    className={`rounded-full px-4 py-2 text-sm font-medium capitalize transition ${
-      active
-        ? "bg-brand-500 text-white shadow-md shadow-brand-500/25"
-        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-    }`}
-  >
-    {children}
-  </button>
-);
-
-const FilterGroup = ({ title, children }) => (
-  <div className="border-b border-gray-100 py-6 first:pt-0 last:border-0 last:pb-0">
-    <h3 className="mb-3 text-sm font-semibold text-gray-900">{title}</h3>
-    <div className="flex flex-wrap gap-2">{children}</div>
-  </div>
-);
-
-const emptyFilters = { status: "", types: [], area: "", price: null, beds: 0 };
-
-const PropertyBrowser = ({ properties, title, description, heroImage = '/listBg.jpg', crumbs, initialFilters = {} }) => {
-  const [filters, setFilters] = useState({ ...emptyFilters, ...initialFilters });
-  const [query, setQuery] = useState(initialFilters.query || "");
-  const [sortBy, setSortBy] = useState('latest');
+// banner (optional): { image: { src, srcSet, position }, heading } shows the full-width image banner
+const PropertyBrowser = ({ title, description, fixedListingType, banner }) => {
+  const { paths } = usePlatform();
+  const navigate = useNavigate();
+  const { filters, query, search, sort, page, update, clear } = usePropertyBrowseState(fixedListingType);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const { propertiesLoading } = useRealEstate();
+  const resultsRef = useRef(null);
+  const allFacets = usePropertyFacets();
+  const facets = usePropertyFacets(filters.listingType);
+  const params = {
+    page, limit: PAGE_SIZE, search, sort, listingType: filters.listingType,
+    type: filters.types, area: filters.area, city: filters.city, region: filters.region, minPrice: filters.price?.min ?? undefined,
+    maxPrice: filters.price?.max ?? undefined, bedrooms: filters.beds || undefined,
+    bathrooms: filters.baths || undefined, availability: filters.availability,
+  };
+  const results = useApiQuery(JSON.stringify(params), () => propertyApi.searchProperties(params));
+  const shown = results.data || results.previous;
+  const pending = results.loading || query.trim() !== search;
+  const total = shown?.total ?? 0;
+  const firstLoad = results.loading && !shown;
+  const shownPage = shown?.page || page;
+  const first = total ? (shownPage - 1) * PAGE_SIZE + 1 : 0;
+  const last = Math.min(shownPage * PAGE_SIZE, total);
+  const words = title.split(" ");
 
-  useLockBodyScroll(isFilterOpen);
-
-  const statuses = [...new Set(properties.map((p) => p.property.status))];
-  const types = [...new Set(properties.map((p) => p.property.type))].sort();
-  const areas = [...new Set(properties.map((p) => p.location.name))].sort();
-  const priceRanges = PRICE_RANGES.filter((range) =>
-    properties.some((p) => getPrice(p) >= range.min && getPrice(p) <= range.max)
-  );
-
-  const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }));
-  const toggleType = (type) =>
-    setFilter("types", filters.types.includes(type) ? filters.types.filter((t) => t !== type) : [...filters.types, type]);
-
-  const search = query.trim().toLowerCase();
-  const filteredProperties = properties.filter((property) => {
-    const price = getPrice(property);
-    return (
-      (!filters.status || property.property.status === filters.status) &&
-      (!filters.types.length || filters.types.includes(property.property.type)) &&
-      (!filters.area || property.location.name === filters.area) &&
-      (!filters.price || (price >= filters.price.min && price <= filters.price.max)) &&
-      (!filters.beds || (property.property.bedrooms || 0) >= filters.beds) &&
-      (!search ||
-        [property.title, property.location.name, property.location.city, property.property.type]
-          .join(" ")
-          .toLowerCase()
-          .includes(search))
-    );
-  });
-
-  if (sorters[sortBy]) filteredProperties.sort(sorters[sortBy]);
-
-  const activeFilters = [
-    filters.status && { key: "status", label: filters.status === "Sale" ? "For Sale" : "For Rent", clear: () => setFilter("status", "") },
-    ...filters.types.map((type) => ({ key: type, label: formatType(type), clear: () => toggleType(type) })),
-    filters.area && { key: "area", label: filters.area, clear: () => setFilter("area", "") },
-    filters.price && { key: "price", label: filters.price.label, clear: () => setFilter("price", null) },
-    filters.beds && { key: "beds", label: `${filters.beds}+ beds`, clear: () => setFilter("beds", 0) },
-    search && { key: "query", label: `"${query.trim()}"`, clear: () => setQuery("") },
-  ].filter(Boolean);
-
-  const clearFilters = () => {
-    setFilters(emptyFilters);
-    setQuery("");
+  const changeIntent = (value) => {
+    if (value === filters.listingType) return;
+    if (fixedListingType) navigate(value === "Sale" ? "/sale" : value === "Rent" ? "/rent" : paths.listings);
+    else update({ listingType: value, area: "", types: [], price: null });
   };
 
-  const filterPanel = (
-    <>
-      {statuses.length > 1 && (
-        <FilterGroup title="Status">
-          <Chip active={!filters.status} onClick={() => setFilter("status", "")}>All</Chip>
-          {statuses.map((status) => (
-            <Chip key={status} active={filters.status === status} onClick={() => setFilter("status", status)}>
-              For {status}
-            </Chip>
-          ))}
-        </FilterGroup>
-      )}
+  const activeFilters = [
+    ...filters.types.map((type) => ({ key: `type:${type}`, kind: "type", value: type, label: formatType(type), clear: () => update({ types: filters.types.filter((value) => value !== type) }) })),
+    filters.area && { key: "area", kind: "area", value: filters.area, label: filters.area, clear: () => update({ area: "" }) },
+    filters.city && { key: "city", kind: "city", value: filters.city, label: filters.city, clear: () => update({ city: "", area: "" }) },
+    filters.region && { key: "region", kind: "region", value: filters.region, label: filters.region, clear: () => update({ region: "", city: "", area: "" }) },
+    filters.price && { key: "price", kind: "price", value: filters.price, label: filters.price.label, clear: () => update({ price: null }) },
+    filters.beds > 0 && { key: "beds", kind: "beds", value: filters.beds, label: `${filters.beds}+ beds`, clear: () => update({ beds: 0 }) },
+    filters.baths > 0 && { key: "baths", kind: "baths", value: filters.baths, label: `${filters.baths}+ baths`, clear: () => update({ baths: 0 }) },
+    filters.availability && { key: "availability", kind: "availability", value: filters.availability, label: filters.availability, clear: () => update({ availability: "" }) },
+    query.trim() && { key: "search", kind: "search", value: query.trim(), label: `“${query.trim()}”`, clear: () => update({ query: "" }, { replace: true }) },
+  ].filter(Boolean);
+  const hasFilters = activeFilters.length > 0 || Boolean(!fixedListingType && filters.listingType);
+  // The banner also names Buy/Rent when it is a filter here (not on the fixed /sale and /rent pages)
+  const bannerFilters = [
+    !fixedListingType && filters.listingType && { key: "intent", kind: "intent", value: filters.listingType, label: filters.listingType === "Rent" ? "For rent" : "For sale", clear: () => update({ listingType: "" }) },
+    ...activeFilters,
+  ].filter(Boolean);
+  const shortlistLink = <Link to="/account/saved" className="catalogue-shortlist"><Heart size={16} aria-hidden="true" />Your shortlist<ArrowUpRight size={15} aria-hidden="true" /></Link>;
 
-      <FilterGroup title="Property type">
-        {types.map((type) => (
-          <Chip key={type} active={filters.types.includes(type)} onClick={() => toggleType(type)}>
-            {formatType(type)}
-          </Chip>
-        ))}
-      </FilterGroup>
-
-      <FilterGroup title="Location">
-        <div className="relative w-full">
-          <select
-            value={filters.area}
-            onChange={(e) => setFilter("area", e.target.value)}
-            className="field appearance-none pr-10"
-          >
-            <option value="">All locations</option>
-            {areas.map((area) => (
-              <option key={area} value={area}>{area}</option>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute top-1/2 right-4 h-4 w-4 -translate-y-1/2 text-gray-400" />
-        </div>
-      </FilterGroup>
-
-      <FilterGroup title="Price range">
-        <Chip active={!filters.price} onClick={() => setFilter("price", null)}>Any price</Chip>
-        {priceRanges.map((range) => (
-          <Chip key={range.label} active={filters.price?.label === range.label} onClick={() => setFilter("price", range)}>
-            {range.label}
-          </Chip>
-        ))}
-      </FilterGroup>
-
-      <FilterGroup title="Bedrooms">
-        {BEDROOM_OPTIONS.map((beds) => (
-          <Chip key={beds} active={filters.beds === beds} onClick={() => setFilter("beds", beds)}>
-            {beds === 0 ? "Any" : `${beds}+`}
-          </Chip>
-        ))}
-      </FilterGroup>
-    </>
-  );
+  const goToPage = (next) => {
+    update({ page: next });
+    resultsRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  };
+  const pageNumbers = Array.from({ length: shown?.pages || 0 }, (_, index) => index + 1)
+    .filter((number) => number === 1 || number === shown.pages || Math.abs(number - page) <= 1);
 
   return (
-    <>
-      <PageHeader title={title} description={description} image={heroImage} crumbs={crumbs || [{ label: title }]} />
-
-      <div className="container-page py-10 sm:py-14">
-        {/* Toolbar */}
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-gray-400" />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name, area or type..."
-              aria-label="Search properties"
-              className="field rounded-full py-3.5 pl-12"
-            />
-          </div>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setIsFilterOpen(true)}
-              className="btn btn-light flex-1 lg:hidden"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-              Filters
-              {activeFilters.length > 0 && (
-                <span className="grid h-5 min-w-5 place-items-center rounded-full bg-brand-500 px-1 text-xs text-white">
-                  {activeFilters.length}
-                </span>
-              )}
-            </button>
-            <div className="relative flex-1 sm:flex-none">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                aria-label="Sort properties"
-                className="field appearance-none rounded-full py-3.5 pr-10 font-semibold sm:w-52"
-              >
-                <option value="latest">Sort: Latest</option>
-                <option value="priceAsc">Price: Low to High</option>
-                <option value="priceDesc">Price: High to Low</option>
-                <option value="popular">Most Popular</option>
-                <option value="rating">Top Rated</option>
-              </select>
-              <ChevronDown className="pointer-events-none absolute top-1/2 right-4 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            </div>
+    <div className="property-catalogue">
+      {banner ? (
+        <ListingsBanner image={banner.image} crumb={title} title={banner.heading || title} description={description} filters={bannerFilters} onClearAll={clear} aside={shortlistLink} />
+      ) : (
+      <header className="catalogue-heading">
+        <div className="container-page">
+          <nav aria-label="Breadcrumb" className="catalogue-breadcrumb"><Link to="/">Home</Link><ChevronRight size={12} aria-hidden="true" /><span>{title}</span></nav>
+          <div className="catalogue-heading-row">
+            <div><h1>{words.slice(0, -1).join(" ")} <span>{words.at(-1)}</span><span className="catalogue-title-stop">.</span></h1><p className="catalogue-description">{description}</p></div>
+            {shortlistLink}
           </div>
         </div>
+      </header>
+      )}
 
-        <div className="flex gap-8">
-          {/* Desktop sidebar */}
-          <aside className="hidden w-72 shrink-0 lg:block">
-            <div className="sticky top-28 rounded-3xl bg-white p-6 ring-1 ring-gray-200/80">
-              <div className="mb-6 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-gray-900">Filters</h2>
-                {activeFilters.length > 0 && (
-                  <button onClick={clearFilters} className="text-sm font-semibold text-brand-600 hover:text-brand-800">
-                    Clear all
-                  </button>
-                )}
-              </div>
-              {filterPanel}
-            </div>
-          </aside>
-
-          {/* Results */}
-          <div className="min-w-0 flex-1">
-            <div className="mb-6 flex flex-wrap items-center gap-2">
-              <p className="mr-2 text-sm text-gray-600">
-                <span className="font-bold text-gray-900">{filteredProperties.length}</span>{" "}
-                {filteredProperties.length === 1 ? "property" : "properties"} found
-              </p>
-              {activeFilters.map((filter) => (
-                <button
-                  key={filter.key}
-                  onClick={filter.clear}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 capitalize transition hover:bg-brand-100"
-                >
-                  {filter.label}
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              ))}
-            </div>
-
-            {propertiesLoading ? (
-              <SkeletonGrid className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3" />
-            ) : filteredProperties.length > 0 ? (
-              <motion.div layout className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-                <AnimatePresence mode="popLayout">
-                  {filteredProperties.map((property) => (
-                    <motion.div
-                      key={property.id}
-                      layout
-                      initial={{ opacity: 0, scale: 0.96 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.96 }}
-                      transition={{ duration: 0.25 }}
-                      className="h-full"
-                    >
-                      <HouseCard house={property} />
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </motion.div>
-            ) : (
-              <div className="rounded-3xl bg-gray-50 px-6 py-20 text-center">
-                <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-white text-gray-400 shadow-sm">
-                  <Home className="h-8 w-8" />
-                </span>
-                <h3 className="mt-5 text-lg font-bold text-gray-900">No properties match your filters</h3>
-                <p className="mt-1 text-gray-500">Try removing a filter or searching for something else.</p>
-                <button onClick={clearFilters} className="btn btn-primary mt-6">
-                  Clear all filters
-                </button>
-              </div>
-            )}
+      <div className="catalogue-controls">
+        <div className="container-page catalogue-controls-inner">
+          <fieldset className="catalogue-intents">
+            <legend className="sr-only">I’m looking to</legend>
+            {INTENTS.map(({ value, label }) => {
+              const count = value === "Sale" ? allFacets.data?.sale : value === "Rent" ? allFacets.data?.rent : allFacets.data?.total;
+              return (
+                <label key={label} className={`catalogue-intent ${filters.listingType === value ? "is-active" : ""}`}>
+                  <input type="radio" className="sr-only" name="catalogue-intent" value={value} checked={filters.listingType === value} onChange={() => changeIntent(value)} />
+                  {label}{count !== undefined && <small>{count}</small>}
+                </label>
+              );
+            })}
+          </fieldset>
+          <div className="catalogue-search-row">
+            <form role="search" onSubmit={(event) => event.preventDefault()} className="catalogue-search">
+              <Search size={18} aria-hidden="true" />
+              <input type="search" aria-label="Search properties" placeholder="Search a home, neighbourhood or type" value={query} onChange={(event) => update({ query: event.target.value }, { replace: true })} />
+              {query && <button type="button" aria-label="Clear search" onClick={() => update({ query: "" }, { replace: true })}><X size={16} aria-hidden="true" /></button>}
+            </form>
+            <button type="button" className="catalogue-filter-trigger" aria-label={activeFilters.length ? `Filters, ${activeFilters.length} active` : "Filters"} onClick={() => setIsFilterOpen(true)}><SlidersHorizontal size={18} aria-hidden="true" /><span>Filters</span>{activeFilters.length > 0 && <small>{activeFilters.length}</small>}</button>
           </div>
         </div>
       </div>
 
-      <CtaBanner />
-
-      {/* Mobile filter sheet */}
-      <AnimatePresence>
-        {isFilterOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsFilterOpen(false)}
-              className="absolute inset-0 bg-gray-950/50 backdrop-blur-sm"
-            />
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Filters"
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 32, stiffness: 320 }}
-              className="absolute inset-x-0 bottom-0 flex max-h-[88dvh] flex-col rounded-t-3xl bg-white"
-            >
-              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-                <h2 className="text-lg font-bold text-gray-900">Filters</h2>
-                <button
-                  onClick={() => setIsFilterOpen(false)}
-                  aria-label="Close filters"
-                  className="grid h-10 w-10 place-items-center rounded-full hover:bg-gray-100"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto px-5 py-6">{filterPanel}</div>
-              <div className="flex gap-3 border-t border-gray-100 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-                <button onClick={clearFilters} className="btn btn-light flex-1">
-                  Clear all
-                </button>
-                <button onClick={() => setIsFilterOpen(false)} className="btn btn-primary flex-2">
-                  Show {filteredProperties.length} {filteredProperties.length === 1 ? "result" : "results"}
-                </button>
-              </div>
-            </motion.div>
+      <div className="container-page catalogue-layout">
+        <aside className="catalogue-sidebar" aria-label="Property filters">
+          <div className="catalogue-sidebar-inner">
+            <div className="catalogue-sidebar-heading"><h2>Refine your search</h2>{hasFilters && <button type="button" onClick={clear} className="catalogue-reset">Reset</button>}</div>
+            <PropertyFilterPanel filters={filters} update={update} facets={facets} />
+            <div className="catalogue-sidebar-note"><MapPin size={16} aria-hidden="true" /><p>A new address.<br />A fresh perspective.</p></div>
           </div>
-        )}
-      </AnimatePresence>
-    </>
+        </aside>
+
+        <section ref={resultsRef} className="catalogue-results" aria-label="Property results">
+          <div className="catalogue-results-heading">
+            <div className="catalogue-result-count" role="status" aria-live="polite">
+              <h2>{firstLoad ? "Finding homes…" : results.error ? "Your search" : <><strong>{total}</strong> {total === 1 ? "home" : "homes"}{filters.listingType === "Sale" ? " for sale" : filters.listingType === "Rent" ? " to rent" : " to explore"}</>}</h2>
+              <p>{pending && !firstLoad ? "Updating your results…" : total ? `Showing ${first}–${last} · Find the one that fits.` : "Your next chapter starts here."}</p>
+            </div>
+            <div className="catalogue-sort"><label htmlFor="catalogue-sort">Sort by</label><div className="catalogue-select-wrap"><select id="catalogue-sort" aria-label="Sort properties" value={sort} onChange={(event) => update({ sort: event.target.value })}>{SORTS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div></div>
+          </div>
+
+          {activeFilters.length > 0 && <div className="catalogue-active-filters" aria-label="Selected filters">{activeFilters.map((filter) => <button key={filter.key} type="button" onClick={filter.clear} aria-label={`Remove ${filter.label} filter`}>{filter.label}<X size={12} aria-hidden="true" /></button>)}<button type="button" onClick={clear} className="catalogue-clear-all">Clear all</button></div>}
+
+          {results.error ? (
+            <div role="alert" className="catalogue-message"><AlertCircle size={30} strokeWidth={1.4} aria-hidden="true" /><h3>We couldn’t load the homes.</h3><p>Please try again in a moment.</p><button type="button" onClick={results.reload} className="catalogue-primary">Try again</button></div>
+          ) : firstLoad ? <SkeletonGrid count={6} className="catalogue-grid catalogue-skeletons" /> : !shown?.items.length ? (
+            <div className="catalogue-message"><House size={34} strokeWidth={1.3} aria-hidden="true" /><h3>{facets.data?.total === 0 ? "New homes are on their way." : "A little room to rethink your search."}</h3><p>{facets.data?.total === 0 ? "Check back for homes as they become available." : "Try a different area, a wider budget or fewer filters."}</p>{hasFilters && <button type="button" onClick={clear} className="catalogue-primary">Clear all filters</button>}{page > 1 && <button type="button" onClick={() => goToPage(1)} className="catalogue-reset">Back to the first page</button>}</div>
+          ) : <div className={`catalogue-grid ${pending ? "is-loading" : ""}`} aria-busy={pending}>{shown.items.map((house) => <HouseCard key={house.id} house={house} />)}</div>}
+
+          {!results.error && shown?.pages > 1 && <nav aria-label="Pagination" className="catalogue-pagination">
+            <p>Page {shownPage} of {shown.pages}</p>
+            <div><button type="button" onClick={() => goToPage(page - 1)} disabled={pending || page <= 1} aria-label="Previous page"><ChevronLeft size={17} aria-hidden="true" /></button>{pageNumbers.map((number, index) => <span key={number}>{index > 0 && number - pageNumbers[index - 1] > 1 && <span className="catalogue-page-gap">…</span>}<button type="button" onClick={() => goToPage(number)} aria-label={`Page ${number}`} aria-current={page === number ? "page" : undefined} disabled={pending}>{number}</button></span>)}<button type="button" onClick={() => goToPage(page + 1)} disabled={pending || page >= shown.pages} aria-label="Next page"><ChevronRight size={17} aria-hidden="true" /></button></div>
+          </nav>}
+
+          <div className="catalogue-help"><div><span className="catalogue-eyebrow">A LITTLE LOCAL KNOWLEDGE</span><p>Find the home. Get to know the neighbourhood.</p></div><Link to={paths.agents}>Talk to an agent<ArrowUpRight size={17} aria-hidden="true" /></Link></div>
+        </section>
+      </div>
+
+      <PropertyFilterDialog open={isFilterOpen} onClose={() => setIsFilterOpen(false)} filters={filters} update={update} facets={facets} clear={clear} total={total} pending={pending} />
+    </div>
   );
 };
 

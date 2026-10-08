@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Search } from 'lucide-react';
+import { usePlatform } from "../context/usePlatform";
 
 const NotFound = ({ message = "The page you're looking for doesn't exist or has been moved." }) => {
+  const { paths } = usePlatform();
   return (
     <div className="grid min-h-[70vh] place-items-center bg-gray-50 px-4 py-20">
       <div className="max-w-md text-center">
@@ -15,7 +17,7 @@ const NotFound = ({ message = "The page you're looking for doesn't exist or has 
             <ArrowLeft className="h-4 w-4" />
             Back to Home
           </Link>
-          <Link to="/listings" className="btn btn-light">
+          <Link to={paths.listings} className="btn btn-light">
             <Search className="h-4 w-4" />
             Browse Listings
           </Link>

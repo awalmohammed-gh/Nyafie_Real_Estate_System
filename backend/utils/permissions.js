@@ -9,8 +9,9 @@ export const COUNTED_STATES = ["published", "pending"];
 // Lifecycle of a subscription: active | expired | cancelled | pending | none
 export const subscriptionState = (sub) => {
   if (!sub) return { status: "none", isActive: false };
-  if (sub.status === "cancelled" || sub.status === "pending") return { status: sub.status, isActive: false };
-  if (!sub.expiresAt || new Date(sub.expiresAt) <= new Date()) return { status: "expired", isActive: false };
+  if (["cancelled", "pending", "expired"].includes(sub.status)) return { status: sub.status, isActive: false };
+  if (sub.status !== "active" || !["paid", "waived"].includes(sub.paymentStatus)) return { status: "pending", isActive: false };
+  if (!sub.expiresAt || !Number.isFinite(new Date(sub.expiresAt).getTime()) || new Date(sub.expiresAt) <= new Date()) return { status: "expired", isActive: false };
   return { status: "active", isActive: true };
 };
 

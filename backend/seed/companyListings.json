@@ -24,12 +24,6 @@
     "images": [
       "/properties/house1.jpg"
     ],
-    "contact": {
-      "id": "agent-001",
-      "name": "Sarah Boateng",
-      "phone": "+233 24 000 0002",
-      "email": "sarah@luxuryghana.com"
-    },
     "isFeatured": false,
     "rating": 4.2,
     "views": 320
@@ -59,12 +53,6 @@
     "images": [
       "/properties/house2.jpg"
     ],
-    "contact": {
-      "id": "agent-002",
-      "name": "Alex Mensah",
-      "phone": "+233 24 000 0001",
-      "email": "alex@modernliving.com"
-    },
     "isFeatured": true,
     "rating": 4.9,
     "views": 1240
@@ -94,12 +82,6 @@
     "images": [
       "/properties/house3.jpg"
     ],
-    "contact": {
-      "id": "agent-003",
-      "name": "Kofi Adjei",
-      "phone": "+233 24 000 0003",
-      "email": "kofi@primeestates.com"
-    },
     "isFeatured": false,
     "rating": 4.9,
     "views": 1560
@@ -129,12 +111,6 @@
     "images": [
       "/properties/house4.jpg"
     ],
-    "contact": {
-      "id": "agent-001",
-      "name": "Sarah Boateng",
-      "phone": "+233 24 000 0002",
-      "email": "sarah@luxuryghana.com"
-    },
     "isFeatured": true,
     "rating": 4.8,
     "views": 980
@@ -164,12 +140,6 @@
     "images": [
       "/properties/house5.jpg"
     ],
-    "contact": {
-      "id": "agent-002",
-      "name": "Alex Mensah",
-      "phone": "+233 24 000 0001",
-      "email": "alex@modernliving.com"
-    },
     "isFeatured": false,
     "rating": 4.6,
     "views": 720
@@ -198,12 +168,6 @@
     "images": [
       "/properties/house6.jpg"
     ],
-    "contact": {
-      "id": "agent-002",
-      "name": "Alex Mensah",
-      "phone": "+233 24 000 0001",
-      "email": "alex@modernliving.com"
-    },
     "isFeatured": false,
     "rating": 4.4,
     "views": 890
@@ -232,12 +196,6 @@
     "images": [
       "/properties/house7_1.jpg"
     ],
-    "contact": {
-      "id": "agent-003",
-      "name": "Kofi Adjei",
-      "phone": "+233 24 000 0003",
-      "email": "kofi@primeestates.com"
-    },
     "isFeatured": false,
     "rating": 4.5,
     "views": 540
@@ -266,12 +224,6 @@
     "images": [
       "/properties/house_8.jpg"
     ],
-    "contact": {
-      "id": "agent-003",
-      "name": "Kofi Adjei",
-      "phone": "+233 24 000 0003",
-      "email": "kofi@primeestates.com"
-    },
     "isFeatured": false,
     "rating": 4.3,
     "views": 3100
@@ -300,12 +252,6 @@
     "images": [
       "/properties/house9.jpg"
     ],
-    "contact": {
-      "id": "agent-001",
-      "name": "Sarah Boateng",
-      "phone": "+233 24 000 0002",
-      "email": "sarah@luxuryghana.com"
-    },
     "isFeatured": false,
     "rating": 4,
     "views": 1850
@@ -334,12 +280,6 @@
     "images": [
       "/properties/house10.jpg"
     ],
-    "contact": {
-      "id": "agent-001",
-      "name": "Sarah Boateng",
-      "phone": "+233 24 000 0002",
-      "email": "sarah@luxuryghana.com"
-    },
     "isFeatured": true,
     "rating": 4.5,
     "views": 430
@@ -368,12 +308,6 @@
     "images": [
       "/properties/house11.jpg"
     ],
-    "contact": {
-      "id": "agent-002",
-      "name": "Alex Mensah",
-      "phone": "+233 24 000 0001",
-      "email": "alex@modernliving.com"
-    },
     "isFeatured": false,
     "rating": 4.6,
     "views": 2100
@@ -402,12 +336,6 @@
     "images": [
       "/properties/house12.png"
     ],
-    "contact": {
-      "id": "agent-003",
-      "name": "Kofi Adjei",
-      "phone": "+233 24 000 0003",
-      "email": "kofi@primeestates.com"
-    },
     "isFeatured": false,
     "rating": 4.7,
     "views": 650

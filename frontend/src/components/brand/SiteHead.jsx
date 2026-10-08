@@ -1,0 +1,70 @@
+import { useEffect, useState } from "react";
+import { usePlatform } from "../../context/usePlatform";
+import router from "../../router/router";
+import { usePageSeo } from "../../context/pageSeo";
+import { publicSiteUrl } from "../../utils/siteUrl";
+
+// Creates or updates a <meta>/<link> tag in <head>; an empty value removes it
+const setTag = (tag, attr, key, valueAttr, value) => {
+  let el = document.head.querySelector(`${tag}[${attr}="${key}"]`);
+  if (!value) return el?.remove();
+  if (!el) {
+    el = document.createElement(tag);
+    el.setAttribute(attr, key);
+    document.head.appendChild(el);
+  }
+  el.setAttribute(valueAttr, value);
+};
+const meta = (name, content) => setTag("meta", "name", name, "content", content);
+const og = (property, content) => setTag("meta", "property", property, "content", content);
+
+/**
+ * Applies Admin Settings to the document head: title, description, keywords, robots,
+ * Open Graph tags, favicon and the canonical URL. (index.html holds the pre-JavaScript fallback.)
+ */
+const SiteHead = () => {
+  const { settings } = usePlatform();
+  const { general, seo, branding } = settings;
+  const [pathname, setPathname] = useState(router.state.location.pathname);
+  const { metadata } = usePageSeo();
+
+  useEffect(() => router.subscribe((state) => setPathname(state.location.pathname)), []);
+
+  useEffect(() => {
+    const current = metadata?.pathname === pathname ? metadata : null;
+    const labels = { [`/${settings.slugs.listings}`]: "All property listings", [`/${settings.slugs.properties}`]: "Explore properties", "/sale": "Properties for sale", "/rent": "Properties to rent", "/contact": "Contact our team" };
+    const title = current?.title || (labels[pathname] ? `${labels[pathname]} | ${general.siteName}` : seo.title || [general.siteName, general.tagline].filter(Boolean).join(" | "));
+    const description = current?.description || seo.metaDescription || general.description;
+    const image = new URL(current?.image || seo.ogImage || branding.logo || "/favicon.png", publicSiteUrl(settings)).href;
+    const privatePage = /^\/(admin|account|agent|agents|checkout|make-offer|login|register|offer|payment)(\/|$)/.test(pathname) || pathname === `/${settings.slugs.agents}`;
+    document.title = title;
+    meta("description", description);
+    meta("keywords", seo.keywords);
+    meta("robots", !seo.allowIndexing || privatePage || current?.noindex ? "noindex, nofollow" : "index, follow");
+    og("og:site_name", general.siteName);
+    og("og:title", title);
+    og("og:description", description);
+    og("og:image", image);
+    meta("twitter:card", image ? "summary_large_image" : "summary");
+    meta("twitter:title", title);
+    meta("twitter:description", description);
+    meta("twitter:image", image);
+
+    const icon = document.head.querySelector('link[rel="icon"]');
+    if (icon) {
+      icon.href = branding.favicon || "/favicon.png";
+      if (branding.favicon) icon.removeAttribute("type");
+      else icon.type = "image/png";
+    }
+  }, [general, seo, branding, pathname, metadata, settings]);
+
+  useEffect(() => {
+    const url = new URL(pathname, publicSiteUrl(settings)).href;
+    setTag("link", "rel", "canonical", "href", url);
+    og("og:url", url);
+  }, [settings, pathname]);
+
+  return null;
+};
+
+export default SiteHead;

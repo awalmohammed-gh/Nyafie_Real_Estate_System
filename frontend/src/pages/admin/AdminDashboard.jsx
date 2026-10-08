@@ -1,178 +1,174 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "motion/react";
-import {
-  ArrowRight,
-  BadgeCheck,
-  Building2,
-  Clock,
-  CreditCard,
-  FileClock,
-  Inbox,
-  MessageSquare,
-  Radio,
-  UserCheck,
-  UserCog,
-  UserX,
-  Users,
-  Wallet,
-} from "lucide-react";
-import { useEffect, useState } from "react";
-import { useAdminData, trend } from "../../hooks/useAdminData";
+import { Building, Building2, ClipboardCheck, Clock, CreditCard, FileClock, HandCoins, Inbox, MessageCircle, Plus, Star, UserCog, Users, Wallet } from "lucide-react";
+import { useAuth } from "../../context/useAuth";
+import { usePlatform } from "../../context/usePlatform";
+import { useApiQuery } from "../../hooks/useApiQuery";
 import { adminApi } from "../../frontApi";
-import AdminStat from "../../components/admin/AdminStat";
-import StatusBadge from "../../components/ui/StatusBadge";
-import { BarChart, ProportionBar } from "../../components/ui/Charts";
-import { formatRelative, isWithinDays } from "../../utils/date";
-import { formatPrice } from "../../utils/property";
-import { formatCedis, monthlySeries } from "../../utils/reports";
+import { PageHeader, Panel } from "../../components/dashboard/Page";
+import { Breakdown } from "../../components/dashboard/Metrics";
+import { AllClear } from "../../components/dashboard/Overview";
+import { DashboardSkeleton, ErrorState } from "../../components/dashboard/States";
+import { AttentionItems, CounterList, MetricGrid, RevenueSources } from "../../components/admin/OverviewSections";
+import PerformanceChart from "../../components/admin/PerformanceChart";
+import { formatCedis } from "../../utils/reports";
 
-const QuickAction = ({ icon: Icon, count, label, to, tone, index }) => (
-  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04 }}>
-    <Link to={to} className={`group flex h-full items-center gap-4 rounded-2xl p-4 text-white transition hover:-translate-y-0.5 hover:shadow-xl ${tone}`}>
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/15">
-        <Icon className="h-5 w-5" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-2xl font-extrabold tabular-nums">{count}</span>
-        <span className="block text-sm leading-snug text-white/80">{label}</span>
-      </span>
-      <ArrowRight className="h-4 w-4 shrink-0 opacity-60 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
-    </Link>
-  </motion.div>
-);
+const REFRESH_MS = 60000; // same cadence as the sidebar's badges
 
+const greeting = () => {
+  const hour = new Date().getHours();
+  return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+};
+const signedChange = (change) => `${change > 0 ? "+" : ""}${change}%`;
+
+/**
+ * Admin overview: key numbers, the work waiting on the team, platform performance over time,
+ * then compact summaries. Built from GET /api/admin/dashboard (+ /performance for the chart).
+ */
 const AdminDashboard = () => {
-  const { users, agents, listings, inquiries, payments, pendingListings, newInquiries, ownerOf, isPubliclyVisible, user } = useAdminData();
+  const { user } = useAuth();
+  const { siteName } = usePlatform();
+  const query = useApiQuery("admin-dashboard", adminApi.getAdminDashboard);
+  const { reload } = query;
+  // Keep the last result on screen while a refresh runs
+  const data = query.data ?? query.previous;
 
-  // Headline numbers come from the dashboard endpoint; local data fills in while it loads
-  const [summary, setSummary] = useState(null);
   useEffect(() => {
-    adminApi.getAdminDashboard().then(setSummary).catch(() => {});
-  }, [users, listings, inquiries]);
+    const timer = setInterval(reload, REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [reload]);
 
-  const customers = users.filter((u) => u.role !== "admin");
-  const activeAgents = agents.filter((a) => a.sub.isActive && a.status !== "suspended");
-  const expiredAgents = agents.filter((a) => a.sub.isExpired);
-  const expiring = agents.filter((a) => a.sub.expiringSoon);
-  const newAgents = agents.filter((a) => isWithinDays(a.createdAt, 30));
-  const paid = payments.filter((p) => p.status === "paid");
-  const revenue = paid.reduce((sum, p) => sum + p.amount, 0);
+  const header = (
+    <PageHeader
+      eyebrow={new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
+      title={`${greeting()}, ${user.firstName}`}
+      description={`What needs doing across ${siteName}, and how the platform is performing.`}
+      actions={
+        <Link to="/admin/properties/add" className="btn btn-primary min-h-11 px-4">
+          <Plus className="h-4 w-4" />
+          Add property
+        </Link>
+      }
+    />
+  );
 
-  const stats = [
-    { icon: Users, label: "Total users", value: summary?.totalUsers ?? customers.length, change: trend(customers).change, to: "/admin/users" },
-    { icon: UserCog, label: "Total agents", value: summary?.totalAgents ?? agents.length, change: trend(agents).change, to: "/admin/agents" },
-    { icon: UserCheck, label: "Active agents", value: summary?.activeAgents ?? activeAgents.length, to: "/admin/agents?status=active", tone: "green" },
-    { icon: UserX, label: "Expired agents", value: summary?.expiredAgents ?? expiredAgents.length, to: "/admin/agents?status=expired", tone: "red" },
-    { icon: Building2, label: "Total properties", value: summary?.totalProperties ?? listings.length, change: trend(listings, (p) => p.listing.createdAt).change, to: "/admin/properties" },
-    { icon: Radio, label: "Active properties", value: listings.filter(isPubliclyVisible).length, to: "/admin/properties?status=published", tone: "green" },
-    { icon: FileClock, label: "Pending properties", value: summary?.pendingProperties ?? pendingListings.length, to: "/admin/properties?status=pending", tone: "amber" },
-    { icon: MessageSquare, label: "Total inquiries", value: summary?.totalInquiries ?? inquiries.length, change: trend(inquiries).change, to: "/admin/inquiries" },
-    { icon: BadgeCheck, label: "Active subscriptions", value: summary?.activeSubscriptions ?? agents.filter((a) => a.sub.isActive).length, to: "/admin/subscriptions?status=active" },
-    { icon: Wallet, label: "Subscription revenue", value: formatCedis(summary?.revenue ?? revenue), change: trend(paid, (p) => p.createdAt, (p) => p.amount).change, to: "/admin/reports" },
+  if (!data) {
+    return query.error ? (
+      <>
+        {header}
+        <ErrorState title="Couldn't load the dashboard" message={query.error} onRetry={reload} />
+      </>
+    ) : (
+      <DashboardSkeleton />
+    );
+  }
+
+  const { properties, agents, customers, deals, revenue } = data;
+  const live = properties.published - properties.hidden;
+
+  const metrics = [
+    {
+      label: "Revenue, last 30 days",
+      value: formatCedis(revenue.last30),
+      hint: revenue.change !== null ? `${signedChange(revenue.change)} vs the 30 days before (${formatCedis(revenue.previous30)})` : `${formatCedis(revenue.total)} collected since launch`,
+      icon: Wallet,
+      to: "/admin/payments",
+      toLabel: "View payments",
+    },
+    {
+      label: "Live listings",
+      value: live.toLocaleString(),
+      hint: properties.inReview ? `${properties.inReview} awaiting review · ${properties.addedThisMonth} added this month` : `${properties.addedThisMonth} added this month · ${properties.total} in total`,
+      attention: properties.inReview > 0,
+      icon: Building2,
+      to: "/admin/properties",
+      toLabel: "Manage properties",
+    },
+    {
+      label: "Active agents",
+      value: agents.active.toLocaleString(),
+      hint: agents.pendingApplications
+        ? `${agents.pendingApplications} ${agents.pendingApplications === 1 ? "application" : "applications"} awaiting review`
+        : `${agents.total} registered${agents.expiringSoon ? ` · ${agents.expiringSoon} expiring soon` : ""}`,
+      attention: agents.pendingApplications > 0,
+      icon: UserCog,
+      to: agents.pendingApplications ? "/admin/agent-applications" : "/admin/agents",
+      toLabel: agents.pendingApplications ? "Review applications" : "Manage agents",
+    },
+    {
+      label: "Customers",
+      value: customers.total.toLocaleString(),
+      hint: customers.newLast30Days ? `+${customers.newLast30Days} in the last 30 days` : "None new in the last 30 days",
+      icon: Users,
+      to: "/admin/customers",
+      toLabel: "View customers",
+    },
   ];
 
-  const revenueSeries = monthlySeries({ revenue: { items: paid, date: (p) => p.createdAt, value: (p) => p.amount } });
-  const recentUsers = [...customers].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5);
+  // Most urgent first. label: [singular, plural]; items with a count of 0 are left out
+  const attention = [
+    { icon: ClipboardCheck, count: agents.pendingApplications, label: ["agent application to review", "agent applications to review"], hint: "Profile and subscription complete, waiting for approval", to: "/admin/agent-applications", tone: "amber", action: "Review" },
+    { icon: FileClock, count: properties.inReview, label: ["listing awaiting review", "listings awaiting review"], hint: "Approve or reject agent submissions", to: "/admin/properties?status=pending", tone: "amber", action: "Review" },
+    { icon: CreditCard, count: deals.rentalsToConfirm, label: ["paid rental to confirm", "paid rentals to confirm"], hint: "Payment received on Paystack", to: "/admin/rentals", tone: "brand", action: "Confirm" },
+    { icon: Wallet, count: deals.officePaymentsExpected, label: ["office payment expected", "office payments expected"], hint: "Confirm once the buyer has paid", to: "/admin/sale-requests", tone: "brand", action: "Open" },
+    { icon: HandCoins, count: deals.pendingOffers, label: ["offer awaiting a response", "offers awaiting a response"], hint: "Customers are waiting to hear back", to: "/admin/offers", tone: "brand", action: "Respond" },
+    { icon: Building, count: deals.newPurchaseRequests, label: ["new purchase request", "new purchase requests"], hint: "Contact the buyer with next steps", to: "/admin/sale-requests", tone: "sky", action: "Contact" },
+    { icon: Inbox, count: deals.newInquiries, label: ["new inquiry", "new inquiries"], hint: "Not answered yet", to: "/admin/inquiries?status=New", tone: "sky", action: "Reply" },
+    { icon: MessageCircle, count: data.unreadMessages, label: ["unread message", "unread messages"], hint: "About HomeBase listings", to: "/admin/messages", tone: "sky", action: "Reply" },
+    { icon: Star, count: data.reviews?.new || 0, label: ["new customer review", "new customer reviews"], hint: "Check them and hide anything inappropriate", to: "/admin/reviews", tone: "gray", action: "Moderate" },
+    { icon: Clock, count: agents.expiringSoon, label: ["agent plan expiring soon", "agent plans expiring soon"], hint: "Within the next 7 days", to: "/admin/subscriptions?status=expiring", tone: "gray", action: "Manage" },
+  ].filter((item) => item.count > 0);
+  const attentionTotal = attention.reduce((sum, item) => sum + item.count, 0);
+
+  const counters = [
+    { label: "Offers awaiting a response", value: deals.pendingOffers, to: "/admin/offers" },
+    { label: "Rentals to confirm", value: deals.rentalsToConfirm, to: "/admin/rentals" },
+    { label: "Purchases in progress", value: deals.purchasesInProgress, to: "/admin/sale-requests" },
+    { label: "Unanswered inquiries", value: deals.newInquiries, to: "/admin/inquiries?status=New" },
+  ];
 
   return (
     <>
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl">Welcome back, {user.firstName}</h1>
-        <p className="mt-1 text-gray-500">Here's what needs your attention across HomeBase today.</p>
+      {header}
+
+      <MetricGrid items={metrics} />
+
+      <div className="mt-6">
+        {attention.length ? (
+          <Panel title="Needs attention" description={`${attentionTotal} ${attentionTotal === 1 ? "item is" : "items are"} waiting on the ${siteName} team`} bodyClassName="">
+            <AttentionItems items={attention} />
+          </Panel>
+        ) : (
+          <AllClear>All clear. Agent applications, listings to review, offers and payments to confirm will show up here.</AllClear>
+        )}
       </div>
 
-      {/* Quick actions */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <QuickAction index={0} icon={FileClock} count={pendingListings.length} label="Pending properties" to="/admin/properties?status=pending" tone="bg-linear-to-br from-brand-500 to-brand-700" />
-        <QuickAction index={1} icon={UserCog} count={newAgents.length} label="New agents this month" to="/admin/agents?filter=new" tone="bg-linear-to-br from-gray-800 to-gray-950" />
-        <QuickAction index={2} icon={Clock} count={expiring.length} label="Expiring soon" to="/admin/subscriptions?status=expiring" tone="bg-linear-to-br from-amber-500 to-amber-700" />
-        <QuickAction index={3} icon={Inbox} count={newInquiries.length} label="New inquiries" to="/admin/inquiries?status=New" tone="bg-linear-to-br from-slate-600 to-slate-800" />
+      <div className="mt-6">
+        <PerformanceChart />
       </div>
 
-      {/* Overview */}
-      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        {stats.map((stat, index) => (
-          <AdminStat key={stat.label} index={index} {...stat} />
-        ))}
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <section className="rounded-2xl bg-white p-6 ring-1 ring-slate-200 xl:col-span-2">
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <h2 className="font-bold text-gray-900">Subscription revenue</h2>
-              <p className="text-sm text-gray-500">Paid subscriptions, last 6 months</p>
-            </div>
-            <Link to="/admin/reports" className="text-sm font-semibold text-brand-600 hover:text-brand-800">Reports</Link>
-          </div>
-          <BarChart title="Subscription revenue by month" data={revenueSeries} series={[{ key: "revenue", label: "Revenue" }]} format={formatCedis} />
-        </section>
-
-        <section className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
-          <h2 className="font-bold text-gray-900">Agent subscriptions</h2>
-          <p className="mb-5 text-sm text-gray-500">Current status of every agent plan</p>
-          <ProportionBar
+      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <Panel title="Inventory" description={`${properties.total} ${properties.total === 1 ? "property" : "properties"} on the platform`} to="/admin/properties" toLabel="Manage">
+          <p className="mb-4 text-xs text-gray-500">
+            {properties.published} published · {properties.inReview} in review · {properties.drafts} {properties.drafts === 1 ? "draft" : "drafts"}
+            {properties.hidden > 0 && ` · ${properties.hidden} hidden (agent plan lapsed)`}
+          </p>
+          <Breakdown
+            total={properties.available + properties.underOffer + properties.rented + properties.sold}
             segments={[
-              { label: "Active", value: agents.filter((a) => a.sub.status === "active").length, className: "bg-emerald-500" },
-              { label: "Expiring", value: expiring.length, className: "bg-amber-400" },
-              { label: "Expired", value: expiredAgents.length, className: "bg-red-500" },
-              { label: "Other", value: agents.filter((a) => ["cancelled", "pending", "none"].includes(a.sub.status)).length, className: "bg-slate-400" },
+              { label: "Available", value: properties.available, className: "bg-emerald-400" },
+              { label: "Under offer", value: properties.underOffer, className: "bg-amber-300" },
+              { label: "Rented", value: properties.rented, className: "bg-sky-400" },
+              { label: "Sold", value: properties.sold, className: "bg-gray-400" },
             ]}
           />
-          <Link to="/admin/subscriptions" className="btn btn-light mt-6 w-full">
-            <CreditCard className="h-4 w-4" />
-            Manage subscriptions
-          </Link>
-        </section>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-bold text-gray-900">Awaiting review</h2>
-            <Link to="/admin/properties?status=pending" className="text-sm font-semibold text-brand-600 hover:text-brand-800">Review all</Link>
-          </div>
-          {pendingListings.length === 0 ? (
-            <p className="rounded-2xl bg-slate-50 py-10 text-center text-sm text-gray-500">No properties waiting for approval.</p>
-          ) : (
-            <ul className="divide-y divide-slate-100">
-              {pendingListings.slice(0, 5).map((p) => (
-                <li key={p.id}>
-                  <Link to={`/admin/properties?status=pending&open=${p.id}`} className="-mx-2 flex items-center gap-3 rounded-xl px-2 py-3 transition hover:bg-slate-50">
-                    <img src={p.media.images[0]} alt="" className="h-12 w-16 shrink-0 rounded-lg object-cover" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-semibold text-gray-900">{p.title}</span>
-                      <span className="block truncate text-sm text-gray-500">{ownerOf(p).name} · {formatPrice(p)}</span>
-                    </span>
-                    <span className="shrink-0 text-xs text-gray-400">{formatRelative(p.listing.createdAt)}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="rounded-2xl bg-white p-6 ring-1 ring-slate-200">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-bold text-gray-900">Recent registrations</h2>
-            <Link to="/admin/users" className="text-sm font-semibold text-brand-600 hover:text-brand-800">All users</Link>
-          </div>
-          <ul className="divide-y divide-slate-100">
-            {recentUsers.map((u) => (
-              <li key={u.id} className="flex items-center gap-3 py-3">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-100 text-sm font-bold text-slate-600">{u.firstName[0]}{u.lastName[0]}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-semibold text-gray-900">{u.name}</span>
-                  <span className="block truncate text-sm text-gray-500">{u.email}</span>
-                </span>
-                <span className="flex shrink-0 flex-col items-end gap-1">
-                  <StatusBadge status={u.role === "agent" ? "Agent" : "User"} tone={u.role === "agent" ? "brand" : "gray"} dot={false} />
-                  <span className="text-xs text-gray-400">{formatRelative(u.createdAt)}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        </Panel>
+        <Panel title="Deals in progress" description="Open work across all listings" bodyClassName="">
+          <CounterList items={counters} />
+        </Panel>
+        <Panel title="Revenue by source" description="Everything collected so far" to="/admin/payments" toLabel="Payments" bodyClassName="" className="md:col-span-2 xl:col-span-1">
+          <RevenueSources revenue={revenue} />
+        </Panel>
       </div>
     </>
   );

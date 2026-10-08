@@ -10,3 +10,6 @@ export const getAgentInquiries = async () => (await client.get("/agents/inquirie
 
 export const updateAgentInquiryStatus = async (id, status) =>
   mapInquiry((await client.patch(`/agents/inquiries/${id}/status`, { status: inquiryStatusToApi(status) })).data);
+
+// Signed-in agents directory: available agents (active account + subscription), with or without listings
+export const getPublicAgents = async () => (await client.get("/agents/public")).data;

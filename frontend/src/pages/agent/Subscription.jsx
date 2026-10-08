@@ -1,212 +1,36 @@
 import { Link } from "react-router-dom";
-import { motion } from "motion/react";
-import { AlertTriangle, ArrowUpRight, CalendarCheck, CalendarX, Check, Lock, RefreshCw } from "lucide-react";
+import { ArrowRight, CalendarDays, Check, CreditCard, Lock, RefreshCw } from "lucide-react";
 import { useAgent } from "../../hooks/useAgent";
-import { usePlatform } from "../../context/usePlatform";
 import PageTitle from "../../components/agent/PageTitle";
+import WorkspaceStats from "../../components/agent/WorkspaceStats";
 import StatusBadge from "../../components/ui/StatusBadge";
-import { ANALYTICS_LEVELS, durationLabel } from "../../data/plans";
+import { ANALYTICS_LEVELS, durationLabel, planFeatureList } from "../../data/plans";
 import { formatDate } from "../../utils/date";
 
-const statusTone = { active: "green", expiring: "amber", expired: "red", cancelled: "gray", pending: "amber" };
-
-const Meter = ({ label, used, limit, message }) => {
-  const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
-  return (
-    <div>
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-sm font-medium text-gray-700">{label}</p>
-        <p className="text-sm font-semibold text-gray-900 tabular-nums">{used} / {limit} used</p>
-      </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
-          className={`h-full rounded-full ${pct >= 100 ? "bg-red-500" : pct >= 80 ? "bg-amber-400" : "bg-brand-500"}`}
-        />
-      </div>
-      {message && <p className={`mt-2 text-xs font-medium ${pct >= 100 ? "text-red-600" : "text-amber-700"}`}>{message}</p>}
-    </div>
-  );
-};
-
+const Meter = ({ label, used, limit }) => <div><div className="flex justify-between gap-3 text-sm"><p className="text-gray-500">{label}</p><p className="font-semibold text-gray-900">{used} / {limit}</p></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={limit || 1} aria-valuenow={Math.min(used, limit || 1)}><div className={`h-full rounded-full ${used >= limit ? "bg-amber-500" : "bg-brand-500"}`} style={{ width: `${limit ? Math.min(100, used / limit * 100) : 0}%` }} /></div></div>;
 const Subscription = () => {
-  const { user, myProperties, permissions: perms } = useAgent();
-  const { plans } = usePlatform();
+  const { user, permissions: perms } = useAgent();
   const sub = user.subscription;
   const plan = perms.plan;
   const state = perms.subscription;
-  const inactive = !state.isActive;
-
-  const totalDays = Math.max(1, Math.round((new Date(sub.expiryDate) - new Date(sub.startDate)) / 86400000));
-  const elapsedPercent = state.isActive ? Math.min(100, Math.round(((totalDays - state.daysRemaining) / totalDays) * 100)) : 100;
-  const sorted = [...plans].filter((p) => p.active).sort((a, b) => a.price - b.price);
-  const nextPlan = sorted.find((p) => p.price > (plan?.price ?? 0));
-
-  // What the plan includes, with locked items shown so upgrades are understandable
-  const featureRows = plan
-    ? [
-        { label: `Up to ${plan.propertyLimit} active properties`, on: true },
-        { label: `Up to ${perms.imageLimit} photos per property`, on: true },
-        { label: plan.featuredLimit > 0 ? `${plan.featuredLimit} featured listings` : "Featured listings", on: plan.featuredLimit > 0 },
-        { label: "Property view analytics", on: true },
-        { label: "Inquiry statistics & property performance", on: plan.analytics !== "basic" },
-        { label: "Advanced listing performance analytics", on: plan.analytics === "advanced" },
-        { label: plan.inquiryManagement === "full" ? "Full inquiry management" : "Inquiry status tracking", on: plan.inquiryManagement === "full" },
-        { label: "Priority visibility in search", on: plan.priorityVisibility },
-        ...(plan.extraFeatures || []).map((f) => ({ label: f, on: true })),
-      ]
-    : [];
-
-  const propertyMessage = perms.limitReached
-    ? "Property limit reached. Upgrade your plan to add more properties."
-    : perms.nearLimit
-      ? "You are close to your property limit."
-      : null;
-
-  return (
-    <>
-      <PageTitle title="Subscription" description="Your plan, limits, usage and renewal." />
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Plan */}
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={`relative overflow-hidden rounded-3xl p-6 sm:p-8 lg:col-span-2 ${inactive ? "bg-white ring-2 ring-red-200" : "bg-gray-900 text-white"}`}
-        >
-          {!inactive && <div className="absolute -top-20 -right-20 h-60 w-60 rounded-full bg-brand-500/30 blur-3xl" />}
-          <div className="relative">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className={`text-sm ${inactive ? "text-gray-500" : "text-gray-400"}`}>Current plan</p>
-              <StatusBadge status={state.statusLabel} tone={statusTone[state.status]} />
-            </div>
-            <h2 className={`mt-2 text-3xl font-extrabold tracking-tight ${inactive ? "text-gray-900" : ""}`}>{plan?.name || sub.planName}</h2>
-            <p className={inactive ? "text-gray-600" : "text-gray-300"}>
-              ₵{sub.price.toLocaleString()} for {plan ? durationLabel(plan.durationDays) : `${totalDays} days`}
-            </p>
-
-            {inactive && (
-              <p className="mt-5 flex items-start gap-3 rounded-2xl bg-red-50 p-4 text-sm text-red-800">
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
-                {state.status === "pending"
-                  ? "Your payment is waiting for confirmation. Your plan starts as soon as it's confirmed."
-                  : `Your subscription is ${state.statusLabel.toLowerCase()}. Your ${myProperties.length} properties are safe and visible to you, but hidden from the public. Publishing and plan features are paused until you renew.`}
-              </p>
-            )}
-
-            <dl className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
-              <div>
-                <dt className={`flex items-center gap-1.5 text-sm ${inactive ? "text-gray-500" : "text-gray-400"}`}><CalendarCheck className="h-4 w-4" /> Start date</dt>
-                <dd className="mt-1 font-semibold">{formatDate(sub.startDate)}</dd>
-              </div>
-              <div>
-                <dt className={`flex items-center gap-1.5 text-sm ${inactive ? "text-gray-500" : "text-gray-400"}`}><CalendarX className="h-4 w-4" /> Expiry date</dt>
-                <dd className={`mt-1 font-semibold ${inactive ? "text-red-600" : ""}`}>{formatDate(sub.expiryDate)}</dd>
-              </div>
-              <div className="col-span-2 sm:col-span-1">
-                <dt className={`text-sm ${inactive ? "text-gray-500" : "text-gray-400"}`}>Days remaining</dt>
-                <dd className={`mt-1 text-2xl font-extrabold ${inactive ? "text-red-600" : state.expiringSoon ? "text-amber-300" : ""}`}>{state.daysRemaining}</dd>
-              </div>
-            </dl>
-
-            <div className="mt-6">
-              <div className={`h-2 overflow-hidden rounded-full ${inactive ? "bg-red-100" : "bg-white/10"}`}>
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${elapsedPercent}%` }}
-                  transition={{ duration: 0.7, ease: "easeOut" }}
-                  className={`h-full rounded-full ${inactive ? "bg-red-500" : state.expiringSoon ? "bg-amber-400" : "bg-brand-400"}`}
-                />
-              </div>
-              <p className={`mt-2 text-xs ${inactive ? "text-gray-500" : "text-gray-400"}`}>{inactive ? "Billing period ended" : `${elapsedPercent}% of your billing period used`}</p>
-            </div>
-
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              {state.status !== "pending" && (
-                <Link to={`/agent/checkout?plan=${sub.planId}`} className="btn btn-primary">
-                  <RefreshCw className="h-4 w-4" />
-                  {inactive ? "Renew Subscription" : `Renew ${plan?.name || sub.planName}`}
-                </Link>
-              )}
-              <Link to="/agent/plans#plans" className={`btn ${inactive ? "btn-light" : "bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20"}`}>
-                {nextPlan ? `Upgrade to ${nextPlan.name}` : "Change plan"}
-                <ArrowUpRight className="h-4 w-4" />
-              </Link>
-            </div>
-          </div>
-        </motion.section>
-
-        {/* Usage */}
-        <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="space-y-6 rounded-3xl bg-white p-6 ring-1 ring-gray-200 sm:p-8">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">Usage</h2>
-            <p className="mt-1 text-sm text-gray-500">Published and pending listings count towards your limit. Drafts don't.</p>
-          </div>
-          <Meter label="Properties" used={perms.activeCount} limit={perms.propertyLimit} message={propertyMessage} />
-          {perms.featuredLimit > 0 ? (
-            <Meter label="Featured listings" used={perms.featuredCount} limit={perms.featuredLimit} message={perms.featuredCount >= perms.featuredLimit ? "Featured limit reached." : null} />
-          ) : (
-            <p className="flex items-start gap-2 rounded-2xl bg-gray-50 p-3 text-sm text-gray-600">
-              <Lock className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
-              Featured listings are not available on your current plan.
-            </p>
-          )}
-          <div className="grid grid-cols-2 gap-3 text-center">
-            <div className="rounded-2xl bg-gray-50 p-3">
-              <p className="text-lg font-bold text-gray-900">{perms.imageLimit}</p>
-              <p className="text-xs text-gray-500">Photos per property</p>
-            </div>
-            <div className="rounded-2xl bg-gray-50 p-3">
-              <p className="text-lg font-bold text-gray-900">{ANALYTICS_LEVELS[perms.analyticsLevel]?.label}</p>
-              <p className="text-xs text-gray-500">Analytics</p>
-            </div>
-          </div>
-        </motion.section>
-      </div>
-
-      {/* Features */}
-      <section className="mt-6 rounded-3xl bg-white p-6 ring-1 ring-gray-200 sm:p-8">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">What's included</h2>
-            <p className="text-sm text-gray-500">Features on your {plan?.name} plan. Locked items are available on higher plans.</p>
-          </div>
-          {nextPlan && <Link to="/agent/plans#plans" className="text-sm font-semibold text-brand-600 hover:text-brand-800">Compare plans</Link>}
-        </div>
-        <ul className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {featureRows.map((f) => (
-            <li key={f.label} className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm ${f.on ? "bg-brand-50/60 text-gray-800" : "bg-gray-50 text-gray-400"}`}>
-              {f.on ? <Check className="h-4 w-4 shrink-0 text-brand-500" /> : <Lock className="h-4 w-4 shrink-0" />}
-              {f.label}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* Billing details */}
-      <section className="mt-6 rounded-3xl bg-white p-6 ring-1 ring-gray-200 sm:p-8">
-        <h2 className="text-lg font-bold text-gray-900">Billing details</h2>
-        <dl className="mt-5 grid grid-cols-1 gap-5 text-sm sm:grid-cols-3">
-          <div>
-            <dt className="text-gray-500">Payment method</dt>
-            <dd className="mt-1 font-semibold text-gray-900">{sub.paymentMethod || "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-gray-500">Last payment</dt>
-            <dd className="mt-1 font-semibold text-gray-900">₵{sub.price.toLocaleString()} · {sub.paymentStatus === "paid" ? formatDate(sub.paidAt || sub.startDate) : sub.paymentStatus}</dd>
-          </div>
-          <div>
-            <dt className="text-gray-500">Reference</dt>
-            <dd className="mt-1 font-mono font-semibold break-all text-gray-900">{sub.reference}</dd>
-          </div>
-        </dl>
-      </section>
-
-
-    </>
-  );
+  const tone = state.isActive ? state.expiringSoon ? "amber" : "green" : "gray";
+  return <div className="space-y-6">
+    <PageTitle title="Your subscription" description="A clear view of your plan, listing limits, and next renewal." eyebrow="Your account" action={<Link to="/agent/subscription/plans" className="btn btn-light">Compare plans<ArrowRight className="h-4 w-4" /></Link>} />
+    <WorkspaceStats items={[
+      { label: "Days remaining", value: sub ? state.daysRemaining : "—", note: sub ? `Ends ${formatDate(sub.expiryDate)}` : "Subscription not on file", icon: CalendarDays },
+      { label: "Listing slots used", value: `${perms.activeCount} / ${perms.propertyLimit}`, note: `${perms.remainingListings} slots available` },
+      { label: "Photos per property", value: perms.imageLimit, note: "Your current upload limit" },
+      { label: "Featured listings", value: `${perms.featuredCount} / ${perms.featuredLimit}`, note: "Extra visibility for your properties" },
+    ]} />
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+      <section className="workspace-card"><div className="workspace-card-header"><h2>Current plan</h2><StatusBadge status={sub ? state.statusLabel : perms.isActive ? "Subscription waived" : "No subscription"} tone={tone} /></div><div className="p-6 sm:p-8"><div className="flex items-start justify-between gap-4"><div><p className="workspace-eyebrow">Your business plan</p><h2 className="mt-3 text-3xl font-semibold tracking-tight text-gray-900">{plan?.name || sub?.planName || "Choose your plan"}</h2>{sub && <p className="mt-2 text-sm text-gray-500">₵{Number(sub.price || 0).toLocaleString()} / {plan ? durationLabel(plan.durationDays) : "billing period"}</p>}</div><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand-700"><CreditCard className="h-6 w-6" /></span></div>
+      <p className="mt-5 text-sm leading-relaxed text-gray-500">{!sub ? perms.isActive ? "Your account currently uses the platform's default plan. A paid subscription is optional while this requirement is waived." : "Choose a plan to start publishing your properties." : state.isActive ? state.expiringSoon ? `Your plan ends in ${state.daysRemaining} days. Renew early to keep your listings available.` : "Your plan is active. Early renewal adds time to your current expiry date." : state.status === "pending" ? "Your payment is awaiting confirmation. Check its status before starting another payment." : "Your listings are saved. Renew your plan to restore publishing and public visibility."}</p>
+      {sub && <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-gray-100 pt-5 text-sm"><div><dt className="text-gray-500">Period started</dt><dd className="mt-1 font-semibold text-gray-900">{formatDate(sub.startDate)}</dd></div><div><dt className="text-gray-500">Period ends</dt><dd className="mt-1 font-semibold text-gray-900">{formatDate(sub.expiryDate)}</dd></div></dl>}
+      <div className="mt-7 flex flex-wrap gap-3">{sub && state.status !== "pending" && <Link to={`/agent/subscription/checkout?plan=${sub.planId}`} className="btn btn-primary"><RefreshCw className="h-4 w-4" />Renew {plan?.name || sub.planName}</Link>}<Link to="/agent/subscription/plans" className={`btn ${sub ? "btn-light" : "btn-primary"}`}>{sub ? "Change plan" : "Choose a plan"}<ArrowRight className="h-4 w-4" /></Link></div></div></section>
+      <section className="workspace-card"><div className="workspace-card-header"><div><h2>Plan usage</h2><p>Live listings and listings in review count.</p></div></div><div className="space-y-6 p-6"><Meter label="Property listings" used={perms.activeCount} limit={perms.propertyLimit} /><Meter label="Featured properties" used={perms.featuredCount} limit={perms.featuredLimit} />{perms.limitReached && <p className="rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">You've reached your listing limit. Upgrade to publish more; your drafts remain available.</p>}<div className="flex items-center justify-between border-t border-gray-100 pt-4 text-sm"><span className="text-gray-500">Analytics</span><span className="font-semibold text-gray-900">{ANALYTICS_LEVELS[perms.analyticsLevel]?.label || "Basic"}</span></div>{!perms.canUseFeatured && <p className="flex items-start gap-2 text-xs leading-relaxed text-gray-500"><Lock className="h-4 w-4 shrink-0" />Featured placement is available with eligible plans.</p>}</div></section>
+    </div>
+    {plan && <details className="workspace-card"><summary className="cursor-pointer px-6 py-5 text-sm font-semibold text-gray-900">What's included in {plan.name}</summary><ul className="grid gap-3 border-t border-gray-100 p-6 sm:grid-cols-2">{planFeatureList(plan).map((feature) => <li key={feature} className="flex items-start gap-2 text-sm text-gray-600"><Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />{feature}</li>)}</ul></details>}
+    {sub && <section className="workspace-card"><div className="workspace-card-header"><h2>Last payment</h2><StatusBadge status={sub.paymentStatus} /></div><dl className="grid gap-5 p-6 text-sm sm:grid-cols-3"><div><dt className="text-xs text-gray-500">Payment method</dt><dd className="mt-2 font-semibold text-gray-900">{sub.paymentMethod || "—"}</dd></div><div><dt className="text-xs text-gray-500">Amount & date</dt><dd className="mt-2 font-semibold text-gray-900">₵{Number(sub.price || 0).toLocaleString()}<span className="mt-1 block text-xs font-normal text-gray-500">{formatDate(sub.paidAt || sub.startDate)}</span></dd></div><div><dt className="text-xs text-gray-500">Payment reference</dt><dd className="mt-2 break-all font-mono text-xs text-gray-900">{sub.reference || "—"}</dd></div></dl></section>}
+  </div>;
 };
-
 export default Subscription;

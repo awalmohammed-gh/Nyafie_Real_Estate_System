@@ -1,17 +1,19 @@
 import { Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import { motion } from "motion/react";
+import NavOverlay from "../nav/NavOverlay";
 
-// Compact image header used at the top of inner pages
+// Compact image header used at the top of inner pages. The navbar sits transparently on top of it.
 const PageHeader = ({ title, description, image, crumbs = [] }) => {
   return (
     <section className="relative isolate overflow-hidden bg-gray-900">
+      <NavOverlay />
       {image && (
         <img src={image} alt="" className="absolute inset-0 -z-10 h-full w-full object-cover opacity-40" />
       )}
       <div className="absolute inset-0 -z-10 bg-linear-to-t from-gray-950 via-gray-900/70 to-brand-900/40" />
 
-      <div className="container-page py-16 sm:py-20 lg:py-24">
+      <div className="container-page pt-32 pb-16 sm:pt-36 sm:pb-20 lg:pt-44 lg:pb-24">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

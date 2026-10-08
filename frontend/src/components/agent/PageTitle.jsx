@@ -1,11 +1,8 @@
-const PageTitle = ({ title, description, action }) => (
-  <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-    <div>
-      <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 sm:text-3xl">{title}</h1>
-      {description && <p className="mt-1 text-gray-500">{description}</p>}
-    </div>
-    {action && <div className="flex shrink-0 flex-wrap gap-3">{action}</div>}
-  </div>
+const PageTitle = ({ title, description, action, eyebrow = "Your workspace" }) => (
+  <header className="workspace-page-title">
+    <div className="min-w-0"><p className="workspace-eyebrow mb-2">{eyebrow}</p><h1>{title}</h1>{description && <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-500">{description}</p>}</div>
+    {action && <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>}
+  </header>
 );
 
 export default PageTitle;

@@ -1,25 +1,22 @@
-import About from "../components/Landing/About"
-import Amenities from "../components/Landing/Amenities"
-import ApartmentPlans from "../components/Landing/ApartmentPlans"
-import FeatureListings from "../components/Landing/FeatureListings"
-import Hero from "../components/Landing/Hero"
-import Neighbourhoods from "../components/Landing/Neighbourhoods"
-import OurServices from "../components/Landing/OurServices"
-import CtaBanner from "../components/ui/CtaBanner"
+import FeatureListings from "../components/Landing/FeatureListings";
+import Hero from "../components/Landing/Hero";
+import Neighbourhoods from "../components/Landing/Neighbourhoods";
+import HomeJourney from "../components/Landing/HomeJourney";
+import { propertyApi } from "../frontApi";
+import { useApiQuery } from "../hooks/useApiQuery";
+import "../components/Landing/home.css";
 
 const Home = () => {
-  return (
-    <>
-      <Hero />
-      <About />
-      <OurServices />
-      <FeatureListings />
-      <Neighbourhoods />
-      <ApartmentPlans />
-      <Amenities />
-      <CtaBanner />
-    </>
-  )
-}
+  const featured = useApiQuery("home-featured", () => propertyApi.searchProperties({ sort: "featured", availability: "Available", limit: 3 }));
 
-export default Home
+  return (
+    <div className="home-page">
+      <Hero />
+      <FeatureListings featured={featured} />
+      <Neighbourhoods />
+      <HomeJourney />
+    </div>
+  );
+};
+
+export default Home;

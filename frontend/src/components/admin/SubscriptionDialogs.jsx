@@ -44,7 +44,7 @@ const ChangePlan = ({ agent, onClose }) => {
             role="radio"
             aria-checked={planId === plan.id}
             onClick={() => setPlanId(plan.id)}
-            className={`flex w-full items-start justify-between gap-4 rounded-2xl p-4 text-left ring-1 transition ${planId === plan.id ? "bg-brand-50 ring-2 ring-brand-500" : "ring-gray-200 hover:ring-gray-300"}`}
+            className={`flex w-full items-start justify-between gap-4 rounded-lg p-4 text-left ring-1 transition ${planId === plan.id ? "bg-brand-50 ring-2 ring-brand-500" : "ring-gray-200 hover:ring-gray-300"}`}
           >
             <span>
               <span className="flex items-center gap-2 font-semibold text-gray-900">

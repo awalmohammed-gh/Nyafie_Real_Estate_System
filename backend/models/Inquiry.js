@@ -11,6 +11,7 @@ const inquirySchema = new mongoose.Schema(
     email: { type: String, required: true, lowercase: true, trim: true },
     phone: { type: String, default: "", trim: true },
     message: { type: String, required: true, maxlength: 2000 },
+    conversation: { type: mongoose.Schema.Types.ObjectId, ref: "Conversation", default: null },
     status: { type: String, enum: ["new", "contacted", "inProgress", "closed"], default: "new" },
   },
   schemaOptions

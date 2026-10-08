@@ -1,17 +1,17 @@
-import { useRealEstate } from '../context/useRealEstate';
 import PropertyBrowser from '../components/PropertyBrowser';
 
-const Listings = () => {
-  const { properties } = useRealEstate();
-
-  return (
-    <PropertyBrowser
-      properties={properties}
-      title="All Listings"
-      description="Explore our full range of properties for sale and rent. Find listings with detailed information, photos, and features to help you make the best choice."
-      heroImage="/listBg.jpg"
-    />
-  );
+const banner = {
+  heading: 'Explore all listings',
+  image: { src: '/banners/listings-suburb.jpg', srcSet: '/banners/listings-suburb-960.jpg 960w, /banners/listings-suburb.jpg 1920w', position: 'center 45%' },
 };
+
+// Every published listing, searched and paginated on the server. The banner names the active filters.
+const Listings = () => (
+  <PropertyBrowser
+    title="All Listings"
+    description="Browse available properties and discover homes, apartments and spaces to buy or rent across Ghana."
+    banner={banner}
+  />
+);
 
 export default Listings;

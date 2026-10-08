@@ -1,6 +1,5 @@
 // Buckets records into the last N calendar months for charts
-export const lastMonths = (count = 6) => {
-  const now = new Date();
+export const lastMonths = (count = 6, now = new Date()) => {
   return Array.from({ length: count }, (_, i) => {
     const start = new Date(now.getFullYear(), now.getMonth() - (count - 1 - i), 1);
     const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
@@ -9,8 +8,8 @@ export const lastMonths = (count = 6) => {
 };
 
 // series: { [key]: { items, date: (item) => date, value?: (item) => number } }
-export const monthlySeries = (series, count = 6) =>
-  lastMonths(count).map(({ start, end, label }) => ({
+export const monthlySeries = (series, count = 6, now = new Date()) =>
+  lastMonths(count, now).map(({ start, end, label }) => ({
     label,
     values: Object.fromEntries(
       Object.entries(series).map(([key, { items, date, value = () => 1 }]) => [
