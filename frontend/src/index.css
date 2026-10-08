@@ -74,6 +74,19 @@
     scrollbar-color: rgb(255 255 255 / 0.4) transparent;
   }
 
+  /* Phones and tablets scroll by touch: hide every scrollbar (scrolling still works).
+     !important in this base layer outranks any later scrollbar style. */
+  @media (hover: none) and (pointer: coarse) {
+    * {
+      scrollbar-width: none !important;
+    }
+    *::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+  }
+
   @supports not (scrollbar-color: auto) {
     .admin-workspace .workspace-sidebar-scroll::-webkit-scrollbar-track {
       background: transparent;
