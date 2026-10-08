@@ -21,7 +21,7 @@ const listen = async (server) => { server.listen(0, '127.0.0.1'); await new Prom
 test("production configuration, metadata, uploads and marketplace security", async (t) => {
   const keys = ['NODE_ENV', 'PUBLIC_SITE_URL', 'CLIENT_URL', 'JWT_KEY', 'COOKIE_SAME_SITE', 'VERCEL_ENV', 'VERCEL_URL', 'VERCEL_BRANCH_URL', 'FRONTEND_INTERNAL_URL', 'MONGODB_URI', 'CLOUD_NAME', 'CLOUD_API_KEY', 'CLOUD_SECRET_KEY', 'ADMIN_EMAIL', 'ADMIN_PSD'];
   const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
-  Object.assign(process.env, { NODE_ENV: 'production', PUBLIC_SITE_URL: 'https://homeb.vercel.app', CLIENT_URL: 'https://homeb.vercel.app', JWT_KEY: 'production-fixture-signing-key-at-least-32-characters', MONGODB_URI: 'mongodb://example.test/test', CLOUD_NAME: 'test', CLOUD_API_KEY: 'fixture', CLOUD_SECRET_KEY: 'fixture' });
+  Object.assign(process.env, { NODE_ENV: 'production', PUBLIC_SITE_URL: 'https://homeb-real-estate.vercel.app', CLIENT_URL: 'https://homeb-real-estate.vercel.app', JWT_KEY: 'production-fixture-signing-key-at-least-32-characters', MONGODB_URI: 'mongodb://example.test/test', CLOUD_NAME: 'test', CLOUD_API_KEY: 'fixture', CLOUD_SECRET_KEY: 'fixture' });
   delete process.env.COOKIE_SAME_SITE;
   delete process.env.VERCEL_ENV;
   delete process.env.VERCEL_URL;
@@ -55,7 +55,7 @@ test("production configuration, metadata, uploads and marketplace security", asy
   const server = http.createServer(app);
   const base = await listen(server);
   const cookie = (user, session) => `${session}_token=${jwt.sign({ id: String(user._id), role: user.role, session }, process.env.JWT_KEY, { expiresIn: '1h' })}`;
-  const call = (path, user, session = 'customer', body) => fetch(base + path, { method: body ? 'POST' : 'GET', headers: { Origin: 'https://homeb.vercel.app', 'X-Session-Domain': session, ...(user ? { Cookie: cookie(user, session) } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+  const call = (path, user, session = 'customer', body) => fetch(base + path, { method: body ? 'POST' : 'GET', headers: { Origin: 'https://homeb-real-estate.vercel.app', 'X-Session-Domain': session, ...(user ? { Cookie: cookie(user, session) } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
   try {
     await t.test('runtime rejects missing or weak production credentials without exposing values', () => {
       validateRuntimeConfig();
@@ -67,20 +67,20 @@ test("production configuration, metadata, uploads and marketplace security", asy
       delete process.env.PUBLIC_SITE_URL;
       assert.throws(validateRuntimeConfig, /PUBLIC_SITE_URL/);
       process.env.PUBLIC_SITE_URL = url;
-      process.env.CLIENT_URL = 'https://homeb.vercel.app/path';
+      process.env.CLIENT_URL = 'https://homeb-real-estate.vercel.app/path';
       assert.throws(validateRuntimeConfig, /valid HTTPS origins/);
-      process.env.CLIENT_URL = 'https://homeb.vercel.app';
+      process.env.CLIENT_URL = 'https://homeb-real-estate.vercel.app';
     });
     await t.test('callbacks have a single canonical origin; previews accept only their own configured origins', () => {
-      process.env.CLIENT_URL = 'https://homeb.vercel.app,https://www.example.test';
-      assert.equal(paymentReturnUrl({ get: () => 'https://www.example.test' }), 'https://homeb.vercel.app');
+      process.env.CLIENT_URL = 'https://homeb-real-estate.vercel.app,https://www.example.test';
+      assert.equal(paymentReturnUrl({ get: () => 'https://www.example.test' }), 'https://homeb-real-estate.vercel.app');
       process.env.VERCEL_ENV = 'preview';
       process.env.VERCEL_URL = 'homebase-preview.vercel.app';
       assert.ok(clientOrigins().includes('https://homebase-preview.vercel.app'));
-      assert.equal(paymentReturnUrl({ get: () => 'https://evil.example' }), 'https://homeb.vercel.app');
+      assert.equal(paymentReturnUrl({ get: () => 'https://evil.example' }), 'https://homeb-real-estate.vercel.app');
       assert.equal(paymentReturnUrl({ get: () => 'https://homebase-preview.vercel.app' }), 'https://homebase-preview.vercel.app');
       delete process.env.VERCEL_ENV; delete process.env.VERCEL_URL;
-      process.env.CLIENT_URL = 'https://homeb.vercel.app';
+      process.env.CLIENT_URL = 'https://homeb-real-estate.vercel.app';
     });
     await t.test('role cookies are host-only, HTTP-only, secure and same-site; cross-site requires explicit configuration', () => {
       for (const session of ['customer', 'agent', 'admin']) setAuthCookie({ cookie: (_name, _token, options) => { assert.equal(options.secure, true); assert.equal(options.httpOnly, true); assert.equal(options.sameSite, 'lax'); assert.equal(options.domain, undefined); } }, customer._id, session);
@@ -100,7 +100,7 @@ test("production configuration, metadata, uploads and marketplace security", asy
       assert.equal(response.status, 200);
       assert.match(response.headers.get('content-type'), /text\/html/);
       assert.match(html, /<title>Accra &amp; East Legon Home \| HomeBase<\/title>/);
-      assert.ok(html.includes(`https://homeb.vercel.app/house/${property._id}`));
+      assert.ok(html.includes(`https://homeb-real-estate.vercel.app/house/${property._id}`));
       assert.ok(html.includes('/assets/app.js'));
       assert.equal(html.includes('agent@example.test'), false);
       assert.equal(html.includes('Old description'), false);
@@ -117,7 +117,7 @@ test("production configuration, metadata, uploads and marketplace security", asy
     });
     await t.test('robots and sitemap contain canonical public pages and visible properties, never private profiles', async () => {
       const robots = await (await call('/robots.txt')).text();
-      assert.match(robots, /Sitemap: https:\/\/homeb.vercel.app\/sitemap.xml/);
+      assert.match(robots, /Sitemap: https:\/\/homeb-real-estate.vercel.app\/sitemap.xml/);
       assert.match(robots, /Disallow: \/agents/);
       const index = await (await call('/sitemap.xml')).text();
       assert.match(index, /sitemap-properties-1.xml/);
@@ -132,7 +132,7 @@ test("production configuration, metadata, uploads and marketplace security", asy
       delete process.env.VERCEL_ENV;
     });
     await t.test('metadata escapes markup and script terminators', () => {
-      const html = injectMetadata('<html><head></head></html>', { title: '</title><script>alert(1)</script>', description: '" /><script>bad()</script>', image: '/image.png', canonical: 'https://homeb.vercel.app' });
+      const html = injectMetadata('<html><head></head></html>', { title: '</title><script>alert(1)</script>', description: '" /><script>bad()</script>', image: '/image.png', canonical: 'https://homeb-real-estate.vercel.app' });
       assert.equal(html.includes('<script>alert(1)</script>'), false);
       assert.equal(html.includes('<script>bad()</script>'), false);
       assert.match(html, /\\u003c/);
