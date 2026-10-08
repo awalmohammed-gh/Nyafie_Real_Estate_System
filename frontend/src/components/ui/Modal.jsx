@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { X } from "lucide-react";
 import { useLockBodyScroll } from "../../hooks/useLockBodyScroll";
@@ -9,11 +9,22 @@ const sizes = { sm: "sm:max-w-md", md: "sm:max-w-lg", lg: "sm:max-w-2xl", xl: "s
 const ModalPanel = ({ onClose, title, description, size, children, footer }) => {
   useLockBodyScroll(true);
   const onEscape = useEffectEvent(() => onClose());
+  const panel = useRef(null);
 
   useEffect(() => {
-    const handleKey = (e) => e.key === "Escape" && onEscape();
+    const previous = document.activeElement;
+    const focusable = () => [...(panel.current?.querySelectorAll('button, a[href], input, select, textarea, [tabindex="0"]') || [])].filter((element) => !element.disabled && element.getClientRects().length);
+    focusable()[0]?.focus();
+    const handleKey = (e) => {
+      if (e.key === "Escape") onEscape();
+      if (e.key === "Tab") {
+        const items = focusable(), first = items[0], last = items.at(-1);
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
+    };
     window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
+    return () => { window.removeEventListener("keydown", handleKey); previous?.focus(); };
   }, []);
 
   return (
@@ -28,6 +39,7 @@ const ModalPanel = ({ onClose, title, description, size, children, footer }) => 
       />
       <motion.div
         role="dialog"
+        ref={panel}
         aria-modal="true"
         aria-label={title}
         initial={{ opacity: 0, y: 32, scale: 0.98 }}

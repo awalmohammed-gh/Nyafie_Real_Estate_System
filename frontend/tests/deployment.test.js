@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { prepareImagePayload } from "../src/utils/imagePayload.js";
+import { prepareImagePayload, prepareRequestImagePayload } from "../src/utils/imagePayload.js";
 import { isListingPublic, mergeAgents } from "../src/utils/property.js";
 
 test("dashboard visibility is independent of the first public property page", () => {
@@ -30,6 +30,17 @@ test("failed image uploads keep editable form data intact", async () => {
   const snapshot = structuredClone(form);
   await assert.rejects(prepareImagePayload(form, async () => { throw new Error('Upload failed'); }), /Upload failed/);
   assert.deepEqual(form, snapshot);
+});
+
+test("customer profile photos reach their dedicated endpoint without an owner-only upload", async () => {
+  const data = { image: "data:image/jpeg;base64,/9j/" };
+  const upload = () => { throw new Error("Customers cannot use the owner upload endpoint"); };
+  assert.equal(await prepareRequestImagePayload({ url: "/auth/customer/me/photo", method: "post", data }, upload), data);
+  assert.equal(await prepareRequestImagePayload({ url: "/uploads/image", method: "post", data }, upload), data);
+  let uploads = 0;
+  const listing = await prepareRequestImagePayload({ url: "/properties", method: "post", data }, async () => { uploads++; return "https://example.test/photo.jpg"; });
+  assert.equal(uploads, 1);
+  assert.equal(listing.image, "https://example.test/photo.jpg");
 });
 
 test("directory totals survive a bounded shared property cache", () => {

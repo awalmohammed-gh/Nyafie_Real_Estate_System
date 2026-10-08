@@ -26,6 +26,7 @@ const FILTERS = [
   { id: "Action", label: "Needs action", match: (r) => ["Paid", "Confirmed"].includes(r.status) },
   { id: "Payment", label: "Awaiting payment", match: (r) => ["Pending", "Payment Pending"].includes(r.status) },
   { id: "Active", label: "Active", match: (r) => r.status === "Active" },
+  { id: "CheckIns", label: "Upcoming check-ins", match: (r) => r.hotelId && ["Paid", "Confirmed"].includes(r.status) && r.startDate.slice(0, 10) >= new Date().toISOString().slice(0, 10) },
   { id: "Closed", label: "Closed", match: (r) => ["Completed", "Cancelled"].includes(r.status) },
 ];
 
@@ -53,6 +54,7 @@ const RentalsBoard = ({ scope }) => {
   const { rentals, loading, error: loadError, reload, updateTransaction } = useTransactions();
   const [params] = useSearchParams();
   const [propertyId, setPropertyId] = useState(params.get("property") || "all");
+  const [roomId, setRoomId] = useState(params.get("room") || "all");
   const [ownerId, setOwnerId] = useState("all");
   const [range, setRange] = useState("all");
   const [status, setStatus] = useState("All");
@@ -68,15 +70,17 @@ const RentalsBoard = ({ scope }) => {
 
   const owners = [...new Map(rentals.map((r) => [r.owner.id, r.owner])).values()];
   const propertyOptions = [...new Map(rentals.map((r) => [r.property.id, r.property])).values()];
+  const roomOptions = [...new Map(rentals.filter((r) => r.hotelId && (propertyId === "all" || r.property.id === propertyId)).map((r) => [r.roomTypeId, { id: r.roomTypeId, name: r.roomName, hotel: r.property.title }])).values()];
   const scoped = rentals
     .filter((r) => ownerId === "all" || r.owner.id === ownerId)
     .filter((r) => propertyId === "all" || r.property.id === propertyId)
+    .filter((r) => roomId === "all" || r.roomTypeId === roomId)
     .filter((r) => range === "all" || isWithinDays(r.createdAt, Number(range)));
 
   const q = query.trim().toLowerCase();
   const rows = scoped
     .filter(FILTERS.find((f) => f.id === status).match)
-    .filter((r) => !q || `${r.contactName} ${r.property.title} ${r.reference || ""}`.toLowerCase().includes(q));
+    .filter((r) => !q || `${r.contactName} ${r.property.title} ${r.roomName} ${r.reference || ""}`.toLowerCase().includes(q));
   const counts = Object.fromEntries(FILTERS.map((f) => [f.id, scoped.filter(f.match).length]));
   const open = openId && rentals.find((r) => r.id === openId);
   const chatLink = open?.conversationId && (isAdmin ? open.ownerType === "admin" && `/admin/messages?c=${open.conversationId}` : `/agent/messages?c=${open.conversationId}`);
@@ -116,6 +120,7 @@ const RentalsBoard = ({ scope }) => {
       render: (r) => (
         <div className="min-w-0">
           <p className="max-w-44 truncate font-semibold text-gray-900">{r.property.title}</p>
+          {r.hotelId && <p className="text-xs text-brand-700">{r.roomName} · {r.numberOfRooms} room(s)</p>}
           {isAdmin && <p className="text-xs text-gray-400">{r.ownerType === "admin" ? "Admin listing" : `Agent · ${r.owner.name}`}</p>}
         </div>
       ),
@@ -134,7 +139,7 @@ const RentalsBoard = ({ scope }) => {
     { key: "payment", header: "Payment", render: (r) => <StatusBadge status={r.paymentStatus} dot={false} /> },
     { key: "status", header: "Rental", render: (r) => <StatusBadge status={r.status} /> },
     { key: "paid", header: "Date paid", render: (r) => <span className="whitespace-nowrap text-gray-600">{r.paidAt ? formatDate(r.paidAt) : "—"}</span> },
-    { key: "movein", header: "Move-in", render: (r) => <span className="whitespace-nowrap text-gray-600">{formatDate(r.startDate)}</span> },
+    { key: "movein", header: "Move-in / Check-in", render: (r) => <span className="whitespace-nowrap text-gray-600">{formatDate(r.startDate)}</span> },
     {
       key: "view",
       header: <span className="sr-only">View</span>,
@@ -159,7 +164,8 @@ const RentalsBoard = ({ scope }) => {
         <FilterTabs label="Rental status" value={status} onChange={setStatus} tabs={FILTERS.map((f) => ({ id: f.id, label: f.label, count: counts[f.id] }))} />
         <SearchInput value={query} onChange={setQuery} placeholder="Search rentals" className="lg:w-72" />
       </div>
-      <Filters isAdmin={isAdmin} owners={owners} ownerId={ownerId} setOwnerId={setOwnerId} properties={propertyOptions} propertyId={propertyId} setPropertyId={setPropertyId} range={range} setRange={setRange} />
+      <Filters isAdmin={isAdmin} owners={owners} ownerId={ownerId} setOwnerId={setOwnerId} properties={propertyOptions} propertyId={propertyId} setPropertyId={(value) => { setPropertyId(value); setRoomId("all"); }} range={range} setRange={setRange} />
+      {!!roomOptions.length && <label className="mb-4 block max-w-sm text-sm font-medium text-gray-700">Room type<select value={roomId} onChange={(e) => setRoomId(e.target.value)} className="field mt-1.5"><option value="all">All room types</option>{roomOptions.map((room) => <option key={room.id} value={room.id}>{room.name} · {room.hotel}</option>)}</select></label>}
       <DataTable
         tableFrom={isAdmin ? "md" : "xl"}
         columns={columns}
@@ -180,6 +186,7 @@ const RentalsBoard = ({ scope }) => {
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-gray-900">{r.contactName}</p>
                   <p className="truncate text-sm text-gray-500">{r.property.title}</p>
+                  {r.hotelId && <p className="text-xs text-brand-700">{r.roomName} · {r.numberOfRooms} room(s) · {r.occupants} guest(s)</p>}
                 </div>
                 <StatusBadge status={r.status} />
               </div>
@@ -234,12 +241,13 @@ const RentalsBoard = ({ scope }) => {
             <dl className="grid grid-cols-2 gap-3 rounded-lg bg-gray-50 p-4 text-sm sm:grid-cols-3">
               {[
                 ["Customer", open.contactName],
+                ...(open.hotelId ? [["Room type", open.roomName], ["Rooms", open.numberOfRooms], ["Nightly price", ghs(open.unitPrice)], ["Nights", open.units]] : []),
                 ["Phone", open.contactPhone],
                 ["Email", open.contactEmail],
                 ["Current address", open.currentAddress || "—"],
-                ["Occupants", open.occupants],
-                ["Move-in", formatDate(open.startDate)],
-                ["Until", formatDate(open.endDate)],
+                [open.hotelId ? "Guests" : "Occupants", open.occupants],
+                [open.hotelId ? "Check-in" : "Move-in", formatDate(open.startDate)],
+                [open.hotelId ? "Check-out" : "Until", formatDate(open.endDate)],
                 ["Amount", ghs(open.amount)],
                 ["Reference", open.reference || "—"],
                 ["Date paid", open.paidAt ? formatDate(open.paidAt) : "—"],

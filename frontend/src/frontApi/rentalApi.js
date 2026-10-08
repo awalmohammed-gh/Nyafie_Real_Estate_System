@@ -2,8 +2,8 @@ import client from "./client";
 import { mapRental } from "./mappers";
 
 // Saves the rental request. Dates are "YYYY-MM-DD"; the backend checks availability and calculates the amount.
-export const createRental = async ({ propertyId, startDate, endDate, fullName, email, phone, currentAddress, occupants, notes }) =>
-  mapRental((await client.post("/rentals", { propertyId, startDate, endDate, fullName, email, phone, currentAddress, occupants, notes })).data);
+export const createRental = async ({ propertyId, startDate, endDate, fullName, email, phone, currentAddress, occupants, notes, roomTypeId, checkIn, checkOut, guests, numberOfRooms }) =>
+  mapRental((await client.post("/rentals", { propertyId, startDate, endDate, fullName, email, phone, currentAddress, occupants, notes, roomTypeId, checkIn, checkOut, guests, numberOfRooms })).data);
 
 export const getMyRentals = async () => (await client.get("/rentals/my")).data.map(mapRental);
 export const getRentalById = async (id) => mapRental((await client.get(`/rentals/${id}`)).data);

@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import { paymentReturnUrl } from "../config/runtime.js";
 import Rental from "../models/Rental.js";
 import Payment from "../models/Payment.js";
+import Property from "../models/Property.js";
+import { isHotel } from "../utils/hotel.js";
 import { postSystemNote } from "./chatController.js";
 import { PAYMENT_HOLD, addHistory, populateRental, presentRental, quoteRental, toDay } from "./rentalController.js";
 import { formatGHS } from "../utils/ownership.js";
@@ -9,6 +11,7 @@ import { notifyOwner, notifyUser } from "../utils/notify.js";
 import { paymentMode, paystack, newReference, isPaystackPaid, toSubunit } from "../utils/paystack.js";
 import { ok, fail } from "../utils/response.js";
 import { getSettings, siteName } from "../models/Setting.js";
+import { initializeHotelPayment, verifyHotelPayment } from "./hotelPaymentController.js";
 
 const rentalResult = async (rentalId, user) => presentRental(await populateRental(Rental.findById(rentalId)), user);
 
@@ -23,6 +26,7 @@ export const initializeRentalPayment = async (req, res) => {
   if (!rental) return fail(res, 404, "Rental not found.");
   if (rental.paymentStatus === "paid") return fail(res, 400, "This rental is already paid.");
   if (!["pending", "payment_pending"].includes(rental.status)) return fail(res, 400, `This rental is ${rental.status.replace("_", " ")}.`);
+  if (rental.hotelId) return initializeHotelPayment(req, res, rental);
 
   const quote = await quoteRental({ propertyId: rental.property, startDate: toDay(rental.startDate), endDate: toDay(rental.endDate) }, req.user);
   if (quote.error) return fail(res, quote.status, quote.error);
@@ -99,8 +103,12 @@ export const verifyPayment = async (req, res) => {
   // Already processed (e.g. the result page was refreshed): same answer again
   if (payment.status === "paid") return ok(res, await rentalResult(payment.rental, req.user), "Rental already paid");
   if (payment.status === "duplicate") return fail(res, 409, `This payment was a duplicate. ${siteName()} will refund it; your rental is already paid.`);
+  if (payment.status === "refund_required") return fail(res, 409, "Your payment was received but the booking could not be fulfilled. Contact HomeBase for your refund; do not pay again.");
 
   if (paymentMode() === "disabled") return fail(res, 503, "Online payments are not available right now. Please try again later.");
+  const booking = await Rental.findById(payment.rental);
+  if (booking?.hotelId) return verifyHotelPayment(req, res, payment, booking);
+  if (booking && isHotel(await Property.findById(booking.property))) return verifyHotelPayment(req, res, payment, booking);
   const paid = await isPaystackPaid(payment.reference, payment.amount);
 
   if (!paid) {

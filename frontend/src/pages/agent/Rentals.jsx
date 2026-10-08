@@ -4,7 +4,7 @@ import RentalsBoard from "../../components/offers/RentalsBoard";
 
 const Rentals = () => (
   <>
-    <PageTitle title="Rental Requests" description="Bookings and online payments for your rental properties." />
+    <PageTitle title="Rentals & Hotel Bookings" description="Manage rental requests, room bookings, payments and upcoming check-ins." />
     <TransactionNav scope="agent" />
     <RentalsBoard scope="agent" />
   </>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertCircle, Bell, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import PageTitle from "../../components/agent/PageTitle";
 import AccountShell from "../../components/account/AccountShell";
+import CustomerSettings from "../../components/account/CustomerSettings";
 import { useAuth } from "../../context/useAuth";
 import { useToast } from "../../context/useToast";
 
@@ -137,7 +138,7 @@ export const AccountSettings = ({ activeSection = null, showAccountSummary = tru
 const Settings = () => {
   const { isAgent } = useAuth();
   const Shell = isAgent ? AgentSettingsShell : AccountShell;
-  return <Shell title={isAgent ? "Account settings" : "Settings"} description="Manage your security and notification preferences."><AccountSettings /></Shell>;
+  return <Shell title="Account settings" description={isAgent ? "Manage your security and notification preferences." : "Keep your account secure and your updates relevant."}>{isAgent ? <AccountSettings /> : <CustomerSettings />}</Shell>;
 };
 
 export default Settings;

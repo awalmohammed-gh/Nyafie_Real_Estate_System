@@ -19,7 +19,7 @@ const paymentSchema = new mongoose.Schema(
     method: { type: String, enum: ["Paystack", "Test payment", "Office"], required: true },
     reference: { type: String, required: true, unique: true },
     // duplicate: a second successful charge for something already paid (needs a refund)
-    status: { type: String, enum: ["pending", "paid", "failed", "duplicate"], default: "pending", index: true },
+    status: { type: String, enum: ["pending", "paid", "failed", "duplicate", "refund_required"], default: "pending", index: true },
     authorizationUrl: { type: String, default: "" }, // reused if the customer clicks Pay again during the same checkout
     paidAt: { type: Date },
     confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // office payments

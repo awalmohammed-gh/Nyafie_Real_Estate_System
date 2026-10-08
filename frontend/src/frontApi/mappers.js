@@ -79,6 +79,7 @@ export const mapUser = (u) =>
     name: `${u.firstName} ${u.lastName}`,
     email: u.email,
     phone: u.phone || "",
+    profileImage: u.profileImage || "",
     role: u.role,
     status: u.isActive === false ? "suspended" : "active",
     createdAt: u.createdAt,
@@ -121,6 +122,7 @@ export const mapProperty = (p) => ({
     size: { value: p.area, unit: p.areaUnit || "sqm" },
   },
   features: p.amenities || [],
+  roomTypes: p.roomTypes || [],
   media: { images: p.images || [] },
   agent: {
     id: p.agent?.id || idOf(p.owner),
@@ -168,6 +170,7 @@ export const toApiProperty = (p) => {
     out.location = { address: p.location.address, neighbourhood: p.location.name, city: p.location.city, region: p.location.region, country: p.location.country, digitalAddress: p.location.digitalAddress, latitude: p.location.latitude, longitude: p.location.longitude };
   }
   if (p.features) out.amenities = p.features;
+  if (p.roomTypes !== undefined) out.roomTypes = p.roomTypes;
   if (p.media) out.images = p.media.images;
   if (p.agent) out.contact = { name: p.agent.name, phone: p.agent.phone, email: p.agent.email };
   if (p.listing?.state !== undefined) out.status = p.listing.state;
@@ -282,6 +285,10 @@ const PAYMENT_STATUS = { pending: "Pending", paid: "Paid", failed: "Failed", dup
 
 export const mapRental = (r) => ({
   id: r.id,
+  hotelId: r.hotelId || null,
+  roomTypeId: r.roomTypeId || null,
+  roomName: r.roomName || "",
+  numberOfRooms: r.numberOfRooms || 1,
   property: mapListingSummary(r.property),
   customer: r.customer,
   owner: r.owner,
@@ -358,7 +365,7 @@ export const mapPaymentRecord = (p) => ({
   reference: p.reference,
   amount: p.amount,
   method: p.method,
-  status: PAYMENT_STATUS[p.status] || p.status,
+  status: p.status === "refund_required" ? "Refund required" : PAYMENT_STATUS[p.status] || p.status,
   customer: p.customer?.firstName ? `${p.customer.firstName} ${p.customer.lastName}` : "Deleted user",
   property: p.property?.title || "Removed property",
   ownerType: p.ownerType,

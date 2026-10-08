@@ -7,6 +7,8 @@ import { useRealEstate } from "../../context/useRealEstate";
 import { usePlatform } from "../../context/usePlatform";
 import { useToast } from "../../context/useToast";
 import ImageUploader from "../../components/agent/ImageUploader";
+import RoomTypesEditor from "../../components/agent/RoomTypesEditor";
+import { roomToForm, roomsToPayload } from "../../utils/hotel";
 import LockedFeature from "../../components/ui/LockedFeature";
 import { COUNTED_STATES, lockCopy } from "../../utils/permissions";
 import Modal from "../../components/ui/Modal";
@@ -184,6 +186,10 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
     (existing?.media.images || []).map((src, i) => ({ id: `existing-${i}`, src, name: `Photo ${i + 1}`, status: "done", progress: 100 }))
   );
   const [customAmenity, setCustomAmenity] = useState("");
+  const [rooms, setRooms] = useState(() => (existing?.roomTypes || []).map(roomToForm));
+  const hotel = form.type.toLowerCase() === "hotel";
+  const activeRooms = rooms.filter((room) => room.active);
+  const hotelPrice = activeRooms.length ? Math.min(...activeRooms.map((room) => Number(room.pricePerNight) || 0)) : 0;
   const [errors, setErrors] = useState({});
   const [previewOpen, setPreviewOpen] = useState(false);
   const [saving, setSaving] = useState(null); // "draft" | "publish"
@@ -222,7 +228,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
   const publishLabel = needsReview ? "Submit for Review" : isEdit && alreadyPublished ? "Save & Publish" : "Publish Property";
 
   const set = (key, value) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => ({ ...prev, [key]: value, ...(key === "type" && value.toLowerCase() === "hotel" ? { listingType: "Rent", rentPeriod: "night" } : {}) }));
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }));
   };
   const bind = (key) => ({ value: form[key], onChange: (e) => set(key, e.target.value) });
@@ -237,7 +243,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
   };
 
   const readyImages = images.filter((img) => img.status === "done");
-  const uploading = images.some((img) => img.status === "uploading");
+  const uploading = images.some((img) => img.status === "uploading") || rooms.some((room) => room.images.some((img) => img.status === "uploading"));
 
   const validate = (mode) => {
     const e = {};
@@ -249,12 +255,14 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
     if (mode === "publish") {
       if (form.description.trim().length < 30) e.description = "Describe the property in at least 30 characters.";
       if (!form.type) e.type = "Choose a property type.";
-      if (!(Number(form.price) > 0)) e.price = "Enter a price greater than 0.";
+      if (!(hotel ? hotelPrice > 0 : Number(form.price) > 0)) e.price = hotel ? "Add a room type with a price greater than 0." : "Enter a price greater than 0.";
+      if (hotel && !activeRooms.length) e.rooms = "Add at least one active room type.";
+      if (hotel && activeRooms.some((room) => !room.name.trim() || !room.description.trim() || !room.images.some((img) => img.status === "done"))) e.rooms = "Add a name, description and photo for each active room type.";
       if (!form.neighbourhood.trim()) e.neighbourhood = "Enter the neighbourhood.";
       if (!form.city.trim()) e.city = "Enter the city or town.";
       if (!form.address.trim()) e.address = "Enter the street address.";
-      if (form.bedrooms === "" || Number(form.bedrooms) < 0) e.bedrooms = "Enter the number of bedrooms.";
-      if (form.bathrooms === "" || Number(form.bathrooms) < 0) e.bathrooms = "Enter the number of bathrooms.";
+      if (!hotel && (form.bedrooms === "" || Number(form.bedrooms) < 0)) e.bedrooms = "Enter the number of bedrooms.";
+      if (!hotel && (form.bathrooms === "" || Number(form.bathrooms) < 0)) e.bathrooms = "Enter the number of bathrooms.";
       if (!(Number(form.area) > 0)) e.area = "Enter the floor area.";
       if (readyImages.length === 0) e.images = "Add at least one photo before publishing.";
       else if (readyImages.length > perms.imageLimit) e.images = `Your ${perms.plan?.name} plan allows ${perms.imageLimit} photos per property. Remove ${readyImages.length - perms.imageLimit} to continue.`;
@@ -265,9 +273,9 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
   };
 
   const buildProperty = (state) => {
-    const price = Number(form.price) || 0;
+    const price = hotel ? hotelPrice : Number(form.price) || 0;
     const pricing =
-      form.listingType === "Sale"
+      hotel ? { perNight: price, currency: "GHS" } : form.listingType === "Sale"
         ? { amount: price, currency: "GHS" }
         : form.rentPeriod === "night"
           ? { perNight: price, currency: "GHS" }
@@ -279,12 +287,13 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
       location: { name: form.neighbourhood.trim(), city: form.city.trim(), region: form.region, address: form.address.trim(), country: form.country.trim(), digitalAddress: form.digitalAddress.trim(), latitude: form.latitude === "" ? null : Number(form.latitude), longitude: form.longitude === "" ? null : Number(form.longitude) },
       property: {
         type: form.type || "Apartment",
-        status: form.listingType,
+        status: hotel ? "Rent" : form.listingType,
         bedrooms: Number(form.bedrooms) || 0,
         bathrooms: Number(form.bathrooms) || 0,
         size: { value: Number(form.area) || 0, unit: "sqm" },
       },
       features: form.amenities,
+      ...(hotel ? { roomTypes: roomsToPayload(rooms) } : {}),
       media: { images: readyImages.map((img) => img.src) },
       agent: { id: user.id, name: form.contactName.trim() || user.name, phone: form.contactPhone.trim(), email: form.contactEmail.trim() },
       owner: { type: "agent", id: user.id },
@@ -337,9 +346,9 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
     { id: "chapter-basics", label: "Listing and property type", done: Boolean(form.type) },
     { id: "chapter-photos", label: "At least one photo", done: readyImages.length > 0 && readyImages.length <= perms.imageLimit },
     { id: "chapter-story", label: "Title and description", done: form.title.trim().length >= 3 && form.description.trim().length >= 30 },
-    { id: "chapter-price", label: "Price", done: Number(form.price) > 0 },
+    { id: hotel ? "chapter-rooms" : "chapter-price", label: hotel ? "Room types and prices" : "Price", done: hotel ? activeRooms.length > 0 && hotelPrice > 0 && activeRooms.every((room) => room.name.trim() && room.description.trim() && room.images.some((img) => img.status === "done")) : Number(form.price) > 0 },
     { id: "chapter-location", label: "Address and area", done: Boolean(form.address.trim() && form.neighbourhood.trim() && form.city.trim()) },
-    { id: "chapter-details", label: "Rooms and floor area", done: form.bedrooms !== "" && form.bathrooms !== "" && Number(form.area) > 0 },
+    { id: "chapter-details", label: "Rooms and floor area", done: (hotel || form.bedrooms !== "" && form.bathrooms !== "") && Number(form.area) > 0 },
     { id: "chapter-contact", label: "Contact details", done: Boolean(form.contactPhone.trim()) && /^\S+@\S+\.\S+$/.test(form.contactEmail) },
   ];
   const readyCount = checklist.filter((c) => c.done).length;
@@ -419,6 +428,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
                     type="button"
                     role="radio"
                     aria-checked={active}
+                    disabled={hotel && o.value === "Sale"}
                     onClick={() => set("listingType", o.value)}
                     className={`flex flex-col items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors sm:flex-row sm:items-center ${
                       active ? "border-brand-500 bg-brand-50/60" : "border-gray-200 bg-white hover:border-gray-300"
@@ -447,6 +457,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
                       type="button"
                       role="radio"
                       aria-checked={active}
+                      disabled={existing?.roomTypes?.length > 0 && t.toLowerCase() !== "hotel"}
                       onClick={() => set("type", t)}
                       className={`rounded-full px-3.5 py-1.5 text-sm font-medium capitalize transition-colors ${
                         active ? "bg-gray-900 text-white" : `bg-white text-gray-700 ring-1 hover:bg-gray-50 ${errors.type ? "ring-red-300" : "ring-gray-200"}`
@@ -488,7 +499,10 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
           </Chapter>
 
           {/* 04 Price */}
-          <Chapter id="chapter-price" number={next()} title={form.listingType === "Sale" ? "Asking price" : "Rent"} description={form.listingType === "Sale" ? "Buyers can make offers below or above this." : "Tenants pay this online when their rental is confirmed."}>
+          {hotel ? <Chapter id="chapter-rooms" number={next()} title="Room Types" description="Set a price and inventory for each room type. The hotel's starting price is taken from your active rooms.">
+            <RoomTypesEditor rooms={rooms} setRooms={setRooms} imageLimit={perms.imageLimit} />
+            {(errors.rooms || errors.price) && <FieldError>{errors.rooms || errors.price}</FieldError>}
+          </Chapter> : <Chapter id="chapter-price" number={next()} title={form.listingType === "Sale" ? "Asking price" : "Rent"} description={form.listingType === "Sale" ? "Buyers can make offers below or above this." : "Tenants pay this online when their rental is confirmed."}>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
               <div className="flex-1">
                 <label htmlFor="price-input" className="text-sm font-medium text-gray-700">{form.listingType === "Sale" ? "Asking price" : "Rental amount"} in Ghana cedi (GHS)</label>
@@ -515,7 +529,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
             <div className="mt-5">
               <Segmented label="Availability" value={form.availability} onChange={(v) => set("availability", v)} options={availabilityOptions.map((a) => ({ value: a, label: a }))} />
             </div>
-          </Chapter>
+          </Chapter>}
 
           {isAdminEditor && (
             <Chapter number={next()} title="Visibility" description={`${siteName} listings skip review and plan limits.`}>
@@ -557,10 +571,10 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
           </Chapter>
 
           {/* 06 Rooms and amenities */}
-          <Chapter id="chapter-details" number={next()} title="Rooms and amenities" description="The facts customers compare between listings.">
+          <Chapter id="chapter-details" number={next()} title={hotel ? "Hotel amenities and floor area" : "Rooms and amenities"} description={hotel ? "Facilities shared across the hotel. Add everything inside a room to its room type above." : "The facts customers compare between listings."}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Stepper label="Bedrooms" icon={Bed} value={form.bedrooms} onChange={(v) => set("bedrooms", v)} error={errors.bedrooms} />
-              <Stepper label="Bathrooms" icon={Bath} value={form.bathrooms} onChange={(v) => set("bathrooms", v)} inputStep={0.5} error={errors.bathrooms} />
+              {!hotel && <Stepper label="Bedrooms" icon={Bed} value={form.bedrooms} onChange={(v) => set("bedrooms", v)} error={errors.bedrooms} />}
+              {!hotel && <Stepper label="Bathrooms" icon={Bath} value={form.bathrooms} onChange={(v) => set("bathrooms", v)} inputStep={0.5} error={errors.bathrooms} />}
               <div>
                 <label htmlFor="area-input" className="flex items-center gap-1.5 text-sm font-medium text-gray-700"><Maximize2 className="h-4 w-4 text-gray-400" />Floor area</label>
                 <div className={`mt-1.5 flex items-center overflow-hidden rounded-xl border bg-white focus-within:ring-4 ${errors.area ? "border-red-300 focus-within:ring-red-500/10" : "border-gray-200 focus-within:border-brand-500 focus-within:ring-brand-500/10"}`}>
@@ -574,7 +588,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
             <div className="mt-6 border-t border-gray-100 pt-6">
               <p className="text-sm font-medium text-gray-700">Amenities <span className="font-normal text-gray-400">· {form.amenities.length} selected</span></p>
               <div className="mt-3 flex flex-wrap gap-2">
-                {[...new Set([...AMENITIES, ...form.amenities])].map((amenity) => {
+                {[...new Set([...(hotel ? ["Swimming Pool", "Restaurant", "Gym", "Parking", "Reception", "24/7 Security", "Elevator", "Garden"] : AMENITIES), ...form.amenities])].map((amenity) => {
                   const active = form.amenities.includes(amenity);
                   return (
                     <button

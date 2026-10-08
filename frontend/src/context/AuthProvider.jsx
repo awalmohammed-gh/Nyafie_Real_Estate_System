@@ -83,6 +83,18 @@ export const AuthProvider = ({ children, domain }) => {
     return next;
   }, [api, checkRole]);
   const changePassword = useCallback((currentPassword, newPassword) => api.changePassword(currentPassword, newPassword), [api]);
+  const uploadProfilePhoto = useCallback(async (image) => {
+    const next = checkRole(await api.uploadProfilePhoto(image));
+    ++revision.current;
+    setUser((current) => current ? { ...current, profileImage: next.profileImage } : current);
+    return next;
+  }, [api, checkRole]);
+  const removeProfilePhoto = useCallback(async () => {
+    const next = checkRole(await api.removeProfilePhoto());
+    ++revision.current;
+    setUser((current) => current ? { ...current, profileImage: next.profileImage } : current);
+    return next;
+  }, [api, checkRole]);
 
   // Admin actions: the backend authorizes each one; the list is refreshed afterwards
   const admin = useMemo(() => {
@@ -120,9 +132,11 @@ export const AuthProvider = ({ children, domain }) => {
       refreshUsers,
       updateProfile,
       changePassword,
+      uploadProfilePhoto,
+      removeProfilePhoto,
       admin,
     }),
-    [domain, user, users, ready, isAdmin, login, register, logout, refreshUser, refreshUsers, updateProfile, changePassword, admin]
+    [domain, user, users, ready, isAdmin, login, register, logout, refreshUser, refreshUsers, updateProfile, changePassword, uploadProfilePhoto, removeProfilePhoto, admin]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

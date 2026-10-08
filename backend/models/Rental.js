@@ -14,6 +14,10 @@ const rentalSchema = new mongoose.Schema(
   {
     customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     property: { type: mongoose.Schema.Types.ObjectId, ref: "Property", required: true, index: true },
+    hotelId: { type: mongoose.Schema.Types.ObjectId, ref: "Property" },
+    roomTypeId: { type: mongoose.Schema.Types.ObjectId },
+    roomName: { type: String, maxlength: 100 }, // immutable booking snapshot
+    numberOfRooms: { type: Number, min: 1, max: 10000, validate: Number.isInteger },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true }, // the agent (or admin account) from the property
     ownerType: { type: String, enum: ["admin", "agent"], required: true, index: true },
     startDate: { type: Date, required: true }, // preferred move-in date
@@ -42,5 +46,11 @@ const rentalSchema = new mongoose.Schema(
   },
   schemaOptions
 );
+
+rentalSchema.index({ hotelId: 1, roomTypeId: 1, status: 1, startDate: 1, endDate: 1 });
+// Hotel terminology over the shared, existing rental/payment ledger.
+for (const [alias, field] of Object.entries({ customerId: "customer", checkIn: "startDate", checkOut: "endDate", guests: "occupants", pricePerNight: "unitPrice", numberOfNights: "units", totalAmount: "amount", bookingStatus: "status" })) {
+  rentalSchema.virtual(alias).get(function () { return this.hotelId ? this[field] : undefined; });
+}
 
 export default mongoose.models.Rental || mongoose.model("Rental", rentalSchema);

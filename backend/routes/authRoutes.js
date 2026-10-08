@@ -2,6 +2,8 @@ import { Router } from "express";
 import { register, registerAgent, login, logout, loginFor, logoutFor, me, updateMe, changePassword } from "../controllers/authController.js";
 import { protectCustomer, protectAgentSession, protectAdmin } from "../middleware/authMiddleware.js";
 import { fail } from "../utils/response.js";
+import { uploadCustomerPhoto, removeCustomerPhoto } from "../controllers/customerPhotoController.js";
+import { rateLimit } from "../middleware/security.js";
 
 const router = Router();
 for (const [session, guard] of [["customer", protectCustomer], ["agent", protectAgentSession], ["admin", protectAdmin]]) {
@@ -18,6 +20,8 @@ for (const [session, guard] of [["customer", protectCustomer], ["agent", protect
 }
 router.post("/customer/register", register);
 router.post("/agent/register", registerAgent);
+router.post("/customer/me/photo", protectCustomer, rateLimit({ windowMs: 15 * 60 * 1000, max: 20, key: (req) => String(req.user._id) }), uploadCustomerPhoto);
+router.delete("/customer/me/photo", protectCustomer, removeCustomerPhoto);
 // Existing unscoped URLs remain customer-only aliases. The legacy token is never read.
 router.use((req, res, next) => {
   const selected = req.get("X-Session-Domain");

@@ -17,3 +17,4 @@ export * as saleRequestApi from "./saleRequestApi";
 export * as notificationApi from "./notificationApi";
 export * as reviewApi from "./reviewApi";
 export * as contactApi from "./contactApi";
+export * as hotelApi from "./hotelApi";

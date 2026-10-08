@@ -4,6 +4,10 @@ export const getPrice = (property) =>
 export const getPriceParts = (property) => {
   const { amount, perMonth, perNight, currency = "GHS" } = property.pricing;
   const prefix = currency === "GHS" ? "₵" : `${currency} `;
+  if (property.property?.type?.toLowerCase() === "hotel") {
+    const prices = (property.roomTypes || []).filter((room) => room.active).map((room) => room.pricePerNight);
+    return prices.length ? { value: `From ${prefix}${Math.min(...prices).toLocaleString()}`, period: "/room /night" } : { value: "Rooms coming soon", period: "" };
+  }
   if (amount != null) return { value: `${prefix}${amount.toLocaleString()}`, period: "" };
   if (perNight != null) return { value: `${prefix}${perNight.toLocaleString()}`, period: "/night" };
   return { value: `${prefix}${(perMonth || 0).toLocaleString()}`, period: "/month" };

@@ -31,7 +31,7 @@ export const defaultSettings = {
     maxImages: 15,
     requireApproval: true,
     allowAgentPublishing: true,
-    propertyTypes: ["Apartment", "Bungalow", "Duplex", "Family-Home", "Hotel-Apartment", "Luxury-Villa", "Manor", "Modern-Home", "Penthouse", "Single", "Studio", "Townhouse", "Villa"],
+    propertyTypes: ["Apartment", "Bungalow", "Duplex", "Family-Home", "Hotel", "Hotel-Apartment", "Luxury-Villa", "Manor", "Modern-Home", "Penthouse", "Single", "Studio", "Townhouse", "Villa"],
     rentPeriods: ["month", "night"],
   },
   agent: { requireSubscription: true, defaultPlan: "" },
@@ -77,6 +77,7 @@ const settingSchema = new mongoose.Schema(
     key: { type: String, default: "platform", unique: true },
     ...Object.fromEntries(Object.keys(defaultSettings).map((name) => [name, section(name)])),
     platform: mongoose.Schema.Types.Mixed, // legacy section (before general/contact existed), read once for migration
+    hotelRoomsVersion: { type: Number, default: 0 }, // internal, one-time feature migration
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   schemaOptions

@@ -62,6 +62,7 @@ const PaymentResult = () => {
                 <dt className="text-gray-500">Property</dt>
                 <dd className="text-right font-semibold text-gray-900">{rental.property.title}</dd>
               </div>
+              {rental.hotelId && <div className="flex justify-between gap-4 py-3"><dt className="text-gray-500">Room</dt><dd className="text-right font-semibold text-gray-900">{rental.roomName} · {rental.numberOfRooms} room(s)</dd></div>}
               <div className="flex justify-between gap-4 py-3">
                 <dt className="text-gray-500">Rental period</dt>
                 <dd className="text-right font-semibold text-gray-900">{formatDate(rental.startDate)} – {formatDate(rental.endDate)}</dd>
@@ -87,13 +88,13 @@ const PaymentResult = () => {
             <span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-red-50">
               <XCircle className="h-10 w-10 text-red-500" />
             </span>
-            <h1 className="mt-6 text-2xl font-extrabold text-gray-900">Payment Failed</h1>
-            <p className="mt-2 text-gray-600">Your payment was not completed. Your rental has not been confirmed.</p>
+            <h1 className="mt-6 text-2xl font-extrabold text-gray-900">Payment needs attention</h1>
+            <p className="mt-2 text-gray-600">We couldn't confirm this booking. Review the payment status below before trying again.</p>
             {message && <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm text-red-700">{message}</p>}
             <div className="mt-8 grid gap-3">
-              <Link to={rental ? `/make-offer/${rental.property.id}` : "/account/rentals"} className="btn btn-primary">
+              <Link to="/account/rentals" className="btn btn-primary">
                 <RotateCcw className="h-4 w-4" />
-                Try Again
+                View bookings & payment status
               </Link>
               <Link to={rental ? `/house/${rental.property.id}?action=chat` : "/account/messages"} className="btn btn-light">
                 <MessageCircle className="h-4 w-4" />

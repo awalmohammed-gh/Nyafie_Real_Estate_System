@@ -8,6 +8,7 @@ import StatusBadge from "../../components/ui/StatusBadge";
 import HistoryTimeline from "../../components/offers/HistoryTimeline";
 import { rentalApi } from "../../frontApi";
 import { formatDate } from "../../utils/date";
+import { bookingPath } from "../../utils/hotel";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
@@ -32,7 +33,7 @@ const MyRentals = () => {
   }, []);
 
   return (
-    <AccountShell title="My Rentals" description="Properties you've rented, their payment and rental status.">
+    <AccountShell title="My Rentals & Hotel Bookings" description="Your rentals and hotel stays, with payment and booking status.">
       {error ? (
         <p role="alert" className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">{error}</p>
       ) : !rentals ? (
@@ -63,6 +64,7 @@ const MyRentals = () => {
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="font-bold text-gray-900">{rental.property.title}</p>
+                        {rental.hotelId && <p className="mt-1 text-sm font-medium text-brand-700">{rental.roomName} · {rental.numberOfRooms} room(s) · {rental.occupants} guest(s)</p>}
                         <p className="text-sm text-gray-500">
                           {rental.property.location} · {rental.owner?.name}
                         </p>
@@ -71,14 +73,14 @@ const MyRentals = () => {
                     </div>
                     <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                       <div>
-                        <dt className="text-xs text-gray-500">Move-in</dt>
+                        <dt className="text-xs text-gray-500">{rental.hotelId ? "Check-in" : "Move-in"}</dt>
                         <dd className="flex items-center gap-1.5 font-semibold text-gray-900">
                           <CalendarDays className="h-3.5 w-3.5 text-brand-500" />
                           {formatDate(rental.startDate)}
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-xs text-gray-500">Until</dt>
+                        <dt className="text-xs text-gray-500">{rental.hotelId ? "Check-out" : "Until"}</dt>
                         <dd className="font-semibold text-gray-900">{formatDate(rental.endDate)}</dd>
                       </div>
                       <div>
@@ -90,7 +92,8 @@ const MyRentals = () => {
                         <dd className="mt-0.5"><StatusBadge status={rental.paymentStatus} /></dd>
                       </div>
                     </dl>
-                    <p className="mt-3 text-sm text-gray-600">{statusHelp[rental.status]}</p>
+                    <p className="mt-3 text-sm text-gray-600">{rental.hotelId ? ({ Pending: "Complete payment to reserve your rooms.", "Payment Pending": "Your secure checkout is in progress. Room holds last 30 minutes.", Paid: "Payment verified. The hotel will confirm your stay.", Confirmed: "Your hotel stay is confirmed.", Active: "You have checked in. Enjoy your stay!", Completed: "Your hotel stay has ended.", Cancelled: "This hotel booking was cancelled." })[rental.status] : statusHelp[rental.status]}</p>
+                    {rental.hotelId && <p className="mt-1 text-xs text-gray-500">{ghs(rental.unitPrice)} / night × {rental.units} nights × {rental.numberOfRooms} rooms</p>}
                     {rental.reference && (
                       <p className="mt-1 text-xs text-gray-400">
                         Reference {rental.reference}
@@ -99,7 +102,7 @@ const MyRentals = () => {
                     )}
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                       {unpaid && (
-                        <Link to={`/checkout/rent/${rental.property.id}`} className="btn btn-primary px-4 py-2 text-xs">
+                        <Link to={rental.hotelId ? `${bookingPath(rental.property.id, rental.roomTypeId)}&booking=${rental.id}` : `/checkout/rent/${rental.property.id}`} className="btn btn-primary px-4 py-2 text-xs">
                           <CreditCard className="h-3.5 w-3.5" />
                           Complete payment
                         </Link>

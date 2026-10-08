@@ -45,6 +45,8 @@ import StatusBadge from "../components/ui/StatusBadge";
 import SignInRequiredModal, { SignInPrompt } from "../components/property/SignInRequiredModal";
 import PropertyGallery from "../components/property/PropertyGallery";
 import PropertyReviews from "../components/reviews/PropertyReviews";
+import HotelRooms from "../components/property/HotelRooms";
+import { isHotel } from "../utils/hotel";
 import {
   buildPropertyEmailLink,
   buildWhatsAppLink,
@@ -144,6 +146,7 @@ const PropertiesDetails = () => {
   const canExpandDescription = description.length > 180;
   const liked = isFavorite(id);
   const isForSale = details.status === "Sale";
+  const hotel = isHotel(property);
 
   // Contact always goes to the real owner: HomeBase (admin listings) or the listing agent
   const isAdminListing = property.owner.type === "admin";
@@ -183,9 +186,9 @@ const PropertiesDetails = () => {
     availability === "Available" &&
     settings.payments.rentalsAvailable &&
     property.pricing.currency === "GHS";
-  const canPrimary = isForSale || canRent;
-  const canMakeOffer = !unavailable;
-  const primaryLabel = isForSale
+  const canPrimary = hotel ? availability === "Available" && property.roomTypes.some((room) => room.active) : isForSale || canRent;
+  const canMakeOffer = !hotel && !unavailable;
+  const primaryLabel = hotel ? "Choose your room" : isForSale
     ? isAdminListing
       ? "Contact owner"
       : "Contact Agent"
@@ -240,16 +243,18 @@ const PropertiesDetails = () => {
     if (user) navigate(flowPaths[flow]);
     else setSignInFor(flow);
   };
-  const startPrimary = () =>
+  const startPrimary = () => {
+    if (hotel) return document.getElementById("choose-room")?.scrollIntoView({ behavior: "smooth", block: "start" });
     isForSale ? requireAuth("chat") : startFlow("rent");
+  };
 
   const specs = [
-    details.bedrooms != null && {
+    !hotel && details.bedrooms != null && {
       icon: Bed,
       label: "Bedrooms",
       value: details.bedrooms,
     },
-    details.bathrooms != null && {
+    !hotel && details.bathrooms != null && {
       icon: Bath,
       label: "Bathrooms",
       value: details.bathrooms,
@@ -368,7 +373,7 @@ const PropertiesDetails = () => {
           <div className="flex items-end justify-between gap-6 lg:shrink-0 lg:flex-col lg:items-end lg:gap-4">
             <div>
               <p className="text-xs text-gray-500 lg:text-right">
-                {isForSale ? "Asking price" : "Rent"}
+                {hotel ? "Room rates" : isForSale ? "Asking price" : "Rent"}
               </p>
               <p
                 className={`mt-1 text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl ${unavailable ? "line-through opacity-60" : ""}`}
@@ -508,7 +513,7 @@ const PropertiesDetails = () => {
                   id="property-amenities-heading"
                   className="text-lg font-semibold tracking-tight text-gray-900 sm:text-xl"
                 >
-                  Amenities & features
+                  {hotel ? "Hotel amenities" : "Amenities & features"}
                 </h2>
                 <ul className="mt-5 grid gap-x-8 gap-y-4 sm:grid-cols-2">
                   {features.map((feature) => (
@@ -609,6 +614,7 @@ const PropertiesDetails = () => {
               onResumeHandled={clearResume}
               onSummary={setReviewSummary}
             />
+            {hotel && <HotelRooms key={property.id} property={property} canBook={!isOwnListing && availability === "Available"} />}
           </div>
 
           <aside className="min-w-0 lg:sticky lg:top-24">
@@ -645,7 +651,7 @@ const PropertiesDetails = () => {
                     {primaryLabel}
                   </button>
                   <p className="mt-3 text-xs leading-5 text-gray-500">
-                    {isForSale
+                    {hotel ? "Choose a room and your dates to check availability and review your stay total." : isForSale
                       ? "This is the asking price. Discuss the final amount and arrange the sale directly with the agent or owner."
                       : availability !== "Available"
                         ? `This property is ${availability.toLowerCase()}. Contact the agent about other options.`
@@ -653,7 +659,7 @@ const PropertiesDetails = () => {
                           ? "Online rental payments are unavailable for this listing. Contact the agent to discuss your rental."
                           : "Confirm availability with the agent, then review your rental dates and total before paying online."}
                   </p>
-                  <button
+                  {!hotel && <button
                     type="button"
                     onClick={() => startFlow("offer")}
                     disabled={!canMakeOffer}
@@ -661,7 +667,7 @@ const PropertiesDetails = () => {
                   >
                     <HandCoins aria-hidden="true" className="h-4 w-4" />
                     Make an offer
-                  </button>
+                  </button>}
                 </div>
               )}
               {isAdminListing || user ? <div className="mt-5 border-t border-gray-100 pt-5">

@@ -15,7 +15,7 @@ export const defaultSettings = {
     maxImages: 15,
     requireApproval: true,
     allowAgentPublishing: true,
-    propertyTypes: ["Apartment", "Bungalow", "Duplex", "Family-Home", "Hotel-Apartment", "Luxury-Villa", "Manor", "Modern-Home", "Penthouse", "Single", "Studio", "Townhouse", "Villa"],
+    propertyTypes: ["Apartment", "Bungalow", "Duplex", "Family-Home", "Hotel", "Hotel-Apartment", "Luxury-Villa", "Manor", "Modern-Home", "Penthouse", "Single", "Studio", "Townhouse", "Villa"],
     rentPeriods: ["month", "night"],
   },
   agent: { requireSubscription: true, defaultPlan: "" },
