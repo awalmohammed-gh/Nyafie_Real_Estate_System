@@ -11,6 +11,7 @@ import { listPayments } from "../controllers/paymentController.js";
 import { protectAdmin } from "../middleware/authMiddleware.js";
 import { listApplications, reviewApplication } from "../controllers/agentApplicationController.js";
 import { adminOnly } from "../middleware/adminMiddleware.js";
+import { listContactMessages, setContactMessageStatus } from "../controllers/contactController.js";
 
 const router = Router();
 
@@ -48,6 +49,8 @@ router.patch("/reviews/:id/status", adminSetReviewStatus); // hide or restore; r
 
 router.get("/inquiries", admin.listInquiries);
 router.patch("/inquiries/:id/status", admin.setInquiryStatus);
+router.get("/contact-messages", listContactMessages);
+router.patch("/contact-messages/:id/status", setContactMessageStatus);
 
 router.get("/settings/payment-status", admin.getPaymentStatus);
 router.put("/settings/:section", admin.updateSettings);

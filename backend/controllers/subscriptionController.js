@@ -1,4 +1,5 @@
 import { setAuthCookie } from "../utils/generateToken.js";
+import { paymentReturnUrl } from "../config/runtime.js";
 import Plan from "../models/Plan.js";
 import Subscription from "../models/Subscription.js";
 import User from "../models/User.js";
@@ -103,7 +104,7 @@ export const initializePayment = async (req, res) => {
       amount: Math.round(plan.price * 100), // pesewas
       currency: "GHS",
       reference,
-      callback_url: `${process.env.CLIENT_URL}${req.user.agentApplication?.status === "approved" ? "/agent/subscription/checkout" : "/agent/checkout"}?reference=${reference}`,
+      callback_url: `${paymentReturnUrl(req)}${req.user.agentApplication?.status === "approved" ? "/agent/subscription/checkout" : "/agent/checkout"}?reference=${reference}`,
       metadata: { userId: String(req.user._id), planId: String(plan._id) },
     }),
   });

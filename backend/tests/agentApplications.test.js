@@ -74,6 +74,7 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
   replace(Setting, "findOneAndUpdate", () => query({ agent: { requireSubscription }, notifications: {} }));
   replace(Notification, "create", async () => ({}));
   replace(Property, "find", () => query([]));
+  replace(Property, "aggregate", async () => []);
   replace(Property, "countDocuments", async () => 0);
   replace(Inquiry, "find", () => query([]));
   const app = express();

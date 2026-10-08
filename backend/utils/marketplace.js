@@ -36,13 +36,19 @@ export const publicQuery = async () => {
 };
 
 // A single batch lookup supplies live profile data for every card, including aggregated results.
-export const presentProperties = async (properties) => {
-  const ids = [...new Set(properties.filter((property) => property.ownerType === "agent").map((property) => String(property.owner)))];
+export const presentProperties = async (properties, { includeAgentDetails = true } = {}) => {
+  const ids = includeAgentDetails ? [...new Set(properties.filter((property) => property.ownerType === "agent").map((property) => String(property.owner)))] : [];
   const users = ids.length ? await User.find({ _id: { $in: ids } }).select(PUBLIC_AGENT_FIELDS) : [];
   const agents = new Map(users.map((user) => [String(user._id), publicAgent(user)]));
   return properties.map((property) => {
     const data = property.toJSON();
     if (property.ownerType === "agent") {
+      if (!includeAgentDetails) {
+        delete data.agent;
+        delete data.contact;
+        delete data.owner;
+        return data;
+      }
       data.agent = agents.get(String(property.owner)) || { id: String(property.owner), name: "Agent", verified: false };
       data.contact = { id: data.agent.id, name: data.agent.name, phone: data.agent.phone || "", email: data.agent.email || "" };
     }

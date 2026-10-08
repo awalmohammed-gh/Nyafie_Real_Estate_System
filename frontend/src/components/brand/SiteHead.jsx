@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { usePlatform } from "../../context/usePlatform";
 import router from "../../router/router";
+import { usePageSeo } from "../../context/pageSeo";
+import { publicSiteUrl } from "../../utils/siteUrl";
 
 // Creates or updates a <meta>/<link> tag in <head>; an empty value removes it
 const setTag = (tag, attr, key, valueAttr, value) => {
@@ -24,36 +26,43 @@ const SiteHead = () => {
   const { settings } = usePlatform();
   const { general, seo, branding } = settings;
   const [pathname, setPathname] = useState(router.state.location.pathname);
+  const { metadata } = usePageSeo();
 
   useEffect(() => router.subscribe((state) => setPathname(state.location.pathname)), []);
 
   useEffect(() => {
-    const title = seo.title || [general.siteName, general.tagline].filter(Boolean).join(" | ");
-    const description = seo.metaDescription || general.description;
-    const image = seo.ogImage || branding.logo;
+    const current = metadata?.pathname === pathname ? metadata : null;
+    const labels = { [`/${settings.slugs.listings}`]: "All property listings", [`/${settings.slugs.properties}`]: "Explore properties", "/sale": "Properties for sale", "/rent": "Properties to rent", "/contact": "Contact our team" };
+    const title = current?.title || (labels[pathname] ? `${labels[pathname]} | ${general.siteName}` : seo.title || [general.siteName, general.tagline].filter(Boolean).join(" | "));
+    const description = current?.description || seo.metaDescription || general.description;
+    const image = new URL(current?.image || seo.ogImage || branding.logo || "/favicon.png", publicSiteUrl(settings)).href;
+    const privatePage = /^\/(admin|account|agent|agents|checkout|make-offer|login|register|offer|payment)(\/|$)/.test(pathname) || pathname === `/${settings.slugs.agents}`;
     document.title = title;
     meta("description", description);
     meta("keywords", seo.keywords);
-    meta("robots", seo.allowIndexing ? "" : "noindex, nofollow");
+    meta("robots", !seo.allowIndexing || privatePage || current?.noindex ? "noindex, nofollow" : "index, follow");
     og("og:site_name", general.siteName);
     og("og:title", title);
     og("og:description", description);
     og("og:image", image);
     meta("twitter:card", image ? "summary_large_image" : "summary");
+    meta("twitter:title", title);
+    meta("twitter:description", description);
+    meta("twitter:image", image);
 
     const icon = document.head.querySelector('link[rel="icon"]');
     if (icon) {
-      icon.href = branding.favicon || "/favicon.svg";
+      icon.href = branding.favicon || "/favicon.png";
       if (branding.favicon) icon.removeAttribute("type");
-      else icon.type = "image/svg+xml";
+      else icon.type = "image/png";
     }
-  }, [general, seo, branding]);
+  }, [general, seo, branding, pathname, metadata, settings]);
 
   useEffect(() => {
-    const url = seo.baseUrl ? `${seo.baseUrl}${pathname}` : "";
+    const url = new URL(pathname, publicSiteUrl(settings)).href;
     setTag("link", "rel", "canonical", "href", url);
     og("og:url", url);
-  }, [seo.baseUrl, pathname]);
+  }, [settings, pathname]);
 
   return null;
 };

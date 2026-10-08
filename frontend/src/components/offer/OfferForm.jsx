@@ -6,6 +6,8 @@ import WhatsAppIcon from "../ui/WhatsAppIcon";
 import { offerApi } from "../../frontApi";
 import { getPriceParts } from "../../utils/property";
 import { buildWhatsAppLink } from "../../utils/whatsapp";
+import { propertyUrl } from "../../utils/siteUrl";
+import { usePlatform } from "../../context/usePlatform";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
@@ -13,6 +15,7 @@ const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 // for rentals). Nothing is paid; the owner accepts, declines or counters, and the
 // customer can keep negotiating on the website or WhatsApp.
 const OfferForm = ({ property, ownerName, whatsappNumber }) => {
+  const { settings } = usePlatform();
   const [amount, setAmount] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -40,7 +43,7 @@ const OfferForm = ({ property, ownerName, whatsappNumber }) => {
   };
 
   if (offer) {
-    const whatsappLink = buildWhatsAppLink(whatsappNumber, property, `${window.location.origin}/house/${property.id}`, offer.amount);
+    const whatsappLink = buildWhatsAppLink(whatsappNumber, property, propertyUrl(property.id, settings), offer.amount);
     return (
       <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} className="text-center">
         <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-50">

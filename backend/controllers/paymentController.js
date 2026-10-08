@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { paymentReturnUrl } from "../config/runtime.js";
 import Rental from "../models/Rental.js";
 import Payment from "../models/Payment.js";
 import { postSystemNote } from "./chatController.js";
@@ -64,7 +65,7 @@ export const initializeRentalPayment = async (req, res) => {
   addHistory(rental, req.user, `Checkout started (${formatGHS(quote.amount)})`);
   await rental.save();
 
-  const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+  const clientUrl = paymentReturnUrl(req);
   const result = await paystack("/transaction/initialize", {
     method: "POST",
     body: JSON.stringify({

@@ -41,6 +41,8 @@ export const protectCustomer = protectSessions("customer");
 export const protectAgent = protectSessions("agent");
 // These identities can access only onboarding, status and subscription requirements.
 export const protectAgentSession = sessionGuard(true, "agent");
+// Applicants can upload their avatar/logo, but never gain workspace access from an upload.
+export const protectUpload = sessionGuard(true, "agent", "admin");
 export const protectAdmin = protectSessions("admin");
 export const protect = protectSessions("customer", "agent", "admin");
 export const protectOwner = protectSessions("agent", "admin");

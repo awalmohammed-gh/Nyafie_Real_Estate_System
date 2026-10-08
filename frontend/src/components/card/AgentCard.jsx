@@ -7,8 +7,8 @@ const AgentCard = ({ agent }) => {
   const { siteName } = usePlatform();
   const areas = agent.locations.filter(Boolean).slice(0, 3);
   const more = agent.locations.filter(Boolean).length - areas.length;
-  const listings = agent.properties.length;
-  const image = agent.properties.find((property) => property.media?.images?.[0])?.media.images[0];
+  const listings = agent.propertyCount;
+  const image = agent.coverImage || agent.properties.find((property) => property.media?.images?.[0])?.media.images[0];
   const profileHref = `/agents/${agent.id}`;
 
   return (

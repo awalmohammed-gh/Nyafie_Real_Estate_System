@@ -5,11 +5,12 @@ import { useRealEstate } from '../context/useRealEstate';
 import { usePlatform } from '../context/usePlatform';
 import AgentCard from '../components/card/AgentCard';
 import AgentAvatar from '../components/agent/AgentAvatar';
+import NavOverlay from '../components/nav/NavOverlay';
 import './agents.css';
 
 const SORTS = [
-  { value: 'listings', label: 'Most listings', compare: (a, b) => b.properties.length - a.properties.length || a.name.localeCompare(b.name) },
-  { value: 'rating', label: 'Highest property rating', compare: (a, b) => (b.rating || 0) - (a.rating || 0) || b.properties.length - a.properties.length },
+  { value: 'listings', label: 'Most listings', compare: (a, b) => b.propertyCount - a.propertyCount || a.name.localeCompare(b.name) },
+  { value: 'rating', label: 'Highest property rating', compare: (a, b) => (b.rating || 0) - (a.rating || 0) || b.propertyCount - a.propertyCount },
   { value: 'newest', label: 'Recently joined', compare: (a, b) => new Date(b.joinedAt || 0) - new Date(a.joinedAt || 0) },
   { value: 'name', label: 'Name A–Z', compare: (a, b) => a.name.localeCompare(b.name) },
 ];
@@ -34,7 +35,7 @@ const Agents = () => {
     agents.forEach((agent) => agent.locations.filter(Boolean).forEach((name) => counts.set(name, (counts.get(name) || 0) + 1)));
     return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name);
   }, [agents]);
-  const listingTotal = agents.reduce((sum, agent) => sum + agent.properties.length, 0);
+  const listingTotal = agents.reduce((sum, agent) => sum + agent.propertyCount, 0);
   const term = searchTerm.trim().toLowerCase();
   const visible = agents
     .filter((agent) => (!area || agent.locations.includes(area))
@@ -50,6 +51,7 @@ const Agents = () => {
   return (
     <div className="agents-page">
       <header className="agents-header">
+        <NavOverlay />
         <div className="container-page">
           <nav aria-label="Breadcrumb" className="agents-breadcrumb">
             <Link to="/">Home</Link><ChevronRight size={14} aria-hidden="true" /><span aria-current="page">Agents</span>

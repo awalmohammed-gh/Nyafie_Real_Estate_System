@@ -1,64 +1,12 @@
+import { AdminLogin, AgentLayout, OnboardingLayout, Onboarding, ApplicationStatus, AdminAgentApplications, Home, Contact, PropertiesDetails, SlugPage, PropertyAction, AgentDetailsPage, NotFound, AuthPage, Profile, AgentProfile, SavedProperties, MyInquiries, Settings, AccountMessages, MyOffers, MyRentals, MyPurchases, AgentSaleRequests, AdminSaleRequests, AgentOffers, AgentRentals, AdminOffers, AdminRentals, AdminPayments, PaymentResult, AgentMessages, AdminMessages, Plans, Checkout, Dashboard, MyProperties, PropertyEditor, Inquiries, PropertyManage, Subscription, AdminLayout, AdminDashboard, AdminUsers, AdminAgents, AdminProperties, AdminInquiries, AdminContactMessages, AdminReviews, AdminSubscriptions, AdminPlans, AdminReports, AdminSettings, AdminPropertyEditor } from './routePages';
 import {createBrowserRouter, createRoutesFromElements, Navigate, Route} from 'react-router-dom'
 import SessionLayout from '../layout/SessionLayout'
-import AdminLogin from '../pages/auth/AdminLogin'
 import SystemLayout from '../layout/SystemLayout'
-import AgentLayout from '../layout/AgentLayout'
-import OnboardingLayout from '../layout/OnboardingLayout'
 import RequireAuth from '../components/auth/RequireAuth'
 import RequireAgent from '../components/auth/RequireAgent'
 import RequireAgentSession from '../components/auth/RequireAgentSession'
 import OnboardingRedirect from '../components/auth/OnboardingRedirect'
-import Onboarding from '../pages/agent/Onboarding'
-import ApplicationStatus from '../pages/agent/ApplicationStatus'
-import AdminAgentApplications from '../pages/admin/AdminAgentApplications'
-import Home from '../pages/Home'
-import Contact from '../pages/Contact'
-import PropertiesDetails from '../pages/PropertiesDetails'
-import SlugPage from '../pages/SlugPage'
-import PropertyAction from '../pages/PropertyAction'
-import AgentDetailsPage from '../pages/AgentDetailsPage'
-import NotFound from '../pages/NotFound'
-import AuthPage from '../pages/auth/AuthPage'
-import Profile from '../pages/account/Profile'
-import AgentProfile from '../pages/agent/Profile'
-import SavedProperties from '../pages/account/SavedProperties'
-import MyInquiries from '../pages/account/MyInquiries'
-import Settings from '../pages/account/Settings'
-import AccountMessages from '../pages/account/Messages'
-import MyOffers from '../pages/account/MyOffers'
-import MyRentals from '../pages/account/MyRentals'
-import MyPurchases from '../pages/account/MyPurchases'
-import AgentSaleRequests from '../pages/agent/SaleRequests'
-import AdminSaleRequests from '../pages/admin/AdminSaleRequests'
-import AgentOffers from '../pages/agent/Offers'
-import AgentRentals from '../pages/agent/Rentals'
-import AdminOffers from '../pages/admin/AdminOffers'
-import AdminRentals from '../pages/admin/AdminRentals'
-import AdminPayments from '../pages/admin/AdminPayments'
-import PaymentResult from '../pages/PaymentResult'
-import AgentMessages from '../pages/agent/Messages'
-import AdminMessages from '../pages/admin/AdminMessages'
-import Plans from '../pages/agent/Plans'
-import Checkout from '../pages/agent/Checkout'
-import Dashboard from '../pages/agent/Dashboard'
-import MyProperties from '../pages/agent/MyProperties'
-import PropertyEditor from '../pages/agent/PropertyEditor'
-import Inquiries from '../pages/agent/Inquiries'
-import PropertyManage from '../pages/agent/PropertyManage'
-import Subscription from '../pages/agent/Subscription'
 import RequireAdmin from '../components/auth/RequireAdmin'
-import AdminLayout from '../layout/AdminLayout'
-import AdminDashboard from '../pages/admin/AdminDashboard'
-import AdminUsers from '../pages/admin/AdminUsers'
-import AdminAgents from '../pages/admin/AdminAgents'
-import AdminProperties from '../pages/admin/AdminProperties'
-import AdminInquiries from '../pages/admin/AdminInquiries'
-import AdminReviews from '../pages/admin/AdminReviews'
-import AdminSubscriptions from '../pages/admin/AdminSubscriptions'
-import AdminPlans from '../pages/admin/AdminPlans'
-import AdminReports from '../pages/admin/AdminReports'
-import AdminSettings from '../pages/admin/AdminSettings'
-import AdminPropertyEditor from '../pages/admin/AdminPropertyEditor'
 
 const router = createBrowserRouter(
     createRoutesFromElements(
@@ -73,13 +21,13 @@ const router = createBrowserRouter(
             <Route path='checkout/buy/:propertyId' element={<PropertyAction mode='buy' key='buy' />} />
             {/* /properties, /listings, /agents (URLs set in Admin Settings) and /sale, /rent */}
             <Route path=':slug' element={<SlugPage />} />
-            <Route path='agent/:id' element={<AgentDetailsPage />} />
-            <Route path='agents/:id' element={<AgentDetailsPage />} />
             <Route path='contact' element={<Contact />} />
 
             {/* Becoming an agent: the plans page is public; onboarding has its own layout below */}
             <Route path='agent/plans' element={<Plans />} />
             <Route element={<RequireAuth />}>
+               <Route path='agent/:id' element={<AgentDetailsPage />} />
+               <Route path='agents/:id' element={<AgentDetailsPage />} />
                <Route path='account/profile' element={<Profile />} />
                <Route path='account/saved' element={<SavedProperties />} />
                <Route path='account/inquiries' element={<MyInquiries />} />
@@ -148,6 +96,7 @@ const router = createBrowserRouter(
                <Route path='agent-applications' element={<AdminAgentApplications />} />
                <Route path='properties' element={<AdminProperties />} />
                <Route path='inquiries' element={<AdminInquiries />} />
+               <Route path='contact-messages' element={<AdminContactMessages />} />
                <Route path='reviews' element={<AdminReviews />} />
                <Route path='offers' element={<AdminOffers />} />
                <Route path='rentals' element={<AdminRentals />} />
