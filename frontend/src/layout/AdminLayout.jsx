@@ -27,7 +27,7 @@ import { useUnreadMessages } from "../hooks/useUnreadMessages";
 import { useUnseenReviews } from "../hooks/useUnseenReviews";
 import { usePendingApplications } from "../hooks/usePendingApplications";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
-import { DashboardSkeleton } from "../components/dashboard/States";
+import PageLoader from "../components/ui/PageLoader";
 import NotificationBell from "../components/ui/NotificationBell";
 import AccountMenu from "../components/account/AccountMenu";
 import SidebarAccount from "../components/dashboard/SidebarAccount";
@@ -109,7 +109,7 @@ const AdminShell = () => {
       groups={groups}
       badges={badges}
       ready={listingsReady && !plansLoading && settingsReady}
-      fallback={<DashboardSkeleton />}
+      fallback={<PageLoader label="Loading your workspace..." />}
       sidebarFooter={<SidebarAccount roleLabel="Administrator" tone="dark" />}
       headerActions={
         <>

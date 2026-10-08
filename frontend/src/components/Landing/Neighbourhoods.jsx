@@ -3,24 +3,30 @@ import { ArrowUpRight, MapPin } from "lucide-react";
 import { usePropertyFacets } from "../../hooks/usePropertyFacets";
 import { usePlatform } from "../../context/usePlatform";
 
+// Areas come from live listings (most listings first), so the list follows what agents post
 const Neighbourhoods = () => {
   const { paths } = usePlatform();
   const facets = usePropertyFacets();
-  const places = (facets.data?.areas || []).slice(0, 4);
+  const places = (facets.data?.areas || []).slice(0, 6);
   if (!places.length) return null;
 
   return (
     <section className="home-section home-places" aria-labelledby="places-heading">
-      <div className="container-page home-places-layout">
-        <div className="home-places-intro"><p className="home-eyebrow">02 / FIND YOUR CORNER</p><h2 id="places-heading" className="home-section-title">Love where<br />you <span className="home-serif">land.</span></h2><p>Start with a neighbourhood.<br />Discover the homes that put you there.</p><Link to={paths.listings} className="home-text-link">See every location <ArrowUpRight size={18} aria-hidden="true" /></Link><span className="home-places-coordinate"><MapPin size={15} aria-hidden="true" /> A place in Ghana. A place for you.</span></div>
-        <div className="home-places-grid">
-          {places.map((place, index) => (
-            <Link key={place.name} to={`${paths.listings}?area=${encodeURIComponent(place.name)}`} className="home-place" aria-label={`Explore ${place.name}: ${place.count} ${place.count === 1 ? "home" : "homes"}`}>
-              <div className="home-place-image">{place.image && <img src={place.image} alt={`A home in ${place.name}`} loading="lazy" decoding="async" />}<span className="home-place-number" aria-hidden="true">0{index + 1}</span><span className="home-place-open"><ArrowUpRight size={21} aria-hidden="true" /></span></div>
-              <div className="home-place-caption"><div><h3>{place.name}</h3><p>{place.city}</p></div><span>{place.count} {place.count === 1 ? "home" : "homes"}</span></div>
-            </Link>
-          ))}
+      <div className="container-page">
+        <div className="home-section-header">
+          <div><p className="home-eyebrow">08 / POPULAR LOCATIONS</p><h2 id="places-heading" className="home-section-title">Explore <span className="home-serif">popular locations.</span></h2></div>
+          <div className="home-section-aside"><p>Discover properties in the places people are searching for.</p><Link to={paths.listings} className="home-text-link">See every location <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
         </div>
+        <ul className="home-places-grid">
+          {places.map((place) => (
+            <li key={place.name}>
+              <Link to={`${paths.listings}?area=${encodeURIComponent(place.name)}`} className="home-place" aria-label={`Explore ${place.name}: ${place.count} ${place.count === 1 ? "property" : "properties"}`}>
+                <div className="home-place-image">{place.image && <img src={place.image} alt="" loading="lazy" decoding="async" />}<span className="home-place-open"><ArrowUpRight size={19} aria-hidden="true" /></span></div>
+                <div className="home-place-caption"><div><h3>{place.name}</h3><p><MapPin size={12} aria-hidden="true" />{place.city || place.region || "Ghana"}</p></div><span>{place.count} {place.count === 1 ? "property" : "properties"}</span></div>
+              </Link>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );

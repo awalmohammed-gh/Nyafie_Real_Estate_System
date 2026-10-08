@@ -1,8 +1,9 @@
-import { useCallback, useState } from 'react'
+import { Suspense, useCallback, useState } from 'react'
 import { Outlet, ScrollRestoration, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import Navbar from './Navbar'
 import Footer from './Footer'
+import PageLoader from '../components/ui/PageLoader'
 import { NavOverlayContext } from '../context/navOverlay'
 
 const SystemLayout = () => {
@@ -31,7 +32,8 @@ const SystemLayout = () => {
           transition={{ duration: 0.25, ease: 'easeOut' }}
           className="flex-1"
         >
-          <Outlet />
+          {/* Page code loads inside the content area: the navbar and footer stay */}
+          <Suspense fallback={<PageLoader label="Loading page..." />}><Outlet /></Suspense>
         </motion.main>
         <Footer />
       </div>

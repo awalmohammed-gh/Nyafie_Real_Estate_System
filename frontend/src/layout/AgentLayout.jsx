@@ -7,7 +7,7 @@ import { usePlatform } from "../context/usePlatform";
 import { TransactionsProvider } from "../context/TransactionsProvider";
 import { useTransactions } from "../context/useTransactions";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
-import { DashboardSkeleton } from "../components/dashboard/States";
+import PageLoader from "../components/ui/PageLoader";
 import AccountMenu from "../components/account/AccountMenu";
 import NotificationBell from "../components/ui/NotificationBell";
 import SubscriptionBanner from "../components/agent/SubscriptionBanner";
@@ -90,7 +90,7 @@ const AgentShell = () => {
       groups={groups}
       badges={badges}
       ready={listingsReady && !plansLoading}
-      fallback={<DashboardSkeleton />}
+      fallback={<PageLoader label="Loading your workspace..." />}
       sidebarFooter={<div className="space-y-2"><PlanSummary /><SidebarAccount roleLabel="Agent" /></div>}
       // The subscription page shows its own, more detailed expiry state
       banner={pathname !== "/agent/subscription" && <SubscriptionBanner />}

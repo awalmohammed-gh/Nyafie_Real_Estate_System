@@ -1,5 +1,6 @@
-import { useId, useState } from "react";
+import { Suspense, useId, useState } from "react";
 import { Link, Outlet, ScrollRestoration, useLocation } from "react-router-dom";
+import PageLoader from "../ui/PageLoader";
 import { AnimatePresence, LayoutGroup, MotionConfig, motion, useReducedMotion } from "motion/react";
 import { ChevronRight, Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { useLockBodyScroll } from "../../hooks/useLockBodyScroll";
@@ -196,7 +197,8 @@ const DashboardLayout = ({ variant, label, groups, badges = {}, headerActions, s
           className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8"
         >
           {banner}
-          {ready ? <Outlet /> : fallback}
+          {/* The sidebar and header stay; only the routed content shows the loader */}
+          {ready ? <Suspense fallback={<PageLoader label="Loading page..." />}><Outlet /></Suspense> : fallback}
         </motion.main>
       </div>
 

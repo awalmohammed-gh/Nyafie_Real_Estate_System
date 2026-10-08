@@ -18,7 +18,8 @@ const SessionLayout = () => {
       <PlatformProvider>
         <RealEstateProvider>
           <SiteHead />
-          <Suspense fallback={<PageLoader label="Loading page..." />}><Outlet /></Suspense>
+          {/* Only before a layout has loaded; each layout has its own boundary around its content */}
+          <Suspense fallback={<PageLoader fullScreen label="Loading HomeBase..." />}><Outlet /></Suspense>
         </RealEstateProvider>
       </PlatformProvider>
     </AuthProvider></PageSeoProvider>
