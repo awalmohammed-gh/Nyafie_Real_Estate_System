@@ -1,0 +1,1 @@
+export const agentProfileForm = (user) => ({ firstName: user.firstName || "", lastName: user.lastName || "", phone: user.phone || "", agentType: "individual", companyName: "", region: "", city: "", officeAddress: "", ghanaPostGPS: "", yearsExperience: 0, bio: "", agencyLogo: "", ...user.agentApplication, profileImage: user.profileImage || "" });

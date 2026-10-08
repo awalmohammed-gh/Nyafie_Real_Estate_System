@@ -67,6 +67,7 @@ const AdminAgents = () => {
   const count = (fn) => agents.filter(fn).length;
 
   const actionsFor = (a) => [
+    { label: "View application", icon: Eye, onClick: () => navigate(`/admin/agent-applications?open=${a.id}`) },
     { label: "View agent", icon: Eye, onClick: () => setOpen(a.id) },
     { label: "Edit agent", icon: Pencil, onClick: () => setEditing(a) },
     { label: "Change plan", icon: Repeat, onClick: () => setSubAction({ type: "changePlan", agent: a }) },
@@ -77,40 +78,48 @@ const AdminAgents = () => {
     { label: "View inquiries", icon: Inbox, onClick: () => navigate(`/admin/inquiries?agent=${a.id}`) },
     a.status === "suspended"
       ? { label: "Activate agent", icon: CheckCircle2, onClick: () => setConfirm({ type: "activate", agent: a }) }
-      : { label: "Suspend agent", icon: Ban, danger: true, onClick: () => setConfirm({ type: "suspend", agent: a }) },
+      : { label: "Suspend agent", icon: Ban, danger: true, hidden: a.agentApplication?.status !== "approved", onClick: () => setConfirm({ type: "suspend", agent: a }) },
   ];
 
   const subBadge = (a) => <StatusBadge status={a.sub.statusLabel} tone={{ active: "green", expiring: "amber", expired: "red", cancelled: "gray", pending: "amber", none: "gray" }[a.sub.status]} />;
+
+  const liveCount = (a) => a.properties.filter((p) => p.listing.state === "published" && isPubliclyVisible(p)).length;
+  const newInquiries = (a) => a.inquiries.filter((i) => i.status === "New").length;
 
   const columns = [
     {
       key: "agent",
       header: "Agent",
       render: (a) => (
-        <button onClick={() => setOpen(a.id)} className="flex items-center gap-3 text-left">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-sm font-bold text-brand-700">{getInitials(a.name)}</span>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700">{getInitials(a.name)}</span>
           <span className="min-w-0">
-            <span className="block truncate font-semibold text-gray-900 hover:text-brand-600">{a.name}</span>
-            <span className="block truncate text-xs text-gray-500">{a.email} · {a.phone}</span>
+            <span className="block truncate font-medium text-gray-900">{a.name}</span>
+            <span className="block truncate text-xs text-gray-500">{a.email}</span>
           </span>
-        </button>
-      ),
-    },
-    { key: "plan", header: "Plan", render: (a) => <span className="font-medium text-gray-800">{a.plan?.name || a.subscription?.planName || "—"}</span> },
-    {
-      key: "sub",
-      header: "Subscription",
-      render: (a) => (
-        <div>
-          {subBadge(a)}
-          {a.subscription && <p className="mt-1 text-xs whitespace-nowrap text-gray-500">{a.sub.isActive ? "Expires" : "Ended"} {formatDate(a.subscription.expiryDate)}</p>}
         </div>
       ),
     },
-    { key: "props", header: "Properties", render: (a) => <UsageBar used={a.activeCount} limit={a.plan?.propertyLimit} /> },
-    { key: "inq", header: "Inquiries", align: "right", render: (a) => <span className="tabular-nums">{a.inquiries.length}</span> },
-    { key: "joined", header: "Registered", render: (a) => <span className="whitespace-nowrap text-gray-600">{formatDate(a.createdAt)}</span> },
-    { key: "account", header: "Account", render: (a) => <StatusBadge status={a.status === "suspended" ? "Suspended" : "Active"} tone={a.status === "suspended" ? "red" : "green"} /> },
+    { key: "phone", header: "Phone", render: (a) => <span className="whitespace-nowrap text-gray-600">{a.phone || "—"}</span> },
+    {
+      key: "sub",
+      header: "Plan",
+      render: (a) => (
+        <div>
+          <p className="text-gray-800">{a.plan?.name || a.subscription?.planName || "No plan"}</p>
+          <div className="mt-0.5">{subBadge(a)}</div>
+        </div>
+      ),
+    },
+    { key: "props", header: "Listings used", render: (a) => <UsageBar used={a.activeCount} limit={a.plan?.propertyLimit} /> },
+    { key: "live", header: "Live", align: "right", render: (a) => <span className="tabular-nums">{liveCount(a)}</span> },
+    {
+      key: "inq",
+      header: "New inquiries",
+      align: "right",
+      render: (a) => <span className={`tabular-nums ${newInquiries(a) ? "font-semibold text-amber-700" : "text-gray-500"}`}>{newInquiries(a)}</span>,
+    },
+    { key: "account", header: "Application", render: (a) => <StatusBadge status={a.status === "suspended" ? "Suspended" : a.agentApplication?.status ? a.agentApplication.status.charAt(0).toUpperCase() + a.agentApplication.status.slice(1) : "Incomplete"} /> },
     { key: "actions", header: <span className="sr-only">Actions</span>, align: "right", render: (a) => <ActionMenu actions={actionsFor(a)} label={`Actions for ${a.name}`} /> },
   ];
 
@@ -145,7 +154,7 @@ const AdminAgents = () => {
         />
         <div className="flex flex-col gap-3 sm:flex-row">
           <SearchInput value={query} onChange={setQuery} placeholder="Search agents" className="sm:w-80" />
-          <select value={planFilter} onChange={(e) => setPlanFilter(e.target.value)} aria-label="Filter by plan" className="field rounded-full sm:w-48">
+          <select value={planFilter} onChange={(e) => setPlanFilter(e.target.value)} aria-label="Filter by plan" className="field py-2 sm:w-48">
             <option value="all">All plans</option>
             {plans.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
@@ -158,6 +167,7 @@ const AdminAgents = () => {
         columns={columns}
         rows={rows}
         minWidth={1000}
+        onRowClick={(a) => setOpen(a.id)}
         empty={<EmptyState icon={UserCog} title="No agents found" description="Try a different filter." />}
         mobileCard={(a) => (
           <div>
@@ -200,10 +210,23 @@ const AdminAgents = () => {
           <div className="space-y-6">
             <div className="flex flex-wrap gap-2">
               {subBadge(viewed)}
-              <StatusBadge status={viewed.status === "suspended" ? "Suspended" : "Account active"} tone={viewed.status === "suspended" ? "red" : "green"} />
+              <StatusBadge status={viewed.status === "suspended" ? "Suspended" : viewed.agentApplication?.status ? viewed.agentApplication.status.charAt(0).toUpperCase() + viewed.agentApplication.status.slice(1) : "Incomplete"} />
             </div>
 
-            <dl className="grid grid-cols-2 gap-4 rounded-2xl bg-slate-50 p-4 text-sm">
+            <div className="grid grid-cols-3 divide-x divide-gray-100 rounded-lg border border-gray-200 text-center">
+              {[
+                ["Properties", viewed.properties.length],
+                ["Live", liveCount(viewed)],
+                ["New inquiries", newInquiries(viewed)],
+              ].map(([label, value]) => (
+                <div key={label} className="px-2 py-3">
+                  <p className="text-lg font-semibold text-gray-900 tabular-nums">{value}</p>
+                  <p className="text-xs text-gray-500">{label}</p>
+                </div>
+              ))}
+            </div>
+
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border border-gray-200 p-4 text-sm">
               {[
                 ["Email", viewed.email],
                 ["Phone", viewed.phone],
@@ -228,7 +251,7 @@ const AdminAgents = () => {
                     ["Photos each", viewed.plan.imageLimit],
                     ["Featured", `${viewed.properties.filter((p) => p.meta?.isFeatured).length}/${viewed.plan.featuredLimit}`],
                   ].map(([label, value]) => (
-                    <div key={label} className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+                    <div key={label} className="rounded-lg border border-gray-200 p-3">
                       <p className="text-lg font-bold text-gray-900 tabular-nums">{value}</p>
                       <p className="text-xs text-gray-500">{label}</p>
                     </div>
@@ -247,7 +270,7 @@ const AdminAgents = () => {
               ) : (
                 <ul className="space-y-2">
                   {viewed.properties.map((p) => (
-                    <li key={p.id} className="flex items-center gap-3 rounded-2xl p-2 ring-1 ring-slate-200">
+                    <li key={p.id} className="flex items-center gap-3 rounded-lg border border-gray-200 p-2">
                       <img src={p.media.images[0]} alt="" className="h-11 w-14 shrink-0 rounded-lg object-cover" />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-gray-900">{p.title}</span>
@@ -260,7 +283,7 @@ const AdminAgents = () => {
               )}
             </div>
 
-            <div className="flex items-center justify-between rounded-2xl bg-slate-50 p-4">
+            <div className="flex items-center justify-between rounded-lg border border-gray-200 p-4">
               <p className="text-sm text-gray-700"><span className="font-semibold">{viewed.inquiries.length}</span> inquiries received</p>
               <Link to={`/admin/inquiries?agent=${viewed.id}`} className="text-sm font-semibold text-brand-600">View inquiries</Link>
             </div>
@@ -273,7 +296,7 @@ const AdminAgents = () => {
               )}
               {viewed.status === "suspended" ? (
                 <button onClick={() => setConfirm({ type: "activate", agent: viewed })} className="btn btn-light"><CheckCircle2 className="h-4 w-4" />Activate agent</button>
-              ) : (
+              ) : viewed.agentApplication?.status === "approved" && (
                 <button onClick={() => setConfirm({ type: "suspend", agent: viewed })} className="btn btn-light text-red-600"><Ban className="h-4 w-4" />Suspend agent</button>
               )}
             </div>

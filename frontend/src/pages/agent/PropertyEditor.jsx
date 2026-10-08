@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { AlertCircle, ArrowLeft, Bath, Bed, Check, Eye, Loader2, MapPin, Maximize2, Plus, Save, Send } from "lucide-react";
+import { motion } from "motion/react";
+import { AlertCircle, ArrowLeft, Bath, Bed, Check, Eye, ImagePlus, KeyRound, Loader2, MapPin, Maximize2, Minus, Plus, Save, Send, Tag } from "lucide-react";
 import { useAgent } from "../../hooks/useAgent";
 import { useRealEstate } from "../../context/useRealEstate";
 import { usePlatform } from "../../context/usePlatform";
@@ -8,16 +9,12 @@ import { useToast } from "../../context/useToast";
 import ImageUploader from "../../components/agent/ImageUploader";
 import LockedFeature from "../../components/ui/LockedFeature";
 import { COUNTED_STATES, lockCopy } from "../../utils/permissions";
-import PageTitle from "../../components/agent/PageTitle";
 import Modal from "../../components/ui/Modal";
 import EmptyState from "../../components/ui/EmptyState";
 import PageLoader from "../../components/ui/PageLoader";
-import { formatPrice, formatType, statusLabel } from "../../utils/property";
+import { formatPrice, formatType, getPriceParts, statusLabel } from "../../utils/property";
 
-const PROPERTY_TYPES = [
-  "Apartment", "Bungalow", "Duplex", "Family-Home", "Hotel-Apartment", "Luxury-Villa",
-  "Manor", "Modern-Home", "Penthouse", "Single", "Studio", "Townhouse", "Villa",
-];
+const RENT_PERIOD_LABELS = { month: "Per month", night: "Per night" };
 
 const REGIONS = [
   "Ahafo", "Ashanti", "Bono", "Bono East", "Central", "Eastern", "Greater Accra", "North East",
@@ -33,7 +30,7 @@ const toForm = (property, user, contact) => {
   if (!property) {
     return {
       title: "", description: "", type: "", listingType: "Sale", price: "", rentPeriod: "month",
-      neighbourhood: "", city: "", region: "Greater Accra", address: "",
+      neighbourhood: "", city: "", region: "Greater Accra", address: "", country: "Ghana", digitalAddress: "", latitude: "", longitude: "",
       bedrooms: "", bathrooms: "", area: "", amenities: [], availability: "Available",
       contactName: contact?.name ?? user.name, contactPhone: contact?.phone ?? (user.phone || ""), contactEmail: contact?.email ?? user.email,
     };
@@ -50,6 +47,10 @@ const toForm = (property, user, contact) => {
     city: location.city,
     region: location.region,
     address: location.address,
+    country: location.country || "Ghana",
+    digitalAddress: location.digitalAddress || "",
+    latitude: location.latitude ?? "",
+    longitude: location.longitude ?? "",
     bedrooms: String(d.bedrooms ?? ""),
     bathrooms: String(d.bathrooms ?? ""),
     area: String(d.size?.value ?? ""),
@@ -78,17 +79,73 @@ const Field = ({ label, error, hint, children, className = "" }) => (
   </div>
 );
 
-const Section = ({ title, description, children }) => (
-  <section className="rounded-3xl bg-white p-6 ring-1 ring-gray-200 sm:p-8">
-    <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-    {description && <p className="mt-0.5 text-sm text-gray-500">{description}</p>}
-    <div className="mt-6">{children}</div>
-  </section>
+const FieldError = ({ children }) => (
+  <p className="mt-1.5 flex items-center gap-1 text-xs text-red-600">
+    <AlertCircle className="h-3.5 w-3.5" />
+    {children}
+  </p>
 );
+
+// A numbered chapter of the listing: big numeral, title and why it matters, then the fields
+const Chapter = ({ id, number, title, description, children }) => (
+  <motion.section id={id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: "easeOut" }} className="scroll-mt-32">
+    <div className="mb-4 flex items-baseline gap-4">
+      <span className="font-mono text-sm font-semibold text-brand-500 tabular-nums">{number}</span>
+      <div className="min-w-0">
+        <h2 className="text-lg font-semibold tracking-tight text-gray-900">{title}</h2>
+        {description && <p className="text-sm text-gray-500">{description}</p>}
+      </div>
+    </div>
+    <div className="sm:pl-10">{children}</div>
+  </motion.section>
+);
+
+// Segmented choice (rent period, availability)
+const Segmented = ({ label, value, onChange, options }) => (
+  <div>
+    <p className="text-sm font-medium text-gray-700">{label}</p>
+    <div role="radiogroup" aria-label={label} className="mt-1.5 inline-flex flex-wrap gap-1 rounded-xl bg-gray-100 p-1">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={`rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${value === o.value ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
+// Number with − / + buttons (whole steps) that can also be typed, e.g. 1.5 bathrooms (inputStep)
+const Stepper = ({ label, icon: Icon, value, onChange, step = 1, inputStep = step, error }) => {
+  const n = Number(value) || 0;
+  const change = (delta) => onChange(String(Math.max(0, Math.round((n + delta) * 2) / 2)));
+  const id = `stepper-${label.toLowerCase()}`;
+  return (
+    <div>
+      <label htmlFor={id} className="flex items-center gap-1.5 text-sm font-medium text-gray-700"><Icon className="h-4 w-4 text-gray-400" />{label}</label>
+      <div className={`mt-1.5 flex items-center overflow-hidden rounded-xl border bg-white ${error ? "border-red-300" : "border-gray-200"}`}>
+        <button type="button" onClick={() => change(-step)} disabled={n <= 0} aria-label={`Fewer ${label.toLowerCase()}`} className="grid h-11 w-11 shrink-0 place-items-center text-gray-500 hover:bg-gray-50 disabled:opacity-30">
+          <Minus className="h-4 w-4" />
+        </button>
+        <input id={id} value={value} onChange={(e) => onChange(e.target.value)} aria-invalid={Boolean(error)} type="number" min="0" step={inputStep} inputMode="decimal" placeholder="0" className="min-w-0 flex-1 bg-transparent text-center text-sm font-semibold text-gray-900 tabular-nums outline-none" />
+        <button type="button" onClick={() => change(step)} aria-label={`More ${label.toLowerCase()}`} className="grid h-11 w-11 shrink-0 place-items-center text-gray-500 hover:bg-gray-50">
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+      {error && <FieldError>{error}</FieldError>}
+    </div>
+  );
+};
 
 const fieldClass = (error) => `field mt-1.5 ${error ? "border-red-300 focus:border-red-400 focus:ring-red-500/10" : ""}`;
 
-// variant "admin": HomeBase listings. No plan limits or review, the platform image cap,
+// variant "admin": admin-owned listings. No plan limits or review, the platform image cap,
 // the platform contact by default and a Featured option. The backend enforces the same rules.
 const adminPermissions = (settings) => ({
   canCreateDraft: true,
@@ -97,22 +154,31 @@ const adminPermissions = (settings) => ({
   limitReached: false,
   nearLimit: false,
   imageLimit: settings.property.maxImages,
-  plan: { name: "HomeBase" },
+  plan: { name: settings.general.siteName },
 });
 
 export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
   const agent = useAgent();
-  const { settings } = usePlatform();
+  const { settings, siteName } = usePlatform();
   const isAdminEditor = variant === "admin";
   const user = agent.user;
   const perms = isAdminEditor ? adminPermissions(settings) : agent.permissions;
   const basePath = isAdminEditor ? "/admin/properties" : "/agent/properties";
-  const platformContact = { name: settings.platform.name, phone: settings.platform.phone, email: settings.platform.email };
+  const platformContact = { name: settings.general.siteName, phone: settings.contact.phone, email: settings.contact.email };
+  // Options from Admin Settings > Property; a listing keeps a type/period it already has even if it was removed since
+  const { propertyTypes, rentPeriods } = settings.property;
+  const typeOptions = existing?.property?.type && !propertyTypes.includes(existing.property.type) ? [...propertyTypes, existing.property.type] : propertyTypes;
   const { addListing, updateListing } = useRealEstate();
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const [form, setForm] = useState(() => toForm(existing, user, isAdminEditor ? platformContact : null));
+  const [form, setForm] = useState(() => {
+    const initial = toForm(existing, user, isAdminEditor ? platformContact : null);
+    if (!isAdminEditor) Object.assign(initial, { contactName: user.name, contactPhone: user.phone || "", contactEmail: user.email });
+    if (!existing && !rentPeriods.includes(initial.rentPeriod)) initial.rentPeriod = rentPeriods[0];
+    return initial;
+  });
+  const periodOptions = rentPeriods.includes(form.rentPeriod) ? rentPeriods : [...rentPeriods, form.rentPeriod];
   const [featured, setFeatured] = useState(Boolean(existing?.meta?.isFeatured));
   const [images, setImages] = useState(() =>
     (existing?.media.images || []).map((src, i) => ({ id: `existing-${i}`, src, name: `Photo ${i + 1}`, status: "done", progress: 100 }))
@@ -141,7 +207,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
         title={copy.title}
         description={copy.description}
         cta={copy.cta}
-        to={user.subscription ? `/agent/checkout?plan=${user.subscription.planId}` : "/agent/plans"}
+        to={user.subscription ? `/agent/subscription/checkout?plan=${user.subscription.planId}` : "/agent/subscription/plans"}
       />
     );
   }
@@ -175,6 +241,10 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
 
   const validate = (mode) => {
     const e = {};
+    for (const [key, min, max] of [["latitude", -90, 90], ["longitude", -180, 180]]) {
+      if (form[key] !== "" && (!Number.isFinite(Number(form[key])) || Number(form[key]) < min || Number(form[key]) > max)) e[key] = `Enter a value between ${min} and ${max}.`;
+    }
+    if ((form.latitude === "") !== (form.longitude === "")) e.latitude = "Provide both coordinates or leave both empty.";
     if (form.title.trim().length < 3) e.title = "Give the property a title (at least 3 characters).";
     if (mode === "publish") {
       if (form.description.trim().length < 30) e.description = "Describe the property in at least 30 characters.";
@@ -206,7 +276,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
       title: form.title.trim(),
       description: form.description.trim(),
       pricing,
-      location: { name: form.neighbourhood.trim(), city: form.city.trim(), region: form.region, address: form.address.trim() },
+      location: { name: form.neighbourhood.trim(), city: form.city.trim(), region: form.region, address: form.address.trim(), country: form.country.trim(), digitalAddress: form.digitalAddress.trim(), latitude: form.latitude === "" ? null : Number(form.latitude), longitude: form.longitude === "" ? null : Number(form.longitude) },
       property: {
         type: form.type || "Apartment",
         status: form.listingType,
@@ -262,224 +332,379 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
   const inputProps = (key) => ({ ...bind(key), "aria-invalid": Boolean(errors[key]), className: fieldClass(errors[key]) });
   const preview = buildProperty(form.availability);
 
+  // Same rules as publishing, per chapter, for the "ready to publish" checklist
+  const checklist = [
+    { id: "chapter-basics", label: "Listing and property type", done: Boolean(form.type) },
+    { id: "chapter-photos", label: "At least one photo", done: readyImages.length > 0 && readyImages.length <= perms.imageLimit },
+    { id: "chapter-story", label: "Title and description", done: form.title.trim().length >= 3 && form.description.trim().length >= 30 },
+    { id: "chapter-price", label: "Price", done: Number(form.price) > 0 },
+    { id: "chapter-location", label: "Address and area", done: Boolean(form.address.trim() && form.neighbourhood.trim() && form.city.trim()) },
+    { id: "chapter-details", label: "Rooms and floor area", done: form.bedrooms !== "" && form.bathrooms !== "" && Number(form.area) > 0 },
+    { id: "chapter-contact", label: "Contact details", done: Boolean(form.contactPhone.trim()) && /^\S+@\S+\.\S+$/.test(form.contactEmail) },
+  ];
+  const readyCount = checklist.filter((c) => c.done).length;
+  const jumpTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const availabilityOptions = ["Available", "Under Offer", form.listingType === "Sale" ? "Sold" : "Rented"];
+  const statusChip = !existing ? "New listing" : { draft: "Draft", pending: "In review", published: "Published", rejected: "Rejected", suspended: "Hidden" }[existing.listing.state] || "Draft";
+  const previewPrice = getPriceParts(preview);
+  let chapter = 0;
+  const next = () => String(++chapter).padStart(2, "0");
+
   return (
     <>
-      <Link to={basePath} className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-brand-600">
-        <ArrowLeft className="h-4 w-4" />
-        {isAdminEditor ? "Properties" : "My Properties"}
-      </Link>
-      <PageTitle
-        title={isEdit ? "Edit property" : "Add a new property"}
-        description={isEdit ? existing.title : isAdminEditor ? "A HomeBase listing. It is published straight away, with no plan limits." : "Fill in the details below. You can save a draft at any time."}
-      />
+      {/* Header */}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <Link to={basePath} className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition hover:text-brand-600">
+            <ArrowLeft className="h-4 w-4" />
+            {isAdminEditor ? "Properties" : "My Properties"}
+          </Link>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">{isEdit ? "Edit listing" : "New listing"}</h1>
+            <span className="rounded-full bg-gray-900 px-2.5 py-0.5 text-xs font-semibold text-white">{statusChip}</span>
+          </div>
+          <p className="mt-1 text-sm text-gray-500">
+            {isEdit ? existing.title : isAdminEditor ? `A ${siteName} listing. It is published straight away, with no plan limits.` : needsReview ? `Save a draft at any time. When you submit, ${siteName} reviews the listing before it goes live.` : "Save a draft at any time, or publish when every section is ready."}
+          </p>
+        </div>
+      </div>
 
       {existing?.listing.state === "rejected" && existing.listing.rejectionReason && (
-        <p className="mb-6 flex items-start gap-3 rounded-2xl bg-red-50 px-5 py-4 text-sm text-red-800 ring-1 ring-red-100">
+        <p className="mb-6 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
           <span>
-            <span className="font-semibold">This listing was rejected by HomeBase:</span> {existing.listing.rejectionReason} Update it and submit again.
+            <span className="font-semibold">This listing was rejected by {siteName}:</span> {existing.listing.rejectionReason} Update it and submit again.
           </span>
         </p>
       )}
 
       {publishBlocked && (
         <div className="mb-6">
-          <LockedFeature
-            title={blockCopy.title}
-            description={`${blockCopy.description} You can still save this property as a draft.`}
-            cta={blockCopy.cta}
-          />
+          <LockedFeature title={blockCopy.title} description={`${blockCopy.description} You can still save this property as a draft.`} cta={blockCopy.cta} />
         </div>
       )}
 
       {!publishBlocked && perms.nearLimit && !alreadyCounted && (
-        <p className="mb-6 flex items-start gap-3 rounded-2xl bg-amber-50 px-5 py-4 text-sm text-amber-900 ring-1 ring-amber-100">
+        <p className="mb-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
           You are close to your property limit: {perms.activeCount} of {perms.propertyLimit} used on your {perms.plan?.name} plan.
         </p>
       )}
 
-      {needsReview && !publishBlocked && (
-        <p className="mb-6 text-sm text-gray-500">New listings are reviewed by HomeBase before they're published. You'll see the status on My Properties.</p>
-      )}
+      {/* Progress on small screens (the checklist sits beside the form on large ones) */}
+      {!isAdminEditor && <nav aria-label="Listing sections" className="workspace-toolbar mb-6"><div className="flex items-center justify-between gap-3"><p className="workspace-eyebrow">Build your listing</p><span className="text-xs text-gray-500">{readyCount} of {checklist.length} ready</span></div><div className="mt-3 flex gap-2 overflow-x-auto pb-1">{checklist.map((c, index) => <button key={c.id} type="button" onClick={() => jumpTo(c.id)} className={`inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${c.done ? "border-brand-200 bg-brand-50 text-brand-700" : "border-gray-200 bg-white text-gray-500"}`}><span className="grid h-4 w-4 place-items-center">{c.done ? <Check className="h-3 w-3" /> : index + 1}</span>{c.label}</button>)}</div></nav>}
+      <div className="sticky top-14 z-20 -mx-4 mb-6 border-b border-gray-200 bg-gray-50/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 xl:hidden">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-medium text-gray-700">Ready to publish</span>
+          <span className="text-gray-500 tabular-nums">{readyCount} of {checklist.length}</span>
+        </div>
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-200">
+          <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${(readyCount / checklist.length) * 100}%` }} />
+        </div>
+      </div>
 
-      <form onSubmit={(e) => e.preventDefault()} className="space-y-6 pb-28" noValidate>
-        <Section title="Basic information" description="What buyers and renters see first.">
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <Field label="Property title" error={errors.title} className="sm:col-span-2">
-              <input {...inputProps("title")} placeholder="e.g. Modern 3-bedroom home in East Legon" maxLength={80} />
-            </Field>
-            <Field label="Description" error={errors.description} hint={`${form.description.length}/1500 characters`} className="sm:col-span-2">
-              <textarea {...inputProps("description")} rows={5} maxLength={1500} placeholder="Describe the layout, finishes, surroundings and what makes it special." className={`${fieldClass(errors.description)} resize-y`} />
-            </Field>
-            <Field label="Property type" error={errors.type}>
-              <select {...inputProps("type")}>
-                <option value="">Select a type</option>
-                {PROPERTY_TYPES.map((t) => (
-                  <option key={t} value={t}>{formatType(t)}</option>
-                ))}
-              </select>
-            </Field>
-            <div>
-              <span className="mb-1.5 block text-sm font-medium text-gray-700">Listing type</span>
-              <div role="radiogroup" className="mt-1.5 grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1">
-                {["Sale", "Rent"].map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    role="radio"
-                    aria-checked={form.listingType === option}
-                    onClick={() => set("listingType", option)}
-                    className={`rounded-lg py-2.5 text-sm font-semibold transition ${form.listingType === option ? "bg-white text-brand-700 shadow-sm" : "text-gray-600"}`}
-                  >
-                    For {option}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <Field label={form.listingType === "Sale" ? "Price (GHS)" : "Rent (GHS)"} error={errors.price}>
-              <input {...inputProps("price")} type="number" min="0" inputMode="numeric" placeholder="0" />
-            </Field>
-            {form.listingType === "Rent" ? (
-              <Field label="Rent period">
-                <select {...bind("rentPeriod")} className="field mt-1.5">
-                  <option value="month">Per month</option>
-                  <option value="night">Per night</option>
-                </select>
-              </Field>
-            ) : (
-              <Field label="Property status">
-                <select {...bind("availability")} className="field mt-1.5">
-                  <option>Available</option>
-                  <option>Under Offer</option>
-                  <option>Sold</option>
-                </select>
-              </Field>
-            )}
-            {form.listingType === "Rent" && (
-              <Field label="Property status">
-                <select {...bind("availability")} className="field mt-1.5">
-                  <option>Available</option>
-                  <option>Under Offer</option>
-                  <option>Rented</option>
-                </select>
-              </Field>
-            )}
-          </div>
-        </Section>
-
-        {isAdminEditor && (
-          <Section title="Visibility" description="HomeBase listings skip review and plan limits.">
-            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl bg-gray-50 px-4 py-3">
-              <span>
-                <span className="block text-sm font-semibold text-gray-900">Featured listing</span>
-                <span className="block text-xs text-gray-500">Show this property first in featured spots when published.</span>
-              </span>
-              <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} className="h-5 w-5 accent-brand-500" />
-            </label>
-          </Section>
-        )}
-
-        <Section title="Location">
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <Field label="Street address" error={errors.address} className="sm:col-span-2">
-              <input {...inputProps("address")} placeholder="e.g. 12 Palm Street" />
-            </Field>
-            <Field label="Neighbourhood" error={errors.neighbourhood}>
-              <input {...inputProps("neighbourhood")} placeholder="e.g. East Legon" />
-            </Field>
-            <Field label="City / town" error={errors.city}>
-              <input {...inputProps("city")} placeholder="e.g. Accra" />
-            </Field>
-            <Field label="Region">
-              <select {...bind("region")} className="field mt-1.5">
-                {REGIONS.map((r) => (
-                  <option key={r}>{r}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
-        </Section>
-
-        <Section title="Property details">
-          <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
-            <Field label="Bedrooms" error={errors.bedrooms}>
-              <input {...inputProps("bedrooms")} type="number" min="0" inputMode="numeric" placeholder="0" />
-            </Field>
-            <Field label="Bathrooms" error={errors.bathrooms}>
-              <input {...inputProps("bathrooms")} type="number" min="0" step="0.5" inputMode="decimal" placeholder="0" />
-            </Field>
-            <Field label="Area (sqm)" error={errors.area} className="col-span-2 sm:col-span-1">
-              <input {...inputProps("area")} type="number" min="0" inputMode="numeric" placeholder="0" />
-            </Field>
-          </div>
-
-          <div className="mt-8">
-            <p className="text-sm font-medium text-gray-700">Amenities</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {[...new Set([...AMENITIES, ...form.amenities])].map((amenity) => {
-                const active = form.amenities.includes(amenity);
+      <form onSubmit={(e) => e.preventDefault()} className="grid gap-8 pb-28 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]" noValidate>
+        <div className="min-w-0 space-y-10">
+          {/* 01 What are you listing */}
+          <Chapter id="chapter-basics" number={next()} title="What are you listing?" description="Customers filter by these first.">
+            <div role="radiogroup" aria-label="Listing type" className="grid grid-cols-2 gap-3">
+              {[
+                { value: "Sale", title: "For sale", text: "Buyers make offers and pay at the office", icon: Tag },
+                { value: "Rent", title: "For rent", text: "Tenants request dates and pay online", icon: KeyRound },
+              ].map((o) => {
+                const active = form.listingType === o.value;
                 return (
                   <button
-                    key={amenity}
+                    key={o.value}
                     type="button"
-                    onClick={() => toggleAmenity(amenity)}
-                    aria-pressed={active}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium transition ${
-                      active ? "bg-brand-500 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => set("listingType", o.value)}
+                    className={`flex flex-col items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors sm:flex-row sm:items-center ${
+                      active ? "border-brand-500 bg-brand-50/60" : "border-gray-200 bg-white hover:border-gray-300"
                     }`}
                   >
-                    {active && <Check className="h-3.5 w-3.5" />}
-                    {amenity}
+                    <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${active ? "bg-brand-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                      <o.icon className="h-5 w-5" />
+                    </span>
+                    <span>
+                      <span className="block text-base font-semibold text-gray-900">{o.title}</span>
+                      <span className="block text-xs text-gray-500">{o.text}</span>
+                    </span>
                   </button>
                 );
               })}
             </div>
-            <div className="mt-3 flex max-w-sm gap-2">
-              <input
-                value={customAmenity}
-                onChange={(e) => setCustomAmenity(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addCustomAmenity();
-                  }
-                }}
-                placeholder="Add another amenity"
-                aria-label="Add another amenity"
-                className="field"
-              />
-              <button type="button" onClick={addCustomAmenity} className="btn btn-light shrink-0 px-4">
-                <Plus className="h-4 w-4" />
-                Add
-              </button>
+
+            <div className="mt-6">
+              <p className="text-sm font-medium text-gray-700">Property type</p>
+              <div role="radiogroup" aria-label="Property type" aria-invalid={Boolean(errors.type)} tabIndex={errors.type ? -1 : undefined} className="mt-2 flex flex-wrap gap-2 outline-none">
+                {typeOptions.map((t) => {
+                  const active = form.type === t;
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => set("type", t)}
+                      className={`rounded-full px-3.5 py-1.5 text-sm font-medium capitalize transition-colors ${
+                        active ? "bg-gray-900 text-white" : `bg-white text-gray-700 ring-1 hover:bg-gray-50 ${errors.type ? "ring-red-300" : "ring-gray-200"}`
+                      }`}
+                    >
+                      {formatType(t)}
+                    </button>
+                  );
+                })}
+              </div>
+              {errors.type && <FieldError>{errors.type}</FieldError>}
+            </div>
+          </Chapter>
+
+          {/* 02 Photos */}
+          <Chapter id="chapter-photos" number={next()} title="Photos" description="Listings with bright, well-framed photos get more interest. The first photo is the cover.">
+            <ImageUploader
+              images={images}
+              setImages={(v) => {
+                setImages(v);
+                if (errors.images) setErrors((p) => ({ ...p, images: undefined }));
+              }}
+              error={errors.images}
+              max={perms.imageLimit}
+              limitNote={isAdminEditor ? `${siteName} allows up to ${perms.imageLimit} photos per property.` : `${lockCopy(perms, "images").description} Upgrade your plan to add more photos.`}
+            />
+          </Chapter>
+
+          {/* 03 The story */}
+          <Chapter id="chapter-story" number={next()} title="Title and description" description="A clear title and an honest description answer most questions before they're asked.">
+            <div className="space-y-5">
+              <Field label="Listing title" error={errors.title} hint={`${form.title.length}/80`}>
+                <input {...inputProps("title")} placeholder="e.g. Modern 3-bedroom home in East Legon" maxLength={80} />
+              </Field>
+              <Field label="Description" error={errors.description} hint={form.description.trim().length < 30 ? `At least 30 characters · ${form.description.length}/1500` : `${form.description.length}/1500`}>
+                <textarea {...inputProps("description")} rows={6} maxLength={1500} placeholder="The layout and finishes, what's nearby, parking, water and power, and anything a buyer or tenant should know." className={`${fieldClass(errors.description)} resize-y`} />
+              </Field>
+            </div>
+          </Chapter>
+
+          {/* 04 Price */}
+          <Chapter id="chapter-price" number={next()} title={form.listingType === "Sale" ? "Asking price" : "Rent"} description={form.listingType === "Sale" ? "Buyers can make offers below or above this." : "Tenants pay this online when their rental is confirmed."}>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <label htmlFor="price-input" className="text-sm font-medium text-gray-700">{form.listingType === "Sale" ? "Asking price" : "Rental amount"} in Ghana cedi (GHS)</label>
+                <div className={`mt-1.5 flex items-center overflow-hidden rounded-xl border bg-white focus-within:ring-4 ${errors.price ? "border-red-300 focus-within:ring-red-500/10" : "border-gray-200 focus-within:border-brand-500 focus-within:ring-brand-500/10"}`}>
+                  <span className="pl-4 text-2xl font-semibold text-gray-400">₵</span>
+                  <input
+                    id="price-input"
+                    {...bind("price")}
+                    aria-invalid={Boolean(errors.price)}
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    placeholder="0"
+                    className="min-w-0 flex-1 bg-transparent px-2 py-3 text-2xl font-semibold text-gray-900 tabular-nums outline-none"
+                  />
+                  {form.listingType === "Rent" && <span className="pr-4 text-sm text-gray-500">/{form.rentPeriod}</span>}
+                </div>
+                {errors.price && <FieldError>{errors.price}</FieldError>}
+              </div>
+              {form.listingType === "Rent" && (
+                <Segmented label="Charged" value={form.rentPeriod} onChange={(v) => set("rentPeriod", v)} options={periodOptions.map((p) => ({ value: p, label: RENT_PERIOD_LABELS[p] }))} />
+              )}
+            </div>
+            <div className="mt-5">
+              <Segmented label="Availability" value={form.availability} onChange={(v) => set("availability", v)} options={availabilityOptions.map((a) => ({ value: a, label: a }))} />
+            </div>
+          </Chapter>
+
+          {isAdminEditor && (
+            <Chapter number={next()} title="Visibility" description={`${siteName} listings skip review and plan limits.`}>
+              <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-4">
+                <span>
+                  <span className="block text-sm font-semibold text-gray-900">Featured listing</span>
+                  <span className="block text-xs text-gray-500">Show this property first in featured spots when published.</span>
+                </span>
+                <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} className="h-5 w-5 accent-brand-500" />
+              </label>
+            </Chapter>
+          )}
+
+          {/* 05 Location */}
+          <Chapter id="chapter-location" number={next()} title="Where is it?" description="These details appear publicly on the listing. Add coordinates to show the property's map location.">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <Field label="Street address" error={errors.address} className="sm:col-span-2">
+                <input {...inputProps("address")} placeholder="e.g. 12 Palm Street" />
+              </Field>
+              <Field label="Neighbourhood" error={errors.neighbourhood}>
+                <input {...inputProps("neighbourhood")} placeholder="e.g. East Legon" />
+              </Field>
+              <Field label="City / town" error={errors.city}>
+                <input {...inputProps("city")} placeholder="e.g. Accra" />
+              </Field>
+              <Field label="Region">
+                <select {...bind("region")} className="field mt-1.5">
+                  {form.region && !REGIONS.includes(form.region) && <option value={form.region}>{form.region}</option>}
+                  {REGIONS.map((r) => (
+                    <option key={r}>{r}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Country"><input {...inputProps("country")} maxLength={100} /></Field>
+              <Field label="GhanaPost GPS / digital address (optional)"><input {...inputProps("digitalAddress")} maxLength={30} placeholder="e.g. GA-123-4567" /></Field>
+              <Field label="Latitude (optional)" error={errors.latitude}><input {...inputProps("latitude")} type="number" step="any" min={-90} max={90} /></Field>
+              <Field label="Longitude (optional)" error={errors.longitude}><input {...inputProps("longitude")} type="number" step="any" min={-180} max={180} /></Field>
+            </div>
+          </Chapter>
+
+          {/* 06 Rooms and amenities */}
+          <Chapter id="chapter-details" number={next()} title="Rooms and amenities" description="The facts customers compare between listings.">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Stepper label="Bedrooms" icon={Bed} value={form.bedrooms} onChange={(v) => set("bedrooms", v)} error={errors.bedrooms} />
+              <Stepper label="Bathrooms" icon={Bath} value={form.bathrooms} onChange={(v) => set("bathrooms", v)} inputStep={0.5} error={errors.bathrooms} />
+              <div>
+                <label htmlFor="area-input" className="flex items-center gap-1.5 text-sm font-medium text-gray-700"><Maximize2 className="h-4 w-4 text-gray-400" />Floor area</label>
+                <div className={`mt-1.5 flex items-center overflow-hidden rounded-xl border bg-white focus-within:ring-4 ${errors.area ? "border-red-300 focus-within:ring-red-500/10" : "border-gray-200 focus-within:border-brand-500 focus-within:ring-brand-500/10"}`}>
+                  <input id="area-input" {...bind("area")} aria-invalid={Boolean(errors.area)} type="number" min="0" inputMode="numeric" placeholder="0" className="min-w-0 flex-1 bg-transparent px-4 py-2.5 text-sm font-semibold text-gray-900 tabular-nums outline-none" />
+                  <span className="pr-4 text-sm text-gray-500">sqm</span>
+                </div>
+                {errors.area && <FieldError>{errors.area}</FieldError>}
+              </div>
+            </div>
+
+            <div className="mt-6 border-t border-gray-100 pt-6">
+              <p className="text-sm font-medium text-gray-700">Amenities <span className="font-normal text-gray-400">· {form.amenities.length} selected</span></p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {[...new Set([...AMENITIES, ...form.amenities])].map((amenity) => {
+                  const active = form.amenities.includes(amenity);
+                  return (
+                    <button
+                      key={amenity}
+                      type="button"
+                      onClick={() => toggleAmenity(amenity)}
+                      aria-pressed={active}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                        active ? "bg-brand-500 text-white" : "bg-white text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      {active ? <Check className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5 text-gray-400" />}
+                      {amenity}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-3 flex max-w-sm gap-2">
+                <input
+                  value={customAmenity}
+                  onChange={(e) => setCustomAmenity(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addCustomAmenity();
+                    }
+                  }}
+                  placeholder="Something else? e.g. Rooftop terrace"
+                  aria-label="Add another amenity"
+                  className="field py-2"
+                />
+                <button type="button" onClick={addCustomAmenity} className="btn btn-light shrink-0 px-4 py-2">
+                  <Plus className="h-4 w-4" />
+                  Add
+                </button>
+              </div>
+            </div>
+          </Chapter>
+
+          {/* 07 Contact */}
+          <Chapter id="chapter-contact" number={next()} title="Who customers contact" description={isAdminEditor ? "Shown on the listing so buyers and tenants can reach you." : "Your agent profile is linked automatically. Update your contact details in your profile."}>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+              <Field label="Contact name">
+                <input {...bind("contactName")} readOnly={!isAdminEditor} className="field mt-1.5" />
+              </Field>
+              <Field label="Phone" error={errors.contactPhone}>
+                <input {...inputProps("contactPhone")} readOnly={!isAdminEditor} type="tel" />
+              </Field>
+              <Field label="Email" error={errors.contactEmail}>
+                <input {...inputProps("contactEmail")} readOnly={!isAdminEditor} type="email" />
+              </Field>
+            </div>
+            {!isAdminEditor && <Link to="/agent/settings" className="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-brand-600">Manage your agent profile</Link>}
+          </Chapter>
+        </div>
+
+        {/* Live listing card + checklist */}
+        <aside className="hidden xl:block">
+          <div className="sticky top-20 space-y-4">
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+              <p className="flex items-center gap-1.5 border-b border-gray-100 px-4 py-2.5 text-xs font-medium text-gray-500">
+                <Eye className="h-3.5 w-3.5" />
+                How customers will see it
+              </p>
+              <div className="relative aspect-4/3 bg-gray-100">
+                {preview.media.images[0] ? (
+                  <img src={preview.media.images[0]} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <button type="button" onClick={() => jumpTo("chapter-photos")} className="flex h-full w-full flex-col items-center justify-center gap-2 text-gray-400 hover:text-brand-600">
+                    <ImagePlus className="h-7 w-7" />
+                    <span className="text-xs font-medium">Add a cover photo</span>
+                  </button>
+                )}
+                <span className="absolute top-3 left-3 rounded-md bg-gray-950/75 px-2 py-0.5 text-[11px] font-semibold text-white uppercase">{statusLabel(preview.property.status)}</span>
+                <span className="absolute top-3 right-3 rounded-md bg-white/95 px-2 py-0.5 text-[11px] font-semibold text-gray-800">{form.availability}</span>
+              </div>
+              <div className="p-4">
+                <p className="text-xl font-semibold tracking-tight text-gray-900 tabular-nums">
+                  {Number(form.price) > 0 ? previewPrice.value : "₵ —"}
+                  {Number(form.price) > 0 && <span className="text-sm font-medium text-gray-500">{previewPrice.period}</span>}
+                </p>
+                <p className={`mt-0.5 truncate text-sm font-semibold ${form.title.trim() ? "text-gray-900" : "text-gray-400"}`}>{form.title.trim() || "Your listing title"}</p>
+                <p className="mt-1 flex items-center gap-1 truncate text-xs text-gray-500">
+                  <MapPin className="h-3.5 w-3.5 shrink-0" />
+                  {[form.neighbourhood.trim(), form.city.trim()].filter(Boolean).join(", ") || "Neighbourhood, city"}
+                  {form.type && <span className="capitalize"> · {formatType(form.type)}</span>}
+                </p>
+                <div className="mt-3 flex gap-3 border-t border-gray-100 pt-3 text-xs text-gray-600">
+                  <span className="flex items-center gap-1"><Bed className="h-3.5 w-3.5 text-gray-400" />{form.bedrooms || 0} {Number(form.bedrooms) === 1 ? "bed" : "beds"}</span>
+                  <span className="flex items-center gap-1"><Bath className="h-3.5 w-3.5 text-gray-400" />{form.bathrooms || 0} {Number(form.bathrooms) === 1 ? "bath" : "baths"}</span>
+                  <span className="flex items-center gap-1"><Maximize2 className="h-3.5 w-3.5 text-gray-400" />{form.area || 0} sqm</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-gray-900">Ready to publish</p>
+                <p className="text-xs text-gray-500 tabular-nums">{readyCount} of {checklist.length}</p>
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100">
+                <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${(readyCount / checklist.length) * 100}%` }} />
+              </div>
+              <ul className="mt-3 space-y-0.5">
+                {checklist.map((c) => (
+                  <li key={c.id}>
+                    <button type="button" onClick={() => jumpTo(c.id)} className="flex w-full items-center gap-2.5 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors hover:bg-gray-50">
+                      <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${c.done ? "bg-emerald-500 text-white" : "border border-gray-300"}`}>
+                        {c.done && <Check className="h-3 w-3" strokeWidth={3} />}
+                      </span>
+                      <span className={c.done ? "text-gray-500 line-through decoration-gray-300" : "text-gray-800"}>{c.label}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {!isAdminEditor && (
+                <p className="mt-3 border-t border-gray-100 pt-3 text-xs text-gray-500">
+                  {perms.plan?.name} plan · {readyImages.length}/{perms.imageLimit} photos
+                  {!alreadyCounted && ` · ${perms.remainingListings} ${perms.remainingListings === 1 ? "slot" : "slots"} left`}
+                </p>
+              )}
             </div>
           </div>
-        </Section>
-
-        <Section title="Photos" description="The first photo is used as the cover image.">
-          <ImageUploader images={images} setImages={(v) => { setImages(v); if (errors.images) setErrors((p) => ({ ...p, images: undefined })); }} error={errors.images} max={perms.imageLimit} limitNote={isAdminEditor ? `HomeBase allows up to ${perms.imageLimit} photos per property.` : `${lockCopy(perms, "images").description} Upgrade your plan to add more photos.`} />
-        </Section>
-
-        <Section title="Contact information" description="How interested buyers and renters can reach you about this property.">
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-            <Field label="Contact name">
-              <input {...bind("contactName")} className="field mt-1.5" />
-            </Field>
-            <Field label="Phone" error={errors.contactPhone}>
-              <input {...inputProps("contactPhone")} type="tel" />
-            </Field>
-            <Field label="Email" error={errors.contactEmail}>
-              <input {...inputProps("contactEmail")} type="email" />
-            </Field>
-          </div>
-        </Section>
+        </aside>
 
         {/* Sticky action bar */}
-        <div className={`fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/90 backdrop-blur-lg ${isAdminEditor ? "md:left-20 xl:left-72" : "lg:left-64"}`}>
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur lg:left-(--sidebar-width)">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8">
             <p className="hidden text-sm text-gray-500 md:block">
-              {uploading ? "Waiting for photos to finish uploading..." : `${readyImages.length} photo${readyImages.length === 1 ? "" : "s"} ready`}
+              {uploading ? "Waiting for photos to finish uploading..." : readyCount === checklist.length ? "Everything's ready." : `${checklist.length - readyCount} ${checklist.length - readyCount === 1 ? "section" : "sections"} left before you can ${needsReview ? "submit" : "publish"}. Drafts can be saved anytime.`}
             </p>
             <div className="grid w-full grid-cols-3 gap-2 md:flex md:w-auto">
               <button type="button" onClick={() => save("draft")} disabled={Boolean(saving)} className="btn btn-light px-3 sm:px-5">
@@ -513,21 +738,21 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
       >
         <div className="space-y-5">
           {preview.media.images[0] ? (
-            <img src={preview.media.images[0]} alt="" className="aspect-16/9 w-full rounded-2xl object-cover" />
+            <img src={preview.media.images[0]} alt="" className="aspect-video w-full rounded-lg object-cover" />
           ) : (
-            <div className="grid aspect-16/9 w-full place-items-center rounded-2xl bg-gray-100 text-sm text-gray-400">No photo yet</div>
+            <div className="grid aspect-video w-full place-items-center rounded-lg bg-gray-100 text-sm text-gray-400">No photo yet</div>
           )}
           <div>
             <p className="text-xs font-semibold tracking-wider text-brand-600 uppercase">
               {formatType(preview.property.type)} · {statusLabel(preview.property.status)}
             </p>
-            <h3 className="mt-1 text-2xl font-extrabold text-gray-900">{preview.title || "Untitled property"}</h3>
+            <h3 className="mt-1 text-2xl font-semibold text-gray-900">{preview.title || "Untitled property"}</h3>
             <p className="mt-1 flex items-center gap-1.5 text-sm text-gray-500">
               <MapPin className="h-4 w-4" />
               {[preview.location.address, preview.location.name, preview.location.city].filter(Boolean).join(", ") || "Location not set"}
             </p>
           </div>
-          <p className="text-2xl font-extrabold text-gray-900">{formatPrice(preview)}</p>
+          <p className="text-2xl font-semibold text-gray-900">{formatPrice(preview)}</p>
           <div className="grid grid-cols-3 gap-3 text-sm">
             {[
               [Bed, `${preview.property.bedrooms} beds`],

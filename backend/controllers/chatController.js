@@ -1,8 +1,11 @@
 import mongoose from "mongoose";
 import Conversation from "../models/Conversation.js";
 import Message, { MAX_MESSAGE_LENGTH } from "../models/Message.js";
-import Property from "../models/Property.js";
+import Offer from "../models/Offer.js";
+import { notifyOwner, notifyUser } from "../utils/notify.js";
 import { ok, fail } from "../utils/response.js";
+import { siteName } from "../models/Setting.js";
+import { loadPublishedProperty } from "../utils/ownership.js";
 
 const same = (a, b) => a && b && String(a._id || a) === String(b._id || b);
 
@@ -41,7 +44,7 @@ const present = (conversation, user) => {
       : { id: String(customer) },
     owner:
       conversation.ownerType === "admin"
-        ? { id: "admin", name: "HomeBase", type: "admin" }
+        ? { id: "admin", name: siteName(), type: "admin" }
         : { id: String(owner?._id || owner), name: owner?.firstName ? `${owner.firstName} ${owner.lastName}` : "Agent", type: "agent" },
   };
 };
@@ -71,7 +74,8 @@ const validateText = (text) => {
 };
 
 // Saves a message from the signed-in account and updates the conversation summary
-const addMessage = async (conversation, user, side, text) => {
+// System notes from offers, rentals and sale requests pass { notify: false } because those send their own notification.
+export const addMessage = async (conversation, user, side, text, { notify = true } = {}) => {
   const message = await Message.create({ conversation: conversation._id, sender: user._id, message: text });
   conversation.lastMessage = text.length > 140 ? `${text.slice(0, 137)}...` : text;
   conversation.lastMessageAt = message.createdAt;
@@ -79,7 +83,38 @@ const addMessage = async (conversation, user, side, text) => {
   if (side === "customer") conversation.ownerUnread += 1;
   else conversation.customerUnread += 1;
   await conversation.save();
+
+  if (notify) {
+    const preview = conversation.lastMessage;
+    const key = `chat:${conversation._id}:${side === "customer" ? "owner" : "customer"}`;
+    if (side === "customer") {
+      await notifyOwner(conversation, { type: "message", title: `New message from ${user.firstName}`, message: preview, path: `messages?c=${conversation._id}`, key });
+    } else {
+      await notifyUser(conversation.customer?._id || conversation.customer, { type: "message", title: "New reply to your chat", message: preview, link: `/account/messages?c=${conversation._id}`, key });
+    }
+  }
   return message;
+};
+
+// One open conversation per customer and property keeps chats easy to follow.
+// Also used by offers and rentals so the owner hears about them in their inbox.
+export const openConversation = async (property, customerId) => {
+  const existing = await Conversation.findOne({ customer: customerId, property: property._id, status: "open" });
+  if (existing) return existing;
+  return Conversation.create({
+    customer: customerId,
+    owner: property.owner, // the real owner, taken from the property
+    ownerType: property.ownerType,
+    property: property._id,
+  });
+};
+
+// Posts an automatic note (offer made, rental paid, status changed...) into the
+// customer/owner conversation for a property and returns the conversation
+export const postSystemNote = async (property, customerId, user, side, text) => {
+  const conversation = await openConversation(property, customerId);
+  await addMessage(conversation, user, side, text, { notify: false });
+  return conversation;
 };
 
 // GET /api/conversations?scope=customer|owner (plus the /messages aliases)
@@ -99,8 +134,14 @@ export const listConversations = (scopeOverride) => async (req, res) => {
 export const getConversation = async (req, res) => {
   const conversation = await loadAuthorized(req, res);
   if (!conversation) return;
-  const messages = await Message.find({ conversation: conversation._id }).sort({ createdAt: 1 });
-  ok(res, { conversation: present(conversation, req.user), messages });
+  const [messages, offer] = await Promise.all([
+    Message.find({ conversation: conversation._id }).sort({ createdAt: 1 }),
+    // The customer's latest live offer on this property, shown above the chat
+    Offer.findOne({ customer: conversation.customer?._id || conversation.customer, property: conversation.property?._id || conversation.property, status: { $ne: "withdrawn" } })
+      .sort({ createdAt: -1 })
+      .select("amount askingPrice status counterAmount"),
+  ]);
+  ok(res, { conversation: present(conversation, req.user), messages, offer });
 };
 
 // POST /api/conversations { propertyId, message } -> opens (or reuses) a chat with the owner
@@ -109,22 +150,13 @@ export const createConversation = async (req, res) => {
   if (error) return fail(res, 400, error);
   if (!mongoose.isValidObjectId(req.body.propertyId)) return fail(res, 404, "Property not found.");
 
-  const property = await Property.findById(req.body.propertyId);
-  if (!property || property.status !== "published") return fail(res, 404, "This property is not available.");
+  const property = await loadPublishedProperty(req.body.propertyId);
+  if (!property) return fail(res, 404, "This property is not available.");
   if (same(property.owner, req.user) || (property.ownerType === "admin" && req.user.role === "admin")) {
     return fail(res, 400, "This is your own listing.");
   }
 
-  // One open conversation per customer and property keeps chats easy to follow
-  let conversation = await Conversation.findOne({ customer: req.user._id, property: property._id, status: "open" });
-  if (!conversation) {
-    conversation = await Conversation.create({
-      customer: req.user._id,
-      owner: property.owner, // the real owner, taken from the property
-      ownerType: property.ownerType,
-      property: property._id,
-    });
-  }
+  const conversation = await openConversation(property, req.user._id);
   await addMessage(conversation, req.user, "customer", value);
   ok(res, present(await populate(Conversation.findById(conversation._id)), req.user), "Message sent", 201);
 };

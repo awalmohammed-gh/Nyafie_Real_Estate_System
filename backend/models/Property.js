@@ -15,6 +15,10 @@ const propertySchema = new mongoose.Schema(
       neighbourhood: { type: String, default: "" },
       city: { type: String, default: "", index: true },
       region: { type: String, default: "" },
+      country: { type: String, default: "Ghana", trim: true },
+      digitalAddress: { type: String, default: "", trim: true, maxlength: 30 },
+      latitude: { type: Number, default: null, min: -90, max: 90 },
+      longitude: { type: Number, default: null, min: -180, max: 180 },
     },
     bedrooms: { type: Number, default: 0, min: 0 },
     bathrooms: { type: Number, default: 0, min: 0 },
@@ -38,7 +42,9 @@ const propertySchema = new mongoose.Schema(
     reviewedAt: { type: Date },
     isFeatured: { type: Boolean, default: false },
     views: { type: Number, default: 0 },
-    rating: { type: Number, default: null },
+    // Kept in sync with published customer reviews (utils/reviews.js); null until the first one
+    ratingAverage: { type: Number, default: null, min: 1, max: 5 },
+    ratingCount: { type: Number, default: 0, min: 0 },
   },
   schemaOptions
 );

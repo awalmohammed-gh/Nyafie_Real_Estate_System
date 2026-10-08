@@ -1,5 +1,4 @@
-// Resizes and re-encodes a photo in the browser so previews stay small enough to keep
-// in localStorage. A real backend would receive the original file instead.
+// Resize photos for lightweight previews and individual Cloudinary uploads when saved.
 export const compressImage = (file, maxSize = 1280, quality = 0.78) =>
   new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);

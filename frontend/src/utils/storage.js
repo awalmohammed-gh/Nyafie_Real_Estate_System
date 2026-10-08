@@ -26,7 +26,7 @@ export const removeStorage = (key) => {
   }
 };
 
-// Bump when the shape of stored mock data changes so stale browser data is reset
+// Bump to clear old homebase:* browser data (earlier versions kept app data in localStorage)
 const DATA_VERSION = 3; // 3: data now comes from the backend API
 
 export const migrateStorage = () => {
@@ -37,6 +37,6 @@ export const migrateStorage = () => {
       .forEach((key) => localStorage.removeItem(key));
     localStorage.setItem("homebase:version", String(DATA_VERSION));
   } catch {
-    // storage unavailable: providers fall back to seed data
+    // storage unavailable: nothing to migrate (all data comes from the API)
   }
 };

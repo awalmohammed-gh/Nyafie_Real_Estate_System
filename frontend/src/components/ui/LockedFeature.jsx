@@ -4,7 +4,7 @@ import { Lock } from "lucide-react";
 
 // Consistent "why is this unavailable" card for plan-restricted features.
 // Pass copy from lockCopy() so wording matches across the app.
-const LockedFeature = ({ title, description, cta = "Upgrade Plan", to = "/agent/plans#plans", compact = false, className = "" }) => (
+const LockedFeature = ({ title, description, cta = "Upgrade Plan", to = "/agent/subscription/plans#plans", compact = false, className = "" }) => (
   <motion.div
     initial={{ opacity: 0, y: 8 }}
     animate={{ opacity: 1, y: 0 }}

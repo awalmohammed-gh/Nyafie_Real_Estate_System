@@ -1,8 +1,14 @@
 import User from "../models/User.js";
 
-// Creates (or keeps in sync) the main admin account from ADMIN_EMAIL / ADMIN_PSD.
-// The admin never comes from public registration and the password never leaves the server.
+/**
+ * Creates the first admin account from ADMIN_EMAIL / ADMIN_PSD when the database has none.
+ * After that the account lives in MongoDB: the admin edits their name, email and password
+ * from Admin Settings > Admin Account, and restarts never overwrite those changes.
+ * Forgotten password: run `npm run admin:reset` (sets the password back to ADMIN_PSD).
+ */
 export const ensureAdmin = async () => {
+  if (await User.exists({ role: "admin" })) return;
+
   const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.ADMIN_PSD;
   if (!email || !password) {
@@ -10,33 +16,21 @@ export const ensureAdmin = async () => {
     return;
   }
   if (password.length < 8) {
-    console.warn("ADMIN_PSD must be at least 8 characters: admin account not updated.");
+    console.warn("ADMIN_PSD must be at least 8 characters: admin account not created.");
     return;
   }
 
-  let admin = await User.findOne({ email }).select("+password");
-  if (!admin) {
-    admin = new User({ firstName: "Platform", lastName: "Admin", email, password, role: "admin" });
-    await admin.save();
-    console.log(`Admin account created for ${email}`);
-    return;
+  // Never promote an existing customer or agent during deployment bootstrap.
+  const existing = await User.findOne({ email });
+  if (existing) {
+    throw new Error("ADMIN_EMAIL belongs to a non-admin account. Use a dedicated admin email.");
+  } else {
+    try {
+      await User.create({ firstName: "Platform", lastName: "Admin", email, password, role: "admin" });
+    } catch (error) {
+      // Concurrent cold starts may both try to create the same first admin.
+      if (error.code !== 11000 || !await User.exists({ email, role: "admin" })) throw error;
+    }
   }
-
-  let changed = false;
-  if (admin.role !== "admin") {
-    admin.role = "admin";
-    changed = true;
-  }
-  if (!admin.isActive) {
-    admin.isActive = true;
-    changed = true;
-  }
-  if (!(await admin.matchPassword(password))) {
-    admin.password = password; // re-hashed by the pre-save hook
-    changed = true;
-  }
-  if (changed) {
-    await admin.save();
-    console.log(`Admin account updated for ${email}`);
-  }
+  console.log(`Admin account created for ${email}`);
 };

@@ -1,114 +1,57 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { motion } from "motion/react";
-import { AlertCircle, ArrowLeft, Eye, EyeOff, Loader2, Lock, Mail, ShieldCheck } from "lucide-react";
+import { useId, useState } from "react";
+import { Navigate, useLocation } from "react-router-dom";
+import { AlertCircle, ArrowRight, Loader2, Mail, ShieldCheck } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { useToast } from "../../context/useToast";
+import AuthLayout from "../../components/auth/AuthLayout";
+import { AuthField, AuthPasswordField } from "../../components/auth/AuthField";
+import PageLoader from "../../components/ui/PageLoader";
+import { sessionDestination } from "../../utils/sessionDomain";
 
-// Full-screen admin sign in, shown by RequireAdmin whenever /admin/* is opened
-// without an admin session. Credentials are checked by the backend only.
 const AdminLogin = () => {
-  const { user, adminLogin } = useAuth();
+  const { user, ready, adminLogin } = useAuth();
+  const location = useLocation();
   const { toast } = useToast();
   const [form, setForm] = useState({ email: "", password: "" });
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const errorId = useId();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  if (!ready) return <PageLoader fullScreen label="Checking your session..." />;
+  if (user) return <Navigate to={sessionDestination("admin", location.state?.from)} replace />;
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (submitting) return;
     setError("");
     setSubmitting(true);
     try {
       const admin = await adminLogin(form);
       toast({ title: `Welcome back, ${admin.firstName}` });
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "We couldn't sign you in. Please try again.");
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="relative isolate grid min-h-dvh place-items-center overflow-hidden bg-gray-950 px-4 py-10">
-      <div className="absolute -top-40 -left-32 -z-10 h-[28rem] w-[28rem] rounded-full bg-brand-600/25 blur-3xl" />
-      <div className="absolute -right-32 -bottom-40 -z-10 h-[24rem] w-[24rem] rounded-full bg-brand-900/40 blur-3xl" />
-
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: "easeOut" }}
-        className="w-full max-w-md"
-      >
-        <div className="mb-8 flex flex-col items-center text-center">
-          <span className="grid h-14 w-14 place-items-center rounded-2xl bg-brand-500 text-white shadow-lg shadow-brand-500/40">
-            <ShieldCheck className="h-7 w-7" />
-          </span>
-          <h1 className="mt-5 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">HomeBase Admin Console</h1>
-          <p className="mt-2 text-sm text-gray-400">Sign in with your administrator account to continue.</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
-          {user && user.role !== "admin" && (
-            <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              You're signed in as {user.name}, which isn't an admin account.
-            </p>
-          )}
-          <label className="block text-sm">
-            <span className="mb-1.5 block font-medium text-gray-700">Admin email</span>
-            <span className="relative block">
-              <Mail className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <input
-                type="email"
-                autoComplete="username"
-                value={form.email}
-                onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                required
-                className="field pl-10"
-              />
-            </span>
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1.5 block font-medium text-gray-700">Password</span>
-            <span className="relative block">
-              <Lock className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <input
-                type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
-                value={form.password}
-                onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
-                required
-                className="field pr-11 pl-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                className="absolute top-1/2 right-3 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full text-gray-400 hover:text-gray-700"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </span>
-          </label>
-
-          {error && (
-            <p role="alert" className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              {error}
-            </p>
-          )}
-
-          <button type="submit" disabled={submitting} className="btn btn-primary w-full py-3.5">
-            {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-            Sign in to admin
-          </button>
-        </form>
-
-        <Link to="/" className="mt-6 flex items-center justify-center gap-1.5 text-sm font-semibold text-gray-400 transition hover:text-white">
-          <ArrowLeft className="h-4 w-4" />
-          Back to the website
-        </Link>
-      </motion.div>
-    </div>
+    <AuthLayout domain="admin">
+      <div className="auth-admin-mark"><ShieldCheck size={25} aria-hidden="true" /></div>
+      <div className="auth-heading">
+        <span className="auth-eyebrow">Admin console</span>
+        <h1>Welcome back.</h1>
+        <p>Sign in to oversee your marketplace and keep everything moving.</p>
+      </div>
+      <form onSubmit={handleSubmit} className="auth-form" aria-busy={submitting} aria-describedby={error ? errorId : undefined}>
+        <fieldset disabled={submitting} className="auth-fields">
+          <AuthField label="Administrator email" icon={Mail} type="email" name="email" placeholder="admin@example.com" autoComplete="username" value={form.email} onChange={(event) => setForm((previous) => ({ ...previous, email: event.target.value }))} required />
+          <AuthPasswordField label="Password" name="password" placeholder="Enter your password" autoComplete="current-password" value={form.password} onChange={(event) => setForm((previous) => ({ ...previous, password: event.target.value }))} required />
+        </fieldset>
+        {error && <p id={errorId} role="alert" className="auth-error"><AlertCircle size={18} aria-hidden="true" />{error}</p>}
+        <button type="submit" disabled={submitting} className="auth-submit"><span>{submitting ? "Signing you in…" : "Sign in to admin"}</span>{submitting ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <ArrowRight size={18} aria-hidden="true" />}</button>
+      </form>
+      <p className="auth-admin-note"><ShieldCheck size={15} aria-hidden="true" />For authorised administrators only.</p>
+    </AuthLayout>
   );
 };
 

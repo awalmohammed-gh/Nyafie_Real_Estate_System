@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { buildAgents } from "../utils/property";
+import { isListingPublic, mergeAgents } from "../utils/property";
 import { readStorage, writeStorage } from "../utils/storage";
 import { RealEstateContext } from "./realEstateContext";
 import { useAuth } from "./useAuth";
 import { propertyApi, agentApi, adminApi, inquiryApi, userApi } from "../frontApi";
+import { canAccessAgent } from "../utils/sessionDomain";
 
 const GUEST_FAVORITES_KEY = "homebase:favorites";
 
@@ -13,10 +14,11 @@ const GUEST_FAVORITES_KEY = "homebase:favorites";
 //  - inquiries:  sent (customers), received (agents) or all (admins)
 export const RealEstateProvider = ({ children }) => {
   const { user, users, refreshUser } = useAuth();
-  const role = user?.role;
+  const role = user?.role === "agent" && !canAccessAgent(user) ? undefined : user?.role;
   const userId = user?.id;
 
   const [properties, setProperties] = useState([]);
+  const [agentDirectory, setAgentDirectory] = useState(undefined);
   const [propertiesLoading, setPropertiesLoading] = useState(true);
   const [listings, setListings] = useState([]);
   const [listingsLoading, setListingsLoading] = useState(false);
@@ -24,7 +26,6 @@ export const RealEstateProvider = ({ children }) => {
   const [inquiries, setInquiries] = useState([]);
   const [guestFavorites, setGuestFavorites] = useState(() => readStorage(GUEST_FAVORITES_KEY, []));
   const [savedIds, setSavedIds] = useState([]);
-  const [makeOffer, setMakeOffer] = useState([]);
 
   const refreshProperties = useCallback(async () => {
     try {
@@ -55,7 +56,19 @@ export const RealEstateProvider = ({ children }) => {
   // reload public listings whenever the admin user list is refreshed
   useEffect(() => {
     refreshProperties().catch(() => {});
-  }, [refreshProperties, users]);
+  }, [refreshProperties, users, userId]);
+
+  // Agent profiles are visible only to the current signed-in account.
+  // Ignore requests that finish after logout or an account switch.
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    agentApi.getPublicAgents().then(
+      (data) => active && setAgentDirectory({ userId, data }),
+      () => active && setAgentDirectory({ userId, data: null }),
+    );
+    return () => { active = false; };
+  }, [userId, users, properties]);
 
   // Reload role-specific data whenever the signed-in account changes
   useEffect(() => {
@@ -64,8 +77,8 @@ export const RealEstateProvider = ({ children }) => {
   }, [userId, refreshListings, refreshInquiries]);
 
   useEffect(() => {
-    if (userId) userApi.getSavedProperties().then(setSavedIds).catch(() => {});
-  }, [userId]);
+    if (userId && role === "user") userApi.getSavedProperties().then(setSavedIds).catch(() => {});
+  }, [userId, role]);
 
   useEffect(() => void writeStorage(GUEST_FAVORITES_KEY, guestFavorites), [guestFavorites]);
 
@@ -74,7 +87,9 @@ export const RealEstateProvider = ({ children }) => {
     await Promise.all([refreshProperties(), refreshListings()]);
   }, [refreshProperties, refreshListings]);
 
-  const agents = useMemo(() => buildAgents(properties), [properties]);
+  const directory = agentDirectory?.userId === userId ? agentDirectory?.data : undefined;
+  const agents = useMemo(() => userId ? mergeAgents(directory, properties) : [], [userId, directory, properties]);
+  const agentsLoading = Boolean(userId) && (propertiesLoading || directory === undefined);
 
   const addListing = useCallback(
     async (data) => {
@@ -144,7 +159,7 @@ export const RealEstateProvider = ({ children }) => {
   );
 
   const findProperty = useCallback((id) => listings.find((p) => p.id === id) || properties.find((p) => p.id === id), [listings, properties]);
-  const isPubliclyVisible = useCallback((property) => properties.some((p) => p.id === property.id), [properties]);
+  const isPubliclyVisible = useCallback((property) => isListingPublic(property, agents), [agents]);
 
   const favorites = userId ? savedIds : guestFavorites;
 
@@ -170,6 +185,7 @@ export const RealEstateProvider = ({ children }) => {
       properties,
       propertiesLoading,
       agents,
+      agentsLoading,
       listings,
       listingsLoading,
       listingsReady: listingsLoadedFor === role,
@@ -188,10 +204,6 @@ export const RealEstateProvider = ({ children }) => {
       refreshListings,
       refreshInquiries,
       refreshUser,
-      makeOffer,
-      setMakeOffer,
-      addToOffer: (id) => setMakeOffer((prev) => (prev.includes(id) ? prev : [...prev, id])),
-      removeFromOffer: (id) => setMakeOffer((prev) => prev.filter((item) => item !== id)),
       favorites,
       isFavorite: (id) => favorites.includes(id),
       toggleFavorite,
@@ -200,6 +212,7 @@ export const RealEstateProvider = ({ children }) => {
       properties,
       propertiesLoading,
       agents,
+      agentsLoading,
       listings,
       listingsLoading,
       listingsLoadedFor,
@@ -219,7 +232,6 @@ export const RealEstateProvider = ({ children }) => {
       refreshListings,
       refreshInquiries,
       refreshUser,
-      makeOffer,
       favorites,
       toggleFavorite,
     ]

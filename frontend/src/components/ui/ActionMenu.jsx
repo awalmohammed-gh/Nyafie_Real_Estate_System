@@ -10,7 +10,7 @@ const ActionMenu = ({ actions, label = "Actions" }) => {
   const menuRef = useRef(null);
   const visible = actions.filter((a) => !a.hidden);
 
-  const menuHeight = visible.length * 40 + 16;
+  const menuHeight = visible.length * 36 + 10;
   const measure = () => {
     const rect = buttonRef.current.getBoundingClientRect();
     const openUp = rect.bottom + menuHeight > window.innerHeight - 8;
@@ -60,7 +60,7 @@ const ActionMenu = ({ actions, label = "Actions" }) => {
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        className={`grid h-9 w-9 place-items-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 ${position ? "bg-gray-100 text-gray-900" : ""}`}
+        className={`grid h-8 w-8 place-items-center rounded-md text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 ${position ? "bg-gray-100 text-gray-900" : ""}`}
       >
         <MoreHorizontal className="h-5 w-5" />
       </button>
@@ -74,7 +74,7 @@ const ActionMenu = ({ actions, label = "Actions" }) => {
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ duration: 0.12 }}
             style={{ top: position.top, right: position.right }}
-            className="fixed z-[80] w-56 origin-top-right rounded-2xl bg-white p-1.5 shadow-2xl ring-1 shadow-gray-900/10 ring-gray-100"
+            className="fixed z-[80] w-56 origin-top-right rounded-lg border border-gray-200 bg-white p-1 shadow-lg shadow-gray-900/5"
           >
             {visible.map((action) => (
               <button
@@ -86,7 +86,7 @@ const ActionMenu = ({ actions, label = "Actions" }) => {
                   setPosition(null);
                   action.onClick();
                 }}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                   action.danger ? "text-red-600 hover:bg-red-50" : "text-gray-700 hover:bg-gray-50"
                 }`}
               >

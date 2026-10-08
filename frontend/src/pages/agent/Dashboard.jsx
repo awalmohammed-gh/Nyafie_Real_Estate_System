@@ -1,323 +1,63 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { agentApi } from "../../frontApi";
-import { motion } from "motion/react";
-import { ArrowRight, Building2, CalendarClock, Eye, Inbox, MessageSquare, PlusSquare, Radio, Trophy } from "lucide-react";
+import { ArrowRight, Building2, CheckCircle2, Eye, HandCoins, Inbox, KeyRound, Plus, Sparkles } from "lucide-react";
 import { useAgent } from "../../hooks/useAgent";
 import { useRealEstate } from "../../context/useRealEstate";
+import { useTransactions } from "../../context/useTransactions";
 import PageTitle from "../../components/agent/PageTitle";
+import WorkspaceStats from "../../components/agent/WorkspaceStats";
+import ActivityFeed from "../../components/dashboard/ActivityFeed";
+import { ErrorState } from "../../components/dashboard/States";
 import StatusBadge from "../../components/ui/StatusBadge";
 import EmptyState from "../../components/ui/EmptyState";
-import LockedFeature from "../../components/ui/LockedFeature";
-import { BarChart, BarList } from "../../components/ui/Charts";
-import { formatPrice, getListingStatus } from "../../utils/property";
+import { buildActivity } from "../../utils/activity";
 import { formatDate, formatRelative } from "../../utils/date";
-import { lockCopy } from "../../utils/permissions";
+import { formatLocation, formatPrice, getInitials, getListingStatus } from "../../utils/property";
+import { formatCedis } from "../../utils/reports";
 
-const StatCard = ({ icon: Icon, label, value, hint, index }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 12 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay: index * 0.05, duration: 0.3 }}
-    className="rounded-3xl bg-white p-5 ring-1 ring-gray-200 sm:p-6"
-  >
-    <div className="flex items-center justify-between">
-      <p className="text-sm font-medium text-gray-500">{label}</p>
-      <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-brand-500">
-        <Icon className="h-5 w-5" />
-      </span>
-    </div>
-    <p className="mt-3 text-3xl font-extrabold tracking-tight text-gray-900">{value}</p>
-    {hint && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
-  </motion.div>
-);
-
-const Panel = ({ title, description, children, className = "" }) => (
-  <section className={`rounded-3xl bg-white p-6 ring-1 ring-gray-200 ${className}`}>
-    <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-    {description && <p className="mb-5 text-sm text-gray-500">{description}</p>}
-    {children}
-  </section>
-);
-
-// Demo-only weekly view estimate: spreads a listing's views over 8 weeks deterministically
-const weeklyViews = (properties) => {
-  const weeks = Array.from({ length: 8 }, (_, i) => ({ label: `W${i + 1}`, values: { views: 0 } }));
-  properties.forEach((p) => {
-    const seed = [...p.id].reduce((s, c) => s + c.charCodeAt(0), 0);
-    const weights = weeks.map((_, i) => (0.6 + ((seed + i * 37) % 100) / 125) * (1 + i * 0.06));
-    const total = weights.reduce((s, w) => s + w, 0);
-    const recent = Math.round((p.meta?.views || 0) * 0.35);
-    weights.forEach((w, i) => (weeks[i].values.views += Math.round((recent * w) / total)));
-  });
-  return weeks;
-};
-
-const statusTone = { active: "green", expiring: "amber", expired: "red", cancelled: "gray", pending: "amber" };
+const SectionHeader = ({ title, description, to, label = "View all" }) => <header className="workspace-card-header"><div><h2>{title}</h2>{description && <p>{description}</p>}</div>{to && <Link to={to} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-brand-700">{label}<ArrowRight className="h-3.5 w-3.5" /></Link>}</header>;
 
 const Dashboard = () => {
   const { user, myProperties, myInquiries, permissions: perms } = useAgent();
   const { findProperty, isPubliclyVisible } = useRealEstate();
-  const subscription = user.subscription;
-  const state = perms.subscription;
+  const { offers, rentals, sales, pending, loading, error, reload } = useTransactions();
+  const live = myProperties.filter(isPubliclyVisible).length;
+  const freshInquiries = myInquiries.filter((i) => i.status === "New");
+  const drafts = myProperties.filter((p) => p.listing.state === "draft");
+  const rejected = myProperties.filter((p) => p.listing.state === "rejected");
+  const recent = [...myProperties].sort((a, b) => new Date(b.listing.createdAt) - new Date(a.listing.createdAt)).slice(0, 4);
+  const recentInquiries = [...myInquiries].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 4);
+  const recentOffers = [...offers].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 4);
+  const activity = buildActivity({ base: "/agent", offers, rentals, sales, inquiries: myInquiries, findProperty, limit: 5 });
+  const tasks = [
+    { icon: Inbox, label: "New inquiries", count: freshInquiries.length, detail: "Customers waiting to hear from you", to: "/agent/inquiries" },
+    { icon: HandCoins, label: "Offers to review", count: pending.offers, detail: "Accept, counter or decline an offer", to: "/agent/offers" },
+    { icon: KeyRound, label: "Rental & sale requests", count: pending.rentals + pending.sales, detail: "Move your customer requests forward", to: pending.rentals ? "/agent/rentals" : "/agent/sale-requests" },
+    { icon: Building2, label: "Listings to finish", count: drafts.length + rejected.length, detail: rejected.length ? "Review feedback and complete your drafts" : "Complete and submit your drafts", to: "/agent/properties" },
+  ].filter((task) => task.count > 0);
+  const usage = perms.propertyLimit ? Math.min(100, perms.activeCount / perms.propertyLimit * 100) : 0;
+  const propertyStatus = (p) => getListingStatus(p, p.listing.state !== "published" || isPubliclyVisible(p));
 
-  // Headline numbers from the dashboard endpoint (one request); local data fills in while it loads
-  const [summary, setSummary] = useState(null);
-  useEffect(() => {
-    agentApi.getAgentDashboard().then(setSummary).catch(() => {});
-  }, [myProperties, myInquiries]);
-
-  const liveListings = myProperties.filter(isPubliclyVisible);
-  const totalViews = myProperties.reduce((sum, p) => sum + (p.meta?.views || 0), 0);
-  const newInquiries = myInquiries.filter((inq) => inq.status === "New").length;
-  const pendingCount = myProperties.filter((p) => p.listing.state === "pending").length;
-  const draftCount = myProperties.filter((p) => p.listing.state === "draft").length;
-
-  const recentProperties = [...myProperties].sort((a, b) => new Date(b.listing.updatedAt) - new Date(a.listing.updatedAt)).slice(0, 4);
-  const recentInquiries = [...myInquiries].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5);
-  const usagePercent = perms.propertyLimit ? Math.min(100, Math.round((perms.activeCount / perms.propertyLimit) * 100)) : 0;
-
-  // Per-listing performance (views -> inquiries)
-  const performance = myProperties
-    .filter((p) => p.listing.state === "published")
-    .map((p) => {
-      const inquiries = myInquiries.filter((i) => i.propertyId === p.id).length;
-      const views = p.meta?.views || 0;
-      return { property: p, views, inquiries, conversion: views ? (inquiries / views) * 100 : 0 };
-    })
-    .sort((a, b) => b.views - a.views);
-  const best = [...performance].sort((a, b) => b.conversion - a.conversion)[0];
-
-  const stats = [
-    { icon: Building2, label: "Total properties", value: summary?.totalProperties ?? myProperties.length, hint: `${pendingCount} pending review · ${draftCount} drafts` },
-    { icon: Radio, label: "Active listings", value: summary?.activeProperties ?? liveListings.length, hint: perms.isActive ? "Visible to the public" : "Hidden until you renew" },
-    { icon: Eye, label: "Property views", value: (summary?.propertyViews ?? totalViews).toLocaleString(), hint: "Across all listings" },
-    { icon: Inbox, label: "New inquiries", value: summary?.newInquiries ?? newInquiries, hint: `${myInquiries.length} total` },
-  ];
-
-  const renewTo = subscription ? `/agent/checkout?plan=${subscription.planId}` : "/agent/plans";
-  const locked = (feature) => {
-    const copy = lockCopy(perms, feature);
-    return <LockedFeature compact title={copy.title} description={copy.description} cta={copy.cta} to={perms.isActive ? "/agent/plans#plans" : renewTo} />;
-  };
-
-  return (
-    <>
-      <PageTitle
-        title={`Good to see you, ${user.firstName}`}
-        description="Here's how your listings are doing."
-        action={
-          perms.canCreateDraft && (
-            <Link to="/agent/properties/add" className="btn btn-primary sm:hidden">
-              <PlusSquare className="h-4 w-4" />
-              Add Property
-            </Link>
-          )
-        }
-      />
-
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        {stats.map((stat, index) => <StatCard key={stat.label} {...stat} index={index} />)}
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
-        {/* Subscription */}
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.3 }}
-          className="relative overflow-hidden rounded-3xl bg-gray-900 p-6 text-white xl:self-start"
-        >
-          <div className="absolute -top-16 -right-16 h-48 w-48 rounded-full bg-brand-500/30 blur-2xl" />
-          <div className="relative">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-gray-400">Subscription</p>
-              <StatusBadge status={state.statusLabel} tone={statusTone[state.status]} />
-            </div>
-            <p className="mt-2 text-2xl font-extrabold">{perms.plan?.name || subscription?.planName} plan</p>
-            <p className="mt-1 flex items-center gap-2 text-sm text-gray-300">
-              <CalendarClock className="h-4 w-4" />
-              {state.isActive ? `Expires ${formatDate(subscription.expiryDate)} · ${state.daysRemaining} days left` : `${state.statusLabel} · ${formatDate(subscription.expiryDate)}`}
-            </p>
-            <div className="mt-6">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Properties</span>
-                <span className="font-semibold">{perms.activeCount} / {perms.propertyLimit} used</span>
-              </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${usagePercent}%` }}
-                  transition={{ delay: 0.3, duration: 0.6, ease: "easeOut" }}
-                  className={`h-full rounded-full ${usagePercent >= 100 ? "bg-red-400" : usagePercent >= 80 ? "bg-amber-400" : "bg-brand-400"}`}
-                />
-              </div>
-              {perms.limitReached && <p className="mt-2 text-xs text-red-300">Property limit reached. Upgrade to add more.</p>}
-              {perms.nearLimit && <p className="mt-2 text-xs text-amber-300">You are close to your property limit.</p>}
-            </div>
-            <Link
-              to={state.isActive ? "/agent/subscription" : renewTo}
-              className={`btn mt-6 w-full ${state.isActive ? "bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20" : "btn-primary"}`}
-            >
-              {state.isActive ? "Manage subscription" : "Renew Subscription"}
-            </Link>
-          </div>
-        </motion.section>
-
-        {/* Recent properties */}
-        <section className="rounded-3xl bg-white p-6 ring-1 ring-gray-200 xl:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-gray-900">Recent properties</h2>
-            <Link to="/agent/properties" className="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-800">View all <ArrowRight className="h-4 w-4" /></Link>
-          </div>
-          {recentProperties.length === 0 ? (
-            <EmptyState
-              icon={Building2}
-              title="No properties yet"
-              description="Add your first property to start receiving inquiries."
-              action={perms.canCreateDraft && <Link to="/agent/properties/add" className="btn btn-primary">Add Property</Link>}
-            />
-          ) : (
-            <ul className="divide-y divide-gray-100">
-              {recentProperties.map((property) => (
-                <li key={property.id} className="flex items-center gap-4 py-3">
-                  <img src={property.media.images[0]} alt="" className="h-14 w-16 shrink-0 rounded-xl bg-gray-100 object-cover sm:w-20" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-gray-900">{property.title}</p>
-                    <p className="truncate text-sm text-gray-500">{formatPrice(property)} · {property.location.name}</p>
-                  </div>
-                  <div className="hidden items-center gap-1 text-sm text-gray-500 sm:flex">
-                    <Eye className="h-4 w-4" />
-                    {(property.meta?.views || 0).toLocaleString()}
-                  </div>
-                  <StatusBadge status={getListingStatus(property, perms.isActive)} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
-
-      {/* Analytics: each block is gated by the plan's analytics level */}
-      <h2 className="mt-10 mb-4 text-xl font-extrabold tracking-tight text-gray-900">Analytics</h2>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Panel title="Property views" description="Total views per published listing">
-          {perms.canViewAnalytics ? (
-            <BarList items={performance.slice(0, 6).map((row) => ({ label: row.property.title, value: row.views }))} emptyText="Publish a property to start collecting views." />
-          ) : (
-            locked()
-          )}
-        </Panel>
-
-        <Panel title="Inquiry statistics" description="How your leads are progressing">
-          {perms.canViewInquiryStats ? (
-            <div className="grid grid-cols-2 gap-3">
-              {["New", "Contacted", "In Progress", "Closed"].map((s) => (
-                <div key={s} className="rounded-2xl bg-gray-50 p-4">
-                  <p className="text-2xl font-extrabold text-gray-900 tabular-nums">{myInquiries.filter((i) => i.status === s).length}</p>
-                  <StatusBadge status={s} className="mt-2" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            locked("inquiryStats")
-          )}
-        </Panel>
-
-        <Panel title="Property performance" description="Views, inquiries and conversion per listing" className="lg:col-span-2">
-          {perms.canViewPerformance ? (
-            performance.length === 0 ? (
-              <p className="py-6 text-center text-sm text-gray-400">No published listings yet.</p>
-            ) : (
-              <div className="-mx-6 overflow-x-auto px-6">
-                <table className="w-full min-w-[520px] text-left text-sm">
-                  <thead className="text-xs font-semibold tracking-wider text-gray-500 uppercase">
-                    <tr className="border-b border-gray-100">
-                      <th className="py-2 pr-4">Property</th>
-                      <th className="px-4 py-2 text-right">Views</th>
-                      <th className="px-4 py-2 text-right">Inquiries</th>
-                      <th className="py-2 pl-4 text-right">Conversion</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {performance.map((row) => (
-                      <tr key={row.property.id}>
-                        <td className="max-w-60 truncate py-3 pr-4 font-medium text-gray-900">{row.property.title}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{row.views.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right tabular-nums">{row.inquiries}</td>
-                        <td className="py-3 pl-4 text-right font-semibold tabular-nums">{row.conversion.toFixed(2)}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )
-          ) : (
-            locked("performance")
-          )}
-        </Panel>
-
-        <Panel title="Advanced analytics" description="Listing performance trend over the last 8 weeks (estimated from demo data)" className="lg:col-span-2">
-          {perms.canViewAdvancedAnalytics ? (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              <div className="lg:col-span-2">
-                <BarChart title="Estimated weekly listing views" data={weeklyViews(performance.map((r) => r.property))} series={[{ key: "views", label: "Views" }]} />
-              </div>
-              <div className="space-y-3">
-                {best && (
-                  <div className="rounded-2xl bg-brand-50/70 p-4">
-                    <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wider text-brand-700 uppercase"><Trophy className="h-3.5 w-3.5" />Best converting</p>
-                    <p className="mt-1 font-bold text-gray-900">{best.property.title}</p>
-                    <p className="text-sm text-gray-600">{best.conversion.toFixed(2)}% of views became inquiries</p>
-                  </div>
-                )}
-                <div className="rounded-2xl bg-gray-50 p-4">
-                  <p className="text-xs font-semibold tracking-wider text-gray-500 uppercase">Average conversion</p>
-                  <p className="mt-1 text-2xl font-extrabold text-gray-900">
-                    {performance.length ? (performance.reduce((s, r) => s + r.conversion, 0) / performance.length).toFixed(2) : "0.00"}%
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            locked("advanced")
-          )}
-        </Panel>
-      </div>
-
-      {/* Recent inquiries */}
-      <section className="mt-6 rounded-3xl bg-white p-6 ring-1 ring-gray-200">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">Recent inquiries</h2>
-          <Link to="/agent/inquiries" className="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-800">View all <ArrowRight className="h-4 w-4" /></Link>
-        </div>
-        {recentInquiries.length === 0 ? (
-          <EmptyState icon={MessageSquare} title="No inquiries yet" description="When buyers or renters contact you about a property, they'll appear here." />
-        ) : (
-          <ul className="divide-y divide-gray-100">
-            {recentInquiries.map((inquiry) => (
-              <li key={inquiry.id}>
-                <Link to={`/agent/inquiries?open=${inquiry.id}`} className="-mx-3 flex items-center gap-4 rounded-2xl px-3 py-3 transition hover:bg-gray-50">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gray-100 text-sm font-bold text-gray-600">{inquiry.name.charAt(0)}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-gray-900">
-                      {inquiry.name}
-                      <span className="font-normal text-gray-500"> · {findProperty(inquiry.propertyId)?.title || "Removed property"}</span>
-                    </p>
-                    <p className="truncate text-sm text-gray-500">{inquiry.message}</p>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <StatusBadge status={inquiry.status} />
-                    <span className="text-xs text-gray-400">{formatRelative(inquiry.createdAt)}</span>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+  return <div className="space-y-6">
+    <PageTitle title={`Good to see you, ${user.firstName}.`} eyebrow={new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} description="Your listings, your customers, and what needs your attention today." action={perms.canCreateDraft && <Link to="/agent/properties/add" className="btn btn-primary"><Plus className="h-4 w-4" />Add property</Link>} />
+    <WorkspaceStats items={[
+      { label: "Live properties", value: live, note: `${myProperties.length} listings in your portfolio`, icon: Building2, to: "/agent/properties" },
+      { label: "Property views", value: myProperties.reduce((n, p) => n + (p.meta?.views || 0), 0).toLocaleString(), note: "Across all your listings", icon: Eye, to: "/agent/properties" },
+      { label: "New inquiries", value: freshInquiries.length, note: "Waiting for your response", icon: Inbox, to: "/agent/inquiries" },
+      { label: "Pending offers", value: loading ? "—" : pending.offers, note: "Ready for your review", icon: HandCoins, to: "/agent/offers" },
+    ]} />
+    {error && <ErrorState title="Customer activity is unavailable" message={error} onRetry={reload} />}
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <section className="workspace-card"><SectionHeader title="Your next actions" description="A short list to keep your business moving." />
+        {loading ? <p className="p-6 text-sm text-gray-500" role="status">Checking your customer activity...</p> : tasks.length ? <div className="grid divide-y divide-gray-100 sm:grid-cols-2 sm:divide-y-0">{tasks.map(({ icon: Icon, ...task }) => <Link key={task.label} to={task.to} className="group flex items-start gap-3 p-5 transition hover:bg-brand-50/50"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700"><Icon className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className="flex items-center justify-between gap-2 text-sm font-semibold text-gray-900">{task.label}<span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs tabular-nums">{task.count}</span></p><p className="mt-1 text-xs leading-relaxed text-gray-500">{task.detail}</p></div><ArrowRight className="mt-1 h-4 w-4 shrink-0 text-gray-400 group-hover:text-brand-700" /></Link>)}</div> : <div className="flex items-center gap-4 p-6"><CheckCircle2 className="h-8 w-8 shrink-0 text-emerald-600" /><div><p className="font-semibold text-gray-900">You're up to date.</p><p className="mt-1 text-sm text-gray-500">New inquiries, offers and requests will appear here.</p></div></div>}
       </section>
-    </>
-  );
+      <aside className="workspace-card p-5"><div className="flex items-start justify-between gap-3"><div><p className="workspace-eyebrow">Your subscription</p><h2 className="mt-2 text-lg font-semibold text-gray-900">{perms.plan?.name || user.subscription?.planName || "No paid"} plan</h2></div><Sparkles className="h-5 w-5 text-brand-600" /></div><p className="mt-2 text-sm text-gray-500">{user.subscription ? `${perms.subscription.isActive ? "Renews" : "Ended"} ${formatDate(user.subscription.expiryDate)}` : "Plan limits set by HomeBase"}</p><div className="mt-5 flex justify-between text-xs"><span className="text-gray-500">Listing usage</span><span className="font-semibold text-gray-900">{perms.activeCount} / {perms.propertyLimit}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100" role="progressbar" aria-label="Listing usage" aria-valuemin={0} aria-valuemax={perms.propertyLimit || 1} aria-valuenow={Math.min(perms.activeCount, perms.propertyLimit || 1)}><div className={`h-full rounded-full ${perms.limitReached ? "bg-amber-500" : "bg-brand-500"}`} style={{ width: `${usage}%` }} /></div><Link to="/agent/subscription" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-brand-700">{perms.isActive ? "Manage plan" : "Review your subscription"}<ArrowRight className="h-4 w-4" /></Link></aside>
+    </div>
+    <section className="workspace-card"><SectionHeader title="Recent properties" description="Keep an eye on your latest listings." to="/agent/properties" label="All properties" />{recent.length ? <div className="grid gap-px bg-gray-100 md:grid-cols-2">{recent.map((p) => <Link key={p.id} to={`/agent/properties/${p.id}`} className="flex min-w-0 items-center gap-4 bg-white p-5 transition hover:bg-gray-50"><img src={p.media.images[0]} alt="" className="h-20 w-24 shrink-0 rounded-xl bg-gray-100 object-cover" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-gray-900">{p.title}</p><p className="mt-1 truncate text-xs text-gray-500">{formatLocation(p.location)}</p><p className="mt-2 text-sm font-semibold text-gray-900">{formatPrice(p)}</p><div className="mt-2 flex flex-wrap items-center gap-2"><StatusBadge status={propertyStatus(p)} /><span className="text-xs text-gray-400">{p.meta?.views || 0} views</span></div></div><ArrowRight className="hidden h-4 w-4 shrink-0 text-gray-400 sm:block" /></Link>)}</div> : <EmptyState icon={Building2} title="Build your property portfolio" description="Add your first listing, save a draft, and publish when you're ready." action={perms.canCreateDraft && <Link to="/agent/properties/add" className="btn btn-primary">Add your first property</Link>} />}</section>
+    <div className="grid gap-6 lg:grid-cols-2">
+      <section className="workspace-card"><SectionHeader title="Latest inquiries" to="/agent/inquiries" />{recentInquiries.length ? <ul className="divide-y divide-gray-100">{recentInquiries.map((i) => <li key={i.id}><Link to={`/agent/inquiries?open=${i.id}`} className="flex items-start gap-3 p-5 hover:bg-gray-50"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700">{getInitials(i.name)}</span><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-gray-900">{i.name}</p><p className="mt-1 truncate text-xs text-gray-500">{findProperty(i.propertyId)?.title || "Removed property"}</p><p className="mt-1 line-clamp-1 text-sm text-gray-600">{i.message}</p></div><div className="text-right"><StatusBadge status={i.status} /><p className="mt-1 text-[11px] text-gray-400">{formatRelative(i.createdAt)}</p></div></Link></li>)}</ul> : <p className="p-6 text-sm text-gray-500">Customer inquiries will appear here.</p>}</section>
+      <section className="workspace-card"><SectionHeader title="Latest offers" to="/agent/offers" />{loading ? <p className="p-6 text-sm text-gray-500" role="status">Loading offers…</p> : recentOffers.length ? <ul className="divide-y divide-gray-100">{recentOffers.map((o) => <li key={o.id}><Link to={`/agent/offers?property=${o.property.id}`} className="flex items-center gap-3 p-5 hover:bg-gray-50"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gray-50 text-brand-600"><HandCoins className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-gray-900">{o.customer?.name || "Customer"}</p><p className="mt-1 truncate text-xs text-gray-500">{o.property.title}</p></div><div className="text-right"><p className="text-sm font-semibold text-gray-900">{formatCedis(o.amount)}</p><StatusBadge status={o.status} className="mt-1" /></div></Link></li>)}</ul> : <p className="p-6 text-sm text-gray-500">Offers on your listings will appear here.</p>}</section>
+    </div>
+    <section className="workspace-card"><SectionHeader title="Recent activity" description="The latest changes across your properties and customer requests." /><ActivityFeed items={activity} loading={loading} /></section>
+  </div>;
 };
-
 export default Dashboard;

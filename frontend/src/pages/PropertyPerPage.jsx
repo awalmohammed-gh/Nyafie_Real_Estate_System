@@ -1,29 +1,23 @@
-import { useParams } from 'react-router-dom';
-import { useRealEstate } from '../context/useRealEstate';
 import PropertyBrowser from '../components/PropertyBrowser';
 import NotFound from './NotFound';
 
 const descriptions = {
-  sale: "Explore our properties available for sale. Whether you're looking to buy your dream home or invest, find listings with detailed information, photos, and features to help you make the best choice.",
-  rent: "Explore our properties available for rent. From short stays to long-term leases, find a place that fits your lifestyle and budget.",
+  sale: "A space to call your own. Explore homes for sale and picture your next chapter.",
+  rent: "Short stays or fresh starts. Find a rental that fits the way you live.",
 };
 
-const PropertyPerPage = () => {
-  const { status } = useParams();
-  const { properties } = useRealEstate();
+// /sale and /rent (routed by SlugPage)
+const PropertyPerPage = ({ status }) => {
   const key = status.toLowerCase();
 
   if (!descriptions[key]) return <NotFound />;
 
-  const propertyPage = properties.filter((item) => item.property.status.toLowerCase() === key);
-
   return (
     <PropertyBrowser
       key={key}
-      properties={propertyPage}
-      title={`For ${status} Properties`}
+      fixedListingType={key === 'sale' ? 'Sale' : 'Rent'}
+      title={`Homes for ${key === 'sale' ? 'Sale' : 'Rent'}`}
       description={descriptions[key]}
-      heroImage="/cateHeroImg.jpg"
     />
   );
 };
