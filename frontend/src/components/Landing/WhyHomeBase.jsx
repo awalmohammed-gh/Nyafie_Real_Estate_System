@@ -1,5 +1,6 @@
 import { BedDouble, Building2, Heart, KeyRound, ShieldCheck, SlidersHorizontal, UserRound } from "lucide-react";
 import { usePlatform } from "../../context/usePlatform";
+import { RevealGroup, RevealItem } from "./LandingMotion";
 
 // Real platform capabilities only
 const reasons = [
@@ -16,12 +17,13 @@ const WhyHomeBase = () => {
   const { siteName } = usePlatform();
   return (
     <section className="home-section home-why" aria-labelledby="why-heading">
-      <div className="container-page home-why-layout">
-        <div><p className="home-eyebrow">09 / WHY {siteName.toUpperCase()}</p><h2 id="why-heading" className="home-section-title">One marketplace, <span className="home-serif">every kind of move.</span></h2></div>
+      {/* The grid list uses display: contents (no box of its own), so the layout triggers the reveal */}
+      <RevealGroup className="container-page home-why-layout" gap={0.06}>
+        <RevealItem><p className="home-eyebrow">09 / WHY {siteName.toUpperCase()}</p><h2 id="why-heading" className="home-section-title">One marketplace, <span className="home-serif">every kind of move.</span></h2></RevealItem>
         <ul className="home-why-grid">{reasons.map(({ Icon, title, text }) => (
-          <li key={title}><Icon size={22} strokeWidth={1.6} aria-hidden="true" /><h3>{title}</h3><p>{text}</p></li>
+          <RevealItem as="li" key={title}><Icon size={22} strokeWidth={1.6} aria-hidden="true" /><h3>{title}</h3><p>{text}</p></RevealItem>
         ))}</ul>
-      </div>
+      </RevealGroup>
     </section>
   );
 };

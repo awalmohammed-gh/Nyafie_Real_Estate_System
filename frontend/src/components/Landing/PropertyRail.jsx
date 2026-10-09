@@ -1,5 +1,6 @@
 import HouseCard from "../card/HouseCard";
 import SkeletonGrid from "../ui/SkeletonGrid";
+import { RevealGroup, RevealItem } from "./LandingMotion";
 
 /**
  * A row of the shared HouseCard: a grid on larger screens, a swipeable rail on phones.
@@ -10,9 +11,9 @@ const PropertyRail = ({ items, loading, count = 3, columns = 3, label }) => {
   if (loading) return <SkeletonGrid count={count} className={`home-rail is-${columns}`} />;
   if (!items.length) return null;
   return (
-    <ul className={`home-rail is-${columns}`} aria-label={label}>
-      {items.map((house) => <li key={house.id}><HouseCard house={house} /></li>)}
-    </ul>
+    <RevealGroup as="ul" className={`home-rail is-${columns}`} aria-label={label} gap={0.08}>
+      {items.map((house) => <RevealItem as="li" key={house.id}><HouseCard house={house} /></RevealItem>)}
+    </RevealGroup>
   );
 };
 

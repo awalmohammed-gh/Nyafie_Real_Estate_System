@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import { usePlatform } from "../../context/usePlatform";
 import { usePropertyFacets } from "../../hooks/usePropertyFacets";
+import { RevealGroup, RevealItem, SectionHeader } from "./LandingMotion";
 
 // Property types that are standalone houses rather than flats, rooms or stays
 const NOT_HOUSES = ["apartment", "hotel", "hotel-apartment", "studio", "single", "penthouse"];
@@ -28,7 +29,7 @@ const DiscoverCategories = () => {
   return (
     <section className="home-section home-discover" aria-labelledby="discover-heading">
       <div className="container-page">
-        <div className="home-section-header">
+        <SectionHeader>
           <div><p className="home-eyebrow">01 / DISCOVER PROPERTIES</p><h2 id="discover-heading" className="home-section-title">Find the right place for <span className="home-serif">your next move.</span></h2></div>
           <div className="home-section-aside">
             <p>Browse homes for rent, properties for sale, hotels and more — listed by HomeBase and approved agents.</p>
@@ -41,10 +42,10 @@ const DiscoverCategories = () => {
               </dl>
             )}
           </div>
-        </div>
-        <ul className="home-categories">
+        </SectionHeader>
+        <RevealGroup as="ul" className="home-categories" gap={0.08}>
           {categories.map(({ label, note, image, to, count, large }) => (
-            <li key={label} className={large ? "is-large" : ""}>
+            <RevealItem as="li" variant="rise" key={label} className={large ? "is-large" : ""}>
               <Link to={to} className="home-category">
                 <img src={image} alt="" loading="lazy" decoding="async" />
                 <span className="home-category-body">
@@ -54,9 +55,9 @@ const DiscoverCategories = () => {
                 </span>
                 <span className="home-category-open" aria-hidden="true"><ArrowUpRight size={18} /></span>
               </Link>
-            </li>
+            </RevealItem>
           ))}
-        </ul>
+        </RevealGroup>
       </div>
     </section>
   );

@@ -8,6 +8,7 @@ const conversationSchema = new mongoose.Schema(
   {
     customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true }, // property owner account
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // agency staff member handling it (null: the owner)
     ownerType: { type: String, enum: ["admin", "agent"], required: true, index: true },
     property: { type: mongoose.Schema.Types.ObjectId, ref: "Property", required: true, index: true },
     status: { type: String, enum: ["open", "closed"], default: "open" },

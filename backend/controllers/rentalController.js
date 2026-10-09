@@ -136,6 +136,7 @@ export const createRental = async (req, res) => {
 
   const fields = {
     owner: property.owner, // from the database, never the request
+    assignedTo: property.assignedTo || null, // the agency staff member handling the listing
     ownerType: property.ownerType,
     startDate,
     endDate,
@@ -178,7 +179,7 @@ const createHotelRental = async (req, res, quote, contact) => {
     // separate immutable ID so an older successful charge cannot pay for new dates.
     const doc = new Rental({
       customer: req.user._id, property: hotel._id, hotelId: hotel._id,
-      owner: hotel.owner, ownerType: hotel.ownerType,
+      owner: hotel.owner, ownerType: hotel.ownerType, assignedTo: hotel.assignedTo || null,
       roomTypeId: verified.room._id, roomName: verified.room.name,
       startDate: verified.startDate, endDate: verified.endDate,
       pricePeriod: "night", unitPrice: verified.room.pricePerNight, units: verified.units,

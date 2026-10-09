@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { SESSION_ROLES, cookieName, clearAuthCookie } from "../utils/generateToken.js";
 import { fail } from "../utils/response.js";
-import { approvedAgent } from "../utils/agentApplication.js";
+import { approvedAgent, isRemoved } from "../utils/agentApplication.js";
 
 const userFromCookie = async (req, session) => {
   const token = req.cookies?.[cookieName(session)];
@@ -14,9 +14,10 @@ const userFromCookie = async (req, session) => {
     return null;
   }
   if (payload.session !== session || payload.role !== SESSION_ROLES[session] || !/^[a-f\d]{24}$/i.test(payload.id || "")) return null;
-  // Current account role/status matter too: demotion and suspension take effect immediately.
+  // Current account role/status matter too: demotion, suspension and removal take effect immediately.
+  // A removed provider's existing token stops working on its next request.
   const user = await User.findById(payload.id);
-  return user?.role === SESSION_ROLES[session] && (session === "agent" || user.isActive) ? user : null;
+  return user?.role === SESSION_ROLES[session] && (session === "agent" || user.isActive) && !isRemoved(user) ? user : null;
 };
 
 // On shared resources the header selects a domain; it never proves identity.

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { usePlatform } from "../../context/usePlatform";
+import { Reveal, RevealGroup, RevealItem } from "./LandingMotion";
 
 const flow = [
   "Create an agent account",
@@ -47,20 +48,20 @@ const BecomeAgent = () => {
       aria-labelledby="agent-heading"
     >
       <div className="container-page home-agent-layout">
-        <div className="home-agent-copy">
-          <p className="home-eyebrow">07 / HAVE A PROPERTY TO LIST?</p>
-          <h2 id="agent-heading" className="home-section-title">
+        <RevealGroup className="home-agent-copy">
+          <RevealItem as="p" className="home-eyebrow">07 / HAVE A PROPERTY TO LIST?</RevealItem>
+          <RevealItem as="h2" id="agent-heading" className="home-section-title">
             Become a <span className="home-serif">HomeBase agent.</span>
-          </h2>
-          <p className="home-agent-lead">
+          </RevealItem>
+          <RevealItem as="p" className="home-agent-lead">
             Join HomeBase, subscribe to an agent plan and start reaching people
             looking for properties to rent, buy or book.
-          </p>
-          <p className="home-agent-rule">
+          </RevealItem>
+          <RevealItem as="p" className="home-agent-rule">
             Properties can’t be posted anonymously — to list yours, you join as
             an approved HomeBase agent.
-          </p>
-          <div className="home-hero-actions">
+          </RevealItem>
+          <RevealItem className="home-hero-actions">
             {isAgent ? (
               <Link to="/agent/dashboard" className="home-hero-cta is-light">
                 Go to your dashboard{" "}
@@ -74,9 +75,9 @@ const BecomeAgent = () => {
             <Link to="/agent/plans" className="home-hero-cta is-ghost">
               {cheapest ? "See agent plans" : "Learn more"}
             </Link>
-          </div>
+          </RevealItem>
           {cheapest && (
-            <p className="home-agent-price">
+            <RevealItem as="p" className="home-agent-price">
               Plans from{" "}
               <strong>
                 {cheapest.price
@@ -86,29 +87,29 @@ const BecomeAgent = () => {
               {cheapest.durationDays
                 ? ` for ${cheapest.durationDays} days`
                 : ""}
-            </p>
+            </RevealItem>
           )}
-        </div>
-        <div className="home-agent-panel">
+        </RevealGroup>
+        <Reveal className="home-agent-panel" delay={0.15}>
           <h3>How it works</h3>
-          <ol className="home-agent-flow">
+          <RevealGroup as="ol" className="home-agent-flow" gap={0.08} delay={0.3}>
             {flow.map((step, index) => (
-              <li key={step}>
+              <RevealItem as="li" key={step}>
                 <span>{index + 1}</span>
                 {step}
-              </li>
+              </RevealItem>
             ))}
-          </ol>
+          </RevealGroup>
           <h3>What you get</h3>
-          <ul className="home-agent-benefits">
+          <RevealGroup as="ul" className="home-agent-benefits" gap={0.05}>
             {benefits.map(({ Icon, text }) => (
-              <li key={text}>
+              <RevealItem as="li" key={text}>
                 <Icon size={18} strokeWidth={1.75} aria-hidden="true" />
                 {text}
-              </li>
+              </RevealItem>
             ))}
-          </ul>
-        </div>
+          </RevealGroup>
+        </Reveal>
       </div>
     </section>
   );

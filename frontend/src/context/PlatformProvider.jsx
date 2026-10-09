@@ -14,7 +14,8 @@ const withDefaults = (saved = {}) =>
 
 // Plans, platform settings and (for admins) the payment ledger, loaded from the API
 export const PlatformProvider = ({ children }) => {
-  const { isAdmin, users } = useAuth();
+  const { isAdmin, users, user } = useAuth();
+  const viewerId = user?.id;
   const [plans, setPlans] = useState([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [settings, setSettingsState] = useState(() => withDefaults(readStorage(SETTINGS_CACHE, {})));
@@ -28,7 +29,9 @@ export const PlatformProvider = ({ children }) => {
     } finally {
       setPlansLoading(false);
     }
-  }, [isAdmin]);
+    // Reloaded per signed-in account: providers also receive their own plan after it's retired
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, viewerId]);
 
   const refreshPayments = useCallback(async () => {
     setPayments(await adminApi.getSubscriptions());

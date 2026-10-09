@@ -6,7 +6,8 @@ export const sumReportValues = (data, key) => data.reduce((sum, row) => sum + (r
 // Both the reports page and its PDF use these same buckets and definitions.
 export const buildAdminReport = ({ users = [], listings = [], inquiries = [], payments = [] }, now = new Date()) => {
   const customers = users.filter((user) => user.role === "user");
-  const agents = users.filter((user) => user.role === "agent");
+  // Providers an admin removed aren't counted
+  const agents = users.filter((user) => user.role === "agent" && user.status !== "removed" && user.status !== "deleted");
   const paid = payments.filter((payment) => payment.status === "paid");
   const agentListings = listings.filter((property) => property.owner?.type === "agent");
   const reviewed = agentListings.filter((property) => ["published", "rejected", "suspended"].includes(property.listing?.state));

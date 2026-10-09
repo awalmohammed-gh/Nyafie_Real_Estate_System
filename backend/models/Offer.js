@@ -10,6 +10,7 @@ const offerSchema = new mongoose.Schema(
     customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     property: { type: mongoose.Schema.Types.ObjectId, ref: "Property", required: true, index: true },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true }, // taken from the property
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // agency staff member handling it (null: the owner)
     ownerType: { type: String, enum: ["admin", "agent"], required: true, index: true },
     askingPrice: { type: Number, required: true }, // property price when the offer was made
     amount: { type: Number, required: true, min: 1 },

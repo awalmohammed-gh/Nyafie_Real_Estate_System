@@ -5,6 +5,9 @@ import {
   validateAgentProfile,
 } from "../utils/agentApplication.js";
 import { resolveImages } from "../utils/uploadImages.js";
+import Subscription from "../models/Subscription.js";
+import { accountTypeOf, subscriptionState } from "../utils/permissions.js";
+import { ACCOUNT_LABELS, isOrganization } from "../utils/accountTypes.js";
 import { notifyAdmins, notifyUser } from "../utils/notify.js";
 import { ok, fail } from "../utils/response.js";
 import { loadUser } from "./authController.js";
@@ -33,10 +36,17 @@ export const saveApplication = async (req, res) => {
   const { firstName, lastName, phone, profile } = validateAgentProfile(
     req.body,
   );
+  // An active plan is for one account type: switching type needs a plan for that type
+  const subscription = req.user.subscription ? await Subscription.findById(req.user.subscription).populate("plan") : null;
+  const planType = subscriptionState(subscription).isActive ? subscription.plan?.accountType || "individual" : null;
+  if (planType && planType !== profile.agentType)
+    return fail(res, 400, planType === "individual"
+      ? "Your subscription is for individual agents. Once approved, you can upgrade to an agency plan."
+      : `Your subscription is for ${ACCOUNT_LABELS[planType].toLowerCase()} accounts. Keep the ${ACCOUNT_LABELS[planType]} account type.`);
   const images = await resolveImages(
     [
       (req.body.profileImage !== undefined ? req.body.profileImage : req.user.profileImage) || "",
-      ...(profile.agentType === "agency" && req.body.agencyLogo
+      ...(isOrganization(profile.agentType) && req.body.agencyLogo
         ? [req.body.agencyLogo]
         : []),
     ].filter(Boolean),
@@ -48,7 +58,7 @@ export const saveApplication = async (req, res) => {
   );
   changes.profileImage = hasProfileImage ? images[0] : "";
   profile.agencyLogo =
-    profile.agentType === "agency" && req.body.agencyLogo
+    isOrganization(profile.agentType) && req.body.agencyLogo
       ? images[hasProfileImage ? 1 : 0]
       : "";
   for (const [key, value] of Object.entries(profile))
@@ -81,9 +91,13 @@ export const saveApplication = async (req, res) => {
 // Called after profile submission and after verified payment; never grants approval.
 // Approved agents edit public details without changing their application decision or audit trail.
 export const updateAgentProfile = async (req, res) => {
-  const { firstName, lastName, phone, profile } = validateAgentProfile(req.body);
+  // The account type is fixed once approved: it only changes through a paid agency plan (or an admin).
+  // Agency staff edit their personal profile; the agency's name and logo belong to the agency account.
+  const member = Boolean(req.user.agency?.owner);
+  const { firstName, lastName, phone, profile } = validateAgentProfile({ ...req.body, agentType: member ? "individual" : accountTypeOf(req.user) });
+  if (member) Object.assign(profile, { agentType: accountTypeOf(req.user), companyName: req.user.agentApplication?.companyName || "" });
   const avatar = req.body.profileImage !== undefined ? req.body.profileImage : req.user.profileImage;
-  const logo = profile.agentType === "agency" ? req.body.agencyLogo ?? req.user.agentApplication?.agencyLogo : "";
+  const logo = isOrganization(profile.agentType) && !member ? req.body.agencyLogo ?? req.user.agentApplication?.agencyLogo : "";
   const images = await resolveImages([avatar, logo].filter(Boolean));
   const changes = { firstName, lastName, phone, profileImage: avatar ? images[0] : "" };
   profile.agencyLogo = logo ? images[avatar ? 1 : 0] : "";
@@ -154,7 +168,8 @@ export const submitApplication = async (req, res) => {
 export const listApplications = async (_req, res) =>
   ok(
     res,
-    await User.find({ role: "agent" })
+    // Removed providers are managed from the Agents page (Removed tab), not as applications
+    await User.find({ role: "agent", "agentApplication.status": { $ne: "removed" } })
       .populate({ path: "subscription", populate: { path: "plan" } })
       .sort({ "agentApplication.submittedAt": -1, createdAt: -1 }),
   );

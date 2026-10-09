@@ -18,7 +18,20 @@ const DUMMY_HASH = bcrypt.hashSync("homebase-timing-equaliser", 10);
 export const loadUser = async (id) => {
   const user = await User.findById(id).populate("subscription");
   if (user?.role !== "agent") return user;
-  return { ...user.toJSON(), onboarding: await onboardingState(user) };
+  const data = { ...user.toJSON(), onboarding: await onboardingState(user) };
+  delete data.removal; // internal moderation record: admins only
+  // Agency staff work under the owner's plan: share its name, logo and plan status (no billing details)
+  if (user.agency?.owner) {
+    const owner = await User.findById(user.agency.owner).populate("subscription");
+    const sub = owner?.subscription;
+    data.agency = {
+      ...data.agency,
+      name: owner?.agentApplication?.companyName || "",
+      logo: owner?.agentApplication?.agencyLogo || "",
+      subscription: sub ? { id: String(sub._id), plan: String(sub.plan), planName: sub.planName, accountType: sub.accountType, status: sub.status, paymentStatus: sub.paymentStatus, startDate: sub.startDate, expiresAt: sub.expiresAt } : null,
+    };
+  }
+  return data;
 };
 
 // POST /api/auth/register
@@ -132,6 +145,9 @@ export const loginFor = (session) => async (req, res) => {
   const role = session === "customer" ? "user" : session;
   if (!user || user.role !== role || (session !== "agent" && !user.isActive))
     return fail(res, 401, "Incorrect email or password for this area.");
+  // Removed providers: a plain message, never the internal reason
+  if (user.agentApplication?.status === "removed")
+    return fail(res, 403, "Your provider account is no longer active. Contact HomeBase support if you believe this is an error.");
   setAuthCookie(res, user._id, session);
   ok(res, await loadUser(user._id), "Signed in");
 };

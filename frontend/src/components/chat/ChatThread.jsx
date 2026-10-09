@@ -94,6 +94,7 @@ const ChatThread = ({ conversationId, onBack, onChanged }) => {
   const isOwnerSide = conversation.side === "owner";
   const counterpart = isOwnerSide ? conversation.customer : conversation.owner;
   const closed = conversation.status === "closed";
+  const chatLocked = !closed && conversation.chatEnabled === false;
   const unavailable = ["Sold", "Rented"].includes(conversation.property.availability);
 
   return (
@@ -168,7 +169,16 @@ const ChatThread = ({ conversationId, onBack, onChanged }) => {
       </div>
 
       {/* Composer */}
-      {closed ? (
+      {chatLocked ? (
+        <div className="border-t border-gray-100 p-4 text-sm" role="status">
+          <p className="flex items-center gap-2 font-semibold text-gray-900"><Lock className="h-4 w-4 text-gray-400" aria-hidden="true" />Customer chat is locked</p>
+          {isOwnerSide ? (
+            <p className="mt-1 text-gray-600">Upgrade your subscription to communicate with customers directly through HomeBase messaging. You can still reply to inquiries, call or email.{" "}<Link to="/agent/subscription/plans" className="font-semibold text-brand-700 hover:text-brand-800">Upgrade plan</Link></p>
+          ) : (
+            <p className="mt-1 text-gray-600">This agent isn’t using HomeBase chat. Send an inquiry from the property page, or call, email or WhatsApp them.</p>
+          )}
+        </div>
+      ) : closed ? (
         <p className="flex items-center justify-center gap-2 border-t border-gray-100 p-4 text-sm text-gray-500">
           <Lock className="h-4 w-4" />
           This conversation is closed.

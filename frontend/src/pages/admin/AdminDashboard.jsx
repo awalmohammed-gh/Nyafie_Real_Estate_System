@@ -33,9 +33,15 @@ const AdminDashboard = () => {
   // Keep the last result on screen while a refresh runs
   const data = query.data ?? query.previous;
 
+  // Live figures: every minute while open, and straight away when the admin returns to the tab
   useEffect(() => {
-    const timer = setInterval(reload, REFRESH_MS);
-    return () => clearInterval(timer);
+    const timer = setInterval(() => document.visibilityState === "visible" && reload(), REFRESH_MS);
+    const onVisible = () => document.visibilityState === "visible" && reload();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [reload]);
 
   const header = (

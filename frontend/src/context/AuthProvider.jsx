@@ -111,6 +111,9 @@ export const AuthProvider = ({ children, domain }) => {
       extendSubscription: (id, days) => run(adminApi.manageSubscription(id, "extend", { days })),
       cancelSubscription: (id) => run(adminApi.manageSubscription(id, "cancel")),
       activateSubscription: (id) => run(adminApi.manageSubscription(id, "activate")),
+      removeAgent: (id, reason, note) => run(adminApi.removeAgent(id, reason, note)),
+      restoreAgent: (id, republish) => run(adminApi.restoreAgent(id, republish)),
+      deleteAgentPermanently: (id, confirm) => run(adminApi.deleteAgentPermanently(id, confirm)),
     };
   }, [refreshUsers, users]);
 

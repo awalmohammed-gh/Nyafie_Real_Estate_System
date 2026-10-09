@@ -83,7 +83,8 @@ const AuthForm = ({ initialMode = "login", onSuccess, onModeChange }) => {
 
         {error && <p id={errorId} role="alert" className="auth-error"><AlertCircle size={18} aria-hidden="true" />{error}</p>}
 
-        <button type="submit" disabled={submitting} className="auth-submit">
+        {/* Creating an account needs the terms accepted first */}
+        <button type="submit" disabled={submitting || (isSignup && !formData.termsAgree)} aria-busy={submitting} className="auth-submit">
           <span>{submitting ? isSignup ? "Creating your account…" : "Signing you in…" : isSignup ? "Create account" : isAgent ? "Sign in as agent" : "Sign in"}</span>
           {submitting ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <ArrowRight size={18} aria-hidden="true" />}
         </button>

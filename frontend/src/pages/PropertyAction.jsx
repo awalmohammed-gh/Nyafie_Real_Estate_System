@@ -99,7 +99,7 @@ const PropertyAction = ({ mode }) => {
       </p>
     );
   else if (mode === "rent") panel = hotel ? <HotelCheckout key={property.id + location.search} property={property} ownerName={ownerName} /> : <RentalCheckout property={property} ownerName={ownerName} />;
-  else if (mode === "buy") panel = <BuyNowPanel property={property} ownerName={ownerName} whatsappLink={whatsappLink} onChat={() => setChatOpen(true)} />;
+  else if (mode === "buy") panel = <BuyNowPanel property={property} ownerName={ownerName} whatsappLink={whatsappLink} onChat={property.agent.chat ? () => setChatOpen(true) : null} />;
   else panel = <OfferForm property={property} ownerName={ownerName} whatsappNumber={whatsappNumber} />;
 
   return (
@@ -174,11 +174,11 @@ const PropertyAction = ({ mode }) => {
               {user && !isOwnListing && (
                 <>
                   <p className="mt-4 text-sm font-medium text-gray-700">Need more information?</p>
-                  <div className={`mt-2 grid gap-2 ${whatsappLink ? "grid-cols-2" : ""}`}>
-                    <button onClick={() => setChatOpen(true)} className="btn btn-light px-3">
+                  <div className={`mt-2 grid gap-2 ${whatsappLink && property.agent.chat ? "grid-cols-2" : ""}`}>
+                    {property.agent.chat && <button onClick={() => setChatOpen(true)} className="btn btn-light px-3">
                       <MessageCircle className="h-4 w-4" />
                       Chat with {contactLabel}
-                    </button>
+                    </button>}
                     {whatsappLink && (
                       <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="btn bg-emerald-600 px-3 text-white hover:bg-emerald-700">
                         <WhatsAppIcon />

@@ -2,7 +2,7 @@
 export const sessionDomainForPath = (pathname, search = "") => {
   if (["/login", "/register"].includes(pathname) && new URLSearchParams(search).get("account") === "agent") return "agent";
   if (/^\/admin(?:\/|$)/.test(pathname)) return "admin";
-  if (pathname === "/agent" || /^\/agent\/(?:login|register|onboarding|status|checkout|dashboard|properties|inquiries|offers|rentals|sale-requests|messages|subscription|profile|settings)(?:\/|$)/.test(pathname)) return "agent";
+  if (pathname === "/agent" || /^\/agent\/(?:login|register|onboarding|status|checkout|dashboard|properties|inquiries|offers|rentals|sale-requests|messages|subscription|profile|settings|team|join)(?:\/|$)/.test(pathname)) return "agent";
   return "customer";
 };
 
@@ -18,7 +18,11 @@ export const sessionDestination = (domain, from) => {
 
 export const canAccessAgent = (user) => user?.role === "agent" && user.status === "active" && user.agentApplication?.status === "approved" && user.onboarding?.dashboardAccess !== false;
 // The exact onboarding step to open: the server decides it (user.onboarding.nextPath)
+// An agency invite link (/agent/join/<token>) the agent opened before signing in
+export const isJoinPath = (path) => typeof path === "string" && /^\/agent\/join\/[\w-]{20,100}$/.test(path);
 export const agentDestination = (user, from) => {
+  // Joining an agency from an invite comes before onboarding: the invite replaces it
+  if (isJoinPath(from) && user?.role === "agent" && !user.agency) return from;
   if (canAccessAgent(user)) return sessionDestination("agent", from);
   if (user?.onboarding?.nextPath) return user.onboarding.nextPath;
   const application = user?.agentApplication;

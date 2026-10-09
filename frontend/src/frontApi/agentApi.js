@@ -7,6 +7,7 @@ export const getAgentDashboard = async () => {
 };
 
 export const getAgentInquiries = async () => (await client.get("/agents/inquiries")).data.map(mapInquiry);
+export const assignInquiry = async (id, memberId) => mapInquiry((await client.patch(`/agents/inquiries/${id}/assign`, { memberId })).data);
 
 export const updateAgentInquiryStatus = async (id, status) =>
   mapInquiry((await client.patch(`/agents/inquiries/${id}/status`, { status: inquiryStatusToApi(status) })).data);

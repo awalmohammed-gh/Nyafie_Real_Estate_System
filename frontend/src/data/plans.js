@@ -27,7 +27,34 @@ export const planFeatureList = (plan) => [
   `Up to ${plan.imageLimit} photos per property`,
   plan.featuredLimit > 0 ? `${plan.featuredLimit} featured listings` : "No featured listings",
   `${ANALYTICS_LEVELS[plan.analytics]?.label} analytics: ${ANALYTICS_LEVELS[plan.analytics]?.description.toLowerCase()}`,
-  plan.inquiryManagement === "full" ? "Full inquiry management" : "Basic inquiries",
+  plan.inquiryManagement === "full" ? "Full inquiry management" : "Customer inquiries",
+  plan.internalChat ? "HomeBase customer chat" : "Inquiries, calls, email & WhatsApp (no HomeBase chat)",
+  ...(isOrganization(plan.accountType) && plan.teamMemberLimit > 0 ? [`Up to ${plan.teamMemberLimit} team members, with listing and lead assignment`] : []),
   ...(plan.priorityVisibility ? ["Priority visibility in search"] : []),
   ...(plan.extraFeatures || []),
 ];
+
+// The two kinds of agent account. Plans are made for one of them.
+export const ACCOUNT_TYPES = {
+  individual: {
+    label: "Individual Agent",
+    plural: "Individual plans",
+    description: "For independent property agents, property owners and solo real estate professionals.",
+  },
+  agency: {
+    label: "Agency",
+    plural: "Agency plans",
+    description: "For real estate agencies that manage multiple properties, agents and customer inquiries.",
+  },
+  company: {
+    label: "Company",
+    plural: "Company plans",
+    description: "For property developers, property management firms, hotel and property operators, and other registered businesses with larger teams and portfolios.",
+  },
+};
+
+// Agencies and companies are organisations: an owner, a team, shared listings and one subscription
+export const isOrganization = (type) => type === "agency" || type === "company";
+export const accountTypeOf = (value) => (ACCOUNT_TYPES[value] ? value : "individual");
+
+export const plansFor = (plans, accountType) => plans.filter((plan) => plan.accountType === accountType);

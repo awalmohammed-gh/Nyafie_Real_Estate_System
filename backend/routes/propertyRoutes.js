@@ -10,6 +10,7 @@ import {
   updateProperty,
   setFeatured,
   deleteProperty,
+  assignProperty,
 } from "../controllers/propertyController.js";
 import { listPropertyReviews, submitReview } from "../controllers/reviewController.js";
 import { protectAgent, protectCustomer, optionalAuth } from "../middleware/authMiddleware.js";
@@ -31,6 +32,7 @@ router.post("/:id/reviews", protectCustomer, submitReview); // one review per cu
 router.post("/:id/view", optionalAuth, recordView);
 router.put("/:id", protectAgent, agentOnly, activeSubscription, updateProperty);
 router.patch("/:id/feature", protectAgent, agentOnly, activeSubscription, setFeatured);
+router.patch("/:id/assign", protectAgent, agentOnly, assignProperty); // agency owner or manager
 router.delete("/:id", protectAgent, deleteProperty);
 
 export default router;

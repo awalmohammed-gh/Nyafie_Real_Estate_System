@@ -17,6 +17,8 @@ export const updateProperty = async (id, changes) => {
 
 export const featureProperty = async (id, isFeatured) => mapProperty((await client.patch(`/properties/${id}/feature`, { isFeatured })).data);
 export const deleteProperty = (id) => client.delete(`/properties/${id}`);
+// Agency owner or manager: memberId of a team member, or null to hand the listing back to the owner
+export const assignProperty = async (id, memberId) => mapProperty((await client.patch(`/properties/${id}/assign`, { memberId })).data);
 export const recordPropertyView = (id) => client.post(`/properties/${id}/view`);
 
 // Drops empty filters so the query string only carries what the user chose

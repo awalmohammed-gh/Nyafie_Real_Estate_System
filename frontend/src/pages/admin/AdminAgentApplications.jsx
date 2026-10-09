@@ -31,7 +31,7 @@ const STATUS_LABEL = { all: "All", pending: "Pending review", incomplete: "Not s
 const ACTION_LABEL = { approve: "Approve", reject: "Reject", suspend: "Suspend", reactivate: "Reactivate" };
 const statusOf = (agent) => (agent.status === "suspended" ? "suspended" : agent.agentApplication?.status || "incomplete");
 const REVIEW_ACTIONS = { pending: ["approve", "reject"], approved: ["suspend"], suspended: ["reactivate"] };
-const agentType = (agent) => (agent.agentApplication?.agentType === "agency" ? "Agency / Company" : "Individual agent");
+const agentType = (agent) => ({ agency: "Agency", company: "Company" })[agent.agentApplication?.agentType] || "Individual agent";
 
 // The same requirements the server checks before it allows approval
 const eligibility = (agent, requireSubscription) => {
@@ -230,7 +230,7 @@ const AdminAgentApplications = () => {
               <Facts
                 items={[
                   ["Agent type", agentType(selected)],
-                  ...(app.agentType === "agency" ? [["Agency / company", app.companyName]] : []),
+                  ...(["agency", "company"].includes(app.agentType) ? [[app.agentType === "company" ? "Company" : "Agency", app.companyName]] : []),
                   ["Region", app.region],
                   ["City / area", app.city],
                   ["Office address", app.officeAddress],

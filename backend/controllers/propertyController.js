@@ -4,12 +4,18 @@ import Review from "../models/Review.js";
 import User from "../models/User.js";
 import { siteName } from "../models/Setting.js";
 import { notifyAdmins } from "../utils/notify.js";
-import { COUNTED_STATES } from "../utils/permissions.js";
+import { COUNTED_STATES, withinImageLimit } from "../utils/permissions.js";
 import { PUBLIC_AGENT_FIELDS, publicAgent, presentProperties, publicQuery, visibleAgentIds } from "../utils/marketplace.js";
 export { publicQuery, visibleAgentIds } from "../utils/marketplace.js";
 import { resolveImages } from "../utils/uploadImages.js";
 import { ok, fail } from "../utils/response.js";
 import Rental from "../models/Rental.js";
+import Inquiry from "../models/Inquiry.js";
+import Conversation from "../models/Conversation.js";
+import Offer from "../models/Offer.js";
+import SaleRequest from "../models/SaleRequest.js";
+import { canHandleTeamRecord, canSeeAllAgencyWork, isTeamMember, teamFilter, teamOf } from "../utils/team.js";
+import { agencyAssignee } from "./agentController.js";
 import { isHotel, prepareHotelFields, saveHotelProperty, validateHotelPublishing } from "../utils/hotel.js";
 
 const TYPES_OF_PRICE = ["total", "month", "night"];
@@ -258,7 +264,8 @@ export const relatedProperties = async (req, res) => {
   ok(res, await presentProperties([...similar, ...fill], { includeAgentDetails: Boolean(req.user) }));
 };
 
-const isOwner = (property, user) => user && String(property.owner) === String(user._id);
+// The posting agent, or for an agency listing: the owner, managers and the assigned staff member
+const isOwner = (property, user) => Boolean(user) && property.ownerType === "agent" && canHandleTeamRecord(property, user);
 
 // GET /api/properties/:id (public when visible; owners and admins can always see it)
 export const getProperty = async (req, res) => {
@@ -281,7 +288,7 @@ export const recordView = async (req, res) => {
 
 // GET /api/properties/my (agent)
 export const myProperties = async (req, res) => {
-  ok(res, await presentProperties(await Property.find({ owner: req.user._id }).sort({ createdAt: -1 })));
+  ok(res, await presentProperties(await Property.find(teamFilter(req.user)).sort({ createdAt: -1 })));
 };
 
 const limitMessage = (access) =>
@@ -293,6 +300,9 @@ const resolveAgentStatus = (intent, current, access) => {
   if (current === "published") return "published"; // approved listings stay live when edited
   return access.settings.property.requireApproval ? "pending" : "published";
 };
+
+const imageLimitMessage = (access) =>
+  `Your ${access.plan?.name || "current"} plan supports up to ${access.imageLimit} photos per property. Upgrade your plan to add more photos.`;
 
 // POST /api/properties (agent with an active subscription)
 export const createProperty = async (req, res) => {
@@ -306,9 +316,7 @@ export const createProperty = async (req, res) => {
   if (!fields.title || fields.title.length < 3) return fail(res, 400, "Give the property a title (at least 3 characters).");
   const optionProblem = checkPropertyOptions(fields, access.settings);
   if (optionProblem) return fail(res, 400, optionProblem);
-  if (images.length > access.imageLimit) {
-    return fail(res, 400, `Your ${access.plan.name} plan allows up to ${access.imageLimit} photos per property.`);
-  }
+  if (!withinImageLimit(images, access.imageLimit)) return fail(res, 400, imageLimitMessage(access));
   if (intent === "submit") {
     if (!access.settings.property.allowAgentPublishing) return fail(res, 403, `Publishing is paused by ${siteName()}. You can still save drafts.`);
     if (access.activeCount >= access.propertyLimit) return fail(res, 403, limitMessage(access));
@@ -322,7 +330,8 @@ export const createProperty = async (req, res) => {
     ...fields,
     contact: { ...contact, id: String(req.user._id) },
     images: await resolveImages(images),
-    owner: req.user._id, // always the signed-in agent, never taken from the request
+    owner: teamOf(req.user).ownerId, // the signed-in agent, or their agency's owner; never taken from the request
+    assignedTo: isTeamMember(req.user) ? req.user._id : null, // staff listings start assigned to them
     ownerType: "agent",
   };
   if (intent === "submit") {
@@ -369,9 +378,7 @@ export const updateProperty = async (req, res) => {
   if (optionProblem) return fail(res, 400, optionProblem);
   const images = req.body.images !== undefined ? req.body.images : null;
   if (images && !Array.isArray(images)) return fail(res, 400, "Images must be a list.");
-  if (images && images.length > access.imageLimit) {
-    return fail(res, 400, `Your ${access.plan.name} plan allows up to ${access.imageLimit} photos per property.`);
-  }
+  if (images && !withinImageLimit(images, access.imageLimit, property.images)) return fail(res, 400, imageLimitMessage(access));
 
   // Status changes requested by the agent: "draft" (unpublish/withdraw) or submit
   let status = property.status;
@@ -424,7 +431,8 @@ export const setFeatured = async (req, res) => {
 export const deleteProperty = async (req, res) => {
   const property = await Property.findById(req.params.id).catch(() => null);
   if (!property) return fail(res, 404, "Property not found.");
-  if (req.user.role !== "admin" && !(req.user.role === "agent" && isOwner(property, req.user))) {
+  // Agency staff agents can unpublish listings; deleting is for the owner and managers
+  if (req.user.role !== "admin" && !(req.user.role === "agent" && isOwner(property, req.user) && canSeeAllAgencyWork(req.user))) {
     return fail(res, 403, "You can only delete your own properties.");
   }
   if (isHotel(property) && (property.roomTypes.length || await Rental.exists({ property: property._id }))) return fail(res, 409, "Archive this hotel by saving it as a draft. Its room types and booking history must be preserved.");
@@ -434,4 +442,25 @@ export const deleteProperty = async (req, res) => {
     Review.deleteMany({ property: property._id }),
   ]);
   ok(res, null, "Property deleted");
+};
+
+// PATCH /api/properties/:id/assign { memberId } (agency owner or manager): give a listing to a team member.
+// Its leads (inquiries, chats, offers, rentals, sale requests) follow it. null hands it back to the owner.
+export const assignProperty = async (req, res) => {
+  if (!canSeeAllAgencyWork(req.user) || !req.access.isOrganization) return fail(res, 403, "Only the owner or a manager can assign listings.");
+  const property = mongoose.isValidObjectId(req.params.id) ? await Property.findOne({ _id: req.params.id, owner: req.access.ownerId, ownerType: "agent" }) : null;
+  if (!property) return fail(res, 404, "Property not found.");
+  const assignee = await agencyAssignee(req.access.ownerId, req.body.memberId);
+  if (assignee === undefined) return fail(res, 400, "Choose a member of your agency.");
+  property.assignedTo = assignee;
+  await property.save();
+  const scope = { property: property._id, owner: req.access.ownerId };
+  await Promise.all([
+    Inquiry.updateMany({ property: property._id, agent: req.access.ownerId }, { $set: { assignedTo: assignee } }),
+    Conversation.updateMany(scope, { $set: { assignedTo: assignee } }),
+    Offer.updateMany(scope, { $set: { assignedTo: assignee } }),
+    Rental.updateMany(scope, { $set: { assignedTo: assignee } }),
+    SaleRequest.updateMany(scope, { $set: { assignedTo: assignee } }),
+  ]);
+  ok(res, (await presentProperties([property]))[0], assignee ? "Listing assigned" : "Listing returned to the agency owner");
 };

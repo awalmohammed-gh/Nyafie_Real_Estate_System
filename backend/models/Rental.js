@@ -19,6 +19,7 @@ const rentalSchema = new mongoose.Schema(
     roomName: { type: String, maxlength: 100 }, // immutable booking snapshot
     numberOfRooms: { type: Number, min: 1, max: 10000, validate: Number.isInteger },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true }, // the agent (or admin account) from the property
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // agency staff member handling it (null: the owner)
     ownerType: { type: String, enum: ["admin", "agent"], required: true, index: true },
     startDate: { type: Date, required: true }, // preferred move-in date
     endDate: { type: Date, required: true },

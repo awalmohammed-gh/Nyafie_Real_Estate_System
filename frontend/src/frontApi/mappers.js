@@ -8,6 +8,8 @@ export const mapPlan = (p) => ({
   id: p.id,
   name: p.name,
   tagline: p.tagline || "",
+  accountType: ["agency", "company"].includes(p.accountType) ? p.accountType : "individual",
+  sortOrder: p.sortOrder || 0,
   price: p.price,
   durationDays: p.duration,
   propertyLimit: p.propertyLimit,
@@ -16,6 +18,8 @@ export const mapPlan = (p) => ({
   analytics: p.analyticsLevel,
   inquiryManagement: p.inquiryManagement,
   priorityVisibility: Boolean(p.priorityVisibility),
+  internalChat: Boolean(p.internalChat),
+  teamMemberLimit: p.teamMemberLimit || 0,
   extraFeatures: p.features || [],
   active: p.isActive,
   popular: Boolean(p.popular),
@@ -24,6 +28,7 @@ export const mapPlan = (p) => ({
 export const toApiPlan = (p) => ({
   name: p.name,
   tagline: p.tagline,
+  accountType: p.accountType,
   price: p.price,
   duration: p.durationDays,
   propertyLimit: p.propertyLimit,
@@ -32,6 +37,9 @@ export const toApiPlan = (p) => ({
   analyticsLevel: p.analytics,
   inquiryManagement: p.inquiryManagement,
   priorityVisibility: p.priorityVisibility,
+  internalChat: p.internalChat,
+  teamMemberLimit: p.teamMemberLimit,
+  sortOrder: p.sortOrder,
   features: p.extraFeatures,
   isActive: p.active,
   popular: p.popular,
@@ -45,7 +53,10 @@ export const mapSubscription = (s) =>
         userId: idOf(s.user),
         planId: idOf(s.plan),
         planName: s.planName,
+        accountType: ["agency", "company"].includes(s.accountType) ? s.accountType : "individual",
         price: s.amount,
+        kind: s.kind || "new",
+        credit: s.credit || 0,
         startDate: s.startDate || s.createdAt,
         expiryDate: s.expiresAt || s.createdAt,
         status: s.status,
@@ -81,7 +92,9 @@ export const mapUser = (u) =>
     phone: u.phone || "",
     profileImage: u.profileImage || "",
     role: u.role,
-    status: u.isActive === false ? "suspended" : "active",
+    status: u.removal?.deletedAt ? "deleted" : u.agentApplication?.status === "removed" ? "removed" : u.isActive === false ? "suspended" : "active",
+    // Admin views only: why and when the provider was removed
+    removal: u.removal || null,
     createdAt: u.createdAt,
     preferences: u.preferences || {},
     agentApplication: u.agentApplication || null,
@@ -89,6 +102,8 @@ export const mapUser = (u) =>
     onboarding: u.onboarding || null,
     savedProperties: (u.savedProperties || []).map(String),
     subscription: mapSubscription(u.subscription),
+    // Agency staff: the agency they work for, their role there and the agency's plan
+    agency: u.agency?.owner ? { ownerId: idOf(u.agency.owner), role: u.agency.role, joinedAt: u.agency.joinedAt, name: u.agency.name || "", logo: u.agency.logo || "", subscription: mapSubscription(u.agency.subscription) } : null,
     savedCount: u.savedCount ?? (u.savedProperties || []).length,
     inquiriesCount: u.inquiriesCount ?? 0,
   };
@@ -134,7 +149,11 @@ export const mapProperty = (p) => ({
     companyName: p.agent?.companyName || "",
     joinedAt: p.agent?.joinedAt,
     verified: p.agent?.verified === true,
+    chat: p.ownerType !== "agent" || p.agent?.chat === true, // HomeBase chat is a plan feature for agents
+    agency: p.agent?.agency || null, // { id, name, logo } for agency listings
+    profileId: p.agent?.agency?.id || p.agent?.id || idOf(p.owner), // staff link to their agency's profile
   },
+  assignedTo: idOf(p.assignedTo), // agency staff member handling the listing (null: the owner)
   // rating: average of published customer reviews (null until the first one)
   meta: { isFeatured: Boolean(p.isFeatured), rating: p.ratingCount ? p.ratingAverage : null, ratingCount: p.ratingCount || 0, views: p.views || 0 },
   owner: { type: p.ownerType, id: p.ownerType === "admin" ? "admin" : idOf(p.owner) },
@@ -196,6 +215,7 @@ export const mapInquiry = (i) => ({
   phone: i.phone || "",
   message: i.message,
   conversationId: idOf(i.conversation),
+  assignedTo: idOf(i.assignedTo),
   status: STATUS_TO_UI[i.status] || i.status,
   createdAt: i.createdAt,
 });
@@ -206,6 +226,7 @@ export const mapConversation = (c) => {
   return {
     id: c.id,
     side: c.side, // "customer" | "owner": which side the signed-in account is on
+    chatEnabled: c.chatEnabled !== false, // false when the agent's plan has no HomeBase chat
     unread: c.unread || 0,
     status: c.status,
     lastMessage: c.lastMessage,

@@ -1,4 +1,4 @@
-import { AdminLogin, AgentLayout, OnboardingLayout, Onboarding, ApplicationStatus, AdminAgentApplications, Home, Contact, PropertiesDetails, SlugPage, PropertyAction, AgentDetailsPage, NotFound, AuthPage, Profile, AgentProfile, SavedProperties, MyInquiries, Settings, AccountMessages, MyOffers, MyRentals, MyPurchases, AgentSaleRequests, AdminSaleRequests, AgentOffers, AgentRentals, AdminOffers, AdminRentals, AdminPayments, PaymentResult, AgentMessages, AdminMessages, Plans, Checkout, Dashboard, MyProperties, PropertyEditor, Inquiries, PropertyManage, Subscription, AdminLayout, AdminDashboard, AdminUsers, AdminAgents, AdminProperties, AdminInquiries, AdminContactMessages, AdminReviews, AdminSubscriptions, AdminPlans, AdminReports, AdminSettings, AdminPropertyEditor } from './routePages';
+import { UpgradePlan, Team, JoinAgency, AdminLogin, AgentLayout, OnboardingLayout, Onboarding, ApplicationStatus, AdminAgentApplications, Home, Contact, PropertiesDetails, SlugPage, PropertyAction, AgentDetailsPage, NotFound, AuthPage, Profile, AgentProfile, SavedProperties, MyInquiries, Settings, AccountMessages, MyOffers, MyRentals, MyPurchases, AgentSaleRequests, AdminSaleRequests, AgentOffers, AgentRentals, AdminOffers, AdminRentals, AdminPayments, PaymentResult, AgentMessages, AdminMessages, Plans, Checkout, Dashboard, MyProperties, PropertyEditor, Inquiries, PropertyManage, Subscription, AdminLayout, AdminDashboard, AdminUsers, AdminAgents, AdminProperties, AdminInquiries, AdminContactMessages, AdminReviews, AdminSubscriptions, AdminPlans, AdminReports, AdminSettings, AdminPropertyEditor } from './routePages';
 import {createBrowserRouter, createRoutesFromElements, Navigate, Route} from 'react-router-dom'
 import SessionLayout from '../layout/SessionLayout'
 import SystemLayout from '../layout/SystemLayout'
@@ -26,6 +26,8 @@ const router = createBrowserRouter(
 
             {/* Becoming an agent: the plans page is public; onboarding has its own layout below */}
             <Route path='agent/plans' element={<Plans />} />
+            {/* Agency invite links: staff sign in with their own agent account and join */}
+            <Route path='agent/join/:token' element={<JoinAgency />} />
             <Route element={<RequireAuth />}>
                <Route path='agent/:id' element={<AgentDetailsPage />} />
                <Route path='agents/:id' element={<AgentDetailsPage />} />
@@ -83,7 +85,9 @@ const router = createBrowserRouter(
                <Route path='settings' element={<AgentProfile />} />
                <Route path='subscription/plans' element={<Plans />} />
                <Route path='subscription/checkout' element={<Checkout />} />
+               <Route path='subscription/upgrade' element={<UpgradePlan />} />
                <Route path='subscription' element={<Subscription />} />
+               <Route path='team' element={<Team />} />
             </Route>
          </Route>
          {/* Admin console */}

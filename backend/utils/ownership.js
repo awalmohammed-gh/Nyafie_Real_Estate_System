@@ -2,24 +2,27 @@ import mongoose from "mongoose";
 import Property from "../models/Property.js";
 import { siteName } from "../models/Setting.js";
 import { publicQuery } from "./marketplace.js";
+import { canHandleTeamRecord, teamFilter, teamOf } from "./team.js";
 
 export const same = (a, b) => Boolean(a && b) && String(a._id || a) === String(b._id || b);
 
 /**
- * Who may act on a record tied to a listing (offer, rental):
- *  - the agent who posted the property
+ * Who may act on a record tied to a listing (offer, rental, sale request):
+ *  - the agent who posted the property, or for an agency: its owner, managers and the assigned agent
  *  - admins for HomeBase listings
  * Admins can also manage every record on the platform.
  */
 export const ownsRecord = (record, user) =>
-  record.ownerType === "admin" ? user.role === "admin" : user.role === "agent" && same(record.owner, user);
+  record.ownerType === "admin" ? user.role === "admin" : canHandleTeamRecord(record, user);
 
 export const canManageRecord = (record, user) => user.role === "admin" || ownsRecord(record, user);
 
-// Records an owner's inbox may list: admins see all, agents only their own listings
-export const ownerFilter = (user) => (user.role === "admin" ? {} : { ownerType: "agent", owner: user._id });
+// Records an owner's inbox may list: admins see all, agents their own (agency staff: as their role allows)
+export const ownerFilter = (user) => (user.role === "admin" ? {} : { ownerType: "agent", ...teamFilter(user) });
 
-export const isOwnListing = (property, user) => same(property.owner, user) || (property.ownerType === "admin" && user.role === "admin");
+// Listings of the user's own account or agency, which they can't make offers on or rent
+export const isOwnListing = (property, user) =>
+  (property.ownerType === "agent" && user.role === "agent" && same(property.owner, teamOf(user).ownerId)) || (property.ownerType === "admin" && user.role === "admin");
 
 // A published property, or null. Owner, price and listing type always come from here, never from the request.
 export const loadPublishedProperty = async (id) => {

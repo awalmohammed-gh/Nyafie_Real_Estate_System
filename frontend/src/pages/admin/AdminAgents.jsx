@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Ban, Building2, CalendarPlus, CheckCircle2, Eye, Inbox, Pencil, Repeat, UserCog, XCircle, Zap } from "lucide-react";
+import { Ban, Building2, CalendarPlus, CheckCircle2, Eye, Inbox, Pencil, Repeat, RotateCcw, Trash2, UserCog, UserX, XCircle, Zap } from "lucide-react";
 import { useAdminData } from "../../hooks/useAdminData";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import AdminPageTitle from "../../components/admin/AdminPageTitle";
 import EditUserModal from "../../components/admin/EditUserModal";
 import SubscriptionDialogs from "../../components/admin/SubscriptionDialogs";
+import ProviderRemovalDialogs, { RemovalSummary } from "../../components/admin/ProviderRemovalDialogs";
 import DataTable from "../../components/ui/DataTable";
 import FilterTabs from "../../components/ui/FilterTabs";
 import SearchInput from "../../components/ui/SearchInput";
@@ -30,7 +31,7 @@ const UsageBar = ({ used, limit }) => {
 };
 
 const AdminAgents = () => {
-  const { agents, plans, admin, isPubliclyVisible } = useAdminData();
+  const { allAgents: agents, plans, admin, isPubliclyVisible } = useAdminData();
   const run = useAsyncAction();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -40,6 +41,7 @@ const AdminAgents = () => {
   const [editing, setEditing] = useState(null);
   const [subAction, setSubAction] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [removal, setRemoval] = useState(null); // { type: "remove" | "restore" | "delete", agent }
 
   const openId = params.get("open");
   const viewed = openId && agents.find((a) => a.id === openId);
@@ -50,7 +52,11 @@ const AdminAgents = () => {
     setParams(next, { replace: true });
   };
 
+  // Removed (and permanently deleted) providers only show under their own tab
+  const isGone = (a) => a.status === "removed" || a.status === "deleted";
   const matchStatus = (a) => {
+    if (status === "removed") return isGone(a);
+    if (isGone(a)) return false;
     if (status === "all") return true;
     if (status === "suspended") return a.status === "suspended";
     if (status === "new") return isWithinDays(a.createdAt, 30);
@@ -64,9 +70,14 @@ const AdminAgents = () => {
     .filter((a) => !q || `${a.name} ${a.email} ${a.phone}`.toLowerCase().includes(q))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  const count = (fn) => agents.filter(fn).length;
+  // Every tab except Removed counts only providers still on HomeBase
+  const count = (fn) => agents.filter((a) => !isGone(a) && fn(a)).length;
 
-  const actionsFor = (a) => [
+  const actionsFor = (a) => isGone(a) ? [
+    { label: "View agent", icon: Eye, onClick: () => setOpen(a.id) },
+    { label: "View properties", icon: Building2, onClick: () => navigate(`/admin/properties?owner=${a.id}`) },
+    { label: "Restore agent", icon: RotateCcw, hidden: a.status === "deleted", onClick: () => setRemoval({ type: "restore", agent: a }) },
+  ] : [
     { label: "View application", icon: Eye, onClick: () => navigate(`/admin/agent-applications?open=${a.id}`) },
     { label: "View agent", icon: Eye, onClick: () => setOpen(a.id) },
     { label: "Edit agent", icon: Pencil, onClick: () => setEditing(a) },
@@ -79,7 +90,9 @@ const AdminAgents = () => {
     a.status === "suspended"
       ? { label: "Activate agent", icon: CheckCircle2, onClick: () => setConfirm({ type: "activate", agent: a }) }
       : { label: "Suspend agent", icon: Ban, danger: true, hidden: a.agentApplication?.status !== "approved", onClick: () => setConfirm({ type: "suspend", agent: a }) },
+    { label: "Remove agent", icon: UserX, danger: true, onClick: () => setRemoval({ type: "remove", agent: a }) },
   ];
+  const accountLabel = (a) => a.status === "deleted" ? "Deleted" : a.status === "removed" ? "Removed" : a.status === "suspended" ? "Suspended" : a.agentApplication?.status ? a.agentApplication.status.charAt(0).toUpperCase() + a.agentApplication.status.slice(1) : "Incomplete";
 
   const subBadge = (a) => <StatusBadge status={a.sub.statusLabel} tone={{ active: "green", expiring: "amber", expired: "red", cancelled: "gray", pending: "amber", none: "gray" }[a.sub.status]} />;
 
@@ -119,7 +132,7 @@ const AdminAgents = () => {
       align: "right",
       render: (a) => <span className={`tabular-nums ${newInquiries(a) ? "font-semibold text-amber-700" : "text-gray-500"}`}>{newInquiries(a)}</span>,
     },
-    { key: "account", header: "Application", render: (a) => <StatusBadge status={a.status === "suspended" ? "Suspended" : a.agentApplication?.status ? a.agentApplication.status.charAt(0).toUpperCase() + a.agentApplication.status.slice(1) : "Incomplete"} /> },
+    { key: "account", header: "Account", render: (a) => <StatusBadge status={accountLabel(a)} tone={isGone(a) ? "red" : undefined} /> },
     { key: "actions", header: <span className="sr-only">Actions</span>, align: "right", render: (a) => <ActionMenu actions={actionsFor(a)} label={`Actions for ${a.name}`} /> },
   ];
 
@@ -142,7 +155,7 @@ const AdminAgents = () => {
           value={status}
           onChange={setStatus}
           tabs={[
-            { id: "all", label: "All", count: agents.length },
+            { id: "all", label: "All", count: count(() => true) },
             { id: "active", label: "Active", count: count((a) => a.sub.isActive) },
             { id: "expiring", label: "Expiring", count: count((a) => a.sub.status === "expiring") },
             { id: "expired", label: "Expired", count: count((a) => a.sub.status === "expired") },
@@ -150,6 +163,7 @@ const AdminAgents = () => {
             { id: "cancelled", label: "Cancelled", count: count((a) => a.sub.status === "cancelled") },
             { id: "suspended", label: "Suspended", count: count((a) => a.status === "suspended") },
             { id: "new", label: "New", count: count((a) => isWithinDays(a.createdAt, 30)) },
+            { id: "removed", label: "Removed", count: agents.filter(isGone).length },
           ]}
         />
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -182,7 +196,7 @@ const AdminAgents = () => {
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
               <div className="flex flex-wrap gap-2">
                 {subBadge(a)}
-                {a.status === "suspended" && <StatusBadge status="Suspended" />}
+                {a.status !== "active" && <StatusBadge status={accountLabel(a)} tone={isGone(a) ? "red" : undefined} />}
               </div>
               <UsageBar used={a.activeCount} limit={a.plan?.propertyLimit} />
             </div>
@@ -197,7 +211,9 @@ const AdminAgents = () => {
         title={viewed?.name}
         description={viewed && `Agent since ${formatDate(viewed.createdAt)}`}
         footer={
-          viewed && (
+          viewed && (isGone(viewed) ? (
+            viewed.status === "removed" && <button onClick={() => setRemoval({ type: "restore", agent: viewed })} className="btn btn-primary flex-1"><RotateCcw className="h-4 w-4" />Restore agent</button>
+          ) :
             <>
               <button onClick={() => setSubAction({ type: "changePlan", agent: viewed })} className="btn btn-light flex-1"><Repeat className="h-4 w-4" />Change plan</button>
               {viewed.subscription && <button onClick={() => setSubAction({ type: "extend", agent: viewed })} className="btn btn-light flex-1"><CalendarPlus className="h-4 w-4" />Extend</button>}
@@ -210,8 +226,9 @@ const AdminAgents = () => {
           <div className="space-y-6">
             <div className="flex flex-wrap gap-2">
               {subBadge(viewed)}
-              <StatusBadge status={viewed.status === "suspended" ? "Suspended" : viewed.agentApplication?.status ? viewed.agentApplication.status.charAt(0).toUpperCase() + viewed.agentApplication.status.slice(1) : "Incomplete"} />
+              <StatusBadge status={accountLabel(viewed)} tone={isGone(viewed) ? "red" : undefined} />
             </div>
+            {isGone(viewed) && <RemovalSummary removal={viewed.removal} />}
 
             <div className="grid grid-cols-3 divide-x divide-gray-100 rounded-lg border border-gray-200 text-center">
               {[
@@ -288,7 +305,7 @@ const AdminAgents = () => {
               <Link to={`/admin/inquiries?agent=${viewed.id}`} className="text-sm font-semibold text-brand-600">View inquiries</Link>
             </div>
 
-            <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-5">
+            {!isGone(viewed) && <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-5">
               {viewed.sub.isActive ? (
                 <button onClick={() => setSubAction({ type: "cancel", agent: viewed })} className="btn btn-light text-red-600"><XCircle className="h-4 w-4" />Cancel subscription</button>
               ) : viewed.subscription && (
@@ -299,13 +316,24 @@ const AdminAgents = () => {
               ) : viewed.agentApplication?.status === "approved" && (
                 <button onClick={() => setConfirm({ type: "suspend", agent: viewed })} className="btn btn-light text-red-600"><Ban className="h-4 w-4" />Suspend agent</button>
               )}
-            </div>
+              <button onClick={() => setRemoval({ type: "remove", agent: viewed })} className="btn btn-light text-red-600"><UserX className="h-4 w-4" />Remove agent</button>
+            </div>}
+
+            {/* Danger zone: kept apart from everyday actions, and only once the provider is removed */}
+            {viewed.status === "removed" && (
+              <section className="rounded-lg border border-red-200 p-4">
+                <p className="text-sm font-semibold text-red-700">Danger zone</p>
+                <p className="mt-1 text-xs leading-relaxed text-gray-600">Permanently erase this provider's personal details. Payments, customer and team history are always kept. This can't be undone.</p>
+                <button onClick={() => setRemoval({ type: "delete", agent: viewed })} className="btn mt-3 border border-red-200 bg-white px-4 text-red-700 hover:bg-red-50"><Trash2 className="h-4 w-4" />Permanently delete...</button>
+              </section>
+            )}
           </div>
         )}
       </SidePanel>
 
       {editing && <EditUserModal user={editing} onClose={() => setEditing(null)} />}
       <SubscriptionDialogs action={subAction} onClose={() => setSubAction(null)} />
+      <ProviderRemovalDialogs action={removal} onClose={() => setRemoval(null)} />
 
       <ConfirmDialog
         open={Boolean(confirm)}
