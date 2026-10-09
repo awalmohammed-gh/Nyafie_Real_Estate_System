@@ -7,6 +7,7 @@ import Rental from "../models/Rental.js";
 import Inquiry from "../models/Inquiry.js";
 import Notification from "../models/Notification.js";
 import Setting from "../models/Setting.js";
+import Plan from "../models/Plan.js";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import { PUBLIC_AGENT_FIELDS, publicAgent, presentProperties, visibleAgentIds } from "../utils/marketplace.js";
@@ -29,7 +30,10 @@ const settings = (t, overrides = {}) => t.mock.method(Setting, "findOneAndUpdate
 
 test("public listings use live, allowlisted agent data rather than forged contact snapshots", async (t) => {
   t.mock.method(User, "find", () => query([agent]));
+  settings(t);
+  t.mock.method(Plan, "findOne", () => query(null)); // no default plan, so no HomeBase chat
   const [property] = await presentProperties([listing()]);
+  assert.equal(property.agent.chat, false);
   assert.equal(property.agent.id, String(agent._id));
   assert.equal(property.agent.name, "Akua Mensah");
   assert.equal(property.contact.phone, agent.phone);

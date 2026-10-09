@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import { getSettings } from "../models/Setting.js";
-import { subscriptionState } from "./permissions.js";
+import { chatEnabledAgents, subscriptionState } from "./permissions.js";
+import { isOrganization } from "./accountTypes.js";
 
 // Deliberately exclude application documents, approval actors, billing and account preferences.
 export const PUBLIC_AGENT_FIELDS = "firstName lastName phone email profileImage createdAt isActive agentApplication.status agentApplication.agentType agentApplication.companyName agentApplication.bio agentApplication.region agentApplication.city agentApplication.yearsExperience agentApplication.agencyLogo agentApplication.whatsapp";
@@ -25,7 +26,8 @@ export const publicAgent = (user) => ({
 
 export const visibleAgentIds = async () => {
   const settings = await getSettings();
-  const agents = await User.find({ role: "agent", isActive: true, "agentApplication.status": "approved" }).populate({ path: "subscription", populate: { path: "plan" } });
+  // Agency staff work under the agency's account, so only owners and independent agents are listed
+  const agents = await User.find({ role: "agent", isActive: true, "agentApplication.status": "approved", agency: { $exists: false } }).populate({ path: "subscription", populate: { path: "plan" } });
   return agents.filter((agent) => !settings.agent.requireSubscription || subscriptionState(agent.subscription).isActive)
     .map((agent) => ({ id: agent._id, priority: Boolean(agent.subscription?.plan?.priorityVisibility) }));
 };
@@ -37,9 +39,27 @@ export const publicQuery = async () => {
 
 // A single batch lookup supplies live profile data for every card, including aggregated results.
 export const presentProperties = async (properties, { includeAgentDetails = true } = {}) => {
-  const ids = includeAgentDetails ? [...new Set(properties.filter((property) => property.ownerType === "agent").map((property) => String(property.owner)))] : [];
-  const users = ids.length ? await User.find({ _id: { $in: ids } }).select(PUBLIC_AGENT_FIELDS) : [];
-  const agents = new Map(users.map((user) => [String(user._id), publicAgent(user)]));
+  // Agency listings name the staff member assigned to them, with the agency's name and logo
+  const agentListings = includeAgentDetails ? properties.filter((property) => property.ownerType === "agent") : [];
+  const ids = [...new Set(agentListings.flatMap((property) => [property.owner, property.assignedTo]).filter(Boolean).map(String))];
+  // role, subscription and agency are read for the chat and team checks only; publicAgent() never exposes them
+  const users = ids.length ? await User.find({ _id: { $in: ids } }).select(`${PUBLIC_AGENT_FIELDS} role subscription agency`) : [];
+  const byId = new Map(users.map((user) => [String(user._id), user]));
+  const chat = await chatEnabledAgents(users.filter((user) => !user.agency?.owner));
+  const agentFor = (property) => {
+    const owner = byId.get(String(property.owner));
+    if (!owner) return null;
+    const assignee = property.assignedTo && byId.get(String(property.assignedTo));
+    const member = assignee && String(assignee.agency?.owner) === String(owner._id) ? assignee : null;
+    const isAgency = isOrganization(owner.agentApplication?.agentType); // agency or company
+    return {
+      ...publicAgent(member || owner),
+      verified: publicAgent(owner).verified, // approval and plan features belong to the agency account
+      chat: chat.has(String(owner._id)),
+      agency: isAgency ? { id: String(owner._id), name: owner.agentApplication?.companyName || "", logo: owner.agentApplication?.agencyLogo || "" } : null,
+    };
+  };
+  const agents = new Map(agentListings.map((property) => [String(property._id), agentFor(property)]));
   return properties.map((property) => {
     const data = property.toJSON();
     if (property.ownerType === "agent") {
@@ -49,7 +69,7 @@ export const presentProperties = async (properties, { includeAgentDetails = true
         delete data.owner;
         return data;
       }
-      data.agent = agents.get(String(property.owner)) || { id: String(property.owner), name: "Agent", verified: false };
+      data.agent = agents.get(String(property._id)) || { id: String(property.owner), name: "Agent", verified: false };
       data.contact = { id: data.agent.id, name: data.agent.name, phone: data.agent.phone || "", email: data.agent.email || "" };
     }
     return data;

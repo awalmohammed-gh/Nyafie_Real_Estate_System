@@ -30,6 +30,7 @@ export const createInquiry = async (req, res) => {
     customer: req.user?._id || null,
     property: property._id,
     agent: property.ownerType === "agent" ? property.owner : null,
+    assignedTo: property.ownerType === "agent" ? property.assignedTo || null : null,
     ownerType: property.ownerType,
     name,
     email,
@@ -38,7 +39,7 @@ export const createInquiry = async (req, res) => {
     conversation: conversation?._id || null,
     status: "new",
   });
-  await notifyOwner({ owner: property.owner, ownerType: property.ownerType }, { type: "inquiry", title: "New property inquiry", message: `${name} asked about "${property.title}".`, path: "inquiries" });
+  await notifyOwner({ owner: property.owner, ownerType: property.ownerType, assignedTo: property.assignedTo }, { type: "inquiry", title: "New property inquiry", message: `${name} asked about "${property.title}".`, path: "inquiries" });
   ok(res, inquiry, "Inquiry sent", 201);
 };
 

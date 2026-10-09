@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import PropertyRail from "./PropertyRail";
 import { usePlatform } from "../../context/usePlatform";
+import { SectionHeader } from "./LandingMotion";
 
 const FeatureListings = ({ query, items }) => {
   const { paths } = usePlatform();
@@ -9,10 +10,10 @@ const FeatureListings = ({ query, items }) => {
   return (
     <section id="home-listings" className="home-section home-featured" aria-labelledby="featured-heading">
       <div className="container-page">
-        <div className="home-section-header">
+        <SectionHeader>
           <div><p className="home-eyebrow">02 / FEATURED PROPERTIES</p><h2 id="featured-heading" className="home-section-title">Handpicked places <span className="home-serif">worth exploring.</span></h2></div>
           <div className="home-section-aside"><p>Featured listings and visitor favourites.<br />Save the ones you like to your wishlist.</p><Link to={paths.listings} className="home-text-link">View all properties <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
-        </div>
+        </SectionHeader>
         {query.error ? (
           <div role="alert" className="home-listings-message"><h3>We couldn’t load the properties.</h3><p>Please try again in a moment.</p><button type="button" onClick={query.reload} className="btn btn-primary mt-4">Try again</button></div>
         ) : !query.loading && items.length === 0 ? (

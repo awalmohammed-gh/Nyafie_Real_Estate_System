@@ -12,8 +12,10 @@ import {
   ShieldCheck,
   Sparkles,
   Users,
+  User as UserIcon,
+  Landmark,
 } from "lucide-react";
-import { durationLabel, planFeatureList } from "../../data/plans";
+import { ACCOUNT_TYPES, accountTypeOf, durationLabel, planFeatureList, plansFor } from "../../data/plans";
 import { usePlatform } from "../../context/usePlatform";
 import PageLoader from "../../components/ui/PageLoader";
 import { useAuth } from "../../context/useAuth";
@@ -44,7 +46,8 @@ const capabilities = [
 const faqs = [
   { q: "When can I access the agent dashboard?", a: "Complete your agent profile and any required subscription payment, then wait for admin approval. Payment alone does not grant dashboard access." },
   { q: "What happens when my plan expires?", a: "Your account and listings stay safe, but listings are hidden from the public and you can't add or edit properties until you renew." },
-  { q: "Can I upgrade later?", a: "Yes. Choose a bigger plan at any time; the new plan starts on the day you upgrade." },
+  { q: "Can I upgrade later?", a: "Yes, to any higher plan for your account type. The unused value of your current plan is credited, so you only pay the difference, and the upgraded plan starts as soon as your payment is confirmed." },
+  { q: "What's the difference between individual, agency and company plans?", a: "Individual plans are for independent agents and property owners. Agency plans are for real estate agencies, and company plans for developers, property managers and other registered businesses; both add a team and a company profile. Each account type has its own plans, and you upgrade within your type." },
 ];
 
 const Plans = () => {
@@ -55,31 +58,64 @@ const Plans = () => {
   const [searchParams] = useSearchParams();
   const currentPlanId = user?.subscription?.planId;
   // Inactive plans are hidden from new agents, but an existing subscriber can still see and renew theirs
-  const plans = allPlans.filter((p) => p.active || p.id === currentPlanId);
+  const available = allPlans.filter((p) => p.active || p.id === currentPlanId);
   // /agent/onboarding/subscription: step 3 of agent onboarding (focused, no marketing sections)
   const onboardingMode = location.pathname.startsWith("/agent/onboarding");
   const focusedMode = onboardingMode || location.pathname.startsWith("/agent/subscription");
-  const [selectedId, setSelectedId] = useState(searchParams.get("plan") || user?.onboarding?.planId || currentPlanId || "professional");
-  const selected = plans.find((p) => p.id === selectedId) || plans.find((p) => p.popular) || plans[0];
 
+  // Plans are shown for one account type at a time. Agents only see plans for their own account type;
+  // visitors browse all. (The server enforces the same rule whatever plan id is sent.)
+  const accountType = isAgent ? accountTypeOf(user?.agentApplication?.agentType) : "individual";
+  const browsableTypes = !isAgent ? Object.keys(ACCOUNT_TYPES) : [accountType];
+  const canBrowseTypes = browsableTypes.length > 1;
+  const [viewType, setViewType] = useState(() => (browsableTypes.includes(searchParams.get("type")) ? searchParams.get("type") : accountType));
+  const shownType = browsableTypes.includes(viewType) ? viewType : accountType;
+  const plans = plansFor(available, shownType);
+  // While a plan is active, only higher tiers of the same account type (or a renewal) can be bought
+  const currentPlan = allPlans.find((p) => p.id === currentPlanId);
+  const onActivePlan = isAgent && isActive && Boolean(currentPlan);
+
+  // undefined: the suggested plan (the one asked for, the current one, or the most popular); null: none, after unselecting
+  const [selectedId, setSelectedId] = useState(() => searchParams.get("plan") || user?.onboarding?.planId || currentPlanId || undefined);
+  const selected = selectedId === null ? null : plans.find((p) => p.id === selectedId) || plans.find((p) => p.popular) || plans[0] || null;
+  // Clicking the selected plan again unselects it
+  const togglePlan = (id) => setSelectedId(selected?.id === id ? null : id);
+  const showType = (type) => {
+    setViewType(type);
+    setSelectedId(undefined);
+  };
+
+  // Agency staff work under the agency plan, which the owner manages
+  if (isAgent && user?.agency && focusedMode) return <Navigate to="/agent/dashboard" replace />;
+  // Active subscribers upgrade from the upgrade view, which only lists higher plans
+  if (onActivePlan && focusedMode && !onboardingMode) return <Navigate to="/agent/subscription/upgrade" replace />;
   if (plansLoading) return <PageLoader label="Loading plans..." />;
-  if (!selected) return <EmptyState icon={Building2} title="Plans are currently unavailable" description="Please contact our team for help with your subscription." action={<Link to="/contact" className="btn btn-primary">Contact support</Link>} />;
+  if (!plans.length && !canBrowseTypes) return <EmptyState icon={Building2} title="Plans are currently unavailable" description="Please contact our team for help with your subscription." action={<Link to="/contact" className="btn btn-primary">Contact support</Link>} />;
   if (onboardingMode) {
     if (canAccessAgent(user)) return <Navigate to="/agent/subscription/plans" replace />;
     if (user?.onboarding?.step === "profile") return <Navigate to="/agent/onboarding/profile" replace />;
     if (["review", "rejected", "suspended"].includes(user?.onboarding?.step)) return <Navigate to="/agent/status" replace />;
   }
 
-  const isRenewal = isAgent && selected.id === currentPlanId;
-  const ctaLabel = onboardingMode
+  const isRenewal = isAgent && selected?.id === currentPlanId;
+  const isUpgrade = onActivePlan && !isRenewal && selected?.sortOrder > currentPlan.sortOrder;
+  const notAnUpgrade = onActivePlan && !isRenewal && !isUpgrade;
+  const ctaLabel = !selected
+    ? "Choose a plan"
+    : onboardingMode
     ? `Choose ${selected.name}`
     : !isAgent
     ? `Continue with ${selected.name}`
     : isRenewal
       ? `Renew ${selected.name}`
-      : `Switch to ${selected.name}`;
+      : notAnUpgrade
+        ? `Not an upgrade from ${currentPlan.name}`
+        : isUpgrade
+          ? `Upgrade to ${selected.name}`
+          : `Choose ${selected.name}`;
 
   const handleContinue = () => {
+    if (!selected || notAnUpgrade) return;
     if (isAdmin) {
       navigate("/admin/plans");
       return;
@@ -174,17 +210,33 @@ const Plans = () => {
             )}
           </div>
 
-          <div role="radiogroup" aria-label="Subscription plans" className="workspace-plan-cards grid grid-cols-1 gap-5 lg:grid-cols-3">
+          {canBrowseTypes && !onboardingMode && (
+            <div className="mb-8 flex justify-center">
+              <div role="tablist" aria-label="Account type" className="no-scrollbar inline-flex max-w-full overflow-x-auto rounded-full bg-white p-1 shadow-sm ring-1 ring-gray-200">
+                {browsableTypes.map((type) => [type, ACCOUNT_TYPES[type]]).map(([type, info]) => (
+                  <button key={type} type="button" role="tab" aria-selected={shownType === type} onClick={() => showType(type)}
+                    className={`flex min-h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold whitespace-nowrap transition sm:px-5 ${shownType === type ? "bg-brand-500 text-white shadow" : "text-gray-600 hover:text-gray-900"}`}>
+                    <span className="hidden sm:inline">{type === "individual" ? <UserIcon className="h-4 w-4" aria-hidden="true" /> : type === "company" ? <Landmark className="h-4 w-4" aria-hidden="true" /> : <Building2 className="h-4 w-4" aria-hidden="true" />}</span>
+                    <span className="sm:hidden">{info.plural.replace(" plans", "")}</span><span className="hidden sm:inline">{info.plural}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <p className="mx-auto mb-8 max-w-2xl text-center text-sm text-gray-600">{ACCOUNT_TYPES[shownType].description}</p>
+          {!plans.length && <EmptyState icon={Building2} title={`No ${ACCOUNT_TYPES[shownType].plural.toLowerCase()} yet`} description="Please check back soon, or contact our team for help choosing a plan." action={<Link to="/contact" className="btn btn-primary">Contact support</Link>} />}
+
+          <div role="group" aria-label={ACCOUNT_TYPES[shownType].plural} className="workspace-plan-cards grid grid-cols-1 gap-5 lg:grid-cols-3">
             {plans.map((plan) => {
-              const isSelected = plan.id === selectedId;
+              const isSelected = plan.id === selected?.id;
               const isCurrent = plan.id === currentPlanId;
               return (
                 <motion.button
                   key={plan.id}
                   type="button"
-                  role="radio"
-                  aria-checked={isSelected}
-                  onClick={() => setSelectedId(plan.id)}
+                  aria-pressed={isSelected}
+                  title={isSelected ? "Click again to unselect" : undefined}
+                  onClick={() => togglePlan(plan.id)}
                   whileTap={{ scale: 0.99 }}
                   className={`relative flex h-full flex-col rounded-3xl bg-white p-7 text-left transition-shadow sm:p-8 ${
                     isSelected ? "shadow-2xl shadow-brand-500/15" : "shadow-sm ring-1 ring-gray-200 hover:shadow-lg"
@@ -220,7 +272,7 @@ const Plans = () => {
                     <span className="text-gray-600">active listings</span>
                   </div>
 
-                  <p className="mt-3 text-xs text-gray-500">{durationLabel(plan.durationDays)} from the day your payment is confirmed. No automatic charges: renew whenever you’re ready, and renewing early adds the time to your current expiry date.</p>
+                  <p className="mt-3 text-xs text-gray-500">{durationLabel(plan.durationDays)} from the day your payment is confirmed. No automatic charges: renewing early adds the time to your current expiry date, and upgrading credits what’s left of your current plan.</p>
 
                   <ul className="mt-6 mb-8 space-y-3">
                     {planFeatureList(plan).map((feature) => (
@@ -251,7 +303,8 @@ const Plans = () => {
           </div>
 
           {/* Summary + continue */}
-          <div className="workspace-billing-summary mt-8 flex flex-col items-center justify-between gap-5 rounded-3xl bg-white p-6 ring-1 ring-gray-200 sm:flex-row sm:p-8">
+
+          {selected && <div className="workspace-billing-summary mt-8 flex flex-col items-center justify-between gap-5 rounded-3xl bg-white p-6 ring-1 ring-gray-200 sm:flex-row sm:p-8">
             <div className="text-center sm:text-left">
               <p className="text-sm text-gray-500">Selected plan</p>
               <p className="text-lg font-bold text-gray-900">
@@ -260,12 +313,21 @@ const Plans = () => {
               {isRenewal && isActive && (
                 <p className="text-sm text-gray-500">Renewing adds {selected.durationDays} days to your current expiry date.</p>
               )}
+              {isUpgrade && (
+                <p className="text-sm text-gray-500">The unused value of your current plan is credited. You’ll see the exact amount before paying.</p>
+              )}
+              {notAnUpgrade && (
+                <p className="text-sm text-gray-500">While your plan is active you can renew it or upgrade to a higher plan.</p>
+              )}
             </div>
-            <button onClick={handleContinue} className="btn btn-primary w-full px-8 py-3.5 sm:w-auto">
+            <button onClick={handleContinue} disabled={notAnUpgrade && !isAdmin} className="btn btn-primary w-full px-8 py-3.5 sm:w-auto">
               {isAdmin ? "Manage plans in admin" : isAuthenticated ? ctaLabel : "Sign in to continue"}
               <ArrowRight className="h-4 w-4" />
             </button>
-          </div>
+          </div>}
+          {!selected && plans.length > 0 && (
+            <p role="status" className="mt-8 rounded-3xl bg-white p-6 text-center text-sm text-gray-600 ring-1 ring-gray-200 sm:p-8">Select a plan to continue.</p>
+          )}
           <p className="mt-4 flex items-center justify-center gap-2 text-sm text-gray-500">
             <ShieldCheck className="h-4 w-4 text-emerald-500" />
             Dashboard access begins after your profile, required payment and admin approval are complete.

@@ -32,6 +32,11 @@ router.get("/agents", admin.listAgents);
 router.get("/agent-applications", listApplications);
 router.patch("/agent-applications/:id", reviewApplication);
 router.patch("/agents/:id/subscription", admin.manageSubscription);
+router.get("/agents/:id/removal", admin.getRemovalImpact);
+router.post("/agents/:id/remove", admin.removeAgent); // the normal action: deactivate, keep history
+router.post("/agents/:id/restore", admin.restoreAgent);
+router.get("/agents/:id/deletion", admin.getDeletionPlan);
+router.delete("/agents/:id", admin.deleteAgentPermanently); // separate, high-risk: only after removal
 
 router.get("/subscriptions", admin.listSubscriptions);
 

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Building, Building2, CreditCard, HandCoins, Inbox, KeyRound, LayoutDashboard, MessageCircle, LifeBuoy, PlusSquare, Settings } from "lucide-react";
+import { Building, Building2, CreditCard, HandCoins, Inbox, KeyRound, LayoutDashboard, MessageCircle, LifeBuoy, PlusSquare, Settings, Users } from "lucide-react";
 import { useUnreadMessages } from "../hooks/useUnreadMessages";
 import { useAgent } from "../hooks/useAgent";
 import { useRealEstate } from "../context/useRealEstate";
@@ -15,8 +15,9 @@ import SidebarAccount from "../components/dashboard/SidebarAccount";
 import "../pages/agent/workspace.css";
 
 // Built around the agent's day: their listings and customers first, then requests, account and help.
-// Each item points to an agent workspace route or the public support page.
-const groups = [
+// Each item points to an agent workspace route or the public support page. Agency owners and managers
+// also see the team; the subscription is the account owner's (staff work under the agency's plan).
+const navGroups = (perms) => [
   {
     label: "Workspace",
     items: [
@@ -39,7 +40,8 @@ const groups = [
   {
     label: "Account",
     items: [
-      { label: "Subscription", to: "/agent/subscription", icon: CreditCard },
+      ...(perms.canViewTeam ? [{ label: "Team", to: "/agent/team", icon: Users }] : []),
+      ...(perms.canManageSubscription ? [{ label: "Subscription", to: "/agent/subscription", icon: CreditCard }] : []),
       { label: "Settings", to: "/agent/settings", icon: Settings },
     ],
   },
@@ -54,6 +56,14 @@ const PlanSummary = () => {
   const { user, permissions } = useAgent();
   const { isActive, isSuspended, subscription, plan } = permissions;
   const tone = isSuspended || !isActive ? "bg-red-500" : subscription.expiringSoon ? "bg-amber-500" : "bg-emerald-500";
+  if (permissions.isTeamMember) {
+    return (
+      <div className="rounded-md px-2.5 py-2">
+        <p className="flex items-center gap-2 text-xs font-semibold text-gray-900"><span className={`h-1.5 w-1.5 rounded-full ${tone}`} />{plan?.name || "Agency"} plan</p>
+        <p className="mt-0.5 text-[11px] text-gray-500">{isActive ? `Managed by ${permissions.agencyName || "your agency"}` : "Ask your agency owner to renew"}</p>
+      </div>
+    );
+  }
   return (
     <Link to="/agent/subscription" className="block rounded-md px-2.5 py-2 transition-colors hover:bg-gray-100">
       <p className="flex items-center gap-2 text-xs font-semibold text-gray-900">
@@ -87,7 +97,7 @@ const AgentShell = () => {
     <DashboardLayout
       variant="agent"
       label="Agent workspace"
-      groups={groups}
+      groups={navGroups(permissions)}
       badges={badges}
       ready={listingsReady && !plansLoading}
       fallback={<PageLoader label="Loading your workspace..." />}

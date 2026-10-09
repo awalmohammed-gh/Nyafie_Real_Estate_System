@@ -199,13 +199,16 @@ const PropertiesDetails = () => {
     offer: `/make-offer/${id}`,
   };
   const contactLabel = isAdminListing ? siteName : "Agent";
+  // HomeBase chat is a plan feature for agents; without it, customers contact them by inquiry
+  // (guests don't see agent details yet, so they are asked to sign in first and routed after)
+  const chatAction = user && !property.agent.chat ? "inquiry" : "chat";
 
   // The dialog opened by a click, or the one a returning guest asked for
   const resumeAction =
     user && !isOwnListing ? searchParams.get("action") : null;
   const activeDialog =
     dialog ??
-    (["chat", "inquiry"].includes(resumeAction) ? resumeAction : null);
+    (["chat", "inquiry"].includes(resumeAction) ? (resumeAction === "chat" ? chatAction : resumeAction) : null);
 
   // A guest who picked a star comes back from sign-in with ?action=review&rating=N
   const resumeRating =
@@ -245,7 +248,7 @@ const PropertiesDetails = () => {
   };
   const startPrimary = () => {
     if (hotel) return document.getElementById("choose-room")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    isForSale ? requireAuth("chat") : startFlow("rent");
+    isForSale ? requireAuth(chatAction) : startFlow("rent");
   };
 
   const specs = [
@@ -690,16 +693,16 @@ const PropertiesDetails = () => {
                         ownerName
                       ) : (
                         <Link
-                          to={`/agents/${agent.id}`}
+                          to={`/agents/${agent.profileId}`}
                           className="hover:text-brand-600"
                         >
                           {ownerName}
                         </Link>
                       )}
                     </p>
-                    {agent.companyName && !isAdminListing && (
+                    {(agent.agency?.name || agent.companyName) && !isAdminListing && (
                       <p className="mt-0.5 text-xs text-gray-500">
-                        {agent.companyName}
+                        {agent.agency?.name || agent.companyName}
                       </p>
                     )}
                     <p className="mt-0.5 text-xs text-gray-500">
@@ -721,11 +724,11 @@ const PropertiesDetails = () => {
                   <>
                     <button
                       type="button"
-                      onClick={() => requireAuth("chat")}
+                      onClick={() => requireAuth(chatAction)}
                       className={`${secondaryActionClass} mt-5 w-full`}
                     >
-                      <MessageCircle aria-hidden="true" className="h-4 w-4" />
-                      Chat with {contactLabel}
+                      {chatAction === "chat" ? <MessageCircle aria-hidden="true" className="h-4 w-4" /> : <MessageSquare aria-hidden="true" className="h-4 w-4" />}
+                      {chatAction === "chat" ? `Chat with ${contactLabel}` : "Send an inquiry"}
                     </button>
                     <div className="mt-1 flex flex-wrap items-center gap-x-5 text-xs">
                       {whatsappLink &&
@@ -736,7 +739,7 @@ const PropertiesDetails = () => {
                             WhatsApp
                           </>,
                         )}
-                      <button
+                      {chatAction === "chat" && <button
                         type="button"
                         onClick={() => requireAuth("inquiry")}
                         className="inline-flex min-h-11 items-center gap-1.5 font-medium text-gray-600 hover:text-brand-700"
@@ -746,7 +749,7 @@ const PropertiesDetails = () => {
                           className="h-3.5 w-3.5"
                         />
                         Send inquiry / arrange viewing
-                      </button>
+                      </button>}
                     </div>
                   </>
                 )}

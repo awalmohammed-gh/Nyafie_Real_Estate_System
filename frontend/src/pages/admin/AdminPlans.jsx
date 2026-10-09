@@ -8,11 +8,14 @@ import Modal from "../../components/ui/Modal";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import StatusBadge from "../../components/ui/StatusBadge";
 import EmptyState from "../../components/ui/EmptyState";
-import { ANALYTICS_LEVELS, INQUIRY_LEVELS, durationLabel, planFeatureList } from "../../data/plans";
+import { ACCOUNT_TYPES, ANALYTICS_LEVELS, INQUIRY_LEVELS, durationLabel, isOrganization, planFeatureList } from "../../data/plans";
+import FilterTabs from "../../components/ui/FilterTabs";
+
+const TYPE_ORDER = Object.keys(ACCOUNT_TYPES); // individual, agency, company
 import { formatDate } from "../../utils/date";
 
 const emptyPlan = {
-  name: "", tagline: "", price: "", durationDays: 30, propertyLimit: 5, imageLimit: 5, featuredLimit: 0,
+  name: "", tagline: "", accountType: "individual", internalChat: false, teamMemberLimit: 0, sortOrder: 0, price: "", durationDays: 30, propertyLimit: 5, imageLimit: 5, featuredLimit: 0,
   analytics: "basic", inquiryManagement: "basic", priorityVisibility: false, popular: false, active: true, extraFeatures: [],
 };
 
@@ -34,10 +37,18 @@ const Toggle = ({ label, description, checked, onChange }) => (
   </label>
 );
 
+// A plan type's upgrade ladder, lowest tier first
+const ladderOf = (plans, type) => plans.filter((p) => p.accountType === type).sort((a, b) => a.sortOrder - b.sortOrder || a.price - b.price);
+const nextTier = (plans, type) => Math.max(0, ...ladderOf(plans, type).map((p) => p.sortOrder)) + 1;
+
 const PlanForm = ({ plan, plans, onClose, onSave }) => {
-  const [form, setForm] = useState(() => ({ ...emptyPlan, ...plan, price: String(plan?.price ?? ""), extra: (plan?.extraFeatures || []).join("\n") }));
+  const [form, setForm] = useState(() => ({ ...emptyPlan, ...plan, sortOrder: plan ? plan.sortOrder : nextTier(plans, emptyPlan.accountType), price: String(plan?.price ?? ""), extra: (plan?.extraFeatures || []).join("\n") }));
   const [error, setError] = useState("");
   const set = (key, value) => setForm((p) => ({ ...p, [key]: value }));
+  // A new plan goes to the top of its type's ladder unless the admin picks a tier
+  const setType = (type) => setForm((p) => ({ ...p, accountType: type, ...(plan ? {} : { sortOrder: nextTier(plans, type) }) }));
+  const ladder = ladderOf(plans.filter((p) => p.id !== plan?.id), form.accountType);
+  const sameTier = ladder.filter((p) => p.sortOrder === Math.round(Number(form.sortOrder) || 0));
   const num = (key, label, props = {}) => (
     <label className="block text-sm">
       <span className="mb-1.5 block font-medium text-gray-700">{label}</span>
@@ -57,11 +68,15 @@ const PlanForm = ({ plan, plans, onClose, onSave }) => {
       id: plan?.id || (plans.some((p) => p.id === slug) ? `${slug}-${Date.now().toString(36)}` : slug),
       name,
       tagline: form.tagline.trim(),
+      accountType: form.accountType,
+      internalChat: form.internalChat,
       price: Number(form.price),
       durationDays: Number(form.durationDays),
       propertyLimit: Number(form.propertyLimit),
       imageLimit: Number(form.imageLimit),
       featuredLimit: Number(form.featuredLimit) || 0,
+      teamMemberLimit: isOrganization(form.accountType) ? Math.max(0, Math.round(Number(form.teamMemberLimit) || 0)) : 0,
+      sortOrder: Math.round(Number(form.sortOrder) || 0),
       analytics: form.analytics,
       inquiryManagement: form.inquiryManagement,
       priorityVisibility: form.priorityVisibility,
@@ -85,6 +100,19 @@ const PlanForm = ({ plan, plans, onClose, onSave }) => {
             <span className="mb-1.5 block font-medium text-gray-700">Tagline</span>
             <input value={form.tagline} onChange={(e) => set("tagline", e.target.value)} className="field" placeholder="Who is this plan for?" />
           </label>
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium text-gray-700">Account type</span>
+            <select value={form.accountType} onChange={(e) => setType(e.target.value)} className="field">
+              {Object.entries(ACCOUNT_TYPES).map(([value, info]) => <option key={value} value={value}>{info.label}</option>)}
+            </select>
+            <span className="mt-1 block text-xs text-gray-500">Providers only see and buy plans for their own account type.</span>
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium text-gray-700">Upgrade tier</span>
+            <input type="number" step="1" min="0" value={form.sortOrder} onChange={(e) => set("sortOrder", e.target.value)} className="field" />
+            <span className="mt-1 block text-xs text-gray-500">A higher tier is an upgrade within {ACCOUNT_TYPES[form.accountType].plural.toLowerCase()}.{ladder.length > 0 && <> Now: {ladder.map((p) => `${p.name} (${p.sortOrder})`).join(" → ")}</>}</span>
+            {sameTier.length > 0 && <span className="mt-1 block text-xs text-amber-700">Same tier as {sameTier.map((p) => p.name).join(", ")}: neither is an upgrade from the other.</span>}
+          </label>
           {num("price", "Price (GHS)")}
           <label className="block text-sm">
             <span className="mb-1.5 block font-medium text-gray-700">Duration</span>
@@ -105,6 +133,7 @@ const PlanForm = ({ plan, plans, onClose, onSave }) => {
             {num("propertyLimit", "Active properties", { min: 1 })}
             {num("imageLimit", "Images per property", { min: 1 })}
             {num("featuredLimit", "Featured listings")}
+            {isOrganization(form.accountType) && num("teamMemberLimit", "Team members", { min: 0 })}
           </div>
         </div>
 
@@ -125,6 +154,7 @@ const PlanForm = ({ plan, plans, onClose, onSave }) => {
             </label>
           </div>
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Toggle label="HomeBase customer chat" description="Message customers in HomeBase (inquiries, calls, email and WhatsApp work on every plan)" checked={form.internalChat} onChange={(v) => set("internalChat", v)} />
             <Toggle label="Priority visibility" description="Listed ahead of other agents" checked={form.priorityVisibility} onChange={(v) => set("priorityVisibility", v)} />
             <Toggle label="Most popular" description="Highlight on plans page" checked={form.popular} onChange={(v) => set("popular", v)} />
             <Toggle label="Active" description="Available to new agents" checked={form.active} onChange={(v) => set("active", v)} />
@@ -147,6 +177,7 @@ const AdminPlans = () => {
   const [editing, setEditing] = useState(null); // plan | "new"
   const [deleting, setDeleting] = useState(null);
   const [subscribersOf, setSubscribersOf] = useState(null);
+  const [typeFilter, setTypeFilter] = useState("all");
 
   const subscribers = (plan) => agents.filter((a) => a.subscription?.planId === plan.id);
   const activeSubscribers = (plan) => subscribers(plan).filter((a) => a.sub.isActive);
@@ -155,15 +186,20 @@ const AdminPlans = () => {
     <>
       <AdminPageTitle
         title="Plans"
-        description="The single source of truth for agent limits and features."
+        description="The single source of truth for provider limits, features and upgrade tiers. Providers can only upgrade to a higher tier of their own account type."
         action={<button onClick={() => setEditing("new")} className="btn btn-primary"><Plus className="h-4 w-4" />Create plan</button>}
       />
+      {plans.length > 0 && (
+        <div className="mb-5">
+          <FilterTabs label="Plan type" value={typeFilter} onChange={setTypeFilter} tabs={[{ id: "all", label: "All", count: plans.length }, ...TYPE_ORDER.map((type) => ({ id: type, label: ACCOUNT_TYPES[type].label, count: plans.filter((plan) => plan.accountType === type).length }))]} />
+        </div>
+      )}
 
       {plans.length === 0 ? (
         <EmptyState icon={Layers} title="No plans yet" description="Create a plan so agents can subscribe." />
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 2xl:grid-cols-3">
-          {plans.map((plan, index) => {
+          {[...plans].filter((plan) => typeFilter === "all" || plan.accountType === typeFilter).sort((a, b) => TYPE_ORDER.indexOf(a.accountType) - TYPE_ORDER.indexOf(b.accountType) || a.sortOrder - b.sortOrder || a.price - b.price).map((plan, index) => {
             const activeCount = activeSubscribers(plan).length;
             return (
               <motion.article
@@ -177,6 +213,8 @@ const AdminPlans = () => {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-xl font-bold text-gray-900">{plan.name}</h2>
+                      <StatusBadge status={ACCOUNT_TYPES[plan.accountType].label} tone={isOrganization(plan.accountType) ? "brand" : "gray"} dot={false} />
+                      <StatusBadge status={`Tier ${plan.sortOrder}`} tone="gray" dot={false} />
                       <StatusBadge status={plan.active ? "Active" : "Inactive"} tone={plan.active ? "green" : "gray"} />
                       {plan.popular && <StatusBadge status="Popular" tone="brand" dot={false} />}
                     </div>
@@ -217,7 +255,7 @@ const AdminPlans = () => {
                     onClick={() =>
                       run(togglePlanActive(plan.id), {
                         success: plan.active ? "Plan deactivated" : "Plan activated",
-                        description: plan.active ? `${plan.name} is hidden from new agents. Existing subscribers keep it.` : `${plan.name} is available to new agents.`,
+                        description: plan.active ? `${plan.name} is hidden from new agents and upgrades. Existing subscribers keep it.` : `${plan.name} is available to new agents and as an upgrade.`,
                       })
                     }
                     className="btn btn-light flex-1 px-4"

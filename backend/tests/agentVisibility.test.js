@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import Property from "../models/Property.js";
 import Setting from "../models/Setting.js";
+import Plan from "../models/Plan.js";
 import agentRoutes from "../routes/agentRoutes.js";
 import propertyRoutes from "../routes/propertyRoutes.js";
 
@@ -24,6 +25,7 @@ test("agent directory and listing identities require a valid selected session", 
   t.mock.method(User, "findById", (id) => query([customer, agent].find((user) => String(user._id) === String(id))));
   t.mock.method(User, "find", () => query([agent]));
   t.mock.method(Setting, "findOneAndUpdate", () => query({ agent: { requireSubscription: false } }));
+  t.mock.method(Plan, "findOne", () => query(null)); // the waived default plan, read for the chat check
   t.mock.method(Property, "aggregate", () => Promise.resolve([listing.toObject()]));
   t.mock.method(Property, "find", () => query([listing]));
   t.mock.method(Property, "findById", () => query(listing));

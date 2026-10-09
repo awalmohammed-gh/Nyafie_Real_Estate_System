@@ -5,6 +5,8 @@ import { useRealEstate } from "../context/useRealEstate";
 import { getSubscriptionState } from "../utils/subscription";
 import { COUNTED_STATES } from "../utils/permissions";
 
+export const isRemovedAccount = (user) => user.status === "removed" || user.status === "deleted";
+
 const DAY = 86400000;
 const inWindow = (date, fromDays, toDays) => {
   const age = (Date.now() - new Date(date).getTime()) / DAY;
@@ -30,7 +32,7 @@ export const useAdminData = () => {
     const { users } = auth;
     const { listings, inquiries, isPubliclyVisible } = realEstate;
 
-    const agents = users
+    const allAgents = users
       .filter((u) => u.role === "agent")
       .map((u) => {
         const properties = listings.filter((p) => p.owner.type === "agent" && p.owner.id === u.id);
@@ -40,9 +42,13 @@ export const useAdminData = () => {
           plan: platform.getPlan(u.subscription?.planId),
           properties,
           activeCount: properties.filter((p) => COUNTED_STATES.includes(p.listing.state)).length,
+          accountType: ["agency", "company"].includes(u.agentApplication?.agentType) ? u.agentApplication.agentType : "individual",
+          teamCount: users.filter((member) => member.agency?.ownerId === u.id).length, // agency/company staff seats
           inquiries: inquiries.filter((i) => i.ownerType === "agent" && i.ownerId === u.id),
         };
       });
+    // Providers an admin removed (or deleted) aren't counted anywhere; the Agents page lists them separately
+    const agents = allAgents.filter((a) => !isRemovedAccount(a));
 
     const ownerOf = (property) =>
       property.owner.type === "admin"
@@ -56,6 +62,7 @@ export const useAdminData = () => {
       ...platform,
       ...realEstate,
       agents,
+      allAgents, // including removed providers, for names on old records and the Removed tab
       ownerOf,
       userInquiries,
       savedCount: (u) => u.savedCount || 0,

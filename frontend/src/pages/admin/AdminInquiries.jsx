@@ -24,7 +24,7 @@ const RANGES = [
 
 const AdminInquiries = () => {
   const { siteName } = usePlatform();
-  const { inquiries, agents, findProperty, updateInquiryStatus } = useAdminData();
+  const { inquiries, agents, allAgents, findProperty, updateInquiryStatus } = useAdminData();
   const run = useAsyncAction();
   const [params, setParams] = useSearchParams();
   const [status, setStatus] = useState(params.get("status") || "All");
@@ -34,7 +34,7 @@ const AdminInquiries = () => {
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState(null);
 
-  const ownerName = (inq) => (inq.ownerType === "admin" ? siteName : agents.find((a) => a.id === inq.ownerId)?.name || "Deleted agent");
+  const ownerName = (inq) => (inq.ownerType === "admin" ? siteName : allAgents.find((a) => a.id === inq.ownerId)?.name || "Deleted agent");
 
   const scoped = inquiries
     .filter((i) => agentId === "all" || (agentId === "admin" ? i.ownerType === "admin" : i.ownerId === agentId))

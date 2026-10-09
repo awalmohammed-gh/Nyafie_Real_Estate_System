@@ -46,7 +46,11 @@ export const notifyUser = async (userId, payload) => {
  */
 export const notifyOwner = (record, { path = "", ...payload }) => {
   const link = `/${record.ownerType === "admin" ? "admin" : "agent"}/${path}`;
-  return record.ownerType === "admin" ? notifyAdmins({ ...payload, link }) : notifyUser(record.owner?._id || record.owner, { ...payload, link });
+  if (record.ownerType === "admin") return notifyAdmins({ ...payload, link });
+  // Agency listings: the owner and the staff member assigned to the listing both hear about it
+  const owner = String(record.owner?._id || record.owner);
+  const assignee = record.assignedTo ? String(record.assignedTo._id || record.assignedTo) : null;
+  return Promise.all([notifyUser(owner, { ...payload, link }), assignee && assignee !== owner ? notifyUser(assignee, { ...payload, link }) : null]);
 };
 
 /**

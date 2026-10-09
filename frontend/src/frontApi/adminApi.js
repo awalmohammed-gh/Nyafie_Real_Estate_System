@@ -15,6 +15,13 @@ export const updateUser = async (id, changes) => mapUser((await client.put(`/adm
 export const setUserStatus = (id, status) => client.patch(`/admin/users/${id}/status`, { status });
 export const deleteUser = (id) => client.delete(`/admin/users/${id}`);
 
+// Provider removal: remove (deactivate, keep history) -> restore, or later a separate permanent delete
+export const getRemovalImpact = async (id) => (await client.get(`/admin/agents/${id}/removal`)).data;
+export const removeAgent = (id, reason, note) => client.post(`/admin/agents/${id}/remove`, { reason, note });
+export const restoreAgent = (id, republish) => client.post(`/admin/agents/${id}/restore`, { republish });
+export const getDeletionPlan = async (id) => (await client.get(`/admin/agents/${id}/deletion`)).data;
+export const deleteAgentPermanently = (id, confirm) => client.delete(`/admin/agents/${id}`, { data: { confirm } });
+
 // action: "changePlan" | "extend" | "cancel" | "activate"
 export const manageSubscription = (userId, action, extra = {}) => client.patch(`/admin/agents/${userId}/subscription`, { action, ...extra });
 export const getSubscriptions = async () => (await client.get("/admin/subscriptions")).data.map(mapPayment);

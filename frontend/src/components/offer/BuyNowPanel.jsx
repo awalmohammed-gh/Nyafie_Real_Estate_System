@@ -70,15 +70,15 @@ const BuyNowPanel = ({ property, ownerName, whatsappLink, onChat }) => {
           Want to negotiate first?
         </h2>
         <p className="mt-1 text-sm text-gray-600">Propose your price, or talk to {ownerName} about the property.</p>
-        <div className={`mt-4 grid gap-2 ${whatsappLink ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+        <div className={`mt-4 grid gap-2 ${["", "", "sm:grid-cols-2", "sm:grid-cols-3"][1 + Boolean(onChat) + Boolean(whatsappLink)]}`}>
           <Link to={`/make-offer/${property.id}`} className="btn btn-primary px-3">
             <HandCoins className="h-4 w-4" />
             Make Offer
           </Link>
-          <button onClick={onChat} className="btn btn-light px-3">
+          {onChat && <button onClick={onChat} className="btn btn-light px-3">
             <MessageCircle className="h-4 w-4" />
             Chat
-          </button>
+          </button>}
           {whatsappLink && (
             <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="btn bg-emerald-600 px-3 text-white hover:bg-emerald-700">
               <WhatsAppIcon />

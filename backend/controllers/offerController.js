@@ -63,6 +63,7 @@ export const createOffer = async (req, res) => {
     customer: req.user._id,
     property: property._id,
     owner: property.owner, // the real owner, from the database
+    assignedTo: property.assignedTo || null, // the agency staff member handling the listing
     ownerType: property.ownerType,
     askingPrice: property.price,
     amount,

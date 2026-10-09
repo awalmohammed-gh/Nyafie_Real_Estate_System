@@ -36,7 +36,7 @@ const AgentProfile = ({ agent }) => {
           <div className="agent-profile-heading">
             <div className="agent-profile-identity">
               <AgentAvatar name={agent.name} image={agent.profileImage} large />
-              <div><p className="agents-eyebrow">Your local connection</p><h1>{agent.name}</h1><p className="agent-profile-subtitle">{agent.agentType === 'agency' && agent.companyName ? agent.companyName : 'Independent real estate agent'}{agent.joinedAt ? ` · On ${siteName} since ${new Date(agent.joinedAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}` : ''}</p></div>
+              <div><p className="agents-eyebrow">Your local connection</p><h1>{agent.name}</h1><p className="agent-profile-subtitle">{['agency', 'company'].includes(agent.agentType) && agent.companyName ? agent.companyName : 'Independent real estate agent'}{agent.joinedAt ? ` · On ${siteName} since ${new Date(agent.joinedAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}` : ''}</p></div>
             </div>
             {agent.verified && <span className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-700"><BadgeCheck size={17} aria-hidden="true" />Approved agent</span>}
             <Link to={paths.agents} className="agents-back-link"><ArrowLeft size={16} aria-hidden="true" />All agents</Link>

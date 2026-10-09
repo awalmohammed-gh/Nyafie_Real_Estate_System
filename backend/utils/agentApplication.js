@@ -2,8 +2,10 @@ import Subscription from "../models/Subscription.js";
 import { getSettings } from "../models/Setting.js";
 import { subscriptionState } from "./permissions.js";
 import { HttpError } from "./response.js";
+import { ACCOUNT_TYPES, isOrganization } from "./accountTypes.js";
 
-export const applicationStatus = (user) => user?.isActive === false ? "suspended" : user?.agentApplication?.status || "incomplete";
+export const applicationStatus = (user) => user?.agentApplication?.status === "removed" ? "removed" : user?.isActive === false ? "suspended" : user?.agentApplication?.status || "incomplete";
+export const isRemoved = (user) => user?.agentApplication?.status === "removed";
 export const approvedAgent = (user) => user?.role === "agent" && user.isActive === true && user.agentApplication?.status === "approved";
 export const validPhone = (value) => typeof value === "string" && /^\+?[\d\s().-]+$/.test(value.trim()) && /^\d{7,15}$/.test(value.replace(/\D/g, ""));
 
@@ -89,7 +91,8 @@ export const validateAgentProfile = (body) => {
     return value;
   };
   const agentType = body.agentType;
-  if (!["individual", "agency"].includes(agentType)) throw new HttpError(400, "Choose Individual Agent or Agency / Company.");
+  if (!ACCOUNT_TYPES.includes(agentType)) throw new HttpError(400, "Choose Individual Agent, Agency or Company.");
+  const organization = isOrganization(agentType);
   const yearsExperience = Number(body.yearsExperience);
   if (body.yearsExperience === "" || body.yearsExperience == null || !Number.isInteger(yearsExperience) || yearsExperience < 0 || yearsExperience > 80) throw new HttpError(400, "Enter valid years of experience (0–80).");
   if (!validPhone(body.phone)) throw new HttpError(400, "Enter a valid phone number.");
@@ -97,6 +100,6 @@ export const validateAgentProfile = (body) => {
   if (whatsapp && !validPhone(whatsapp)) throw new HttpError(400, "Enter a valid WhatsApp number.");
   return {
     firstName: text("firstName", 80, true), lastName: text("lastName", 80, true), phone: body.phone.trim(),
-    profile: { agentType, companyName: agentType === "agency" ? text("companyName", 160, true) : "", region: text("region", 100, true), city: text("city", 100, true), officeAddress: text("officeAddress", 300, agentType === "agency"), ghanaPostGPS: text("ghanaPostGPS", 30), yearsExperience, bio: text("bio", 1500, true), whatsapp },
+    profile: { agentType, companyName: organization ? text("companyName", 160, true) : "", region: text("region", 100, true), city: text("city", 100, true), officeAddress: text("officeAddress", 300, organization), ghanaPostGPS: text("ghanaPostGPS", 30), yearsExperience, bio: text("bio", 1500, true), whatsapp },
   };
 };

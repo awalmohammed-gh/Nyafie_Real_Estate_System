@@ -3,6 +3,7 @@ import Property from "../models/Property.js";
 import Rental from "../models/Rental.js";
 import { HttpError } from "./response.js";
 import { resolveImages } from "./uploadImages.js";
+import { withinImageLimit } from "./permissions.js";
 
 export const DAY = 86400000;
 export const HOTEL_HOLD = 30 * 60 * 1000;
@@ -114,7 +115,7 @@ export const prepareHotelFields = async (fields, body, existing = null, imageLim
       if (!name || name.length > 100 || description.length > 3000 || !bedType || bedType.length > 120) throw new HttpError(400, "Enter a room name, bed type and description within their limits.");
       if (!Number.isFinite(price) || price <= 0 || price > 10000000 || !Number.isFinite(size) || size < 0 || size > 100000) throw new HttpError(400, "Enter a valid room price and size.");
       if (input.active !== undefined && typeof input.active !== "boolean") throw new HttpError(400, "Room active state must be true or false.");
-      if (!Array.isArray(input.images) || input.images.length > imageLimit) throw new HttpError(400, `Add up to ${imageLimit} photos per room type.`);
+      if (!Array.isArray(input.images) || !withinImageLimit(input.images, imageLimit, (id && existing?.roomTypes.id(id)?.images) || [])) throw new HttpError(400, `Your plan supports up to ${imageLimit} photos per room type. Upgrade your plan to add more photos.`);
       if (!Array.isArray(input.amenities) || input.amenities.length > 40 || input.amenities.some((a) => typeof a !== "string" || !a.trim() || a.length > 100)) throw new HttpError(400, "Add up to 40 room amenities, each under 100 characters.");
       fields.roomTypes.push({
         ...(id ? { _id: id } : {}), name, description, bedType,

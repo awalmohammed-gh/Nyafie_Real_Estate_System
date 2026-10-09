@@ -9,11 +9,12 @@ import { useToast } from "../../context/useToast";
 import { addDays, formatDate } from "../../utils/date";
 import { getSubscriptionState } from "../../utils/subscription";
 import { subscriptionApi } from "../../frontApi";
+import { useApiQuery } from "../../hooks/useApiQuery";
 import PageLoader from "../../components/ui/PageLoader";
 import { canAccessAgent } from "../../utils/sessionDomain";
 import OnboardingProgress from "../../components/agent/OnboardingProgress";
 
-// Renewals and plan changes from the dashboard (new agents see the onboarding progress instead)
+// Renewals and upgrades from the dashboard (new agents see the onboarding progress instead)
 const steps = ["Choose plan", "Payment", "Confirmed"];
 
 const Stepper = ({ current }) => (
@@ -58,6 +59,11 @@ const Checkout = () => {
   const [paymentMode, setPaymentMode] = useState(null); // "paystack" | "disabled" (from the server)
   const timers = useRef([]);
 
+  // What this plan costs now always comes from the server: credit for the current plan, amount due and dates
+  const quoteKey = plan && !returnReference && user?.role === "agent" ? `quote:${plan.id}:${user.subscription?.id || "none"}` : null;
+  const quote = useApiQuery(quoteKey || "quote:none", () => (quoteKey ? subscriptionApi.quotePlan(plan.id) : Promise.resolve(null)));
+  const due = quote.data;
+
   useEffect(() => {
     const pending = timers.current;
     return () => pending.forEach(clearTimeout);
@@ -71,13 +77,15 @@ const Checkout = () => {
   }, []);
 
   // The subscription and the agent role always come from the server after it verified the payment
-  const finish = async (fresh, wasRenewal) => {
+  // kind: "renewal" | "upgrade" | undefined (a new subscription)
+  const finish = async (fresh, kind) => {
     await refreshUser();
     const approved = canAccessAgent(fresh);
-    setSubscription({ ...fresh?.subscription, wasRenewal, approved });
+    const title = kind === "upgrade" ? "Plan upgraded" : kind === "renewal" ? "Subscription renewed" : "Payment confirmed";
+    setSubscription({ ...fresh?.subscription, title, approved });
     setStatus("success");
     toast({
-      title: wasRenewal ? "Subscription renewed" : "Payment confirmed",
+      title,
       description: fresh?.subscription ? `${fresh.subscription.planName} plan active until ${formatDate(fresh.subscription.expiryDate)}.` : undefined,
     });
     timers.current.push(setTimeout(() => navigate(approved ? "/agent/dashboard" : "/agent/status"), 2600));
@@ -97,7 +105,8 @@ const Checkout = () => {
       .then((fresh) => {
         if (fresh?.pending) return setStatus("pending");
         sessionStorage.removeItem(RETURN_KEY);
-        return finish(fresh, saved.reference === returnReference && saved.wasRenewal);
+        const ours = saved.reference === returnReference;
+        return finish(fresh, ours && saved.wasUpgrade ? "upgrade" : ours && saved.wasRenewal ? "renewal" : undefined);
       })
       .catch((err) => {
         setError(err.message);
@@ -156,9 +165,14 @@ const Checkout = () => {
 
   const current = user?.subscription;
   const currentState = getSubscriptionState(current);
-  const isRenewal = Boolean(plan) && currentState.isActive && current?.planId === plan.id;
-  const startDate = isRenewal ? current.startDate : new Date().toISOString();
-  const expiryDate = plan ? addDays(isRenewal ? current.expiryDate : new Date(), plan.durationDays) : null;
+  const isRenewal = due ? due.kind === "renewal" : Boolean(plan) && currentState.isActive && current?.planId === plan.id;
+  const startDate = due?.startsAt || (isRenewal ? current.startDate : new Date().toISOString());
+  const expiryDate = due?.expiresAt || (plan ? addDays(isRenewal ? current.expiryDate : new Date(), plan.durationDays) : null);
+  const amountDue = due?.amount ?? null;
+  const isUpgrade = due?.kind === "upgrade";
+  const summaryLabel = isUpgrade ? `Upgrade from ${due.currentPlan?.name}` : isRenewal ? "Renewal" : "Agent subscription";
+  // Active subscribers came from their subscription page (renewals and upgrades); others from the plans list
+  const backTo = canAccessAgent(user) && currentState.isActive ? { to: isUpgrade ? "/agent/subscription/upgrade" : "/agent/subscription", label: isUpgrade ? "Back to upgrades" : "Back to subscription" } : { to: `${plansPath}?plan=${plan.id}`, label: "Back to plans" };
   const paymentsDisabled = paymentMode === "disabled";
 
   // Payment happens on Paystack; the backend verifies the transaction when the user returns
@@ -168,7 +182,9 @@ const Checkout = () => {
     setStatus("processing");
     try {
       const init = await subscriptionApi.initializePayment(plan.id, "Paystack");
-      sessionStorage.setItem(RETURN_KEY, JSON.stringify({ reference: init.reference, wasRenewal: isRenewal }));
+      // The credit covered the whole upgrade: the server has already switched the plan
+      if (init.mode === "credit") return finish(init.user, "upgrade");
+      sessionStorage.setItem(RETURN_KEY, JSON.stringify({ reference: init.reference, wasRenewal: isRenewal, wasUpgrade: isUpgrade }));
       window.location.assign(init.authorizationUrl);
     } catch (err) {
       setError(err.message);
@@ -194,7 +210,7 @@ const Checkout = () => {
             <Check className="h-10 w-10 text-emerald-500" strokeWidth={3} />
           </motion.span>
           <h1 className="mt-6 text-2xl font-extrabold text-gray-900">
-            {subscription.wasRenewal ? "Subscription renewed" : "Payment confirmed"}
+            {subscription.title}
           </h1>
           <p className="mt-2 text-gray-600">
             Your <span className="font-semibold text-gray-900">{subscription.planName}</span> plan is active until{" "}
@@ -229,9 +245,9 @@ const Checkout = () => {
     <div className={canAccessAgent(user) ? "py-2" : "py-8 sm:py-12"}>
       <div className={canAccessAgent(user) ? "w-full" : "container-page max-w-6xl"}>
         <div className="mb-8 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-          <Link to={`${plansPath}?plan=${plan.id}`} className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-brand-600">
+          <Link to={backTo.to} className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-brand-600">
             <ArrowLeft className="h-4 w-4" />
-            Back to plans
+            {backTo.label}
           </Link>
           {canAccessAgent(user) ? <Stepper current={1} /> : <OnboardingProgress onboarding={user?.onboarding} />}
         </div>
@@ -254,6 +270,16 @@ const Checkout = () => {
               </div>
             )}
 
+            {quote.error && (
+              <p role="alert" className="mt-5 flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                {quote.error}
+              </p>
+            )}
+            {isUpgrade && (
+              <p className="mt-5 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-700">Your upgrade starts as soon as the payment is confirmed. Your listings, team and history stay as they are, and the new limits apply straight away.</p>
+            )}
+
             {status === "error" && (
               <motion.p
                 role="alert"
@@ -266,7 +292,7 @@ const Checkout = () => {
               </motion.p>
             )}
 
-            <button type="submit" disabled={processing || paymentsDisabled || !paymentMode} className="btn btn-primary mt-6 w-full py-4 text-base">
+            <button type="submit" disabled={processing || amountDue === null || (amountDue > 0 && (paymentsDisabled || !paymentMode))} className="btn btn-primary mt-6 w-full py-4 text-base">
               {processing ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -275,7 +301,7 @@ const Checkout = () => {
               ) : (
                 <>
                   <Lock className="h-4 w-4" />
-                  Complete payment · ₵{plan.price.toLocaleString()}
+                  {amountDue === null ? (quote.loading ? "Calculating your price..." : "Price unavailable") : amountDue > 0 ? `Complete payment · ₵${amountDue.toLocaleString()}` : "Upgrade · nothing to pay"}
                 </>
               )}
             </button>
@@ -287,7 +313,7 @@ const Checkout = () => {
             <div className="rounded-2xl bg-white p-6 ring-1 ring-gray-200 sm:p-8 lg:sticky lg:top-28">
               <h2 className="text-lg font-bold text-gray-900">Order summary</h2>
               <div className="mt-5 rounded-2xl bg-linear-to-br from-brand-500 to-brand-800 p-5 text-white">
-                <p className="text-sm text-brand-100">{isRenewal ? "Renewal" : "Agent subscription"}</p>
+                <p className="text-sm text-brand-100">{summaryLabel}</p>
                 <p className="mt-1 text-2xl font-extrabold">{plan.name}</p>
                 <p className="text-sm text-brand-100">{durationLabel(plan.durationDays)} · {plan.propertyLimit} listings · {plan.imageLimit} photos each</p>
               </div>
@@ -304,9 +330,19 @@ const Checkout = () => {
                   <dt className="text-gray-500">Expires</dt>
                   <dd className="font-medium text-gray-900">{formatDate(expiryDate)}</dd>
                 </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-gray-500">Plan price</dt>
+                  <dd className="font-medium text-gray-900">₵{plan.price.toLocaleString()}</dd>
+                </div>
+                {due?.credit > 0 && (
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-gray-500">Credit for {due.currentPlan?.name} <span className="block text-xs">{due.remainingDays} {due.remainingDays === 1 ? "day" : "days"} left</span></dt>
+                    <dd className="font-medium text-emerald-700">−₵{due.credit.toLocaleString()}</dd>
+                  </div>
+                )}
                 <div className="flex justify-between gap-4 border-t border-gray-100 pt-3 text-base">
-                  <dt className="font-semibold text-gray-900">Total</dt>
-                  <dd className="font-extrabold text-gray-900">₵{plan.price.toLocaleString()}</dd>
+                  <dt className="font-semibold text-gray-900">Total due</dt>
+                  <dd className="font-extrabold text-gray-900">{amountDue === null ? "…" : `₵${amountDue.toLocaleString()}`}</dd>
                 </div>
               </dl>
               <p className="mt-6 flex items-start gap-2 text-xs text-gray-500">

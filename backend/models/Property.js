@@ -29,6 +29,7 @@ const propertySchema = new mongoose.Schema(
     images: [{ type: String }], // Cloudinary (or static) URLs, never raw files
     roomTypes: [roomTypeSchema],
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // agency staff member handling it (null: the owner)
     ownerType: { type: String, enum: ["admin", "agent"], required: true },
     // Public contact shown on the listing (the agent, or a HomeBase staff member)
     contact: {
@@ -41,6 +42,8 @@ const propertySchema = new mongoose.Schema(
     status: { type: String, enum: ["draft", "pending", "published", "rejected", "suspended"], default: "draft", index: true },
     availability: { type: String, enum: ["Available", "Under Offer", "Sold", "Rented"], default: "Available" },
     rejectionReason: { type: String, default: "" },
+    // Set when the listing was hidden because its provider was removed; restore can bring it back
+    providerRemoval: { type: new mongoose.Schema({ hiddenAt: Date, statusBefore: String }, { _id: false }), default: undefined },
     reviewedAt: { type: Date },
     isFeatured: { type: Boolean, default: false },
     views: { type: Number, default: 0 },

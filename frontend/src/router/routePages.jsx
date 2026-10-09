@@ -40,6 +40,9 @@ export const PropertyEditor = lazyPage(() => import('../pages/agent/PropertyEdit
 export const Inquiries = lazyPage(() => import('../pages/agent/Inquiries'));
 export const PropertyManage = lazyPage(() => import('../pages/agent/PropertyManage'));
 export const Subscription = lazyPage(() => import('../pages/agent/Subscription'));
+export const UpgradePlan = lazyPage(() => import('../pages/agent/UpgradePlan'));
+export const Team = lazyPage(() => import('../pages/agent/Team'));
+export const JoinAgency = lazyPage(() => import('../pages/agent/JoinAgency'));
 export const AdminLayout = lazyPage(() => import('../layout/AdminLayout'));
 export const AdminDashboard = lazyPage(() => import('../pages/admin/AdminDashboard'));
 export const AdminUsers = lazyPage(() => import('../pages/admin/AdminUsers'));

@@ -1,17 +1,20 @@
 import Plan from "../models/Plan.js";
 import Subscription from "../models/Subscription.js";
+import User from "../models/User.js";
 import { ok, fail } from "../utils/response.js";
+import { ACCOUNT_TYPES } from "../utils/accountTypes.js";
 
 const pickPlan = (body) => {
   const out = {};
   if (body.name !== undefined) out.name = String(body.name).trim();
   if (body.tagline !== undefined) out.tagline = String(body.tagline).trim();
-  ["price", "duration", "propertyLimit", "imageLimit", "featuredPropertyLimit"].forEach((key) => {
+  ["price", "duration", "propertyLimit", "imageLimit", "featuredPropertyLimit", "teamMemberLimit", "sortOrder"].forEach((key) => {
     if (body[key] !== undefined) out[key] = Number(body[key]);
   });
   if (["basic", "standard", "advanced"].includes(body.analyticsLevel)) out.analyticsLevel = body.analyticsLevel;
   if (["basic", "full"].includes(body.inquiryManagement)) out.inquiryManagement = body.inquiryManagement;
-  ["priorityVisibility", "popular", "isActive"].forEach((key) => {
+  if (ACCOUNT_TYPES.includes(body.accountType)) out.accountType = body.accountType;
+  ["priorityVisibility", "internalChat", "popular", "isActive"].forEach((key) => {
     if (body[key] !== undefined) out[key] = Boolean(body[key]);
   });
   if (Array.isArray(body.features)) out.features = body.features.map((f) => String(f).trim()).filter(Boolean);
@@ -25,13 +28,25 @@ const validatePlan = (p, creating) => {
   if (p.propertyLimit !== undefined && !(p.propertyLimit >= 1)) return "Property limit must be at least 1.";
   if (p.imageLimit !== undefined && !(p.imageLimit >= 1)) return "Image limit must be at least 1.";
   if (p.featuredPropertyLimit !== undefined && !(p.featuredPropertyLimit >= 0)) return "Featured limit can't be negative.";
+  if (p.sortOrder !== undefined && !(Number.isInteger(p.sortOrder) && Math.abs(p.sortOrder) <= 1000)) return "Upgrade tier must be a whole number.";
+  if (p.teamMemberLimit !== undefined && !(Number.isInteger(p.teamMemberLimit) && p.teamMemberLimit >= 0 && p.teamMemberLimit <= 500)) return "Team members must be a whole number from 0 to 500.";
   return null;
 };
 
-// GET /api/plans (active plans; admins get all with ?all=true)
+// The plan a provider's account is on (staff: their organisation's), so a retired plan still shows for its subscribers
+const ownPlanId = async (user) => {
+  if (user?.role !== "agent") return null;
+  const holder = user.agency?.owner ? await User.findById(user.agency.owner._id || user.agency.owner).select("subscription") : user;
+  const subscriptionId = holder?.subscription?._id || holder?.subscription;
+  return subscriptionId ? (await Subscription.findById(subscriptionId).select("plan"))?.plan || null : null;
+};
+
+// GET /api/plans (active plans, plus the provider's own current plan; admins get all with ?all=true)
 export const listPlans = async (req, res) => {
   const all = req.query.all === "true" && req.user?.role === "admin";
-  ok(res, await Plan.find(all ? {} : { isActive: true }).sort({ price: 1 }));
+  const own = all ? null : await ownPlanId(req.user);
+  const filter = all ? {} : own ? { $or: [{ isActive: true }, { _id: own }] } : { isActive: true };
+  ok(res, await Plan.find(filter).sort({ sortOrder: 1, price: 1 }));
 };
 
 // POST /api/plans (admin)

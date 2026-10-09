@@ -14,6 +14,7 @@ import SidePanel from "../../components/ui/SidePanel";
 import EmptyState from "../../components/ui/EmptyState";
 import { formatDate } from "../../utils/date";
 import { formatCedis } from "../../utils/reports";
+import { ACCOUNT_TYPES } from "../../data/plans";
 
 const subTone = { active: "green", expiring: "amber", expired: "red", cancelled: "gray", pending: "amber" };
 const payTone = { paid: "green", pending: "amber", failed: "red", waived: "gray", refunded: "gray" };
@@ -24,6 +25,7 @@ const AdminSubscriptions = () => {
   const [params] = useSearchParams();
   const [status, setStatus] = useState(params.get("status") || "all");
   const [query, setQuery] = useState("");
+  const [accountType, setAccountType] = useState("all");
   const [viewingId, setViewingId] = useState(null);
   const [action, setAction] = useState(null);
 
@@ -32,7 +34,8 @@ const AdminSubscriptions = () => {
   const q = query.trim().toLowerCase();
   const rows = subscribed
     .filter(matches)
-    .filter((a) => !q || `${a.name} ${a.email} ${a.subscription.planName}`.toLowerCase().includes(q))
+    .filter((a) => accountType === "all" || a.accountType === accountType)
+    .filter((a) => !q || `${a.name} ${a.email} ${a.subscription.planName} ${a.agentApplication?.companyName || ""}`.toLowerCase().includes(q))
     .sort((a, b) => new Date(a.subscription.expiryDate) - new Date(b.subscription.expiryDate));
 
   const count = (fn) => subscribed.filter(fn).length;
@@ -58,7 +61,9 @@ const AdminSubscriptions = () => {
         </div>
       ),
     },
+    { key: "account", header: "Account", render: (a) => <div className="min-w-0"><p className="text-gray-800">{ACCOUNT_TYPES[a.accountType].label}</p>{a.accountType !== "individual" && <p className="truncate text-xs text-gray-500">{a.agentApplication?.companyName || "Name not set"}</p>}</div> },
     { key: "plan", header: "Plan", render: (a) => <span className="font-medium text-gray-800">{a.subscription.planName}</span> },
+    { key: "usage", header: "Usage", render: (a) => <div className="text-xs whitespace-nowrap text-gray-600 tabular-nums"><p>Listings {a.activeCount} / {a.plan?.propertyLimit ?? "—"}</p>{a.accountType !== "individual" && <p>Team {a.teamCount} / {a.plan?.teamMemberLimit ?? 0}</p>}</div> },
     { key: "amount", header: "Amount", render: (a) => <span className="font-semibold text-gray-900 tabular-nums">{formatCedis(a.subscription.price)}</span> },
     { key: "start", header: "Start", render: (a) => <span className="whitespace-nowrap text-gray-600">{formatDate(a.subscription.startDate)}</span> },
     {
@@ -100,14 +105,21 @@ const AdminSubscriptions = () => {
             { id: "pending", label: "Pending", count: count((a) => a.sub.status === "pending") },
           ]}
         />
-        <SearchInput value={query} onChange={setQuery} placeholder="Search agent or plan" className="lg:w-72" />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <label className="sr-only" htmlFor="sub-account-type">Account type</label>
+          <select id="sub-account-type" value={accountType} onChange={(e) => setAccountType(e.target.value)} className="field py-2.5 sm:w-48">
+            <option value="all">All account types</option>
+            {Object.entries(ACCOUNT_TYPES).map(([value, info]) => <option key={value} value={value}>{info.label}</option>)}
+          </select>
+          <SearchInput value={query} onChange={setQuery} placeholder="Search agent, company or plan" className="lg:w-72" />
+        </div>
       </div>
 
       <DataTable
         columns={columns}
         rows={rows}
         rowKey={(a) => a.id}
-        minWidth={980}
+        minWidth={1180}
         empty={<EmptyState icon={CreditCard} title="No subscriptions" description="Nothing matches this filter." />}
         mobileCard={(a) => (
           <div>

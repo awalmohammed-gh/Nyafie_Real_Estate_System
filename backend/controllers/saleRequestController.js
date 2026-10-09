@@ -195,6 +195,7 @@ export const createSaleRequest = async (req, res) => {
     customer: req.user._id,
     property: property._id,
     owner: property.owner, // from the database, never the request
+    assignedTo: property.assignedTo || null, // the agency staff member handling the listing
     ownerType: property.ownerType,
     askingPrice: property.price,
     contactName,

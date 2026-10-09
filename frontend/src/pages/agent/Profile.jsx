@@ -54,7 +54,7 @@ const ProfileForm = ({ user }) => {
       <span className="settings-preview-label">Live preview</span>
     </div>;
   return <form onSubmit={save} className="settings-profile-form space-y-5">
-    <AgentProfileFields form={form} setForm={setForm} email={user.email} disabled={saving} onUploadingChange={setUploading} photoFirst profilePreview={profilePreview} />
+    <AgentProfileFields form={form} setForm={setForm} email={user.email} disabled={saving} onUploadingChange={setUploading} photoFirst profilePreview={profilePreview} typeLocked teamAgency={user.agency ? user.agency.name || "your agency" : ""} />
     {error && <p role="alert" className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</p>}
     <div className="settings-save-bar">
       <p role="status" aria-live="polite" className="flex items-center gap-2 text-xs text-gray-500">{dirty ? <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" /> : <Check className="h-4 w-4 shrink-0 text-brand-600" />}{uploading ? "Preparing your image..." : saving ? "Saving your profile..." : dirty ? "You have unsaved changes" : "Your profile is up to date"}</p>

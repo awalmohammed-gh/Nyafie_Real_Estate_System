@@ -10,7 +10,7 @@ import ImageUploader from "../../components/agent/ImageUploader";
 import RoomTypesEditor from "../../components/agent/RoomTypesEditor";
 import { roomToForm, roomsToPayload } from "../../utils/hotel";
 import LockedFeature from "../../components/ui/LockedFeature";
-import { COUNTED_STATES, lockCopy } from "../../utils/permissions";
+import { COUNTED_STATES, lockCopy, withinImageLimit } from "../../utils/permissions";
 import Modal from "../../components/ui/Modal";
 import EmptyState from "../../components/ui/EmptyState";
 import PageLoader from "../../components/ui/PageLoader";
@@ -243,6 +243,8 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
   };
 
   const readyImages = images.filter((img) => img.status === "done");
+  // Matches the server: photos kept after a downgrade may stay, but no new ones beyond the limit
+  const photosOk = withinImageLimit(readyImages, perms.imageLimit, existing?.media.images);
   const uploading = images.some((img) => img.status === "uploading") || rooms.some((room) => room.images.some((img) => img.status === "uploading"));
 
   const validate = (mode) => {
@@ -265,7 +267,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
       if (!hotel && (form.bathrooms === "" || Number(form.bathrooms) < 0)) e.bathrooms = "Enter the number of bathrooms.";
       if (!(Number(form.area) > 0)) e.area = "Enter the floor area.";
       if (readyImages.length === 0) e.images = "Add at least one photo before publishing.";
-      else if (readyImages.length > perms.imageLimit) e.images = `Your ${perms.plan?.name} plan allows ${perms.imageLimit} photos per property. Remove ${readyImages.length - perms.imageLimit} to continue.`;
+      else if (!photosOk) e.images = `Your ${perms.plan?.name} plan supports ${perms.imageLimit} photos per property. Remove the new photos, or upgrade your plan to add more.`;
       if (!form.contactPhone.trim()) e.contactPhone = "Add a contact phone number.";
       if (!/^\S+@\S+\.\S+$/.test(form.contactEmail)) e.contactEmail = "Enter a valid email address.";
     }
@@ -344,7 +346,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
   // Same rules as publishing, per chapter, for the "ready to publish" checklist
   const checklist = [
     { id: "chapter-basics", label: "Listing and property type", done: Boolean(form.type) },
-    { id: "chapter-photos", label: "At least one photo", done: readyImages.length > 0 && readyImages.length <= perms.imageLimit },
+    { id: "chapter-photos", label: "At least one photo", done: readyImages.length > 0 && photosOk },
     { id: "chapter-story", label: "Title and description", done: form.title.trim().length >= 3 && form.description.trim().length >= 30 },
     { id: hotel ? "chapter-rooms" : "chapter-price", label: hotel ? "Room types and prices" : "Price", done: hotel ? activeRooms.length > 0 && hotelPrice > 0 && activeRooms.every((room) => room.name.trim() && room.description.trim() && room.images.some((img) => img.status === "done")) : Number(form.price) > 0 },
     { id: "chapter-location", label: "Address and area", done: Boolean(form.address.trim() && form.neighbourhood.trim() && form.city.trim()) },
@@ -482,7 +484,8 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
               }}
               error={errors.images}
               max={perms.imageLimit}
-              limitNote={isAdminEditor ? `${siteName} allows up to ${perms.imageLimit} photos per property.` : `${lockCopy(perms, "images").description} Upgrade your plan to add more photos.`}
+              limitNote={isAdminEditor ? `${siteName} allows up to ${perms.imageLimit} photos per property.` : lockCopy(perms, "images").description}
+              limitAction={isAdminEditor || !perms.canUpgrade ? null : { to: perms.upgradePath, label: "View Upgrade Options" }}
             />
           </Chapter>
 

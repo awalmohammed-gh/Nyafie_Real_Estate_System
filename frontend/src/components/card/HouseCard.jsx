@@ -18,7 +18,7 @@ const HouseCard = ({ house }) => {
   const unavailable = ["Sold", "Rented"].includes(house.listing?.availability);
   const identity = isAgent && !isAuthenticated ? <span className="text-xs font-medium text-brand-600">Sign in to view agent</span> : <>
     {house.agent?.profileImage && isAgent ? <img src={house.agent.profileImage} alt="" loading="lazy" className="h-8 w-8 shrink-0 rounded-full object-cover" /> : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700">{getInitials(agentName)}</span>}
-    <span className="min-w-0"><span className="block text-[10px] text-gray-500">Listed by</span><span className="flex items-center gap-1 truncate text-xs font-semibold text-gray-700">{agentName}{isAgent && house.agent?.verified && <BadgeCheck aria-label="Approved agent" className="h-3.5 w-3.5 shrink-0 text-brand-600" />}</span></span>
+    <span className="min-w-0"><span className="block text-[10px] text-gray-500">Listed by</span><span className="flex items-center gap-1 truncate text-xs font-semibold text-gray-700">{agentName}{isAgent && house.agent?.verified && <BadgeCheck aria-label="Approved agent" className="h-3.5 w-3.5 shrink-0 text-brand-600" />}</span>{isAgent && house.agent?.agency?.name && house.agent.agency.name !== agentName && <span className="block truncate text-[10px] text-gray-500">{house.agent.agency.name}</span>}</span>
   </>;
 
   return (
@@ -103,7 +103,7 @@ const HouseCard = ({ house }) => {
           )}
         </div>
         <div className="mt-4 border-t border-gray-100 pt-3">
-          {isAgent && !isAuthenticated ? <Link to="/login" state={{ from: `/house/${id}` }} className="relative z-10 flex min-h-11 items-center gap-2.5 rounded-lg hover:text-brand-600">{identity}</Link> : isAgent && house.agent?.id ? <Link to={`/agents/${house.agent.id}`} className="relative z-10 flex min-h-11 items-center gap-2.5 rounded-lg hover:text-brand-600" aria-label={`View ${agentName}'s profile`}>{identity}</Link> : <div className="flex min-h-11 items-center gap-2.5">{identity}</div>}
+          {isAgent && !isAuthenticated ? <Link to="/login" state={{ from: `/house/${id}` }} className="relative z-10 flex min-h-11 items-center gap-2.5 rounded-lg hover:text-brand-600">{identity}</Link> : isAgent && house.agent?.id ? <Link to={`/agents/${house.agent.profileId}`} className="relative z-10 flex min-h-11 items-center gap-2.5 rounded-lg hover:text-brand-600" aria-label={`View ${agentName}'s profile`}>{identity}</Link> : <div className="flex min-h-11 items-center gap-2.5">{identity}</div>}
         </div>
       </div>
     </article>

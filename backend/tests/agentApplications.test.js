@@ -176,7 +176,10 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
       assert.equal(agent.agentApplication.approvedAt.getTime(), approvedAt);
       assert.equal(id(agent.agentApplication.approvedBy), id(admin));
       assert.equal(id(agent.subscription), subscriptionId);
-      assert.equal((await call("/api/agents/profile", "agent", { ...profile, agentType: "agency" }, "PUT")).status, 400);
+      // The account type is fixed after approval (it changes only through a paid agency plan): the request is ignored
+      const typeBefore = agent.agentApplication.agentType;
+      assert.equal((await call("/api/agents/profile", "agent", { ...profile, bio: body.bio, agentType: typeBefore === "agency" ? "individual" : "agency" }, "PUT")).status, 200);
+      assert.equal(agent.agentApplication.agentType, typeBefore);
       // The fixture does not populate subscription refs; exercise public field selection with subscriptions waived.
       requireSubscription = false;
       let directory;

@@ -26,6 +26,7 @@ import { useTransactions } from "../context/useTransactions";
 import { useUnreadMessages } from "../hooks/useUnreadMessages";
 import { useUnseenReviews } from "../hooks/useUnseenReviews";
 import { usePendingApplications } from "../hooks/usePendingApplications";
+import { useAdminLiveRefresh } from "../hooks/useAdminLiveRefresh";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
 import PageLoader from "../components/ui/PageLoader";
 import NotificationBell from "../components/ui/NotificationBell";
@@ -89,6 +90,7 @@ const AdminShell = () => {
   const unreadMessages = useUnreadMessages("admin");
   const newReviews = useUnseenReviews();
   const pendingApplications = usePendingApplications();
+  useAdminLiveRefresh();
   const review = listings.filter((p) => p.listing.state === "pending").length;
 
   const badges = {

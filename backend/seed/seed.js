@@ -15,27 +15,57 @@ import { ensureAdmin } from "../utils/ensureAdmin.js";
 const DAY = 24 * 60 * 60 * 1000;
 const daysAgo = (n) => new Date(Date.now() - n * DAY);
 
+// Plans per account type. Starter plans have no HomeBase chat (inquiries, phone, email and WhatsApp still work).
 const plans = [
   {
-    name: "Starter",
-    tagline: "For new agents getting their first listings online",
-    price: 150, duration: 30, propertyLimit: 5, imageLimit: 5, featuredPropertyLimit: 0,
-    analyticsLevel: "basic", inquiryManagement: "basic", priorityVisibility: false,
+    name: "Starter", accountType: "individual",
+    tagline: "For independent agents and owners getting their first listings online",
+    price: 150, duration: 30, propertyLimit: 5, imageLimit: 2, featuredPropertyLimit: 0,
+    analyticsLevel: "basic", inquiryManagement: "basic", internalChat: false, priorityVisibility: false,
     features: ["Agent profile page", "Email support"], popular: false,
   },
   {
-    name: "Professional",
-    tagline: "For growing agents who list every month",
-    price: 400, duration: 90, propertyLimit: 20, imageLimit: 10, featuredPropertyLimit: 3,
-    analyticsLevel: "standard", inquiryManagement: "full", priorityVisibility: false,
+    name: "Professional", accountType: "individual",
+    tagline: "For serious independent agents who list every month",
+    price: 400, duration: 90, propertyLimit: 20, imageLimit: 15, featuredPropertyLimit: 3,
+    analyticsLevel: "advanced", inquiryManagement: "full", internalChat: true, priorityVisibility: true,
     features: ["Agent profile page", "Priority support"], popular: true,
   },
   {
-    name: "Premium",
-    tagline: "For established agencies and top producers",
-    price: 1400, duration: 365, propertyLimit: 50, imageLimit: 15, featuredPropertyLimit: 10,
-    analyticsLevel: "advanced", inquiryManagement: "full", priorityVisibility: true,
-    features: ["Homepage spotlight rotation", "Dedicated account manager"], popular: false,
+    name: "Agency Starter", accountType: "agency",
+    tagline: "For small agencies building their presence",
+    price: 600, duration: 30, propertyLimit: 25, imageLimit: 5, featuredPropertyLimit: 2, teamMemberLimit: 3,
+    analyticsLevel: "standard", inquiryManagement: "full", internalChat: false, priorityVisibility: false,
+    features: ["Company profile and logo", "Email support"], popular: false,
+  },
+  {
+    name: "Agency Business", accountType: "agency",
+    tagline: "For established agencies and property companies",
+    price: 1500, duration: 90, propertyLimit: 100, imageLimit: 20, featuredPropertyLimit: 10, teamMemberLimit: 15,
+    analyticsLevel: "advanced", inquiryManagement: "full", internalChat: true, priorityVisibility: true,
+    features: ["Company profile and logo", "Dedicated account manager"], popular: true,
+  },
+  // Company plans: larger organisations (developers, property managers, hotel and property operators)
+  {
+    name: "Company Starter", accountType: "company", sortOrder: 1,
+    tagline: "For registered property businesses getting started on HomeBase",
+    price: 2000, duration: 30, propertyLimit: 50, imageLimit: 15, featuredPropertyLimit: 5, teamMemberLimit: 5,
+    analyticsLevel: "advanced", inquiryManagement: "full", internalChat: true, priorityVisibility: false,
+    features: ["Company profile and logo", "Email support"], popular: false,
+  },
+  {
+    name: "Company Growth", accountType: "company", sortOrder: 2,
+    tagline: "For growing developers and property management firms",
+    price: 5000, duration: 90, propertyLimit: 150, imageLimit: 15, featuredPropertyLimit: 15, teamMemberLimit: 15,
+    analyticsLevel: "advanced", inquiryManagement: "full", internalChat: true, priorityVisibility: true,
+    features: ["Company profile and logo", "Priority support"], popular: true,
+  },
+  {
+    name: "Company Pro", accountType: "company", sortOrder: 3,
+    tagline: "For large property companies and operators",
+    price: 15000, duration: 365, propertyLimit: 500, imageLimit: 15, featuredPropertyLimit: 40, teamMemberLimit: 40,
+    analyticsLevel: "advanced", inquiryManagement: "full", internalChat: true, priorityVisibility: true,
+    features: ["Company profile and logo", "Dedicated account manager"], popular: false,
   },
 ];
 

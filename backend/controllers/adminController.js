@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { isOrganization } from "../utils/accountTypes.js";
 import User from "../models/User.js";
 import Property from "../models/Property.js";
 import Inquiry from "../models/Inquiry.js";
@@ -21,6 +22,7 @@ import { checkPropertyOptions, pickPropertyFields, validateForPublishing } from 
 import { resolveImages } from "../utils/uploadImages.js";
 import { updateInquiryStatus } from "./inquiryController.js";
 import { activateSubscription } from "./subscriptionController.js";
+import { removalImpact, removeProvider, restoreProvider, deletionPlan, permanentlyDeleteProvider } from "../utils/providerRemoval.js";
 import { ok, fail } from "../utils/response.js";
 import { prepareHotelFields, saveHotelProperty } from "../utils/hotel.js";
 
@@ -116,6 +118,35 @@ export const deleteUser = async (req, res) => {
   ok(res, null, "User deleted");
 };
 
+// ---------- Provider removal ----------
+
+// GET /api/admin/agents/:id/removal -> what removing this provider will change
+export const getRemovalImpact = async (req, res) => ok(res, await removalImpact(req.params.id));
+
+// POST /api/admin/agents/:id/remove { reason, note } -> deactivate; nothing is deleted
+export const removeAgent = async (req, res) => {
+  const result = await removeProvider(req.params.id, req.user, { reason: req.body.reason, note: req.body.note });
+  ok(res, result, `${result.name} was removed`);
+};
+
+// POST /api/admin/agents/:id/restore { republish } -> the account only, unless listings are asked for
+export const restoreAgent = async (req, res) => {
+  const result = await restoreProvider(req.params.id, req.user, { republish: req.body.republish === true });
+  ok(res, result, `${result.name} was restored`);
+};
+
+// GET /api/admin/agents/:id/deletion -> what a permanent delete would delete, anonymise and keep
+export const getDeletionPlan = async (req, res) => {
+  const { references, ...plan } = await deletionPlan(req.params.id); // eslint-disable-line no-unused-vars
+  ok(res, plan);
+};
+
+// DELETE /api/admin/agents/:id { confirm } -> permanent; only for removed providers, typed confirmation
+export const deleteAgentPermanently = async (req, res) => {
+  const result = await permanentlyDeleteProvider(req.params.id, req.user, req.body?.confirm);
+  ok(res, result, result.mode === "erase" ? `${result.name} was permanently deleted` : `${result.name}'s personal details were permanently deleted`);
+};
+
 // ---------- Agent subscriptions ----------
 
 const newReference = () => `HB-ADM-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString("hex").toUpperCase()}`;
@@ -125,6 +156,7 @@ export const manageSubscription = async (req, res) => {
   const { action, planId, days } = req.body;
   const user = await User.findById(req.params.id).populate("subscription").catch(() => null);
   if (!user || user.role !== "agent") return fail(res, 404, "Agent not found.");
+  if (user.agentApplication?.status === "removed") return fail(res, 409, "This provider was removed. Restore them before changing their plan.");
   const current = user.subscription;
 
   if (action === "changePlan") {
@@ -134,7 +166,13 @@ export const manageSubscription = async (req, res) => {
       // Keep the paid-up period; the new plan's limits apply immediately
       current.plan = plan._id;
       current.planName = plan.name;
+      current.accountType = plan.accountType;
       await current.save();
+      // An agency or company plan makes the account that type (admins assign plans deliberately)
+      if (isOrganization(plan.accountType) && user.agentApplication?.agentType !== plan.accountType) {
+        user.agentApplication.agentType = plan.accountType;
+        await user.save();
+      }
     } else {
       const subscription = await Subscription.create({
         user: user._id, plan: plan._id, planName: plan.name, amount: 0, paymentReference: newReference(), paymentMethod: "Admin",

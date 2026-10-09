@@ -7,6 +7,8 @@ import { useTransactions } from "../../context/useTransactions";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { DetailList, Panel } from "../../components/dashboard/Page";
 import PropertyQuickActions from "../../components/agent/PropertyQuickActions";
+import AssignWork from "../../components/agent/AssignWork";
+import { propertyApi } from "../../frontApi";
 import StatusBadge from "../../components/ui/StatusBadge";
 import EmptyState from "../../components/ui/EmptyState";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
@@ -57,7 +59,7 @@ const PropertyManage = () => {
   const { propertyId } = useParams();
   const navigate = useNavigate();
   const { myProperties, myInquiries, permissions: perms } = useAgent();
-  const { deleteListing, isPubliclyVisible } = useRealEstate();
+  const { deleteListing, isPubliclyVisible, refreshListings, refreshInquiries } = useRealEstate();
   const { offers, rentals, sales, loading } = useTransactions();
   const run = useAsyncAction();
   const [activeImage, setActiveImage] = useState(0);
@@ -223,6 +225,7 @@ const PropertyManage = () => {
         <div className="space-y-6">
           <Panel title="Manage listing">
             <PropertyQuickActions property={property} perms={perms} />
+            {perms.canAssignWork && <div className="mt-5 border-t border-gray-100 pt-5"><AssignWork assignedTo={property.assignedTo} canAssign assign={(memberId) => propertyApi.assignProperty(property.id, memberId)} onDone={() => { refreshListings(); refreshInquiries(); }} note="Its inquiries, chats, offers and requests go to the same person." /></div>}
           </Panel>
 
           <Panel title="Customer interest" bodyClassName="">

@@ -20,6 +20,7 @@ import rentalRoutes from "./routes/rentalRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import saleRequestRoutes from "./routes/saleRequestRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import teamRoutes from "./routes/teamRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import contactRoutes from "./routes/contactRoutes.js";
 import { listConversations } from "./controllers/chatController.js";
@@ -64,7 +65,7 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
   app.post(["/api/auth/register", "/api/auth/customer/register", "/api/auth/agent/register"], limits.register);
   app.put(["/api/auth/me/password", "/api/auth/customer/me/password", "/api/auth/agent/me/password", "/api/auth/admin/me/password", "/api/admin/account"], limits.password);
   app.use(["/api/payments", "/api/subscriptions/initialize", "/api/subscriptions/verify"], limits.payments);
-  app.post(["/api/inquiries", "/api/offers", "/api/rentals", "/api/sale-requests", "/api/conversations", "/api/properties/:id/reviews"], limits.contact);
+  app.post(["/api/inquiries", "/api/offers", "/api/rentals", "/api/sale-requests", "/api/conversations", "/api/properties/:id/reviews", "/api/team/invites/:token/accept"], limits.contact);
 
   app.use("/api/auth", authRoutes);
   app.use("/api/users", userRoutes);
@@ -81,6 +82,7 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
   app.use("/api/payments", paymentRoutes);
   app.use("/api/sale-requests", saleRequestRoutes);
   app.use("/api/notifications", notificationRoutes);
+  app.use("/api/team", teamRoutes);
   app.use("/api/reviews", reviewRoutes);
   app.use("/api/contact", contactRoutes);
   app.use("/api/uploads", uploadRoutes);
