@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import express from "express";
 import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
+import { customerTabClaims, customerTabHeaders } from "./support/customerTab.js";
 import User from "../models/User.js";
 import Property from "../models/Property.js";
 import Setting from "../models/Setting.js";
@@ -38,9 +39,9 @@ test("agent directory and listing identities require a valid selected session", 
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const token = (user, session) => jwt.sign({ id: String(user._id), role: user.role, session }, process.env.JWT_KEY, { expiresIn: "1h" });
+  const token = (user, session) => jwt.sign({ id: String(user._id), role: user.role, session, ...customerTabClaims(session) }, process.env.JWT_KEY, { expiresIn: "1h" });
   const customerCookie = `customer_token=${token(customer, "customer")}`;
-  const call = (path, cookie, domain = "customer") => fetch(`${base}${path}`, { headers: { "X-Session-Domain": domain, ...(cookie ? { Cookie: cookie } : {}) } });
+  const call = (path, cookie, domain = "customer") => fetch(`${base}${path}`, { headers: { ...customerTabHeaders(domain), "X-Session-Domain": domain, ...(cookie ? { Cookie: cookie } : {}) } });
   try {
     await t.test("guest, forged and expired sessions cannot download the directory", async () => {
       for (const cookie of [undefined, "customer_token=invalid", `customer_token=${jwt.sign({ id: String(customer._id), role: "user", session: "customer" }, process.env.JWT_KEY, { expiresIn: -1 })}`]) {

@@ -4,6 +4,31 @@ The existing React/Express/MongoDB app connects customers to the agent who owns 
 listing. Existing platform-owned listings remain identified as platform listings.
 No existing data needs a destructive migration.
 
+## Authentication and customer tab sessions
+
+- Customer login and registration require `X-Customer-Tab`, a random 32-byte
+  secret encoded as 64 lowercase hexadecimal characters. The frontend stores it
+  only in `sessionStorage`. The HTTP-only customer cookie contains its SHA-256
+  hash, never the raw secret. Protected and optional customer authentication both
+  verify the proof; a cookie alone cannot restore a customer identity in a new tab.
+- Customer cookies have no persistent expiry attribute. Their signed JWT expires
+  after two hours. Existing customer cookies without a tab binding require a new
+  login. A same-tab refresh keeps the proof; logout removes it. A new tab with no
+  proof is rejected without clearing another tab's working shared cookie.
+- Browser restore and tab duplication can preserve or copy session storage.
+  Tab closure is not a reliable server event, so this is not a guarantee of
+  immediate server-side revocation on every kind of browser restore. Explicit
+  sign-out clears the cookie and proof; the JWT expiry remains enforced server-side.
+- Customer and agent login routes share a limit of five attempts per normalized
+  email/network in 15 minutes, plus 40 per network and 20 per email across networks.
+  Admin login remains five per email/network and 20 per network. Password-change
+  attempts are limited to five per network in 15 minutes. Limits count all attempts,
+  including successful ones; HTTP 429 includes `Retry-After`.
+- Production counters use shared atomic MongoDB buckets; development counters are
+  in memory. Authentication and protected responses use `private, no-store`.
+  Password changes continue revoking earlier tokens through `sessionVersion`.
+  Agent and admin cookie lifetimes and role isolation remain unchanged.
+
 ## Ownership and public identity
 
 - Agent posting routes require an approved, active account and a paid or waived,

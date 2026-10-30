@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import express from "express";
 import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
+import { customerTabClaims, customerTabHeaders } from "./support/customerTab.js";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import Plan from "../models/Plan.js";
@@ -93,8 +94,8 @@ test("removing a provider ends access and public presence, keeps history; perman
   t.after(() => server.close());
   const base = `http://127.0.0.1:${server.address().port}/api`;
   const call = async (session, user, method, path, body) => {
-    const headers = { "Content-Type": "application/json", "X-Session-Domain": session };
-    if (user) headers.Cookie = `${session}_token=${jwt.sign({ id: String(user._id), role: session === "customer" ? "user" : session, session }, process.env.JWT_KEY, { expiresIn: "1h" })}`;
+    const headers = { ...customerTabHeaders(session), "Content-Type": "application/json", "X-Session-Domain": session };
+    if (user) headers.Cookie = `${session}_token=${jwt.sign({ id: String(user._id), role: session === "customer" ? "user" : session, session, ...customerTabClaims(session) }, process.env.JWT_KEY, { expiresIn: "1h" })}`;
     const response = await fetch(`${base}${path}`, { method, headers, body: body && JSON.stringify(body) });
     return { status: response.status, body: await response.json() };
   };

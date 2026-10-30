@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import express from "express";
 import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
+import { customerTabClaims, customerTabHeaders } from "./support/customerTab.js";
 import mongoose from "mongoose";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
@@ -54,8 +55,8 @@ const setup = async (t) => {
   const sessions = { user: "customer", agent: "agent", admin: "admin" };
   const as = (user) => {
     const session = sessions[user.role];
-    const cookie = `${session}_token=${jwt.sign({ id: String(user._id), role: user.role, session }, process.env.JWT_KEY, { expiresIn: "1h" })}`;
-    return (method, path = "", body) => fetch(`${base}${path}`, { method, headers: { Cookie: cookie, "X-Session-Domain": session, ...(body ? { "Content-Type": "application/json" } : {}) }, body: body && JSON.stringify(body) });
+    const cookie = `${session}_token=${jwt.sign({ id: String(user._id), role: user.role, session, ...customerTabClaims(session) }, process.env.JWT_KEY, { expiresIn: "1h" })}`;
+    return (method, path = "", body) => fetch(`${base}${path}`, { method, headers: { ...customerTabHeaders(session), Cookie: cookie, "X-Session-Domain": session, ...(body ? { "Content-Type": "application/json" } : {}) }, body: body && JSON.stringify(body) });
   };
   return { users: { customer, other, agent, admin }, notes: { mine1, mine2, mine3, others, agents, shared }, as, all: () => docs, base };
 };

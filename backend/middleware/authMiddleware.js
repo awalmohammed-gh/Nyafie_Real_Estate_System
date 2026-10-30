@@ -3,6 +3,7 @@ import User from "../models/User.js";
 import { SESSION_ROLES, cookieName, clearAuthCookie } from "../utils/generateToken.js";
 import { fail } from "../utils/response.js";
 import { approvedAgent, isRemoved } from "../utils/agentApplication.js";
+import { CUSTOMER_TAB_HEADER, matchesCustomerTab, validTabSecret } from "../utils/customerTabSession.js";
 
 const userFromCookie = async (req, session) => {
   const token = req.cookies?.[cookieName(session)];
@@ -14,6 +15,12 @@ const userFromCookie = async (req, session) => {
     return null;
   }
   if (payload.session !== session || payload.role !== SESSION_ROLES[session] || !/^[a-f\d]{24}$/i.test(payload.id || "")) return null;
+  if (session === "customer" && !validTabSecret(payload.tabHash)) return null;
+  if (session === "customer" && !matchesCustomerTab(payload, req.get(CUSTOMER_TAB_HEADER))) {
+    // A new tab must not erase the shared cookie used by an already signed-in tab.
+    req.customerTabMismatch = true;
+    return null;
+  }
   // Current account role/status matter too: demotion, suspension and removal take effect immediately.
   // A removed provider's existing token stops working on its next request.
   const user = await User.findById(payload.id).select("+sessionVersion");
@@ -35,12 +42,13 @@ export const viewerSessions = async (req, _res, next) => {
 // On shared resources the header selects a domain; it never proves identity.
 // Only that domain's cookie, signed claims and current account role do so.
 const sessionGuard = (allowApplicant, ...allowed) => async (req, res, next) => {
+  res.set("Cache-Control", "private, no-store");
   const session = req.sessionDomain || req.get("X-Session-Domain") || allowed[0];
   if (!allowed.includes(session)) return fail(res, 403, "This session cannot access this area.");
   try {
     const user = req.user && req.sessionDomain === session ? req.user : await userFromCookie(req, session);
     if (!user) {
-      if (req.cookies?.[cookieName(session)]) clearAuthCookie(res, session);
+      if (req.cookies?.[cookieName(session)] && !(session === "customer" && req.customerTabMismatch)) clearAuthCookie(res, session);
       return fail(res, 401, "Please sign in to this area to continue.");
     }
     req.user = user;
@@ -61,7 +69,8 @@ export const protect = protectSessions("customer", "agent", "admin");
 export const protectOwner = protectSessions("agent", "admin");
 export const protectSubscriber = sessionGuard(true, "customer", "agent");
 
-export const optionalAuth = async (req, _res, next) => {
+export const optionalAuth = async (req, res, next) => {
+  res.set("Cache-Control", "private, no-store");
   const session = req.get("X-Session-Domain") || "customer";
   if (!Object.hasOwn(SESSION_ROLES, session)) return next();
   try {

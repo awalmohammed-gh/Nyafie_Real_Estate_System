@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
+import { customerTabClaims, customerTabHeaders } from "./support/customerTab.js";
 import { createApp } from "../app.js";
 import User from "../models/User.js";
 import Property from "../models/Property.js";
@@ -24,7 +25,7 @@ test("rental payments recover without a browser callback using signed webhooks a
   await new Promise((done) => server.once("listening", done));
   t.after(() => new Promise((done) => server.close(done)));
   const base = `http://127.0.0.1:${server.address().port}/api`;
-  const token = jwt.sign({ id: customer.id, role: "user", session: "customer" }, process.env.JWT_KEY);
+  const token = jwt.sign({ id: customer.id, role: "user", session: "customer", ...customerTabClaims("customer") }, process.env.JWT_KEY);
   const realFetch = globalThis.fetch;
   const provider = new Map();
   t.mock.method(globalThis, "fetch", async (url, options) => {
@@ -37,7 +38,7 @@ test("rental payments recover without a browser callback using signed webhooks a
     return { json: async () => ({ status: true, data: { status: "success", reference, amount: Math.round(payment.amount * 100), currency: "GHS", ...changes } }) };
   });
   const api = async (path, body) => {
-    const response = await fetch(`${base}${path}`, { method: body ? "POST" : "GET", headers: { "Content-Type": "application/json", "X-Session-Domain": "customer", Cookie: `customer_token=${token}` }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    const response = await fetch(`${base}${path}`, { method: body ? "POST" : "GET", headers: { ...customerTabHeaders(), "Content-Type": "application/json", "X-Session-Domain": "customer", Cookie: `customer_token=${token}` }, ...(body ? { body: JSON.stringify(body) } : {}) });
     const payload = await response.json();
     return { ...payload, code: response.status, body: payload };
   };

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import jwt from "jsonwebtoken";
+import { customerTabClaims, customerTabHeaders } from "./support/customerTab.js";
 import User from "../models/User.js";
 import { cloudinary } from "../config/cloudinary.js";
 import { createApp } from "../app.js";
@@ -41,10 +42,10 @@ test("customer profile photos use authenticated HTTP uploads and persist through
   await new Promise((resolve) => server.once("listening", resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const cookie = (account, session = "customer") => `${session}_token=${jwt.sign({ id: String(account._id), role: account.role, session }, env.JWT_KEY, { expiresIn: "1h" })}`;
+  const cookie = (account, session = "customer") => `${session}_token=${jwt.sign({ id: String(account._id), role: account.role, session, ...customerTabClaims(session) }, env.JWT_KEY, { expiresIn: "1h" })}`;
   const call = (method, path, { account = customer, session = "customer", body, origin = env.CLIENT_URL, cookies } = {}) => fetch(base + path, {
     method,
-    headers: { Origin: origin, "X-Session-Domain": session, ...(cookies ? { Cookie: cookies } : account ? { Cookie: cookie(account, session) } : {}), ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
+    headers: { ...customerTabHeaders(session), Origin: origin, "X-Session-Domain": session, ...(cookies ? { Cookie: cookies } : account ? { Cookie: cookie(account, session) } : {}), ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   const photoPath = "/api/auth/customer/me/photo";

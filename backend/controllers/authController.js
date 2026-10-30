@@ -4,6 +4,7 @@ import { setAuthCookie, clearAuthCookie } from "../utils/generateToken.js";
 import { ok, fail } from "../utils/response.js";
 import { notifyAdmins } from "../utils/notify.js";
 import { onboardingState, validPhone } from "../utils/agentApplication.js";
+import { CUSTOMER_TAB_HEADER, validTabSecret } from "../utils/customerTabSession.js";
 
 const isEmail = (value) => typeof value === "string" && value.length <= 254 && /^\S+@\S+\.\S+$/.test(value.trim());
 const text = (value) => (typeof value === "string" ? value.trim() : "");
@@ -36,6 +37,7 @@ export const loadUser = async (id) => {
 
 // POST /api/auth/register
 export const register = async (req, res) => {
+  if (!validTabSecret(req.get(CUSTOMER_TAB_HEADER))) return fail(res, 400, "Reload this tab to start a secure sign-in session.");
   const { email, password } = req.body;
   const firstName = text(req.body.firstName);
   const lastName = text(req.body.lastName);
@@ -63,7 +65,7 @@ export const register = async (req, res) => {
     password,
     role: "user",
   });
-  setAuthCookie(res, user._id, "customer", user.sessionVersion);
+  setAuthCookie(res, user._id, "customer", user.sessionVersion, req.get(CUSTOMER_TAB_HEADER));
   notifyAdmins({
     type: "user",
     title: "New account",
@@ -141,6 +143,7 @@ const checkCredentials = async (email, password) => {
 
 // Each login authenticates only the role named by its route.
 export const loginFor = (session) => async (req, res) => {
+  if (session === "customer" && !validTabSecret(req.get(CUSTOMER_TAB_HEADER))) return fail(res, 400, "Reload this tab to start a secure sign-in session.");
   const user = await checkCredentials(req.body.email, req.body.password);
   const role = session === "customer" ? "user" : session;
   if (!user || user.role !== role || (session !== "agent" && !user.isActive))
@@ -148,7 +151,7 @@ export const loginFor = (session) => async (req, res) => {
   // Removed providers: a plain message, never the internal reason
   if (user.agentApplication?.status === "removed")
     return fail(res, 403, "Your provider account is no longer active. Contact HomeBase support if you believe this is an error.");
-  setAuthCookie(res, user._id, session, user.sessionVersion);
+  setAuthCookie(res, user._id, session, user.sessionVersion, req.get(CUSTOMER_TAB_HEADER));
   ok(res, await loadUser(user._id), "Signed in");
 };
 export const login = loginFor("customer");
@@ -196,6 +199,6 @@ export const changePassword = async (req, res) => {
   if (problem) return fail(res, 400, problem.replace("your password", "your new password"));
   user.password = newPassword;
   await user.save();
-  setAuthCookie(res, user._id, req.sessionDomain, user.sessionVersion);
+  setAuthCookie(res, user._id, req.sessionDomain, user.sessionVersion, req.get(CUSTOMER_TAB_HEADER));
   ok(res, null, "Password updated. Other sessions have been signed out.");
 };
