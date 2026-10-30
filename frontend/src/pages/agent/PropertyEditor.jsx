@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { motion } from "motion/react";
-import { AlertCircle, ArrowLeft, Bath, Bed, Check, Eye, ImagePlus, KeyRound, Loader2, MapPin, Maximize2, Minus, Plus, Save, Send, Tag } from "lucide-react";
+import { AlertCircle, ArrowLeft, Bath, Bed, Building2, Check, Eye, ImagePlus, KeyRound, Loader2, MapPin, Maximize2, Minus, Plus, Save, Send, Tag } from "lucide-react";
 import { useAgent } from "../../hooks/useAgent";
 import { useRealEstate } from "../../context/useRealEstate";
 import { usePlatform } from "../../context/usePlatform";
@@ -90,15 +90,15 @@ const FieldError = ({ children }) => (
 
 // A numbered chapter of the listing: big numeral, title and why it matters, then the fields
 const Chapter = ({ id, number, title, description, children }) => (
-  <motion.section id={id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: "easeOut" }} className="scroll-mt-32">
-    <div className="mb-4 flex items-baseline gap-4">
+  <motion.section id={id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: "easeOut" }} className="property-editor-chapter scroll-mt-32">
+    <div className="property-editor-chapter-heading mb-4 flex items-baseline gap-4">
       <span className="font-mono text-sm font-semibold text-brand-500 tabular-nums">{number}</span>
       <div className="min-w-0">
         <h2 className="text-lg font-semibold tracking-tight text-gray-900">{title}</h2>
         {description && <p className="text-sm text-gray-500">{description}</p>}
       </div>
     </div>
-    <div className="sm:pl-10">{children}</div>
+    <div className="property-editor-chapter-content sm:pl-10">{children}</div>
   </motion.section>
 );
 
@@ -354,30 +354,34 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
     { id: "chapter-contact", label: "Contact details", done: Boolean(form.contactPhone.trim()) && /^\S+@\S+\.\S+$/.test(form.contactEmail) },
   ];
   const readyCount = checklist.filter((c) => c.done).length;
-  const jumpTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const adminSections = [...checklist.slice(0, 4), { id: "chapter-visibility", done: false, optional: true }, ...checklist.slice(4)];
+  const jumpTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
   const availabilityOptions = ["Available", "Under Offer", form.listingType === "Sale" ? "Sold" : "Rented"];
   const statusChip = !existing ? "New listing" : { draft: "Draft", pending: "In review", published: "Published", rejected: "Rejected", suspended: "Hidden" }[existing.listing.state] || "Draft";
   const previewPrice = getPriceParts(preview);
+  const hasPreviewPrice = hotel ? hotelPrice > 0 : Number(form.price) > 0;
   let chapter = 0;
   const next = () => String(++chapter).padStart(2, "0");
 
   return (
     <>
       {/* Header */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className={`mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between ${isAdminEditor ? "ape-heading" : ""}`}>
         <div className="min-w-0">
           <Link to={basePath} className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition hover:text-brand-600">
             <ArrowLeft className="h-4 w-4" />
             {isAdminEditor ? "Properties" : "My Properties"}
           </Link>
+          {isAdminEditor && <p className="ape-eyebrow">YOUR NEXT LISTING STARTS HERE</p>}
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">{isEdit ? "Edit listing" : "New listing"}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">{isAdminEditor ? isEdit ? "Edit property" : "Add a property" : isEdit ? "Edit listing" : "New listing"}</h1>
             <span className="rounded-full bg-gray-900 px-2.5 py-0.5 text-xs font-semibold text-white">{statusChip}</span>
           </div>
           <p className="mt-1 text-sm text-gray-500">
-            {isEdit ? existing.title : isAdminEditor ? `A ${siteName} listing. It is published straight away, with no plan limits.` : needsReview ? `Save a draft at any time. When you submit, ${siteName} reviews the listing before it goes live.` : "Save a draft at any time, or publish when every section is ready."}
+            {isEdit ? existing.title : isAdminEditor ? "Give your property a great first impression. Save a draft, or publish when every detail is ready." : needsReview ? `Save a draft at any time. When you submit, ${siteName} reviews the listing before it goes live.` : "Save a draft at any time, or publish when every section is ready."}
           </p>
         </div>
+        {isAdminEditor && <div className="ape-platform"><span><Building2 size={19} aria-hidden="true" /></span><div><strong>{siteName}</strong><small>Platform listing</small></div></div>}
       </div>
 
       {existing?.listing.state === "rejected" && existing.listing.rejectionReason && (
@@ -403,8 +407,9 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
       )}
 
       {/* Progress on small screens (the checklist sits beside the form on large ones) */}
+      {isAdminEditor && <nav className="ape-section-nav" aria-label="Property sections"><div className="ape-section-nav-heading"><p>Build your listing</p><span>{readyCount} of {checklist.length} required sections ready</span></div><ol>{adminSections.map((item, index) => <li key={item.id}><button type="button" onClick={() => jumpTo(item.id)} aria-label={item.optional ? "Visibility (optional)" : undefined} className={item.done ? "is-complete" : item.optional ? "is-optional" : ""}><span>{item.done ? <Check size={12} aria-hidden="true" /> : String(index + 1).padStart(2, "0")}</span>{({ "chapter-basics": "Property", "chapter-photos": "Photos", "chapter-story": "Description", "chapter-price": "Pricing", "chapter-rooms": "Room types", "chapter-visibility": "Visibility", "chapter-location": "Location", "chapter-details": "Details", "chapter-contact": "Contact" })[item.id]}</button></li>)}</ol></nav>}
       {!isAdminEditor && <nav aria-label="Listing sections" className="workspace-toolbar mb-6"><div className="flex items-center justify-between gap-3"><p className="workspace-eyebrow">Build your listing</p><span className="text-xs text-gray-500">{readyCount} of {checklist.length} ready</span></div><div className="mt-3 flex gap-2 overflow-x-auto pb-1">{checklist.map((c, index) => <button key={c.id} type="button" onClick={() => jumpTo(c.id)} className={`inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${c.done ? "border-brand-200 bg-brand-50 text-brand-700" : "border-gray-200 bg-white text-gray-500"}`}><span className="grid h-4 w-4 place-items-center">{c.done ? <Check className="h-3 w-3" /> : index + 1}</span>{c.label}</button>)}</div></nav>}
-      <div className="sticky top-14 z-20 -mx-4 mb-6 border-b border-gray-200 bg-gray-50/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 xl:hidden">
+      <div className={`sticky top-14 z-20 -mx-4 mb-6 border-b border-gray-200 bg-gray-50/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 xl:hidden ${isAdminEditor ? "ape-mobile-progress" : ""}`}>
         <div className="flex items-center justify-between text-xs">
           <span className="font-medium text-gray-700">Ready to publish</span>
           <span className="text-gray-500 tabular-nums">{readyCount} of {checklist.length}</span>
@@ -414,8 +419,8 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
         </div>
       </div>
 
-      <form onSubmit={(e) => e.preventDefault()} className="grid gap-8 pb-28 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]" noValidate>
-        <div className="min-w-0 space-y-10">
+      <form onSubmit={(e) => e.preventDefault()} className={`grid gap-8 pb-28 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem] ${isAdminEditor ? "ape-layout" : ""}`} noValidate>
+        <div className={`min-w-0 space-y-10 ${isAdminEditor ? "ape-fields" : ""}`}>
           {/* 01 What are you listing */}
           <Chapter id="chapter-basics" number={next()} title="What are you listing?" description="Customers filter by these first.">
             <div role="radiogroup" aria-label="Listing type" className="grid grid-cols-2 gap-3">
@@ -535,7 +540,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
           </Chapter>}
 
           {isAdminEditor && (
-            <Chapter number={next()} title="Visibility" description={`${siteName} listings skip review and plan limits.`}>
+            <Chapter id="chapter-visibility" number={next()} title="Visibility" description="Give a featured property a little more visibility in the marketplace.">
               <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-4">
                 <span>
                   <span className="block text-sm font-semibold text-gray-900">Featured listing</span>
@@ -649,7 +654,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
         </div>
 
         {/* Live listing card + checklist */}
-        <aside className="hidden xl:block">
+        <aside className={`hidden xl:block ${isAdminEditor ? "ape-sidebar" : ""}`}>
           <div className="sticky top-20 space-y-4">
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
               <p className="flex items-center gap-1.5 border-b border-gray-100 px-4 py-2.5 text-xs font-medium text-gray-500">
@@ -670,8 +675,8 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
               </div>
               <div className="p-4">
                 <p className="text-xl font-semibold tracking-tight text-gray-900 tabular-nums">
-                  {Number(form.price) > 0 ? previewPrice.value : "₵ —"}
-                  {Number(form.price) > 0 && <span className="text-sm font-medium text-gray-500">{previewPrice.period}</span>}
+                  {hasPreviewPrice ? previewPrice.value : "₵ —"}
+                  {hasPreviewPrice && <span className="text-sm font-medium text-gray-500">{previewPrice.period}</span>}
                 </p>
                 <p className={`mt-0.5 truncate text-sm font-semibold ${form.title.trim() ? "text-gray-900" : "text-gray-400"}`}>{form.title.trim() || "Your listing title"}</p>
                 <p className="mt-1 flex items-center gap-1 truncate text-xs text-gray-500">
@@ -689,7 +694,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
 
             <div className="rounded-xl border border-gray-200 bg-white p-4">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-gray-900">Ready to publish</p>
+                <p className="text-sm font-semibold text-gray-900">{isAdminEditor ? "Listing checklist" : "Ready to publish"}</p>
                 <p className="text-xs text-gray-500 tabular-nums">{readyCount} of {checklist.length}</p>
               </div>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100">
@@ -718,7 +723,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
         </aside>
 
         {/* Sticky action bar */}
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur lg:left-(--sidebar-width)">
+        <div className={`fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur lg:left-(--sidebar-width) ${isAdminEditor ? "ape-actions" : ""}`}>
           <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8">
             <p className="hidden text-sm text-gray-500 md:block">
               {uploading ? "Waiting for photos to finish uploading..." : readyCount === checklist.length ? "Everything's ready." : `${checklist.length - readyCount} ${checklist.length - readyCount === 1 ? "section" : "sections"} left before you can ${needsReview ? "submit" : "publish"}. Drafts can be saved anytime.`}

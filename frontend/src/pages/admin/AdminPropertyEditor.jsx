@@ -5,6 +5,7 @@ import { PropertyEditorForm } from "../agent/PropertyEditor";
 import EmptyState from "../../components/ui/EmptyState";
 import PageLoader from "../../components/ui/PageLoader";
 import { usePlatform } from "../../context/usePlatform";
+import "./adminPropertyEditor.css";
 
 // Add / edit HomeBase (admin-owned) listings with the shared property form.
 // Agent listings are moderated from the Properties page instead.
@@ -25,7 +26,7 @@ const AdminPropertyEditor = () => {
       />
     );
   }
-  return <PropertyEditorForm key={propertyId || "new"} existing={existing} isEdit={Boolean(propertyId)} variant="admin" />;
+  return <div className="admin-property-editor"><PropertyEditorForm key={propertyId || "new"} existing={existing} isEdit={Boolean(propertyId)} variant="admin" /></div>;
 };
 
 export default AdminPropertyEditor;

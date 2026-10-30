@@ -5,7 +5,7 @@ import DataTable from "../../components/ui/DataTable";
 import FilterTabs from "../../components/ui/FilterTabs";
 import SearchInput from "../../components/ui/SearchInput";
 import StatusBadge from "../../components/ui/StatusBadge";
-import SidePanel from "../../components/ui/SidePanel";
+import AdminRecordModal from "../../components/admin/AdminRecordModal";
 import EmptyState from "../../components/ui/EmptyState";
 import { ErrorState, TableSkeleton } from "../../components/dashboard/States";
 import { useApiQuery } from "../../hooks/useApiQuery";
@@ -63,9 +63,9 @@ const AdminContactMessages = () => {
           {data.pages > 1 && <div className="mt-4 flex items-center justify-between gap-3 text-xs text-gray-500"><span>Page {data.page} of {data.pages} · {data.total} messages</span><div className="flex gap-2"><button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage((value) => value - 1)} className="grid h-10 w-10 place-items-center rounded-lg border border-gray-200 disabled:opacity-40"><ChevronLeft size={18} /></button><button type="button" aria-label="Next page" disabled={page >= data.pages} onClick={() => setPage((value) => value + 1)} className="grid h-10 w-10 place-items-center rounded-lg border border-gray-200 disabled:opacity-40"><ChevronRight size={18} /></button></div></div>}
         </div>
       )}
-      <SidePanel open={Boolean(open)} onClose={() => !busy && setOpen(null)} title={open?.subject || "Contact message"} description={open ? `Received ${formatDate(open.createdAt)}` : ""} footer={open && <>{open.phone && <a href={`tel:${open.phone.replace(/[^\d+]/g, "")}`} className="btn btn-light"><Phone size={16} />Call sender</a>}<a href={`mailto:${encodeURIComponent(open.email)}?subject=${encodeURIComponent(`Re: ${open.subject}`)}`} className="btn btn-primary"><Mail size={16} />Reply by email</a></>}>
+      <AdminRecordModal open={Boolean(open)} onClose={() => !busy && setOpen(null)} title={open?.subject || "Contact message"} description={open ? `Received ${formatDate(open.createdAt)}` : ""} footer={open && <>{open.phone && <a href={`tel:${open.phone.replace(/[^\d+]/g, "")}`} className="btn btn-light"><Phone size={16} />Call sender</a>}<a href={`mailto:${encodeURIComponent(open.email)}?subject=${encodeURIComponent(`Re: ${open.subject}`)}`} className="btn btn-primary"><Mail size={16} />Reply by email</a></>}>
         {open && <div className="space-y-6"><dl className="grid gap-4 rounded-xl bg-gray-50 p-4 text-sm">{[["From", open.name], ["Email", open.email], ["Phone", open.phone || "Not provided"]].map(([label, value]) => <div key={label}><dt className="text-gray-500">{label}</dt><dd className="font-medium break-words text-gray-900">{value}</dd></div>)}</dl><p className="text-sm leading-7 whitespace-pre-wrap break-words text-gray-700">{open.message}</p><div><h2 className="mb-3 text-sm font-semibold">Message status</h2><div role="group" aria-label="Message status" className="grid grid-cols-2 gap-2">{Object.entries(STATUSES).map(([key, label]) => <button key={key} type="button" disabled={busy} aria-pressed={open.status === key} onClick={() => changeStatus(key)} className={`rounded-lg border px-3 py-2.5 text-sm font-medium disabled:opacity-50 ${open.status === key ? "border-brand-200 bg-brand-50 text-brand-800" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>{label}</button>)}</div></div></div>}
-      </SidePanel>
+      </AdminRecordModal>
     </>
   );
 };
