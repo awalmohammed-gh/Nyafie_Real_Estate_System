@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AlertCircle, ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Heart, House, MapPin, Search, SlidersHorizontal, X } from "lucide-react";
+import { AlertCircle, ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Heart, House, KeyRound, RotateCcw, Search, SlidersHorizontal, Tag, X } from "lucide-react";
 import HouseCard from "./card/HouseCard";
 import ListingsBanner from "./property/ListingsBanner";
 import SkeletonGrid from "./ui/SkeletonGrid";
@@ -12,9 +12,10 @@ import { usePlatform } from "../context/usePlatform";
 import { propertyApi } from "../frontApi";
 import { formatType } from "../utils/property";
 import "./property/catalogue.css";
+import "./property/catalogueSearch.css";
 
 const PAGE_SIZE = 9;
-const INTENTS = [{ value: "", label: "All homes" }, { value: "Sale", label: "Buy" }, { value: "Rent", label: "Rent" }];
+const INTENTS = [{ value: "", label: "All homes", icon: House }, { value: "Sale", label: "Buy", icon: Tag }, { value: "Rent", label: "Rent", icon: KeyRound }];
 const SORTS = [
   { value: "", label: "Recommended" }, { value: "latest", label: "Newest first" },
   { value: "priceAsc", label: "Price: low to high" }, { value: "priceDesc", label: "Price: high to low" },
@@ -98,12 +99,12 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner }) => {
         <div className="container-page catalogue-controls-inner">
           <fieldset className="catalogue-intents">
             <legend className="sr-only">I’m looking to</legend>
-            {INTENTS.map(({ value, label }) => {
+            {INTENTS.map(({ value, label, icon: Icon }) => {
               const count = value === "Sale" ? allFacets.data?.sale : value === "Rent" ? allFacets.data?.rent : allFacets.data?.total;
               return (
                 <label key={label} className={`catalogue-intent ${filters.listingType === value ? "is-active" : ""}`}>
                   <input type="radio" className="sr-only" name="catalogue-intent" value={value} checked={filters.listingType === value} onChange={() => changeIntent(value)} />
-                  {label}{count !== undefined && <small>{count}</small>}
+                  <Icon size={15} aria-hidden="true" />{label}{count !== undefined && <small>{count}</small>}
                 </label>
               );
             })}
@@ -122,9 +123,14 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner }) => {
       <div className="container-page catalogue-layout">
         <aside className="catalogue-sidebar" aria-label="Property filters">
           <div className="catalogue-sidebar-inner">
-            <div className="catalogue-sidebar-heading"><h2>Refine your search</h2>{hasFilters && <button type="button" onClick={clear} className="catalogue-reset">Reset</button>}</div>
+            <div className="catalogue-sidebar-heading">
+              <div className="catalogue-filter-intro"><span className="catalogue-filter-emblem"><SlidersHorizontal size={20} aria-hidden="true" /></span><span className="catalogue-eyebrow">A HOME THAT FITS YOU</span></div>
+              <div className="catalogue-filter-title"><h2>Find your fit<span>.</span></h2><button type="button" onClick={clear} className="catalogue-reset" disabled={!hasFilters} aria-label="Reset filters"><RotateCcw size={13} aria-hidden="true" />Reset</button></div>
+              <p>Choose the details that make a place yours.</p>
+              {activeFilters.length > 0 && <span className="catalogue-filter-applied">{activeFilters.length} {activeFilters.length === 1 ? "filter" : "filters"} applied</span>}
+            </div>
             <PropertyFilterPanel filters={filters} update={update} facets={facets} />
-            <div className="catalogue-sidebar-note"><MapPin size={16} aria-hidden="true" /><p>A new address.<br />A fresh perspective.</p></div>
+            <Link to={paths.agents} className="catalogue-sidebar-note"><span>KNOW THE NEIGHBOURHOOD</span><strong>A little local insight?</strong><p>Connect with an agent who knows the area.</p><span className="catalogue-agent-link">Explore agents<ArrowUpRight size={16} aria-hidden="true" /></span></Link>
           </div>
         </aside>
 
