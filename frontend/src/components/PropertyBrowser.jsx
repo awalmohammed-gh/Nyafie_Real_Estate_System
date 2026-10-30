@@ -104,7 +104,7 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner }) => {
               return (
                 <label key={label} className={`catalogue-intent ${filters.listingType === value ? "is-active" : ""}`}>
                   <input type="radio" className="sr-only" name="catalogue-intent" value={value} checked={filters.listingType === value} onChange={() => changeIntent(value)} />
-                  <Icon size={15} aria-hidden="true" />{label}{count !== undefined && <small>{count}</small>}
+                  <Icon size={15} aria-hidden="true" /><span className="catalogue-intent-label">{label}</span>{count !== undefined && <small>{count}</small>}
                 </label>
               );
             })}
