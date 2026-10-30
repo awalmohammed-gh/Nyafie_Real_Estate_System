@@ -49,6 +49,7 @@ const rentalSchema = new mongoose.Schema(
 );
 
 rentalSchema.index({ hotelId: 1, roomTypeId: 1, status: 1, startDate: 1, endDate: 1 });
+rentalSchema.index({ property: 1, status: 1, startDate: 1, endDate: 1 });
 // Hotel terminology over the shared, existing rental/payment ledger.
 for (const [alias, field] of Object.entries({ customerId: "customer", checkIn: "startDate", checkOut: "endDate", guests: "occupants", pricePerNight: "unitPrice", numberOfNights: "units", totalAmount: "amount", bookingStatus: "status" })) {
   rentalSchema.virtual(alias).get(function () { return this.hotelId ? this[field] : undefined; });

@@ -25,10 +25,11 @@ export const isOwnListing = (property, user) =>
   (property.ownerType === "agent" && user.role === "agent" && same(property.owner, teamOf(user).ownerId)) || (property.ownerType === "admin" && user.role === "admin");
 
 // A published property, or null. Owner, price and listing type always come from here, never from the request.
-export const loadPublishedProperty = async (id) => {
+export const loadPublishedProperty = async (id, { session } = {}) => {
   if (!mongoose.isValidObjectId(id)) return null;
   const { query } = await publicQuery();
-  return Property.findOne({ _id: id, ...query });
+  const property = Property.findOne({ _id: id, ...query });
+  return session ? property.session(session) : property;
 };
 
 export const ownerName = (record) =>

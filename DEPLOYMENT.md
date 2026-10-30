@@ -1,6 +1,6 @@
 # HomeBase deployment guide
 
-HomeBase remains a Vite 8 / React 19 SPA with React Router 7, an Express 5 API, Mongoose 9 / MongoDB, Cloudinary images, and Paystack **test** payments. No Next.js migration is required. The canonical production origin is **https://real-estate-home-phi.vercel.app**.
+HomeBase remains a Vite 8 / React 19 SPA with React Router 7, an Express 5 API, Mongoose 9 / MongoDB, Cloudinary images, and Paystack **test** payments. No Next.js migration is required. The canonical production origin is **https://nyafie.vercel.app**.
 
 The repository is prepared for deployment. No Vercel production deployment or production browser/payment verification has been performed in this session. Local checks and the remaining production checks are listed below.
 
@@ -30,20 +30,25 @@ Both `.env.example` files contain empty assignments only. Actual local `.env` fi
 | `NODE_ENV` | Yes | `production` |
 | `MONGODB_URI` | Yes | Production Atlas connection string for a dedicated HomeBase database user. Include the intended database in the URI or set `MONGODB_DB`. |
 | `MONGODB_DB` | If the URI does not select the intended database | Production database name. Overrides the database in the URI when supplied. |
-| `PUBLIC_SITE_URL` | Yes | `https://real-estate-home-phi.vercel.app` |
+| `PUBLIC_SITE_URL` | Yes | `https://nyafie.vercel.app` |
 | `JWT_KEY` | Yes | A fresh randomly generated secret of at least 32 characters; use a separate value for Preview. Production refuses shorter values. |
 | `CLOUD_NAME` | Yes | Production Cloudinary cloud name. |
 | `CLOUD_API_KEY` | Yes | Cloudinary API key, backend only. |
 | `CLOUD_SECRET_KEY` | Yes | Cloudinary API secret, backend only. |
 | `Test_Secret_Key` | Required for online payments | Paystack **test** secret key (`sk_test_` prefix). Missing or live keys disable checkout. |
 | `Test_Public_Key` | Optional | Paystack test public key for the admin configuration summary. Checkout currently uses the authorization URL returned by the backend. |
-| `CLIENT_URL` | Optional | `https://real-estate-home-phi.vercel.app`. Defaults to the canonical origin. Additional origins must be an exact comma-separated list of HTTPS origins with no paths; no wildcard. |
+| `CRON_SECRET` | Required for scheduled rental payment recovery | At least 32 random characters. Vercel sends it as a Bearer authorization header to `/api/payments/reconcile`. Never expose it in frontend variables. |
+| `CLIENT_URL` | Optional | `https://nyafie.vercel.app`. Defaults to the canonical origin. Additional origins must be an exact comma-separated list of HTTPS origins with no paths; no wildcard. |
 | `COOKIE_SAME_SITE` | Optional | Leave unset or use `lax` for this same-domain architecture. |
 | `ADMIN_EMAIL` | Required to create the first admin in a fresh database | A dedicated admin email that does not belong to an existing customer or agent. |
 | `ADMIN_PSD` | Required with `ADMIN_EMAIL` for initial bootstrap | Strong initial admin password. The minimum accepted length is 8 characters. Remove both bootstrap variables after creating and verifying the admin account. |
 | `ADMIN_WHATSAPP_NUMBER` | Optional | Fallback platform WhatsApp number when Admin Settings has none. Agent contacts continue to come from the property's actual agent. |
+| `VIEW_HASH_SECRET` | Optional | Key for the hashed visitor ids used to deduplicate property views. Defaults to a key derived from `JWT_KEY`; changing either lets returning visitors count once more. |
+| `VIEW_WINDOW_HOURS` | Optional | How long one visitor counts as one view of a listing (1 to 720, default 24). |
 
-Vercel supplies `VERCEL`, `VERCEL_ENV`, `VERCEL_URL`, and `VERCEL_BRANCH_URL`. The declared service binding supplies `FRONTEND_INTERNAL_URL`; do **not** enter a fixed frontend URL for that variable in Vercel. `PORT` and `TRUST_PROXY` are local/separate-host options and are not needed here.
+Vercel supplies `VERCEL`, `VERCEL_ENV`, `VERCEL_URL`, and `VERCEL_BRANCH_URL`. The declared service binding supplies `FRONTEND_INTERNAL_URL`; do **not** enter a fixed frontend URL for that variable in Vercel. `PORT` and `TRUST_PROXY` are local/separate-host options and are not needed here: on Vercel the app trusts exactly one proxy hop, so `req.ip` (used by rate limits and view deduplication) is the real client address and a forged `X-Forwarded-For` cannot change it.
+
+When first deploying real property view tracking, run `npm run views:reset` once in `backend/` against the production database. It sets earlier counts (seeded numbers and refresh-inflated counts) to 0, so every displayed view comes from deduplicated visits.
 
 The application uses one signing secret (`JWT_KEY`) with separate customer, agent and admin cookies and mandatory role/session JWT claims. It does not read separate customer/agent/admin secret variables. There is no email delivery provider or WhatsApp API integration: email and WhatsApp use external contact links, while contact forms, property inquiries and conversations are stored in MongoDB.
 
@@ -52,7 +57,7 @@ The application uses one signing secret (`JWT_KEY`) with separate customer, agen
 | Variable | Value |
 | --- | --- |
 | `VITE_API_URL` | `/api` |
-| `VITE_PUBLIC_SITE_URL` | `https://real-estate-home-phi.vercel.app` |
+| `VITE_PUBLIC_SITE_URL` | `https://nyafie.vercel.app` |
 
 These are public build-time values. Redeploy the frontend after changing them.
 
@@ -82,7 +87,15 @@ Customers cannot access agent or admin APIs; agents cannot access admin APIs. Ag
 
 Guests can browse published properties but cannot see agent identities or the directory. The agent directory and profiles require login, as requested. They are excluded from the sitemap and marked noindex. Agent inquiries route to the actual listing owner. Sale listings retain contact/offer flows; rental totals and availability come from the database. Payment success requires server verification of Paystack's reference, currency and amount. A browser return URL alone does not mark a payment successful.
 
-Paystack remains **test-only**, including on the production domain. The deployment is suitable for testing the marketplace on HTTPS; it will not collect live rental or subscription payments. The current integration verifies payments during the application's callback/recheck flow and has no payment webhook receiver. A webhook configuration is therefore not required for this version.
+Paystack remains **test-only**, including on the production domain. The deployment is suitable for testing the marketplace on HTTPS; it will not collect live rental or subscription payments.
+
+### Rental payment webhook and recovery
+
+After deploying, register `https://nyafie.vercel.app/api/payments/paystack/webhook` as the **test** webhook URL in Paystack's dashboard. This endpoint confirms regular-rental and hotel-room charges without a browser return or customer login cookie. It verifies the exact raw body's HMAC-SHA512 signature and independently checks the reference, currency and amount with Paystack before using the existing transactional booking/inventory checks. Paystack retries callbacks when the endpoint returns a non-200 response; the app acknowledges a charge only after a durable payment or refund-review outcome. See [Paystack's webhook setup](https://paystack.com/docs/payments/webhooks/).
+
+Set `CRON_SECRET` in the backend deployment environment. The committed `vercel.json` schedules `GET /api/payments/reconcile` daily at 02:00 UTC as a fallback for missed rental webhooks and return pages. The job checks up to 20 due Paystack rental attempts per invocation; pending attempts remain eligible, and failed attempts are rechecked for seven days. Atomic ten-minute leases prevent overlapping jobs checking the same attempt. Increase the schedule frequency with a compatible hosting plan or invoke the same authenticated endpoint from another scheduler when payment volume needs more than 20 checks per day. On other hosts, configure an equivalent scheduled GET with `Authorization: Bearer <CRON_SECRET>`. See [Vercel cron authentication](https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs).
+
+Never put `CRON_SECRET` in a URL. Missing/short secrets disable the recovery endpoint. Preview deployments need an explicitly configured callback URL for their own test environment; production cron scheduling does not imply a preview scheduler. Non-rental references (including the separate subscription ledger) are acknowledged without creating rental records. Subscription verification retains its existing dedicated flow. Refund-required flags still need admin handling; no provider refunds are issued automatically.
 
 ## SEO, routing and performance
 
@@ -99,7 +112,7 @@ Public listing queries are bounded (48 maximum per page); the agent profile pagi
 3. In Vercel, import that GitHub repository into the intended account/team. Choose root directory `./` and retain the committed `vercel.json`. Configure `platform-redesign` as the production branch if deploying this branch directly; otherwise merge the reviewed branch into the project's production branch first.
 4. Set the project framework to **Services** and verify the two service roots/frameworks and Node 24.x settings against the table above. Add the Production and Preview environment variables to the correct environments before building. Do not use `frontend` as the project root.
 5. Deploy. Inspect both service build logs and backend runtime logs. Confirm that the backend binding was injected and MongoDB/Cloudinary initialization succeeds. Visit `/api/health` and expect HTTP 200 with `{ "success": true, "service": "HomeBase" }`.
-6. In project Domains, confirm this project owns `real-estate-home-phi.vercel.app`. Naming the project does not guarantee that hostname is available. If Vercel assigns a different domain, update both canonical URL variables and `CLIENT_URL` to the actual chosen domain and redeploy before sharing links.
+6. In project Domains, confirm this project owns `nyafie.vercel.app`. Naming the project does not guarantee that hostname is available. If Vercel assigns a different domain, update both canonical URL variables and `CLIENT_URL` to the actual chosen domain and redeploy before sharing links.
 7. Sign in through `/admin/login`, review settings, property publication rules and subscription requirements, and check the payment summary says Paystack test and active. Verify the first admin account, then remove its bootstrap variables and redeploy. MongoDB retains the account.
 8. Complete the production checks below using dedicated test accounts and Paystack's test checkout. Keep the project in test operation until those checks pass. Roll back the whole deployment if a release breaks a verified flow.
 

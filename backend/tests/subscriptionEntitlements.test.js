@@ -16,7 +16,7 @@ import { quotePlan } from "../utils/planChange.js";
 import { chatEnabledAgents, withinImageLimit } from "../utils/permissions.js";
 
 const DAY = 24 * 60 * 60 * 1000;
-const NOW = new Date("2026-10-01T12:00:00Z");
+const NOW = new Date();
 // A chainable, awaitable stand-in for a Mongoose query
 const q = (value) => {
   const promise = Promise.resolve(value);

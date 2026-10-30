@@ -1,25 +1,16 @@
 import { useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Building, Building2, ClipboardCheck, Clock, CreditCard, FileClock, HandCoins, Inbox, MessageCircle, Plus, Star, UserCog, Users, Wallet } from "lucide-react";
+import { Building, Building2, ClipboardCheck, Clock, CreditCard, FileClock, HandCoins, Inbox, MessageCircle, Star, UserCog, Users, Wallet } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { usePlatform } from "../../context/usePlatform";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { adminApi } from "../../frontApi";
-import { PageHeader, Panel } from "../../components/dashboard/Page";
-import { Breakdown } from "../../components/dashboard/Metrics";
-import { AllClear } from "../../components/dashboard/Overview";
 import { DashboardSkeleton, ErrorState } from "../../components/dashboard/States";
-import { AttentionItems, CounterList, MetricGrid, RevenueSources } from "../../components/admin/OverviewSections";
+import { AttentionQueue, CounterList, InventorySummary, MetricGrid, OverviewHeader, PopularListings, RevenueSources, SectionHeading } from "../../components/admin/OverviewSections";
 import PerformanceChart from "../../components/admin/PerformanceChart";
 import { formatCedis } from "../../utils/reports";
+import "./adminOverview.css";
 
 const REFRESH_MS = 60000; // same cadence as the sidebar's badges
-
-const greeting = () => {
-  const hour = new Date().getHours();
-  return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-};
-const signedChange = (change) => `${change > 0 ? "+" : ""}${change}%`;
 
 /**
  * Admin overview: key numbers, the work waiting on the team, platform performance over time,
@@ -45,38 +36,30 @@ const AdminDashboard = () => {
   }, [reload]);
 
   const header = (
-    <PageHeader
-      eyebrow={new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
-      title={`${greeting()}, ${user.firstName}`}
-      description={`What needs doing across ${siteName}, and how the platform is performing.`}
-      actions={
-        <Link to="/admin/properties/add" className="btn btn-primary min-h-11 px-4">
-          <Plus className="h-4 w-4" />
-          Add property
-        </Link>
-      }
-    />
+    <OverviewHeader name={user?.firstName} siteName={siteName} generatedAt={data?.generatedAt} loading={query.loading} onRefresh={reload} />
   );
 
   if (!data) {
     return query.error ? (
-      <>
+      <div className="admin-overview">
         {header}
         <ErrorState title="Couldn't load the dashboard" message={query.error} onRetry={reload} />
-      </>
+      </div>
     ) : (
-      <DashboardSkeleton />
+      <div className="admin-overview">{header}<DashboardSkeleton /></div>
     );
   }
 
   const { properties, agents, customers, deals, revenue } = data;
-  const live = properties.published - properties.hidden;
+  const live = Math.max(0, properties.published - properties.hidden);
 
   const metrics = [
     {
-      label: "Revenue, last 30 days",
+      label: "Revenue · last 30 days",
       value: formatCedis(revenue.last30),
-      hint: revenue.change !== null ? `${signedChange(revenue.change)} vs the 30 days before (${formatCedis(revenue.previous30)})` : `${formatCedis(revenue.total)} collected since launch`,
+      hint: revenue.change !== null ? `Previous 30 days: ${formatCedis(revenue.previous30)}` : "Confirmed payments received",
+      change: revenue.change,
+      tone: "violet",
       icon: Wallet,
       to: "/admin/payments",
       toLabel: "View payments",
@@ -87,6 +70,7 @@ const AdminDashboard = () => {
       hint: properties.inReview ? `${properties.inReview} awaiting review · ${properties.addedThisMonth} added this month` : `${properties.addedThisMonth} added this month · ${properties.total} in total`,
       attention: properties.inReview > 0,
       icon: Building2,
+      tone: "teal",
       to: "/admin/properties",
       toLabel: "Manage properties",
     },
@@ -98,6 +82,7 @@ const AdminDashboard = () => {
         : `${agents.total} registered${agents.expiringSoon ? ` · ${agents.expiringSoon} expiring soon` : ""}`,
       attention: agents.pendingApplications > 0,
       icon: UserCog,
+      tone: "amber",
       to: agents.pendingApplications ? "/admin/agent-applications" : "/admin/agents",
       toLabel: agents.pendingApplications ? "Review applications" : "Manage agents",
     },
@@ -106,6 +91,7 @@ const AdminDashboard = () => {
       value: customers.total.toLocaleString(),
       hint: customers.newLast30Days ? `+${customers.newLast30Days} in the last 30 days` : "None new in the last 30 days",
       icon: Users,
+      tone: "blue",
       to: "/admin/customers",
       toLabel: "View customers",
     },
@@ -120,63 +106,38 @@ const AdminDashboard = () => {
     { icon: HandCoins, count: deals.pendingOffers, label: ["offer awaiting a response", "offers awaiting a response"], hint: "Customers are waiting to hear back", to: "/admin/offers", tone: "brand", action: "Respond" },
     { icon: Building, count: deals.newPurchaseRequests, label: ["new purchase request", "new purchase requests"], hint: "Contact the buyer with next steps", to: "/admin/sale-requests", tone: "sky", action: "Contact" },
     { icon: Inbox, count: deals.newInquiries, label: ["new inquiry", "new inquiries"], hint: "Not answered yet", to: "/admin/inquiries?status=New", tone: "sky", action: "Reply" },
-    { icon: MessageCircle, count: data.unreadMessages, label: ["unread message", "unread messages"], hint: "About HomeBase listings", to: "/admin/messages", tone: "sky", action: "Reply" },
+    { icon: MessageCircle, count: data.unreadMessages, label: ["unread message", "unread messages"], hint: "Conversations about your listings", to: "/admin/messages", tone: "sky", action: "Reply" },
     { icon: Star, count: data.reviews?.new || 0, label: ["new customer review", "new customer reviews"], hint: "Check them and hide anything inappropriate", to: "/admin/reviews", tone: "gray", action: "Moderate" },
     { icon: Clock, count: agents.expiringSoon, label: ["agent plan expiring soon", "agent plans expiring soon"], hint: "Within the next 7 days", to: "/admin/subscriptions?status=expiring", tone: "gray", action: "Manage" },
   ].filter((item) => item.count > 0);
   const attentionTotal = attention.reduce((sum, item) => sum + item.count, 0);
 
   const counters = [
-    { label: "Offers awaiting a response", value: deals.pendingOffers, to: "/admin/offers" },
-    { label: "Rentals to confirm", value: deals.rentalsToConfirm, to: "/admin/rentals" },
-    { label: "Purchases in progress", value: deals.purchasesInProgress, to: "/admin/sale-requests" },
-    { label: "Unanswered inquiries", value: deals.newInquiries, to: "/admin/inquiries?status=New" },
+    { label: "Pending offers", value: deals.pendingOffers, to: "/admin/offers", icon: HandCoins },
+    { label: "Rentals to confirm", value: deals.rentalsToConfirm, to: "/admin/rentals", icon: CreditCard },
+    { label: "Purchases in progress", value: deals.purchasesInProgress, to: "/admin/sale-requests", icon: Building },
+    { label: "Unanswered inquiries", value: deals.newInquiries, to: "/admin/inquiries?status=New", icon: Inbox },
   ];
 
   return (
-    <>
+    <div className="admin-overview">
       {header}
-
       <MetricGrid items={metrics} />
-
-      <div className="mt-6">
-        {attention.length ? (
-          <Panel title="Needs attention" description={`${attentionTotal} ${attentionTotal === 1 ? "item is" : "items are"} waiting on the ${siteName} team`} bodyClassName="">
-            <AttentionItems items={attention} />
-          </Panel>
-        ) : (
-          <AllClear>All clear. Agent applications, listings to review, offers and payments to confirm will show up here.</AllClear>
-        )}
+      <div className="overview-primary-grid">
+        <div className="overview-chart-column"><PerformanceChart refreshKey={data.generatedAt} /></div>
+        <AttentionQueue items={attention} total={attentionTotal} />
       </div>
-
-      <div className="mt-6">
-        <PerformanceChart />
-      </div>
-
-      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Panel title="Inventory" description={`${properties.total} ${properties.total === 1 ? "property" : "properties"} on the platform`} to="/admin/properties" toLabel="Manage">
-          <p className="mb-4 text-xs text-gray-500">
-            {properties.published} published · {properties.inReview} in review · {properties.drafts} {properties.drafts === 1 ? "draft" : "drafts"}
-            {properties.hidden > 0 && ` · ${properties.hidden} hidden (agent plan lapsed)`}
-          </p>
-          <Breakdown
-            total={properties.available + properties.underOffer + properties.rented + properties.sold}
-            segments={[
-              { label: "Available", value: properties.available, className: "bg-emerald-400" },
-              { label: "Under offer", value: properties.underOffer, className: "bg-amber-300" },
-              { label: "Rented", value: properties.rented, className: "bg-sky-400" },
-              { label: "Sold", value: properties.sold, className: "bg-gray-400" },
-            ]}
-          />
-        </Panel>
-        <Panel title="Deals in progress" description="Open work across all listings" bodyClassName="">
+      <div className="overview-secondary-grid">
+        <InventorySummary properties={properties} />
+        <section className="overview-panel">
+          <SectionHeading title="Deals in progress" description="Your open pipeline" to="/admin/reports" toLabel="Reports" />
           <CounterList items={counters} />
-        </Panel>
-        <Panel title="Revenue by source" description="Everything collected so far" to="/admin/payments" toLabel="Payments" bodyClassName="" className="md:col-span-2 xl:col-span-1">
-          <RevenueSources revenue={revenue} />
-        </Panel>
+          <p className="overview-pipeline-note">Open a category to manage the next step.</p>
+        </section>
+        <RevenueSources revenue={revenue} />
       </div>
-    </>
+      <PopularListings properties={properties} siteName={siteName} />
+    </div>
   );
 };
 

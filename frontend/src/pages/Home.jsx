@@ -11,6 +11,7 @@ import HomeAgents from "../components/Landing/HomeAgents";
 import RecentListings from "../components/Landing/RecentListings";
 import WhyHomeBase from "../components/Landing/WhyHomeBase";
 import FinalCta from "../components/Landing/FinalCta";
+import AboutNyaFie from "../components/Landing/AboutNyaFie";
 import { useHomeListings } from "../hooks/useHomeListings";
 import { usePropertyFacets } from "../hooks/usePropertyFacets";
 import { usePlatform } from "../context/usePlatform";
@@ -48,6 +49,7 @@ const Home = () => {
       <HomeAgents />
       <RecentListings items={listings.recent} loading={listings.loading} />
       <WhyHomeBase />
+      <AboutNyaFie />
       <FinalCta />
     </div>
   );

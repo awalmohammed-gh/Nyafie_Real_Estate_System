@@ -129,6 +129,8 @@ export const limits = {
   // Payment starts and checks, and things customers send to owners
   payments: rateLimit({ windowMs: 15 * MINUTE, max: 30 }),
   contact: rateLimit({ windowMs: 15 * MINUTE, max: 30, message: "You're sending a lot of requests. Please wait a few minutes and try again." }),
+  // Property views: plenty for real browsing, stops scripts inflating counts with fresh visitor ids
+  views: rateLimit({ windowMs: 15 * MINUTE, max: 120 }),
 };
 
 /**

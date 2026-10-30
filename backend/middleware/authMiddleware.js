@@ -16,8 +16,20 @@ const userFromCookie = async (req, session) => {
   if (payload.session !== session || payload.role !== SESSION_ROLES[session] || !/^[a-f\d]{24}$/i.test(payload.id || "")) return null;
   // Current account role/status matter too: demotion, suspension and removal take effect immediately.
   // A removed provider's existing token stops working on its next request.
-  const user = await User.findById(payload.id);
+  const user = await User.findById(payload.id).select("+sessionVersion");
+  const tokenVersion = payload.sessionVersion === undefined ? "" : payload.sessionVersion;
+  if (!user || typeof tokenVersion !== "string" || tokenVersion !== (user.sessionVersion || "")) return null;
   return user?.role === SESSION_ROLES[session] && (session === "agent" || user.isActive) && !isRemoved(user) ? user : null;
+};
+
+// Property views: every verified session in this browser, whichever page sent the request, so an agent
+// or admin opening a public listing page is recognised (their own and moderation views don't count)
+export const viewerSessions = async (req, _res, next) => {
+  try {
+    const [customer, agent, admin] = await Promise.all(["customer", "agent", "admin"].map((session) => userFromCookie(req, session)));
+    req.viewerSessions = { customer, agent, admin };
+    next();
+  } catch (error) { next(error); }
 };
 
 // On shared resources the header selects a domain; it never proves identity.

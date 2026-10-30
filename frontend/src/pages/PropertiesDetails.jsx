@@ -77,6 +77,7 @@ const PropertiesDetails = () => {
   const [signInRating, setSignInRating] = useState(0); // the star a guest picked before being asked to sign in
   const [reviewSummary, setReviewSummary] = useState(null); // live from the reviews section
   const viewedRef = useRef(null);
+  const [liveViews, setLiveViews] = useState(null); // { id, views } returned when this visit was recorded
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -101,13 +102,13 @@ const PropertiesDetails = () => {
       : Promise.resolve(null),
   );
 
-  // Count one view per visit for agent listings (not the owner viewing their own listing)
+  // Record this visit once per page open (the ref guards re-renders and StrictMode; the backend's
+  // dedupe is the real protection), then show the server's authoritative count. Never blocks the page.
   useEffect(() => {
     if (!property || viewedRef.current === id) return;
     viewedRef.current = id;
-    if (property.owner?.type === "agent" && property.owner.id !== user?.id)
-      recordView(id);
-  }, [id, property, user, recordView]);
+    recordView(id).then((result) => Number.isFinite(result?.views) && setLiveViews({ id, views: result.views }));
+  }, [id, property, recordView]);
 
   if (detail.loading) return <PageLoader label="Loading property..." />;
   if (detail.error) {
@@ -229,6 +230,7 @@ const PropertiesDetails = () => {
     ? reviewSummary.count
     : meta?.ratingCount || 0;
   const ratingAverage = reviewSummary ? reviewSummary.average : meta?.rating;
+  const views = liveViews?.id === id ? liveViews.views : meta?.views || 0;
 
   const closeDialog = () => {
     setDialog(null);
@@ -365,10 +367,10 @@ const PropertiesDetails = () => {
                   ({ratingCount} {ratingCount === 1 ? "rating" : "ratings"})
                 </a>
               )}
-              {Boolean(meta?.views) && (
-                <span className="flex items-center gap-1.5">
+              {views > 0 && (
+                <span className="flex items-center gap-1.5 whitespace-nowrap">
                   <Eye aria-hidden="true" className="h-4 w-4" />
-                  {meta.views.toLocaleString()} views
+                  {views.toLocaleString()} {views === 1 ? "view" : "views"}
                 </span>
               )}
             </div>

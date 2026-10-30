@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { motion } from "motion/react";
-import { Check, Layers, Pencil, Plus, Power, Trash2, Users } from "lucide-react";
+import { Check, Layers, Pencil, Plus, Power, Search, Trash2, Users, ArrowUpRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useAdminData } from "../../hooks/useAdminData";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
-import AdminPageTitle from "../../components/admin/AdminPageTitle";
 import Modal from "../../components/ui/Modal";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import StatusBadge from "../../components/ui/StatusBadge";
 import EmptyState from "../../components/ui/EmptyState";
 import { ACCOUNT_TYPES, ANALYTICS_LEVELS, INQUIRY_LEVELS, durationLabel, isOrganization, planFeatureList } from "../../data/plans";
-import FilterTabs from "../../components/ui/FilterTabs";
+import "./adminReports.css";
+import "./adminPlans.css";
 
 const TYPE_ORDER = Object.keys(ACCOUNT_TYPES); // individual, agency, company
 import { formatDate } from "../../utils/date";
@@ -28,6 +28,7 @@ const Toggle = ({ label, description, checked, onChange }) => (
     <button
       type="button"
       role="switch"
+      aria-label={label}
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${checked ? "bg-brand-500" : "bg-gray-300"}`}
@@ -44,6 +45,7 @@ const nextTier = (plans, type) => Math.max(0, ...ladderOf(plans, type).map((p) =
 const PlanForm = ({ plan, plans, onClose, onSave }) => {
   const [form, setForm] = useState(() => ({ ...emptyPlan, ...plan, sortOrder: plan ? plan.sortOrder : nextTier(plans, emptyPlan.accountType), price: String(plan?.price ?? ""), extra: (plan?.extraFeatures || []).join("\n") }));
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const set = (key, value) => setForm((p) => ({ ...p, [key]: value }));
   // A new plan goes to the top of its type's ladder unless the admin picks a tier
   const setType = (type) => setForm((p) => ({ ...p, accountType: type, ...(plan ? {} : { sortOrder: nextTier(plans, type) }) }));
@@ -56,7 +58,8 @@ const PlanForm = ({ plan, plans, onClose, onSave }) => {
     </label>
   );
 
-  const save = () => {
+  const save = async () => {
+    if (saving) return;
     const name = form.name.trim();
     if (!name) return setError("Give the plan a name.");
     if (plans.some((p) => p.id !== plan?.id && p.name.toLowerCase() === name.toLowerCase())) return setError("Another plan already uses this name.");
@@ -64,7 +67,8 @@ const PlanForm = ({ plan, plans, onClose, onSave }) => {
     if (!(Number(form.durationDays) > 0)) return setError("Duration must be at least 1 day.");
     if (!(Number(form.propertyLimit) > 0) || !(Number(form.imageLimit) > 0)) return setError("Property and image limits must be at least 1.");
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-    onSave({
+    setSaving(true);
+    try { await onSave({
       id: plan?.id || (plans.some((p) => p.id === slug) ? `${slug}-${Date.now().toString(36)}` : slug),
       name,
       tagline: form.tagline.trim(),
@@ -83,14 +87,14 @@ const PlanForm = ({ plan, plans, onClose, onSave }) => {
       popular: form.popular,
       active: form.active,
       extraFeatures: form.extra.split("\n").map((s) => s.trim()).filter(Boolean),
-    });
+    }); } finally { setSaving(false); }
   };
 
   return (
-    <Modal open onClose={onClose} title={plan ? `Edit ${plan.name}` : "Create plan"} description="Limits apply to every agent on this plan immediately." size="lg"
-      footer={<><button onClick={onClose} className="btn btn-light">Cancel</button><button onClick={save} className="btn btn-primary">{plan ? "Save plan" : "Create plan"}</button></>}
+    <Modal open onClose={saving ? () => {} : onClose} title={plan ? `Edit ${plan.name}` : "Create plan"} description="Changes to limits and features apply to existing subscribers immediately." size="lg"
+      footer={<><button onClick={onClose} disabled={saving} className="btn btn-light">Cancel</button><button onClick={save} disabled={saving} aria-busy={saving} className="btn btn-primary">{saving ? "Saving…" : plan ? "Save plan" : "Create plan"}</button></>}
     >
-      <div className="space-y-6">
+      <fieldset disabled={saving} className="space-y-6"><legend className="sr-only">Plan details</legend>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="block text-sm">
             <span className="mb-1.5 block font-medium text-gray-700">Plan name</span>
@@ -113,7 +117,7 @@ const PlanForm = ({ plan, plans, onClose, onSave }) => {
             <span className="mt-1 block text-xs text-gray-500">A higher tier is an upgrade within {ACCOUNT_TYPES[form.accountType].plural.toLowerCase()}.{ladder.length > 0 && <> Now: {ladder.map((p) => `${p.name} (${p.sortOrder})`).join(" → ")}</>}</span>
             {sameTier.length > 0 && <span className="mt-1 block text-xs text-amber-700">Same tier as {sameTier.map((p) => p.name).join(", ")}: neither is an upgrade from the other.</span>}
           </label>
-          {num("price", "Price (GHS)")}
+          {num("price", "Price (GHS)", { step: "0.01" })}
           <label className="block text-sm">
             <span className="mb-1.5 block font-medium text-gray-700">Duration</span>
             <select value={[30, 90, 180, 365].includes(Number(form.durationDays)) ? form.durationDays : "custom"} onChange={(e) => set("durationDays", e.target.value === "custom" ? 60 : Number(e.target.value))} className="field">
@@ -154,7 +158,7 @@ const PlanForm = ({ plan, plans, onClose, onSave }) => {
             </label>
           </div>
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Toggle label="HomeBase customer chat" description="Message customers in HomeBase (inquiries, calls, email and WhatsApp work on every plan)" checked={form.internalChat} onChange={(v) => set("internalChat", v)} />
+            <Toggle label="Customer chat" description="Message customers on the platform (calls, email and WhatsApp work on every plan)" checked={form.internalChat} onChange={(v) => set("internalChat", v)} />
             <Toggle label="Priority visibility" description="Listed ahead of other agents" checked={form.priorityVisibility} onChange={(v) => set("priorityVisibility", v)} />
             <Toggle label="Most popular" description="Highlight on plans page" checked={form.popular} onChange={(v) => set("popular", v)} />
             <Toggle label="Active" description="Available to new agents" checked={form.active} onChange={(v) => set("active", v)} />
@@ -165,120 +169,54 @@ const PlanForm = ({ plan, plans, onClose, onSave }) => {
           <span className="mb-1.5 block font-medium text-gray-700">Other features <span className="text-gray-400">(one per line)</span></span>
           <textarea rows={3} value={form.extra} onChange={(e) => set("extra", e.target.value)} className="field resize-y" placeholder={"Agent profile page\nPriority support"} />
         </label>
-        {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-      </div>
+        {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      </fieldset>
     </Modal>
   );
 };
 
 const AdminPlans = () => {
-  const { plans, agents, savePlan, togglePlanActive, deletePlan } = useAdminData();
+  const { plans, agents, savePlan, togglePlanActive, deletePlan, plansError, refreshPlans } = useAdminData();
   const run = useAsyncAction();
   const [editing, setEditing] = useState(null); // plan | "new"
   const [deleting, setDeleting] = useState(null);
   const [subscribersOf, setSubscribersOf] = useState(null);
   const [typeFilter, setTypeFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [availability, setAvailability] = useState("all");
+  const [working, setWorking] = useState(false);
 
   const subscribers = (plan) => agents.filter((a) => a.subscription?.planId === plan.id);
   const activeSubscribers = (plan) => subscribers(plan).filter((a) => a.sub.isActive);
 
+  const visible = plans.filter(plan => (typeFilter === "all" || plan.accountType === typeFilter) && (availability === "all" || plan.active === (availability === "active")) && (plan.name + " " + plan.tagline).toLowerCase().includes(search.trim().toLowerCase())).sort((a,b) => TYPE_ORDER.indexOf(a.accountType)-TYPE_ORDER.indexOf(b.accountType) || a.sortOrder-b.sortOrder || a.price-b.price);
+  const resetFilters = () => { setSearch("");setTypeFilter("all");setAvailability("all"); };
   return (
-    <>
-      <AdminPageTitle
-        title="Plans"
-        description="The single source of truth for provider limits, features and upgrade tiers. Providers can only upgrade to a higher tier of their own account type."
-        action={<button onClick={() => setEditing("new")} className="btn btn-primary"><Plus className="h-4 w-4" />Create plan</button>}
-      />
-      {plans.length > 0 && (
-        <div className="mb-5">
-          <FilterTabs label="Plan type" value={typeFilter} onChange={setTypeFilter} tabs={[{ id: "all", label: "All", count: plans.length }, ...TYPE_ORDER.map((type) => ({ id: type, label: ACCOUNT_TYPES[type].label, count: plans.filter((plan) => plan.accountType === type).length }))]} />
-        </div>
-      )}
+    <div className="admin-reports admin-plans">
+      <header className="reports-heading"><div><p className="reports-eyebrow">The right plan for every provider</p><h1>Plans &amp; pricing<span>.</span></h1><p>Manage pricing, access and upgrade paths in one place.</p></div><div className="reports-heading-actions"><Link to="/admin/inventory" className="reports-button is-secondary">Financial inventory<ArrowUpRight size={15} aria-hidden="true" /></Link><button type="button" disabled={Boolean(plansError)} onClick={()=>setEditing("new")} className="reports-button is-primary"><Plus size={16} aria-hidden="true" />Create plan</button></div></header>
+      {plansError && <div className="plans-load-error" role="alert"><div><h2>Couldn't load the latest plans</h2><p>{plansError}{plans.length ? " Showing the last loaded plans." : " Please retry before making changes."}</p></div><button type="button" disabled={working} onClick={async()=>{setWorking(true);try{await run(refreshPlans(),{});}finally{setWorking(false);}}} className="reports-button is-secondary">Retry plans</button></div>}
+      {(!plansError || plans.length > 0) && <>
+      <dl className="plans-summary">{[["Plans available",plans.filter(plan=>plan.active).length,"Open to new subscriptions"],["Active subscribers",agents.filter(agent=>agent.sub.isActive).length,"Across current agent accounts"],["Account types",new Set(plans.map(plan=>plan.accountType)).size,"Individuals, agencies and companies"],["Hidden plans",plans.filter(plan=>!plan.active).length,"Existing subscribers keep access"]].map(([label,value,hint])=><div key={label}><dt>{label}</dt><dd>{value}</dd><p>{hint}</p></div>)}</dl>
+      <div className="plans-workspace">
+        <div className="plans-toolbar"><div className="plans-type-filter" role="group" aria-label="Plan account type">{[{id:"all",label:"All plans"},...TYPE_ORDER.map(type=>({id:type,label:ACCOUNT_TYPES[type].label}))].map(item=><button type="button" key={item.id} onClick={()=>setTypeFilter(item.id)} aria-pressed={typeFilter===item.id}>{item.label}<span>{plans.filter(plan=>item.id==="all"||plan.accountType===item.id).length}</span></button>)}</div><div className="plans-filter-tools"><label className="plans-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search plans</span><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search plans..." /></label><label><span className="sr-only">Plan availability</span><select value={availability} onChange={event=>setAvailability(event.target.value)}><option value="all">All availability</option><option value="active">Active plans</option><option value="hidden">Hidden plans</option></select></label></div></div>
+        <div className="plans-list-heading"><span>{visible.length} {visible.length===1?"plan":"plans"} shown</span><p>Lower tiers first within each account type</p></div>
+        {!plans.length ? <EmptyState icon={Layers} title="Your first plan starts here" description="Set a price, choose the limits and give agents a clear way to get started." action={<button type="button" onClick={()=>setEditing("new")} className="reports-button is-primary">Create your first plan</button>} /> : !visible.length ? <EmptyState icon={Search} title="No plans match these filters" description="Try another name, account type or availability." action={<button type="button" onClick={resetFilters} className="reports-button is-secondary">Reset filters</button>} /> : <div className="plans-card-grid">{visible.map(plan=>{
+          const activeCount=activeSubscribers(plan).length;
+          return <article key={plan.id} className={"plan-card plan-type-"+plan.accountType+(plan.active?"":" is-hidden")}>
+            <header><span className="plan-type-label"><Layers size={15} aria-hidden="true" />{ACCOUNT_TYPES[plan.accountType].label}</span><span className={"plan-availability "+(plan.active?"is-active":"")}>{plan.active?"Active":"Hidden"}</span></header>
+            <div className="plan-title"><h2>{plan.name}</h2>{plan.popular&&<span className="plan-popular">Popular</span>}</div><p className="plan-tagline">{plan.tagline || "A plan for "+ACCOUNT_TYPES[plan.accountType].plural.toLowerCase()+"."}</p>
+            <p className="plan-price"><strong>₵{plan.price.toLocaleString("en-GH",{minimumFractionDigits:2,maximumFractionDigits:2})}</strong><span>{durationLabel(plan.durationDays)}</span><span className="plan-tier">Tier {plan.sortOrder}</span></p>
+            <dl className="plan-limits">{[["Properties",plan.propertyLimit],["Images / listing",plan.imageLimit],["Featured",plan.featuredLimit]].map(([label,value])=><div key={label}><dd>{value}</dd><dt>{label}</dt></div>)}</dl>
+            <ul className="plan-feature-list">{planFeatureList(plan).slice(3).map(feature=><li key={feature}><Check size={15} aria-hidden="true" />{feature}</li>)}</ul>
+            <button type="button" className="plan-subscribers" onClick={()=>setSubscribersOf(plan)} aria-label={"View "+plan.name+" subscribers"}><span><Users size={16} aria-hidden="true" />Subscribers</span><strong>{activeCount} active <span>/ {subscribers(plan).length} total</span></strong></button>
+            <footer className="plan-actions"><button type="button" disabled={working} onClick={()=>setEditing(plan)} aria-label={"Edit "+plan.name}><Pencil size={15} aria-hidden="true" />Edit plan</button><button type="button" disabled={working} onClick={async()=>{setWorking(true);try{await run(togglePlanActive(plan.id),{success:plan.active?"Plan deactivated":"Plan activated",description:plan.active?"Hidden from new subscriptions. Existing subscribers keep access.":"Available to new subscribers and upgrades."});}finally{setWorking(false);}}} aria-label={(plan.active?"Deactivate ":"Activate ")+plan.name}><Power size={15} aria-hidden="true" />{plan.active?"Deactivate":"Activate"}</button><button type="button" disabled={working||activeCount>0} title={activeCount>0?"Deactivate this plan instead; active subscribers still use it.":"Delete plan"} aria-label={"Delete "+plan.name} onClick={()=>setDeleting(plan)}><Trash2 size={15} aria-hidden="true" /></button></footer>
+            {activeCount>0&&<p className="plan-protection-note">Active subscribers keep this plan when it is hidden.</p>}
+          </article>;
+        })}</div>}
+      </div>
+      <aside className="plans-guidance"><span><Layers size={20} aria-hidden="true" /></span><div><h2>Keep upgrade paths simple.</h2><p>Agents can upgrade to a higher tier within their account type. Changes to limits apply immediately; deactivating a plan hides it from new subscriptions.</p></div><Link to="/admin/subscriptions">Manage subscriptions<ArrowUpRight size={15} aria-hidden="true" /></Link></aside>
 
-      {plans.length === 0 ? (
-        <EmptyState icon={Layers} title="No plans yet" description="Create a plan so agents can subscribe." />
-      ) : (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 2xl:grid-cols-3">
-          {[...plans].filter((plan) => typeFilter === "all" || plan.accountType === typeFilter).sort((a, b) => TYPE_ORDER.indexOf(a.accountType) - TYPE_ORDER.indexOf(b.accountType) || a.sortOrder - b.sortOrder || a.price - b.price).map((plan, index) => {
-            const activeCount = activeSubscribers(plan).length;
-            return (
-              <motion.article
-                key={plan.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className={`flex flex-col rounded-lg bg-white p-6 ring-1 ring-slate-200 ${plan.active ? "" : "opacity-75"}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-xl font-bold text-gray-900">{plan.name}</h2>
-                      <StatusBadge status={ACCOUNT_TYPES[plan.accountType].label} tone={isOrganization(plan.accountType) ? "brand" : "gray"} dot={false} />
-                      <StatusBadge status={`Tier ${plan.sortOrder}`} tone="gray" dot={false} />
-                      <StatusBadge status={plan.active ? "Active" : "Inactive"} tone={plan.active ? "green" : "gray"} />
-                      {plan.popular && <StatusBadge status="Popular" tone="brand" dot={false} />}
-                    </div>
-                    <p className="mt-1 text-sm text-gray-500">{plan.tagline}</p>
-                  </div>
-                  <p className="shrink-0 text-right">
-                    <span className="block text-2xl font-semibold text-gray-900">₵{plan.price.toLocaleString()}</span>
-                    <span className="text-xs text-gray-500">{durationLabel(plan.durationDays)}</span>
-                  </p>
-                </div>
-
-                <dl className="mt-5 grid grid-cols-3 gap-2 text-center">
-                  {[["Properties", plan.propertyLimit], ["Images", plan.imageLimit], ["Featured", plan.featuredLimit]].map(([label, value]) => (
-                    <div key={label} className="rounded-xl bg-slate-50 py-3">
-                      <dd className="text-lg font-bold text-gray-900 tabular-nums">{value}</dd>
-                      <dt className="text-xs text-gray-500">{label}</dt>
-                    </div>
-                  ))}
-                </dl>
-
-                <ul className="mt-5 mb-5 space-y-2">
-                  {planFeatureList(plan).slice(3).map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-gray-700">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-
-                <button onClick={() => setSubscribersOf(plan)} className="mt-auto flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm transition hover:bg-slate-100">
-                  <span className="flex items-center gap-2 text-gray-700"><Users className="h-4 w-4 text-gray-400" />Subscribed agents</span>
-                  <span className="font-semibold text-gray-900">{activeCount} active · {subscribers(plan).length} total</span>
-                </button>
-
-                <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-                  <button onClick={() => setEditing(plan)} className="btn btn-light flex-1 px-4"><Pencil className="h-4 w-4" />Edit</button>
-                  <button
-                    onClick={() =>
-                      run(togglePlanActive(plan.id), {
-                        success: plan.active ? "Plan deactivated" : "Plan activated",
-                        description: plan.active ? `${plan.name} is hidden from new agents and upgrades. Existing subscribers keep it.` : `${plan.name} is available to new agents and as an upgrade.`,
-                      })
-                    }
-                    className="btn btn-light flex-1 px-4"
-                  >
-                    <Power className="h-4 w-4" />
-                    {plan.active ? "Deactivate" : "Activate"}
-                  </button>
-                  <button
-                    onClick={() => setDeleting(plan)}
-                    disabled={activeCount > 0}
-                    title={activeCount > 0 ? "Plans with active subscribers can't be deleted" : undefined}
-                    aria-label={`Delete ${plan.name}`}
-                    className="btn btn-light px-3 text-red-600"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </motion.article>
-            );
-          })}
-        </div>
-      )}
-
+      </>}
       {editing && (
         <PlanForm
           plan={editing === "new" ? null : editing}
@@ -324,7 +262,7 @@ const AdminPlans = () => {
           </ul>
         ))}
       </Modal>
-    </>
+    </div>
   );
 };
 

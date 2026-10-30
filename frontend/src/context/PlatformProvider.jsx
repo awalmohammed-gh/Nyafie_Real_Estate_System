@@ -18,6 +18,7 @@ export const PlatformProvider = ({ children }) => {
   const viewerId = user?.id;
   const [plans, setPlans] = useState([]);
   const [plansLoading, setPlansLoading] = useState(true);
+  const [plansError, setPlansError] = useState("");
   const [settings, setSettingsState] = useState(() => withDefaults(readStorage(SETTINGS_CACHE, {})));
   const [settingsReady, setSettingsReady] = useState(false);
   const [settingsError, setSettingsError] = useState("");
@@ -26,6 +27,10 @@ export const PlatformProvider = ({ children }) => {
   const refreshPlans = useCallback(async () => {
     try {
       setPlans(await planApi.getPlans({ all: isAdmin }));
+      setPlansError("");
+    } catch (error) {
+      setPlansError(error.message || "Plans could not be loaded.");
+      throw error;
     } finally {
       setPlansLoading(false);
     }
@@ -112,6 +117,7 @@ export const PlatformProvider = ({ children }) => {
     () => ({
       plans,
       plansLoading,
+      plansError,
       settingsReady,
       settingsError,
       reloadSettings,
@@ -128,7 +134,7 @@ export const PlatformProvider = ({ children }) => {
       refreshPlans,
       refreshPayments,
     }),
-    [plans, plansLoading, settingsReady, settingsError, reloadSettings, paths, settings, payments, getPlan, savePlan, deletePlan, togglePlanActive, updateSettings, refreshPlans, refreshPayments]
+    [plans, plansLoading, plansError, settingsReady, settingsError, reloadSettings, paths, settings, payments, getPlan, savePlan, deletePlan, togglePlanActive, updateSettings, refreshPlans, refreshPayments]
   );
 
   return <PlatformContext.Provider value={value}>{children}</PlatformContext.Provider>;

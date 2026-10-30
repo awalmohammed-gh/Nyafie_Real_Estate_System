@@ -1,0 +1,161 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import crypto from "node:crypto";
+import jwt from "jsonwebtoken";
+import { createApp } from "../app.js";
+import User from "../models/User.js";
+import Property from "../models/Property.js";
+import Rental from "../models/Rental.js";
+import Payment from "../models/Payment.js";
+import Setting from "../models/Setting.js";
+import Notification from "../models/Notification.js";
+import { isolatedMongo } from "./support/isolatedMongo.js";
+
+test("rental payments recover without a browser callback using signed webhooks and scheduled checks", { skip: process.env.RUN_PAYMENT_INTEGRATION !== "1", timeout: 90000 }, async (t) => {
+  await isolatedMongo(t);
+  process.env.JWT_KEY = "isolated-callback-signing-key-at-least-32-characters";
+  process.env.Test_Secret_Key = "sk_test_isolated_callback";
+  process.env.CRON_SECRET = "isolated-recovery-secret-at-least-32-characters";
+  process.env.PUBLIC_SITE_URL = "http://localhost:5173";
+  await Setting.create({ key: "platform", payments: { rentalsEnabled: true } });
+  const owner = await User.create({ firstName: "Test", lastName: "Owner", email: "owner@callback.test", password: "test-password", role: "admin" });
+  const customer = await User.create({ firstName: "Test", lastName: "Guest", email: "guest@callback.test", phone: "0241234567", password: "test-password" });
+  const server = createApp({ initialize: async () => {} }).listen(0, "127.0.0.1");
+  await new Promise((done) => server.once("listening", done));
+  t.after(() => new Promise((done) => server.close(done)));
+  const base = `http://127.0.0.1:${server.address().port}/api`;
+  const token = jwt.sign({ id: customer.id, role: "user", session: "customer" }, process.env.JWT_KEY);
+  const realFetch = globalThis.fetch;
+  const provider = new Map();
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    if (!String(url).startsWith("https://api.paystack.co/")) return realFetch(url, options);
+    if (String(url).includes("/initialize")) return { json: async () => ({ status: true, data: { authorization_url: "https://checkout.paystack.com/callback-test" } }) };
+    const reference = decodeURIComponent(String(url).split("/").at(-1));
+    const changes = provider.get(reference);
+    if (changes instanceof Error) throw changes;
+    const payment = await Payment.findOne({ reference });
+    return { json: async () => ({ status: true, data: { status: "success", reference, amount: Math.round(payment.amount * 100), currency: "GHS", ...changes } }) };
+  });
+  const api = async (path, body) => {
+    const response = await fetch(`${base}${path}`, { method: body ? "POST" : "GET", headers: { "Content-Type": "application/json", "X-Session-Domain": "customer", Cookie: `customer_token=${token}` }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    const payload = await response.json();
+    return { ...payload, code: response.status, body: payload };
+  };
+  const webhook = async (reference, extra = {}) => {
+    const body = JSON.stringify({ event: "charge.success", data: { reference, ...extra } });
+    const signature = crypto.createHmac("sha512", process.env.Test_Secret_Key).update(body).digest("hex");
+    const response = await fetch(`${base}/payments/paystack/webhook`, { method: "POST", headers: { "Content-Type": "application/json", "x-paystack-signature": signature }, body });
+    return { code: response.status, ...(await response.json()) };
+  };
+  const recover = async () => {
+    const response = await fetch(`${base}/payments/reconcile`, { headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` } });
+    return { code: response.status, ...(await response.json()) };
+  };
+  const start = async ({ hotel = false } = {}) => {
+    const listing = await Property.create({ title: "Callback test rental", propertyType: hotel ? "Hotel" : "Apartment", listingType: "Rent", price: 100, pricePeriod: hotel ? "night" : "month", owner: owner._id, ownerType: "admin", status: "published", availability: "Available", ...(hotel ? { roomTypes: [{ name: "Deluxe", bedType: "King", description: "Test room", pricePerNight: 100, quantity: 2, maxGuests: 2, beds: 1, images: ["/room.jpg"] }] } : {}) });
+    const booking = await api("/rentals", { propertyId: listing.id, startDate: "2030-01-01", endDate: hotel ? "2030-01-04" : "2030-02-01", fullName: "Test Guest", email: customer.email, phone: customer.phone, currentAddress: "12 Test Road", ...(hotel ? { roomTypeId: listing.roomTypes[0].id, checkIn: "2030-01-01", checkOut: "2030-01-04", guests: 2, numberOfRooms: 1 } : {}) });
+    assert.equal(booking.code, 201, JSON.stringify(booking));
+    const checkout = await api("/payments/initialize", { rentalId: booking.data.id });
+    assert.equal(checkout.code, 200, JSON.stringify(checkout));
+    return { listing, booking: booking.data, reference: checkout.data.reference };
+  };
+
+  await t.test("a signed webhook confirms a regular rental without any customer callback or login cookie", async () => {
+    const f = await start();
+    const res = await webhook(f.reference, { customer: { id: "forged" }, metadata: { rentalId: "forged" }, amount: 1 });
+    assert.equal(res.code, 200);
+    const rental = await Rental.findById(f.booking.id);
+    assert.equal(rental.paymentStatus, "paid");
+    assert.equal(String(rental.customer), customer.id);
+    assert.equal((await Payment.findOne({ reference: f.reference })).status, "paid");
+    const notifications = await Notification.countDocuments();
+    assert.equal((await webhook(f.reference)).code, 200);
+    assert.equal((await api(`/payments/verify/${f.reference}`)).code, 200);
+    assert.equal((await Rental.findById(f.booking.id)).history.filter((h) => h.note.startsWith("Paid ")).length, 1);
+    assert.equal(await Notification.countDocuments(), notifications, "replays do not repeat payment notifications");
+  });
+
+  await t.test("hotel room payments use the same authenticated callback without losing room inventory checks", async () => {
+    const f = await start({ hotel: true });
+    assert.equal((await webhook(f.reference)).code, 200);
+    const rental = await Rental.findById(f.booking.id);
+    assert.equal(rental.paymentStatus, "paid");
+    assert.equal(rental.roomName, "Deluxe");
+    assert.equal(rental.amount, 300);
+    assert.equal((await webhook(f.reference)).code, 200);
+    assert.equal(rental.history.filter((h) => h.note.startsWith("Hotel payment verified")).length, 1);
+  });
+
+  await t.test("scheduled recovery confirms a successful payment whose webhook and browser callback were missed", async () => {
+    const f = await start();
+    assert.equal((await Rental.findById(f.booking.id)).paymentStatus, "pending");
+    const recovered = await recover();
+    assert.equal(recovered.code, 200);
+    assert.equal(recovered.data.paid, 1);
+    assert.equal((await Rental.findById(f.booking.id)).paymentStatus, "paid");
+    assert.equal((await recover()).data.checked, 0);
+  });
+
+  await t.test("a webhook racing a browser verification fulfills the booking once", async () => {
+    const f = await start();
+    const results = await Promise.all([webhook(f.reference), api(`/payments/verify/${f.reference}`)]);
+    assert.ok(results.every((res) => res.code === 200));
+    const rental = await Rental.findById(f.booking.id);
+    assert.equal(rental.paymentStatus, "paid");
+    assert.equal(rental.history.filter((h) => h.note.startsWith("Paid ")).length, 1);
+  });
+
+  await t.test("processing payments retain their hold until provider verification confirms success", async () => {
+    const f = await start();
+    const before = await Rental.findById(f.booking.id);
+    provider.set(f.reference, { status: "pending" });
+    assert.equal((await webhook(f.reference)).code, 503);
+    const verification = await api(`/payments/verify/${f.reference}`);
+    assert.equal(verification.code, 409);
+    assert.equal(verification.body.code, "PAYMENT_PENDING");
+    const after = await Rental.findById(f.booking.id);
+    assert.equal(after.status, "payment_pending");
+    assert.equal(after.paymentStartedAt.getTime(), before.paymentStartedAt.getTime());
+    assert.equal((await Payment.findOne({ reference: f.reference })).status, "pending");
+    provider.delete(f.reference);
+    assert.equal((await webhook(f.reference)).code, 200);
+  });
+
+  await t.test("a signed callback alone cannot override a mismatched provider amount, currency or reference", async () => {
+    const f = await start();
+    for (const change of [{ amount: 1 }, { currency: "USD" }, { reference: "different-payment" }]) {
+      provider.set(f.reference, change);
+      assert.equal((await webhook(f.reference)).code, 503);
+      assert.equal((await Rental.findById(f.booking.id)).paymentStatus, "pending");
+    }
+    provider.delete(f.reference);
+    assert.equal((await webhook(f.reference)).code, 200);
+  });
+
+  await t.test("provider errors return non-200 so Paystack can redeliver the webhook", async (st) => {
+    st.mock.method(console, "error", () => {});
+    const f = await start();
+    provider.set(f.reference, new Error("Simulated provider outage"));
+    assert.equal((await webhook(f.reference)).code, 500);
+    assert.equal((await Payment.findOne({ reference: f.reference })).status, "pending");
+    provider.delete(f.reference);
+    assert.equal((await webhook(f.reference)).code, 200);
+  });
+
+  await t.test("recovery leases prevent concurrent scheduled jobs from claiming the same payment", async () => {
+    const f = await start();
+    const results = await Promise.all([recover(), recover()]);
+    assert.ok(results.every((res) => res.code === 200));
+    assert.equal(results.reduce((total, res) => total + res.data.checked, 0), 1);
+    assert.equal((await Rental.findById(f.booking.id)).paymentStatus, "paid");
+  });
+
+  await t.test("a late charge for a cancelled rental is acknowledged after recording refund review", async () => {
+    const f = await start();
+    await Rental.updateOne({ _id: f.booking.id }, { status: "cancelled" });
+    assert.equal((await webhook(f.reference)).code, 200);
+    assert.equal((await Rental.findById(f.booking.id)).status, "cancelled");
+    assert.equal((await Payment.findOne({ reference: f.reference })).status, "refund_required");
+    assert.equal((await webhook(f.reference)).code, 200);
+  });
+});

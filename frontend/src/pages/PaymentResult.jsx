@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { motion } from "motion/react";
-import { CheckCircle2, Loader2, MessageCircle, RotateCcw, XCircle } from "lucide-react";
+import { CheckCircle2, Clock3, Loader2, MessageCircle, RotateCcw, XCircle } from "lucide-react";
 import { paymentApi, rentalApi } from "../frontApi";
 import { formatDate } from "../utils/date";
 import { usePlatform } from "../context/usePlatform";
@@ -14,39 +14,68 @@ const PaymentResult = () => {
   const { paths } = usePlatform();
   const [params] = useSearchParams();
   const reference = params.get("reference");
-  const [state, setState] = useState({ status: "verifying" }); // verifying | paid | failed
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState({ reference: null, status: "verifying" });
 
   useEffect(() => {
     if (!reference) return undefined;
     let active = true;
     paymentApi
       .verifyPayment(reference)
-      .then((rental) => active && setState({ status: "paid", rental }))
+      .then((rental) => active && setState({ reference, status: "paid", rental }))
       .catch(async (err) => {
-        // Look up the rental so "Try Again" and "Contact Agent" go to the right property
+        if (!active) return;
+        if (err.code === "PAYMENT_PENDING") {
+          setState({ reference, status: "pending", message: err.message });
+          return;
+        }
+        // A verification outage is not evidence of a failed charge.
+        if (err.status !== 402 && err.status !== 409) {
+          setState({ reference, status: "unverified", message: err.message });
+          return;
+        }
+        // Look up the rental so "Contact Agent" goes to the right property.
         const rental = await rentalApi
           .getMyRentals()
           .then((list) => list.find((r) => r.reference === reference))
           .catch(() => null);
-        if (active) setState({ status: "failed", message: err.message, rental });
+        if (active) setState({ reference, status: "failed", message: err.message, rental });
       });
     return () => {
       active = false;
     };
-  }, [reference]);
+  }, [reference, attempt]);
 
   if (!reference) return <Navigate to="/account/rentals" replace />;
 
-  const { status, rental, message } = state;
+  const { status, rental, message } = state.reference === reference ? state : { status: "verifying" };
+  const checkAgain = () => {
+    setState({ reference, status: "verifying" });
+    setAttempt(value => value + 1);
+  };
 
   return (
     <div className="grid min-h-[70vh] place-items-center bg-gray-50 px-4 py-16">
-      <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-xl sm:p-10">
+      <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-xl sm:p-10" aria-live="polite" aria-busy={status === "verifying"}>
         {status === "verifying" && (
           <>
             <Loader2 className="mx-auto h-10 w-10 animate-spin text-brand-500" />
             <h1 className="mt-5 text-xl font-bold text-gray-900">Confirming your payment...</h1>
-            <p className="mt-2 text-sm text-gray-600">Please keep this page open. We're checking the payment with Paystack.</p>
+            <p className="mt-2 text-sm text-gray-600">We're checking your existing payment with Paystack. Please don't start another payment.</p>
+          </>
+        )}
+
+        {(status === "pending" || status === "unverified") && (
+          <>
+            <span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-amber-50"><Clock3 aria-hidden="true" className="h-10 w-10 text-amber-600" /></span>
+            <h1 className="mt-6 text-2xl font-extrabold text-gray-900">{status === "pending" ? "Payment still processing" : "Unable to verify payment"}</h1>
+            <p className="mt-2 text-gray-600">{status === "pending" ? "Paystack hasn't confirmed the final result yet. Your payment has not been marked as failed." : "We couldn't check the payment status right now. This does not mean your payment failed."}</p>
+            <p className="mt-4 rounded-2xl bg-amber-50 p-3 text-sm text-amber-900">{message}{status === "unverified" && " Please do not pay again while confirmation is pending."}</p>
+            <p className="mt-4 break-all font-mono text-xs text-gray-500">Reference: {reference}</p>
+            <div className="mt-8 grid gap-3">
+              <button type="button" onClick={checkAgain} className="btn btn-primary"><RotateCcw aria-hidden="true" className="h-4 w-4" />Check again</button>
+              <Link to="/account/rentals" className="btn btn-light">View bookings &amp; payment status</Link>
+            </div>
           </>
         )}
 

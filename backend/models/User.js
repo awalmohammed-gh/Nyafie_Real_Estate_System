@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { ACCOUNT_TYPES } from "../utils/accountTypes.js";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 import { schemaOptions } from "../utils/schemaOptions.js";
 
 const applicationSchema = new mongoose.Schema({
@@ -56,6 +57,9 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     phone: { type: String, default: "", trim: true },
     password: { type: String, required: true, minlength: 8, select: false },
+    // Empty only for accounts whose password has never changed. Older cookies
+    // remain compatible until the first change; every later change revokes them.
+    sessionVersion: { type: String, default: "", select: false },
     profileImage: { type: String, default: "" },
     // Roles and application decisions are assigned only by server-owned flows.
     role: { type: String, enum: ["user", "agent", "admin"], default: "user" },
@@ -80,6 +84,9 @@ const userSchema = new mongoose.Schema(
 userSchema.pre("save", async function hashPassword() {
   if (!this.isModified("password")) return;
   this.password = await bcrypt.hash(this.password, 10);
+  // Persist the password hash and revocation marker in the same database write.
+  // Random versions also distinguish changes made within the same second.
+  if (!this.isNew) this.sessionVersion = randomUUID();
 });
 
 userSchema.methods.matchPassword = function matchPassword(plain) {

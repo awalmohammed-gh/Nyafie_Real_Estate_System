@@ -24,12 +24,29 @@ export const publicAgent = (user) => ({
   agencyLogo: user.agentApplication?.agencyLogo || "",
 });
 
+// Agency staff work under the agency's account, so only owners and independent agents are listed
+const LISTED_AGENT = { role: "agent", isActive: true, "agentApplication.status": "approved", agency: { $exists: false } };
+const inGoodStanding = (settings, agent) => !settings.agent.requireSubscription || subscriptionState(agent.subscription).isActive;
+
 export const visibleAgentIds = async () => {
-  const settings = await getSettings();
-  // Agency staff work under the agency's account, so only owners and independent agents are listed
-  const agents = await User.find({ role: "agent", isActive: true, "agentApplication.status": "approved", agency: { $exists: false } }).populate({ path: "subscription", populate: { path: "plan" } });
-  return agents.filter((agent) => !settings.agent.requireSubscription || subscriptionState(agent.subscription).isActive)
+  const [settings, agents] = await Promise.all([
+    getSettings(),
+    User.find(LISTED_AGENT).select("subscription").populate({
+      path: "subscription",
+      select: "status paymentStatus expiresAt plan",
+      populate: { path: "plan", select: "priorityVisibility" },
+    }),
+  ]);
+  return agents.filter((agent) => inGoodStanding(settings, agent))
     .map((agent) => ({ id: agent._id, priority: Boolean(agent.subscription?.plan?.priorityVisibility) }));
+};
+
+// The publicQuery() rule for a single listing, without loading the whole agent directory
+export const isPubliclyVisible = async (property) => {
+  if (property.status !== "published") return false;
+  if (property.ownerType === "admin") return true;
+  const [settings, owner] = await Promise.all([getSettings(), User.findOne({ _id: property.owner, ...LISTED_AGENT }).select("subscription").populate("subscription")]);
+  return Boolean(owner) && inGoodStanding(settings, owner);
 };
 
 export const publicQuery = async () => {

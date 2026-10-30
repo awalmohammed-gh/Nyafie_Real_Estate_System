@@ -32,9 +32,17 @@ export const checkPaystackConfig = () => {
 export const paystack = async (path, options = {}) => {
   const response = await fetch(`${PAYSTACK}${path}`, {
     ...options,
+    signal: options.signal || AbortSignal.timeout(8000),
     headers: { Authorization: `Bearer ${secretKey()}`, "Content-Type": "application/json" },
   });
   return response.json();
+};
+
+// Signatures cover the exact bytes Paystack sent, before JSON parsing.
+export const validPaystackSignature = (body, signature) => {
+  if (!Buffer.isBuffer(body) || typeof signature !== "string" || !/^[a-f\d]{128}$/i.test(signature) || !secretKey()) return false;
+  const expected = crypto.createHmac("sha512", secretKey()).update(body).digest();
+  return crypto.timingSafeEqual(expected, Buffer.from(signature, "hex"));
 };
 
 // Unique payment reference, e.g. HB-LX2K9A-3F9A1C (prefix tells subscriptions and rentals apart)

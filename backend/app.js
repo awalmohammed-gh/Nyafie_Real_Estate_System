@@ -26,6 +26,8 @@ import contactRoutes from "./routes/contactRoutes.js";
 import { listConversations } from "./controllers/chatController.js";
 import { protectCustomer } from "./middleware/authMiddleware.js";
 import { allowedOrigins, limits, originCheck, rejectOperatorKeys, securityHeaders } from "./middleware/security.js";
+import { authenticatePaystackWebhook, authenticatePaymentRecovery } from "./middleware/paymentCallbacks.js";
+import { paystackWebhook, reconcileRentalPayments } from "./controllers/paymentCallbackController.js";
 
 
 // Exported without a listener: Vercel imports the app; server.js starts local development.
@@ -38,6 +40,17 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
   if (process.env.VERCEL) app.set("trust proxy", 1);
   else if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
   app.use("/api", securityHeaders);
+  const initializeRequest = async (_req, res, next) => {
+    try { await initialize(); next(); }
+    catch (error) {
+      console.error("Backend initialization failed:", error.message);
+      res.status(503).json({ success: false, message: "Service is temporarily unavailable. Please try again." });
+    }
+  };
+  // Provider/service authentication replaces browser cookies and Origin checks.
+  // Raw bytes must be authenticated before JSON parsing or any database work.
+  app.post("/api/payments/paystack/webhook", express.raw({ type: "application/json", limit: "256kb", inflate: false }), authenticatePaystackWebhook, initializeRequest, paystackWebhook);
+  app.get("/api/payments/reconcile", authenticatePaymentRecovery, initializeRequest, reconcileRentalPayments);
   app.use(cors({ origin: (origin, callback) => callback(null, !origin || allowedOrigins().includes(origin)), credentials: true }));
   // Individual image uploads are <= 3 MB; listing saves contain only cloud URLs.
   app.use(express.json({ limit: "4mb" }));
@@ -47,13 +60,7 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
 
 
   // One connection/bootstrap promise is reused across concurrent function requests.
-  app.use(async (_req, res, next) => {
-    try { await initialize(); next(); }
-    catch (error) {
-      console.error("Backend initialization failed:", error.message);
-      res.status(503).json({ success: false, message: "Service is temporarily unavailable. Please try again." });
-    }
-  });
+  app.use(initializeRequest);
 
   //api endpoints
   app.use("/api", limits.api);
@@ -65,6 +72,7 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
   app.post(["/api/auth/register", "/api/auth/customer/register", "/api/auth/agent/register"], limits.register);
   app.put(["/api/auth/me/password", "/api/auth/customer/me/password", "/api/auth/agent/me/password", "/api/auth/admin/me/password", "/api/admin/account"], limits.password);
   app.use(["/api/payments", "/api/subscriptions/initialize", "/api/subscriptions/verify"], limits.payments);
+  app.post("/api/properties/:id/view", limits.views);
   app.post(["/api/inquiries", "/api/offers", "/api/rentals", "/api/sale-requests", "/api/conversations", "/api/properties/:id/reviews", "/api/team/invites/:token/accept"], limits.contact);
 
   app.use("/api/auth", authRoutes);

@@ -26,6 +26,7 @@ client.interceptors.response.use(
       (error.request && !error.response ? "Can't reach the server. Please check your connection and try again." : error.message);
     const wrapped = new Error(message);
     wrapped.status = error.response?.status;
+    wrapped.code = error.response?.data?.code;
     return Promise.reject(wrapped);
   }
 );

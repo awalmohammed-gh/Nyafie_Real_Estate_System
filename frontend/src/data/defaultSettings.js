@@ -2,9 +2,10 @@
 // until GET /api/settings returns the saved values from MongoDB (managed from /admin/settings).
 export const defaultSettings = {
   general: {
-    siteName: "HomeBase",
-    tagline: "Real Estate in Ghana",
-    description: "Discover verified homes for sale and rent across Ghana, with trusted local agents.",
+    siteName: "NyaFie",
+    tagline: "Your Next Home Starts Here.",
+    description: "NyaFie is a Ghanaian real estate marketplace connecting property seekers with trusted agents to discover, rent, and buy homes across Ghana.",
+    fullDescription: "NyaFie is a modern real estate marketplace designed to make finding a home in Ghana simple, convenient, and accessible.\n\nWhether you're looking to rent an apartment, buy a house, or explore available properties, NyaFie helps you discover listings that match your needs, budget, and preferred location.\n\nThe platform also empowers real estate agents and agencies to list properties, manage their listings, and connect directly with potential buyers and tenants.\n\nWith an easy-to-use interface, advanced property search, and direct communication between customers and agents, NyaFie brings property seekers and real estate professionals together in one convenient platform.\n\nNyaFie: Your Next Home Starts Here.",
   },
   branding: { logo: "", logoDark: "", favicon: "" },
   seo: { title: "", metaDescription: "", keywords: "", ogImage: "", baseUrl: "", allowIndexing: true },

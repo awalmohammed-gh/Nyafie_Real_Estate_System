@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { Building, Building2, CreditCard, HandCoins, Inbox, KeyRound, LayoutDashboard, MessageCircle, LifeBuoy, PlusSquare, Settings, Users } from "lucide-react";
 import { useUnreadMessages } from "../hooks/useUnreadMessages";
+import { useAgentLiveRefresh } from "../hooks/useAgentLiveRefresh";
 import { useAgent } from "../hooks/useAgent";
 import { useRealEstate } from "../context/useRealEstate";
 import { usePlatform } from "../context/usePlatform";
@@ -84,6 +85,7 @@ const AgentShell = () => {
   const { pending } = useTransactions();
   const unreadMessages = useUnreadMessages("agent");
   const { pathname } = useLocation();
+  useAgentLiveRefresh();
 
   const badges = {
     inquiries: myInquiries.filter((inq) => inq.status === "New").length,

@@ -63,7 +63,7 @@ export const register = async (req, res) => {
     password,
     role: "user",
   });
-  setAuthCookie(res, user._id, "customer");
+  setAuthCookie(res, user._id, "customer", user.sessionVersion);
   notifyAdmins({
     type: "user",
     title: "New account",
@@ -120,7 +120,7 @@ export const registerAgent = async (req, res) => {
       return fail(res, 409, "An account with this email already exists.");
     throw error;
   }
-  setAuthCookie(res, user._id, "agent");
+  setAuthCookie(res, user._id, "agent", user.sessionVersion);
   ok(
     res,
     await loadUser(user._id),
@@ -131,7 +131,7 @@ export const registerAgent = async (req, res) => {
 
 const checkCredentials = async (email, password) => {
   if (typeof email !== "string" || typeof password !== "string" || !password || Buffer.byteLength(password, "utf8") > 72) return null;
-  const user = await User.findOne({ email: email.trim().toLowerCase().slice(0, 254) }).select("+password");
+  const user = await User.findOne({ email: email.trim().toLowerCase().slice(0, 254) }).select("+password +sessionVersion");
   if (!user) {
     await bcrypt.compare(password, DUMMY_HASH); // same work as a real check: no account-existence timing signal
     return null;
@@ -148,7 +148,7 @@ export const loginFor = (session) => async (req, res) => {
   // Removed providers: a plain message, never the internal reason
   if (user.agentApplication?.status === "removed")
     return fail(res, 403, "Your provider account is no longer active. Contact HomeBase support if you believe this is an error.");
-  setAuthCookie(res, user._id, session);
+  setAuthCookie(res, user._id, session, user.sessionVersion);
   ok(res, await loadUser(user._id), "Signed in");
 };
 export const login = loginFor("customer");
@@ -189,12 +189,13 @@ export const updateMe = async (req, res) => {
 // PUT /api/auth/me/password
 export const changePassword = async (req, res) => {
   const { currentPassword, newPassword } = req.body;
-  const user = await User.findById(req.user._id).select("+password");
-  if (typeof currentPassword !== "string" || !(await user.matchPassword(currentPassword)))
+  const user = await User.findById(req.user._id).select("+password +sessionVersion");
+  if (!user || typeof currentPassword !== "string" || !(await user.matchPassword(currentPassword)))
     return fail(res, 400, "Your current password is incorrect.");
   const problem = passwordProblem(newPassword);
   if (problem) return fail(res, 400, problem.replace("your password", "your new password"));
   user.password = newPassword;
   await user.save();
-  ok(res, null, "Password updated");
+  setAuthCookie(res, user._id, req.sessionDomain, user.sessionVersion);
+  ok(res, null, "Password updated. Other sessions have been signed out.");
 };

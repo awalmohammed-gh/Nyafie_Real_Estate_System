@@ -41,7 +41,7 @@ test("anonymous contact submission reaches an admin-only inbox and survives stat
   process.env.JWT_KEY = "contact-inbox-test-signing-key-123456";
   process.env.CLIENT_URL = "http://localhost:5173";
   const admin = { _id: new mongoose.Types.ObjectId(), role: "admin", isActive: true };
-  User.findById = async (id) => String(id) === String(admin._id) ? admin : null;
+  User.findById = (id) => ({ select: async () => String(id) === String(admin._id) ? admin : null });
   Setting.findOneAndUpdate = () => ({ lean: async () => ({ notifications: { messages: true } }) });
   Notification.create = async (record) => notifications.push(record);
   const create = async (fields) => {

@@ -24,8 +24,11 @@ const paymentSchema = new mongoose.Schema(
     paidAt: { type: Date },
     confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // office payments
     note: { type: String, default: "" },
+    nextReconcileAt: { type: Date, default: null },
   },
   schemaOptions
 );
+
+paymentSchema.index({ kind: 1, method: 1, status: 1, nextReconcileAt: 1, createdAt: 1 });
 
 export default mongoose.models.Payment || mongoose.model("Payment", paymentSchema);

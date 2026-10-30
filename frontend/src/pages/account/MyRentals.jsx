@@ -15,7 +15,7 @@ const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 // What each rental status means for the customer
 const statusHelp = {
   Pending: "Complete your payment to book this property.",
-  "Payment Pending": "Your checkout is in progress. If you didn't finish paying, you can try again.",
+  "Payment Pending": "Your payment is awaiting confirmation. Check its status before paying again.",
   Paid: "Payment received. Waiting for the owner to confirm your rental.",
   Confirmed: "Your rental is confirmed. The owner will arrange your move-in.",
   Active: "You've moved in. Enjoy your new home!",
@@ -49,6 +49,9 @@ const MyRentals = () => {
         <ul className="space-y-4">
           {rentals.map((rental) => {
             const unpaid = ["Pending", "Payment Pending"].includes(rental.status) && rental.paymentStatus !== "Paid";
+            const checkPayment = unpaid && rental.status === "Payment Pending" && Boolean(rental.reference);
+            const checkoutPath = rental.hotelId ? `${bookingPath(rental.property.id, rental.roomTypeId)}&booking=${rental.id}` : `/checkout/rent/${rental.property.id}`;
+            const paymentPath = checkPayment ? `/payment/success?reference=${encodeURIComponent(rental.reference)}` : checkoutPath;
             const open = openId === rental.id;
             return (
               <li key={rental.id} className="rounded-3xl bg-white p-4 ring-1 ring-gray-200 sm:p-5">
@@ -102,9 +105,9 @@ const MyRentals = () => {
                     )}
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                       {unpaid && (
-                        <Link to={rental.hotelId ? `${bookingPath(rental.property.id, rental.roomTypeId)}&booking=${rental.id}` : `/checkout/rent/${rental.property.id}`} className="btn btn-primary px-4 py-2 text-xs">
+                        <Link to={paymentPath} className="btn btn-primary px-4 py-2 text-xs">
                           <CreditCard className="h-3.5 w-3.5" />
-                          Complete payment
+                          {checkPayment ? "Check payment status" : "Complete payment"}
                         </Link>
                       )}
                       {rental.conversationId && (

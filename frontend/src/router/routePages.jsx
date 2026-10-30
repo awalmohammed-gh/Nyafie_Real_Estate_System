@@ -56,3 +56,5 @@ export const AdminPlans = lazyPage(() => import('../pages/admin/AdminPlans'));
 export const AdminReports = lazyPage(() => import('../pages/admin/AdminReports'));
 export const AdminSettings = lazyPage(() => import('../pages/admin/AdminSettings'));
 export const AdminPropertyEditor = lazyPage(() => import('../pages/admin/AdminPropertyEditor'));
+
+export const AdminFinancialInventory = lazyPage(() => import('../pages/admin/AdminFinancialInventory'));

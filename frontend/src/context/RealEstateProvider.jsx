@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isListingPublic, mergeAgents } from "../utils/property";
 import { readStorage, writeStorage } from "../utils/storage";
 import { RealEstateContext } from "./realEstateContext";
@@ -7,6 +7,7 @@ import { propertyApi, agentApi, adminApi, inquiryApi, userApi } from "../frontAp
 import { canAccessAgent } from "../utils/sessionDomain";
 
 const GUEST_FAVORITES_KEY = "homebase:favorites";
+const EMPTY_PROPERTIES = [];
 
 // Listings, inquiries and favorites backed by the API.
 //  - properties: what the public can see
@@ -17,9 +18,14 @@ export const RealEstateProvider = ({ children }) => {
   const role = user?.role === "agent" && !canAccessAgent(user) ? undefined : user?.role;
   const userId = user?.id;
 
-  const [properties, setProperties] = useState([]);
+  const [publicSnapshot, setPublicSnapshot] = useState(null);
+  const properties = publicSnapshot && publicSnapshot.userId === userId ? publicSnapshot.data : EMPTY_PROPERTIES;
+  const [publicPropertiesRequested, setPublicPropertiesRequested] = useState(false);
+  const requestPublicProperties = useCallback(() => setPublicPropertiesRequested(true), []);
+  const publicRequest = useRef(null);
   const [agentDirectory, setAgentDirectory] = useState(undefined);
-  const [propertiesLoading, setPropertiesLoading] = useState(true);
+  const [publicLoadState, setPublicLoadState] = useState(null);
+  const propertiesLoading = !publicLoadState || publicLoadState.userId !== userId;
   const [listings, setListings] = useState([]);
   const [listingsLoading, setListingsLoading] = useState(false);
   const [listingsLoadedFor, setListingsLoadedFor] = useState(null); // role whose listings are loaded
@@ -27,13 +33,21 @@ export const RealEstateProvider = ({ children }) => {
   const [guestFavorites, setGuestFavorites] = useState(() => readStorage(GUEST_FAVORITES_KEY, []));
   const [savedIds, setSavedIds] = useState([]);
 
-  const refreshProperties = useCallback(async () => {
-    try {
-      setProperties(await propertyApi.getProperties());
-    } finally {
-      setPropertiesLoading(false);
-    }
-  }, []);
+  const refreshProperties = useCallback(async ({ fresh = false } = {}) => {
+    if (!fresh && publicRequest.current && publicRequest.current.userId === userId) return publicRequest.current.promise;
+    const request = { userId };
+    publicRequest.current = request;
+    request.promise = propertyApi.getProperties().then((data) => {
+      if (publicRequest.current === request) setPublicSnapshot({ userId, data });
+      return data;
+    }).finally(() => {
+      if (publicRequest.current === request) {
+        publicRequest.current = null;
+        setPublicLoadState({ userId });
+      }
+    });
+    return request.promise;
+  }, [userId]);
 
   const refreshListings = useCallback(async () => {
     if (role !== "agent" && role !== "admin") return setListings([]);
@@ -55,8 +69,8 @@ export const RealEstateProvider = ({ children }) => {
   // Admin account actions (suspend, cancel a plan...) change what is public, so
   // reload public listings whenever the admin user list is refreshed
   useEffect(() => {
-    refreshProperties().catch(() => {});
-  }, [refreshProperties, users, userId]);
+    if (publicPropertiesRequested) refreshProperties().catch(() => {});
+  }, [refreshProperties, users, publicPropertiesRequested]);
 
   // Agent profiles are visible only to the current signed-in account.
   // Ignore requests that finish after logout or an account switch.
@@ -84,12 +98,18 @@ export const RealEstateProvider = ({ children }) => {
 
   // After any listing change, refresh both the public list and the owner's list
   const refreshAfterChange = useCallback(async () => {
-    await Promise.all([refreshProperties(), refreshListings()]);
+    await Promise.all([refreshProperties({ fresh: true }), refreshListings()]);
   }, [refreshProperties, refreshListings]);
 
   const directory = agentDirectory?.userId === userId ? agentDirectory?.data : undefined;
   const agents = useMemo(() => userId ? mergeAgents(directory, properties) : [], [userId, directory, properties]);
-  const agentsLoading = Boolean(userId) && (propertiesLoading || directory === undefined);
+  const agentsLoading = Boolean(userId) && (directory === undefined || (directory === null && propertiesLoading));
+
+  // Only load the shared public list for homepage sections or a directory fallback.
+  // Catalogue and detail pages already fetch their own results.
+  useEffect(() => {
+    if (directory === null) requestPublicProperties();
+  }, [directory, requestPublicProperties]);
 
   const addListing = useCallback(
     async (data) => {
@@ -136,9 +156,8 @@ export const RealEstateProvider = ({ children }) => {
     [role, refreshAfterChange]
   );
 
-  const recordView = useCallback((id) => {
-    propertyApi.recordPropertyView(id).catch(() => {});
-  }, []);
+  // Resolves to { counted, views }, or null when the request failed (the page carries on regardless)
+  const recordView = useCallback((id) => propertyApi.recordPropertyView(id).catch(() => null), []);
 
   const addInquiry = useCallback(
     async ({ propertyId, name, email, phone, message }) => {
@@ -201,6 +220,7 @@ export const RealEstateProvider = ({ children }) => {
       addInquiry,
       updateInquiryStatus,
       refreshProperties,
+      requestPublicProperties,
       refreshListings,
       refreshInquiries,
       refreshUser,
@@ -229,6 +249,7 @@ export const RealEstateProvider = ({ children }) => {
       addInquiry,
       updateInquiryStatus,
       refreshProperties,
+      requestPublicProperties,
       refreshListings,
       refreshInquiries,
       refreshUser,

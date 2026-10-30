@@ -96,10 +96,11 @@ const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const toTypeValue = (value) => String(value ?? "").trim().replace(/\s+/g, "-");
 
 const validators = {
-  general: async (b) => ({
+  general: async (b, current) => ({
     siteName: text(b.siteName, "Website name", 40, { required: true }),
     tagline: text(b.tagline, "Tagline", 80),
     description: text(b.description, "Website description", 300),
+    fullDescription: text(b.fullDescription ?? current.fullDescription, "Full website description", 5000),
   }),
 
   branding: async (b, current) => ({

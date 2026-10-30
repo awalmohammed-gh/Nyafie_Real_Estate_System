@@ -28,7 +28,7 @@ export const planFeatureList = (plan) => [
   plan.featuredLimit > 0 ? `${plan.featuredLimit} featured listings` : "No featured listings",
   `${ANALYTICS_LEVELS[plan.analytics]?.label} analytics: ${ANALYTICS_LEVELS[plan.analytics]?.description.toLowerCase()}`,
   plan.inquiryManagement === "full" ? "Full inquiry management" : "Customer inquiries",
-  plan.internalChat ? "HomeBase customer chat" : "Inquiries, calls, email & WhatsApp (no HomeBase chat)",
+  plan.internalChat ? "Customer chat" : "Inquiries, calls, email & WhatsApp (no in-app chat)",
   ...(isOrganization(plan.accountType) && plan.teamMemberLimit > 0 ? [`Up to ${plan.teamMemberLimit} team members, with listing and lead assignment`] : []),
   ...(plan.priorityVisibility ? ["Priority visibility in search"] : []),
   ...(plan.extraFeatures || []),

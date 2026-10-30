@@ -5,7 +5,8 @@ import User from "../models/User.js";
 import { siteName } from "../models/Setting.js";
 import { notifyAdmins } from "../utils/notify.js";
 import { COUNTED_STATES, withinImageLimit } from "../utils/permissions.js";
-import { PUBLIC_AGENT_FIELDS, publicAgent, presentProperties, publicQuery, visibleAgentIds } from "../utils/marketplace.js";
+import { PUBLIC_AGENT_FIELDS, publicAgent, presentProperties, publicQuery, visibleAgentIds, isPubliclyVisible } from "../utils/marketplace.js";
+import { claimView, isCrawler, viewerHash } from "../utils/propertyViews.js";
 export { publicQuery, visibleAgentIds } from "../utils/marketplace.js";
 import { resolveImages } from "../utils/uploadImages.js";
 import { ok, fail } from "../utils/response.js";
@@ -278,12 +279,34 @@ export const getProperty = async (req, res) => {
   ok(res, (await presentProperties([property], { includeAgentDetails: Boolean(req.user) }))[0]);
 };
 
-// POST /api/properties/:id/view
+/**
+ * POST /api/properties/:id/view -> { counted, views }
+ * Called by the property details page (never by cards or search). The browser only names the listing:
+ * who is viewing comes from verified session cookies or a server-side hash, and the total from the
+ * database. Each viewer counts once per listing per window (utils/propertyViews.js). HomeBase admins,
+ * anyone in the organisation that owns the listing, and crawlers never add views. Sold and rented
+ * listings stay public, so they still count; drafts, hidden and removed listings do not.
+ */
 export const recordView = async (req, res) => {
-  const property = await Property.findById(req.params.id).catch(() => null);
-  if (!property || property.ownerType !== "agent" || isOwner(property, req.user)) return ok(res, null);
-  await Property.updateOne({ _id: property._id, status: "published" }, { $inc: { views: 1 } });
-  ok(res, null);
+  const property = mongoose.isValidObjectId(req.params.id) ? await Property.findById(req.params.id).select("status ownerType owner views") : null;
+  if (!property) return fail(res, 404, "Property not found.");
+  const result = (counted, views = property.views || 0) => ok(res, { counted, views });
+  const { customer, agent, admin } = req.viewerSessions || {};
+  const ownTeam = Boolean(agent) && property.ownerType === "agent" && String(teamOf(agent).ownerId) === String(property.owner);
+  if (admin || ownTeam) return result(false);
+  if (!await isPubliclyVisible(property)) return fail(res, 404, "Property not found.");
+  if (isCrawler(req.get("user-agent"))) return result(false);
+
+  // Tracking problems never break the page: the visit just isn't counted
+  try {
+    if (!await claimView(property._id, viewerHash(req, customer || agent))) return result(false);
+    // Atomic increment; a view is not an edit, so updatedAt stays as it was
+    const updated = await Property.findByIdAndUpdate(property._id, { $inc: { views: 1 } }, { returnDocument: "after", projection: { views: 1 }, timestamps: false });
+    return result(true, updated?.views ?? (property.views || 0) + 1);
+  } catch (error) {
+    console.error(`[views] could not record a view for ${property._id}: ${error.message}`);
+    return result(false);
+  }
 };
 
 // GET /api/properties/my (agent)

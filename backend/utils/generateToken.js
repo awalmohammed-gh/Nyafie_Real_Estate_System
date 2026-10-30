@@ -17,10 +17,10 @@ const HOUR = 60 * 60 * 1000;
 const SESSION_LIFETIME = Object.freeze({ customer: 7 * 24 * HOUR, agent: 7 * 24 * HOUR, admin: 12 * HOUR });
 
 // Both the signed claims and cookie identify a single session domain.
-export const setAuthCookie = (res, userId, session) => {
+export const setAuthCookie = (res, userId, session, sessionVersion = "") => {
   const name = cookieName(session);
   const lifetime = SESSION_LIFETIME[session];
-  const token = jwt.sign({ id: String(userId), role: SESSION_ROLES[session], session }, process.env.JWT_KEY, {
+  const token = jwt.sign({ id: String(userId), role: SESSION_ROLES[session], session, sessionVersion }, process.env.JWT_KEY, {
     algorithm: "HS256", expiresIn: Math.floor(lifetime / 1000),
   });
   res.cookie(name, token, { ...cookieOptions(), maxAge: lifetime });

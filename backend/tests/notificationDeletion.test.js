@@ -14,7 +14,7 @@ const matches = (doc, filter) => Object.entries(filter).every(([key, value]) => 
   if (value && typeof value === "object" && Array.isArray(value.$in)) return value.$in.some((v) => String(v) === String(doc[key]));
   return String(doc[key]) === String(value);
 });
-const chain = (rows) => ({ sort: () => chain(rows), limit: () => chain(rows), then: (resolve, reject) => Promise.resolve(rows).then(resolve, reject) });
+const chain = (rows) => ({ select: () => chain(rows), sort: () => chain(rows), limit: () => chain(rows), then: (resolve, reject) => Promise.resolve(rows).then(resolve, reject) });
 
 const setup = async (t) => {
   process.env.JWT_KEY = "notification-deletion-test-key";
@@ -28,7 +28,7 @@ const setup = async (t) => {
   docs.forEach((doc) => { doc.id = String(doc._id); });
   const [mine1, mine2, mine3, others, agents, shared] = docs;
 
-  t.mock.method(User, "findById", (id) => Promise.resolve(users.find((user) => String(user._id) === String(id))));
+  t.mock.method(User, "findById", (id) => chain(users.find((user) => String(user._id) === String(id))));
   t.mock.method(Notification, "find", (filter) => chain(docs.filter((doc) => matches(doc, filter))));
   t.mock.method(Notification, "countDocuments", async (filter) => docs.filter((doc) => matches(doc, filter)).length);
   t.mock.method(Notification, "updateMany", async (filter, update) => { docs.filter((doc) => matches(doc, filter)).forEach((doc) => Object.assign(doc, update)); });

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { propertyApi } from "../frontApi";
 import { useApiQuery } from "./useApiQuery";
 import { useRealEstate } from "../context/useRealEstate";
@@ -17,11 +17,11 @@ const pick = (items, count, shown) => {
 
 /**
  * Every homepage property section in one place. Featured listings come from one sorted search;
- * rentals, sales, hotels and recent listings are selected from the public listings the app
- * already loads (RealEstateProvider), so the homepage adds a single request for properties.
+ * rentals, sales, hotels and recent listings share a public list requested only when needed.
  */
 export const useHomeListings = () => {
-  const { properties, propertiesLoading } = useRealEstate();
+  const { properties, propertiesLoading, requestPublicProperties } = useRealEstate();
+  useEffect(() => { requestPublicProperties(); }, [requestPublicProperties]);
   const featured = useApiQuery("home-featured", () => propertyApi.searchProperties({ sort: "featured", availability: "Available", limit: 8 }));
 
   const sections = useMemo(() => {
