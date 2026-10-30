@@ -4,7 +4,7 @@ import { CheckCircle2, ChevronRight, CircleDashed, RefreshCw, XCircle } from "lu
 import AdminPageTitle from "../../components/admin/AdminPageTitle";
 import DataTable from "../../components/ui/DataTable";
 import StatusBadge from "../../components/ui/StatusBadge";
-import SidePanel from "../../components/ui/SidePanel";
+import AdminRecordModal from "../../components/admin/AdminRecordModal";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import FilterTabs from "../../components/ui/FilterTabs";
 import EmptyState from "../../components/ui/EmptyState";
@@ -30,7 +30,7 @@ const STATUSES = ["pending", "incomplete", "approved", "rejected", "suspended", 
 const STATUS_LABEL = { all: "All", pending: "Pending review", incomplete: "Not submitted", approved: "Approved", rejected: "Rejected", suspended: "Suspended" };
 const ACTION_LABEL = { approve: "Approve", reject: "Reject", suspend: "Suspend", reactivate: "Reactivate" };
 const statusOf = (agent) => (agent.status === "suspended" ? "suspended" : agent.agentApplication?.status || "incomplete");
-const REVIEW_ACTIONS = { pending: ["approve", "reject"], approved: ["suspend"], suspended: ["reactivate"] };
+const REVIEW_ACTIONS = { pending: ["approve", "reject"], approved: ["suspend"], suspended: ["reactivate"]};
 const agentType = (agent) => ({ agency: "Agency", company: "Company" })[agent.agentApplication?.agentType] || "Individual agent";
 
 // The same requirements the server checks before it allows approval
@@ -190,7 +190,7 @@ const AdminAgentApplications = () => {
         />
       )}
 
-      <SidePanel
+      <AdminRecordModal
         open={Boolean(selected)}
         onClose={() => show(null)}
         title={selected?.name}
@@ -283,7 +283,7 @@ const AdminAgentApplications = () => {
             </Section>
           </div>
         )}
-      </SidePanel>
+      </AdminRecordModal>
 
       <ConfirmDialog
         open={Boolean(confirmation)}

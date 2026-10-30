@@ -5,6 +5,7 @@ import DataTable from "../ui/DataTable";
 import EmptyState from "../ui/EmptyState";
 import FilterTabs from "../ui/FilterTabs";
 import SidePanel from "../ui/SidePanel";
+import AdminRecordModal from "../admin/AdminRecordModal";
 import WorkspaceStats from "../agent/WorkspaceStats";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import { ErrorState, TableSkeleton } from "../dashboard/States";
@@ -48,8 +49,7 @@ const ACTIONS = {
 // Rental bookings. scope "agent": own listings only (enforced by the API); "admin": every rental.
 const RentalsBoard = ({ scope }) => {
   const isAdmin = scope === "admin";
-  // Records open in a side panel for admins and agents alike (stage, payment, history, next action)
-  const Detail = SidePanel;
+  const Detail = isAdmin ? AdminRecordModal : SidePanel;
   const run = useAsyncAction();
   const { rentals, loading, error: loadError, reload, updateTransaction } = useTransactions();
   const [params] = useSearchParams();

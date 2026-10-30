@@ -1,16 +1,15 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Building2, CheckCircle2, ExternalLink, Eye, EyeOff, Pencil, Star, StarOff, Trash2, X, XCircle, Plus, Tag } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Building2, CheckCircle2, ClipboardCheck, ExternalLink, Eye, EyeOff, FilePenLine, MapPin, Pencil, RotateCcw, Star, StarOff, Trash2, X, XCircle, Plus, Tag } from "lucide-react";
 import { useAdminData } from "../../hooks/useAdminData";
 import { useToast } from "../../context/useToast";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
-import AdminPageTitle from "../../components/admin/AdminPageTitle";
 import DataTable from "../../components/ui/DataTable";
 import FilterTabs from "../../components/ui/FilterTabs";
 import SearchInput from "../../components/ui/SearchInput";
 import StatusBadge from "../../components/ui/StatusBadge";
 import ActionMenu from "../../components/ui/ActionMenu";
-import SidePanel from "../../components/ui/SidePanel";
+import AdminRecordModal from "../../components/admin/AdminRecordModal";
 import Modal from "../../components/ui/Modal";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import EmptyState from "../../components/ui/EmptyState";
@@ -20,6 +19,16 @@ import { usePlatform } from "../../context/usePlatform";
 import { useViewMode } from "../../hooks/useViewMode";
 import PropertyTile from "../../components/dashboard/PropertyTile";
 import ViewToggle from "../../components/dashboard/ViewToggle";
+import { propertyCardImageSources } from "../../utils/propertyImages";
+import "./adminProperties.css";
+
+const priceOf = (property) => {
+  if (property.property.type.toLowerCase() === "hotel") {
+    const prices = (property.roomTypes || []).filter((room) => room.active).map((room) => room.pricePerNight);
+    return prices.length ? Math.min(...prices) : null;
+  }
+  return property.pricing.amount ?? property.pricing.perNight ?? property.pricing.perMonth ?? null;
+};
 
 const EditPropertyModal = ({ property, onClose }) => {
   const { updateListing } = useAdminData();
@@ -81,7 +90,7 @@ const EditPropertyModal = ({ property, onClose }) => {
 };
 
 const AdminProperties = () => {
-  const { siteName } = usePlatform();
+  const { siteName, paths } = usePlatform();
   const { listings, ownerOf, isPubliclyVisible, setListingState, setFeatured, deleteListing, updateListing, users } = useAdminData();
   const run = useAsyncAction();
   const navigate = useNavigate();
@@ -89,6 +98,8 @@ const AdminProperties = () => {
   const [status, setStatus] = useState(params.get("status") || "all");
   const [ownerType, setOwnerType] = useState("all");
   const [query, setQuery] = useState("");
+  const [purpose, setPurpose] = useState("all");
+  const [sort, setSort] = useState("review");
   const [editing, setEditing] = useState(null);
   const [rejecting, setRejecting] = useState(null);
   const [reason, setReason] = useState("");
@@ -106,15 +117,37 @@ const AdminProperties = () => {
     else next.delete(key);
     setParams(next, { replace: true });
   };
+  const selectStatus = (value) => { setStatus(value); setParam("status", value === "all" ? null : value); };
 
   const q = query.trim().toLowerCase();
   const scoped = listings.filter((p) => (!ownerId || p.owner.id === ownerId) && (ownerType === "all" || p.owner.type === ownerType));
   const rows = scoped
     .filter((p) => status === "all" || p.listing.state === status)
-    .filter((p) => !q || `${p.title} ${p.location.name} ${p.location.city} ${ownerOf(p).name}`.toLowerCase().includes(q))
-    .sort((a, b) => (a.listing.state === "pending" ? -1 : 0) - (b.listing.state === "pending" ? -1 : 0) || new Date(b.listing.createdAt) - new Date(a.listing.createdAt));
+    .filter((p) => purpose === "all" || p.property.status === purpose)
+    .filter((p) => !q || `${p.title} ${p.property.type} ${p.location.name} ${p.location.city} ${ownerOf(p).name}`.toLowerCase().includes(q))
+    .sort((a, b) => {
+      if (sort === "priceAsc" || sort === "priceDesc") {
+        const left = priceOf(a), right = priceOf(b);
+        if (left === null || right === null) return left === right ? 0 : left === null ? 1 : -1;
+        return sort === "priceAsc" ? left - right : right - left;
+      }
+      if (sort === "views") return (b.meta?.views || 0) - (a.meta?.views || 0);
+      return (sort === "review" ? (a.listing.state === "pending" ? -1 : 0) - (b.listing.state === "pending" ? -1 : 0) : 0) || new Date(b.listing.createdAt) - new Date(a.listing.createdAt);
+    });
 
   const count = (state) => scoped.filter((p) => state === "all" || p.listing.state === state).length;
+  const filtered = status !== "all" || ownerType !== "all" || purpose !== "all" || Boolean(q || ownerId);
+  const resetFilters = () => {
+    setStatus("all"); setOwnerType("all"); setPurpose("all"); setQuery(""); setSort("review");
+    setParams((current) => { const next = new URLSearchParams(current); next.delete("owner"); next.delete("status"); return next; }, { replace: true });
+  };
+  const reviewQueue = () => { selectStatus("pending"); setPurpose("all"); setQuery(""); setSort("review"); };
+  const summary = [
+    { id: "all", label: "Total properties", icon: Building2, note: `${scoped.filter((p) => p.property.status === "Rent").length} for rent · ${scoped.filter((p) => p.property.status === "Sale").length} for sale`, tone: "plum" },
+    { id: "published", label: "Published", icon: CheckCircle2, note: "Approved listings", tone: "green" },
+    { id: "pending", label: "Awaiting review", icon: ClipboardCheck, note: "Check details before publishing", tone: "amber" },
+    { id: "draft", label: "Drafts", icon: FilePenLine, note: "Saved, not yet published", tone: "slate" },
+  ];
 
   const approve = (p) => run(setListingState(p.id, "published"), { success: "Property approved", description: `${p.title} is now published.` });
   const hide = (p) => run(setListingState(p.id, "suspended"), { success: "Property hidden", description: p.title, type: "warning" });
@@ -150,9 +183,9 @@ const AdminProperties = () => {
   const ownerCell = (p) => {
     const owner = ownerOf(p);
     return (
-      <div className="min-w-0">
-        <p className="truncate text-gray-800">{owner.name}</p>
-        <p className="truncate text-xs text-gray-500">{owner.type === "Admin" ? `${siteName} listing` : "Agent listing"}</p>
+      <div className="ap-owner-cell">
+        <span className={`ap-owner-avatar ${owner.type === "Admin" ? "is-platform" : ""}`}>{owner.type === "Admin" ? <Building2 size={16} aria-hidden="true" /> : owner.name.charAt(0)}</span>
+        <div className="min-w-0"><p className="truncate text-gray-800">{owner.name}</p><p className="truncate text-xs text-gray-500">{owner.type === "Admin" ? "Platform listing" : "Agent listing"}</p></div>
       </div>
     );
   };
@@ -174,34 +207,44 @@ const AdminProperties = () => {
       header: "Property",
       render: (p) => (
         <div className="flex min-w-0 items-center gap-3">
-          <img src={p.media.images[0]} alt="" className="h-10 w-14 shrink-0 rounded-md bg-gray-100 object-cover" />
+          {p.media.images[0] ? <img {...propertyCardImageSources(p.media.images[0])} sizes="64px" alt="" loading="lazy" className="ap-table-photo" /> : <span className="ap-table-photo ap-photo-placeholder"><Building2 size={22} aria-hidden="true" /></span>}
           <span className="min-w-0">
-            <span className="block max-w-56 truncate font-medium text-gray-900">{p.title}</span>
-            <span className="block text-xs text-gray-500"><span className="capitalize">{formatType(p.property.type)}</span> · {statusLabel(p.property.status)}</span>
+            <button type="button" onClick={() => setParam("open", p.id)} className="ap-property-name">{p.title}</button>
+            <span className="ap-property-location"><MapPin size={12} aria-hidden="true" />{[p.location.name, p.location.city].filter(Boolean).join(", ") || "Location not provided"}</span>
           </span>
         </div>
       ),
     },
-    { key: "location", header: "Location", render: (p) => <span className="block max-w-40 truncate text-gray-600">{p.location.name}, {p.location.city}</span> },
-    { key: "price", header: "Price", render: (p) => <span className="font-medium whitespace-nowrap text-gray-900">{formatPrice(p)}</span> },
+    { key: "price", header: "Price / purpose", render: (p) => <div className="ap-table-price"><strong>{formatPrice(p)}</strong><span>{statusLabel(p.property.status)} · {formatType(p.property.type)}</span></div> },
     { key: "owner", header: "Agent / owner", render: ownerCell },
     { key: "status", header: "Status", render: listingBadge },
-    { key: "added", header: "Added", render: (p) => <span className="whitespace-nowrap text-gray-500">{formatDate(p.listing.createdAt)}</span> },
+    { key: "added", header: "Activity", render: (p) => <div className="ap-activity"><span><Eye size={13} aria-hidden="true" />{(p.meta?.views || 0).toLocaleString()} views</span><small>{formatDate(p.listing.createdAt)}</small></div> },
     { key: "actions", header: <span className="sr-only">Actions</span>, align: "right", render: (p) => <ActionMenu actions={actionsFor(p)} label={`Actions for ${p.title}`} /> },
   ];
 
   return (
-    <>
-      <AdminPageTitle
-        title="Properties"
-        description={`Every listing on the platform, from ${siteName} and agents.`}
-        action={<Link to="/admin/properties/add" className="btn btn-primary"><Plus className="h-4 w-4" />Add Property</Link>}
-      />
+    <div className="admin-properties">
+      <header className="ap-heading">
+        <div><p className="ap-eyebrow"><span />PROPERTY WORKSPACE</p><h1>Your property portfolio<span>.</span></h1><p>Keep every listing in view. Review, publish, and make room for what’s next.</p></div>
+        <div className="ap-heading-actions"><Link to={paths.listings} className="ap-public-link">View marketplace<ArrowUpRight size={16} aria-hidden="true" /></Link><Link to="/admin/properties/add" className="btn btn-primary"><Plus size={17} aria-hidden="true" />Add property</Link></div>
+      </header>
 
-      <div className="mb-5 flex flex-col gap-3">
+      <section className="ap-summary" aria-label="Property overview">{summary.map(({ id, label, icon: Icon, note, tone }) => (
+        <button key={id} type="button" className={`ap-stat is-${tone}`} aria-pressed={status === id} onClick={() => selectStatus(id)}>
+          <span className="ap-stat-top"><span>{label}</span><span className="ap-stat-icon"><Icon size={19} aria-hidden="true" /></span></span>
+          <strong>{count(id).toLocaleString()}</strong><span className="ap-stat-note">{note}</span><span className="ap-stat-bar"><span style={{ width: `${scoped.length ? count(id) / scoped.length * 100 : 0}%` }} /></span>
+        </button>
+      ))}</section>
+
+      {count("pending") > 0 && <div className="ap-review-notice"><span className="ap-review-icon"><ClipboardCheck size={21} aria-hidden="true" /></span><div><h2>{count("pending")} {count("pending") === 1 ? "listing needs" : "listings need"} your review</h2><p>Check the photos, price, and property details before they go live.</p></div><button type="button" onClick={reviewQueue}>Review listings<ArrowRight size={16} aria-hidden="true" /></button></div>}
+
+      <section className="ap-collection" aria-label="Manage properties">
+      <div className="ap-collection-heading"><div><h2>Property collection</h2><p>Listings from {siteName} and your agent community.</p></div><div className="ap-view-control"><span>View</span><ViewToggle value={view} onChange={setView} /></div></div>
+      <div className="ap-toolbar">
         <FilterTabs
+          label="Listing status"
           value={status}
-          onChange={setStatus}
+          onChange={selectStatus}
           tabs={[
             { id: "all", label: "All", count: count("all") },
             { id: "pending", label: "Pending Review", count: count("pending") },
@@ -211,24 +254,25 @@ const AdminProperties = () => {
             { id: "draft", label: "Drafts", count: count("draft") },
           ]}
         />
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <SearchInput value={query} onChange={setQuery} placeholder="Search title, area or owner" className="sm:w-80" />
-          <select value={ownerType} onChange={(e) => setOwnerType(e.target.value)} aria-label="Filter by owner type" className="field py-2 sm:w-44">
+        <div className="ap-filter-row">
+          <SearchInput value={query} onChange={setQuery} placeholder="Search title, area, type or owner" className="ap-search" />
+          <select value={ownerType} onChange={(e) => setOwnerType(e.target.value)} aria-label="Filter by owner type" className="field">
             <option value="all">All owners</option>
-            <option value="admin">Admin</option>
+            <option value="admin">{siteName}</option>
             <option value="agent">Agents</option>
           </select>
+          <select value={purpose} onChange={(event) => setPurpose(event.target.value)} aria-label="Filter by listing purpose" className="field"><option value="all">Rent & sale</option><option value="Rent">For rent</option><option value="Sale">For sale</option></select>
+          <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort properties" className="field"><option value="review">Review priority</option><option value="newest">Newest first</option><option value="priceAsc">Price: low to high</option><option value="priceDesc">Price: high to low</option><option value="views">Most viewed</option></select>
+        </div>
+        <div className="ap-result-bar"><p role="status" aria-live="polite"><strong>{rows.length}</strong> {rows.length === 1 ? "property" : "properties"}<span>of {scoped.length} in this collection</span></p><div className="ap-filter-chips">
           {ownerId && (
-            <button onClick={() => setParam("owner", null)} className="inline-flex items-center gap-1.5 self-start rounded-full bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-100">
+            <button onClick={() => setParam("owner", null)} className="ap-owner-filter">
               Owner: {ownerFilterName || ownerId}
               <X className="h-4 w-4" />
             </button>
           )}
-          <div className="flex items-center justify-between gap-3 sm:ml-auto">
-            <p className="text-sm text-gray-500 sm:hidden">{rows.length} {rows.length === 1 ? "property" : "properties"}</p>
-            <ViewToggle value={view} onChange={setView} />
-          </div>
-        </div>
+          {filtered && <button type="button" onClick={resetFilters} className="ap-clear"><RotateCcw size={12} aria-hidden="true" />Clear filters</button>}
+        </div></div>
       </div>
 
       {view === "grid" ? (
@@ -236,10 +280,10 @@ const AdminProperties = () => {
           listings.length === 0 ? (
             <EmptyState icon={Building2} title="No properties yet" description="Properties added to the platform will appear here." action={<Link to="/admin/properties/add" className="btn btn-primary px-3.5 py-2"><Plus className="h-4 w-4" />Add Property</Link>} />
           ) : (
-            <EmptyState icon={Building2} title="No properties here" description="Nothing matches these filters." />
+            <EmptyState icon={Building2} title="No matching properties" description="Try another area, owner, or listing status." action={<button type="button" onClick={resetFilters} className="btn btn-light">Clear filters</button>} />
           )
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          <div className="ap-property-grid">
             {rows.map((p, i) => (
               <PropertyTile
                 key={p.id}
@@ -254,12 +298,12 @@ const AdminProperties = () => {
           </div>
         )
       ) : (
-      <DataTable
+      <div className="ap-property-table"><DataTable
         columns={columns}
         rows={rows}
         minWidth={980}
         onRowClick={(p) => setParam("open", p.id)}
-        empty={<EmptyState icon={Building2} title="No properties here" description="Nothing matches these filters." />}
+        empty={<EmptyState icon={Building2} title={listings.length ? "No matching properties" : "No properties yet"} description={listings.length ? "Try another area, owner, or listing status." : "Add your first property to start your portfolio."} action={filtered ? <button type="button" onClick={resetFilters} className="btn btn-light">Clear filters</button> : <Link to="/admin/properties/add" className="btn btn-primary">Add property</Link>} />}
         mobileCard={(p) => (
           <div className="flex gap-3">
             <img src={p.media.images[0]} alt="" className="h-20 w-24 shrink-0 rounded-xl object-cover" />
@@ -275,11 +319,12 @@ const AdminProperties = () => {
             </div>
           </div>
         )}
-      />
+      /></div>
       )}
+      </section>
 
       {/* View / moderate */}
-      <SidePanel
+      <AdminRecordModal
         open={Boolean(viewed)}
         onClose={() => setParam("open", null)}
         title={viewed?.title}
@@ -352,7 +397,7 @@ const AdminProperties = () => {
             </div>
           </div>
         )}
-      </SidePanel>
+      </AdminRecordModal>
 
       {editing && <EditPropertyModal property={editing} onClose={() => setEditing(null)} />}
 
@@ -388,7 +433,7 @@ const AdminProperties = () => {
           if (ok && openId === property.id) setParam("open", null);
         }}
       />
-    </>
+    </div>
   );
 };
 

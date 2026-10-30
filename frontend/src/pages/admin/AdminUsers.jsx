@@ -11,7 +11,7 @@ import FilterTabs from "../../components/ui/FilterTabs";
 import SearchInput from "../../components/ui/SearchInput";
 import StatusBadge from "../../components/ui/StatusBadge";
 import ActionMenu from "../../components/ui/ActionMenu";
-import SidePanel from "../../components/ui/SidePanel";
+import AdminRecordModal from "../../components/admin/AdminRecordModal";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import EmptyState from "../../components/ui/EmptyState";
 import { formatDate, formatRelative, isWithinDays } from "../../utils/date";
@@ -184,7 +184,7 @@ const AdminUsers = () => {
       />
 
       {/* Customer preview */}
-      <SidePanel
+      <AdminRecordModal
         open={Boolean(viewed)}
         onClose={() => setViewing(null)}
         title={viewed?.name}
@@ -258,7 +258,7 @@ const AdminUsers = () => {
             </button>
           </div>
         )}
-      </SidePanel>
+      </AdminRecordModal>
 
       {editing && <EditUserModal user={editing} onClose={() => setEditing(null)} />}
 

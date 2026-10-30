@@ -10,7 +10,7 @@ import FilterTabs from "../../components/ui/FilterTabs";
 import SearchInput from "../../components/ui/SearchInput";
 import StatusBadge from "../../components/ui/StatusBadge";
 import ActionMenu from "../../components/ui/ActionMenu";
-import SidePanel from "../../components/ui/SidePanel";
+import AdminRecordModal from "../../components/admin/AdminRecordModal";
 import EmptyState from "../../components/ui/EmptyState";
 import { formatDate } from "../../utils/date";
 import { formatCedis } from "../../utils/reports";
@@ -139,7 +139,7 @@ const AdminSubscriptions = () => {
         )}
       />
 
-      <SidePanel
+      <AdminRecordModal
         open={Boolean(viewing)}
         onClose={() => setViewingId(null)}
         title="Subscription details"
@@ -190,7 +190,7 @@ const AdminSubscriptions = () => {
             </div>
           </div>
         )}
-      </SidePanel>
+      </AdminRecordModal>
 
       <SubscriptionDialogs action={action} onClose={() => setAction(null)} />
     </>
