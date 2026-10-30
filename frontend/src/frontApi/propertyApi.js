@@ -19,7 +19,8 @@ export const featureProperty = async (id, isFeatured) => mapProperty((await clie
 export const deleteProperty = (id) => client.delete(`/properties/${id}`);
 // Agency owner or manager: memberId of a team member, or null to hand the listing back to the owner
 export const assignProperty = async (id, memberId) => mapProperty((await client.patch(`/properties/${id}/assign`, { memberId })).data);
-export const recordPropertyView = (id) => client.post(`/properties/${id}/view`);
+// Details page only. The server decides whether this visit counts -> { counted, views }
+export const recordPropertyView = async (id) => (await client.post(`/properties/${id}/view`)).data;
 
 // Drops empty filters so the query string only carries what the user chose
 const cleanParams = (params) => Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length)).map(([k, v]) => [k, Array.isArray(v) ? v.join(",") : v]));

@@ -72,6 +72,7 @@ const groups = [
   {
     label: "Finance",
     items: [
+      { label: "Inventory", to: "/admin/inventory", icon: BarChart3 },
       { label: "Payments", to: "/admin/payments", icon: Wallet },
       { label: "Subscriptions", to: "/admin/subscriptions", icon: CreditCard },
       { label: "Plans", to: "/admin/plans", icon: Layers },

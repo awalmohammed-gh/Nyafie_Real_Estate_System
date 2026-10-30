@@ -1,12 +1,12 @@
 import { useContext } from "react";
 import { PlatformContext } from "../../context/platformContext";
 
-// Transparent crop of the HomeBase mark: small, ready before settings load, and visible on light or dark
-const MARK = "/brand/homebase-mark.png";
+// Match the browser icon immediately, including before platform settings load.
+const MARK = "/favicon-nyafie.png";
 const SIZES = { sm: "h-8 w-8", md: "h-14 w-14", lg: "h-16 w-16" };
 
 /**
- * The app's loading state: the HomeBase mark with a soft purple glow.
+ * The app's loading state: the NyaFie icon with a soft purple glow.
  * It fills and centres within whatever holds it (page content, a dashboard outlet, a panel),
  * so layouts keep their navbar, footer and sidebars. fullScreen is only for screens with no shell.
  * size: "sm" for components, "md" (default) for page content, "lg" for full-screen.

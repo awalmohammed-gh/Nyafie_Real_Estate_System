@@ -23,9 +23,13 @@ export const GeneralTab = () => {
       <Row label="Tagline" description={`A short line used in the browser title, e.g. “${example}”.`} htmlFor="set-tagline">
         <input id="set-tagline" value={f.form.tagline} onChange={(e) => f.set("tagline", e.target.value.slice(0, 80))} className="field" />
       </Row>
-      <Row label="Website description" description="One or two sentences about the business. Shown in the footer and used as the default search description." htmlFor="set-desc">
+      <Row label="Short description" description="One or two sentences about the business. Shown in the footer and used as the default search description." htmlFor="set-desc">
         <textarea id="set-desc" rows={3} value={f.form.description} onChange={(e) => f.set("description", e.target.value.slice(0, 300))} className="field resize-y" />
         <Counter value={f.form.description} max={300} />
+      </Row>
+      <Row label="Full description" description="The complete introduction to NyaFie. Use blank lines to separate paragraphs." htmlFor="set-full-desc">
+        <textarea id="set-full-desc" rows={10} value={f.form.fullDescription || ""} onChange={(e) => f.set("fullDescription", e.target.value.slice(0, 5000))} className="field resize-y" />
+        <Counter value={f.form.fullDescription || ""} max={5000} />
       </Row>
     </Panel>
   );

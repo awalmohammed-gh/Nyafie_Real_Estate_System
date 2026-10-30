@@ -99,7 +99,7 @@ test("production configuration, metadata, uploads and marketplace security", asy
       const html = await response.text();
       assert.equal(response.status, 200);
       assert.match(response.headers.get('content-type'), /text\/html/);
-      assert.match(html, /<title>Accra &amp; East Legon Home \| HomeBase<\/title>/);
+      assert.match(html, /<title>Accra &amp; East Legon Home \| NyaFie<\/title>/);
       assert.ok(html.includes(`https://real-estate-home-phi.vercel.app/house/${property._id}`));
       assert.ok(html.includes('/assets/app.js'));
       assert.equal(html.includes('agent@example.test'), false);

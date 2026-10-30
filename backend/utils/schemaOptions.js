@@ -7,6 +7,7 @@ export const schemaOptions = {
     transform: (_doc, ret) => {
       delete ret._id;
       delete ret.password;
+      delete ret.sessionVersion;
       return ret;
     },
   },

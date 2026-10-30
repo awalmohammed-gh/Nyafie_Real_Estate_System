@@ -172,6 +172,14 @@ export const dashboard = async (_req, res) => {
               },
             },
           ],
+          // Real, deduplicated views (see recordView): the marketplace total and the most viewed live listings
+          views: [{ $group: { _id: null, total: { $sum: "$views" } } }],
+          mostViewed: [
+            { $match: { ...visibleMatch, views: { $gt: 0 } } },
+            { $sort: { views: -1, createdAt: -1 } },
+            { $limit: 5 },
+            { $project: { title: 1, views: 1, ownerType: 1, "location.neighbourhood": 1, "location.city": 1, image: { $arrayElemAt: ["$images", 0] } } },
+          ],
           // Deals close listings whatever their review state, so these count every listing
           closed: [
             {
@@ -257,6 +265,8 @@ export const dashboard = async (_req, res) => {
       underOffer: closed["Under Offer"] || 0,
       rented: closed.Rented || 0,
       sold: closed.Sold || 0,
+      views: inventory.views[0]?.total || 0,
+      mostViewed: inventory.mostViewed.map((p) => ({ id: String(p._id), title: p.title, views: p.views, ownerType: p.ownerType, area: [...new Set([p.location?.neighbourhood, p.location?.city].filter(Boolean))].join(", "), image: p.image || "" })),
     },
     agents: {
       total: agentDocs.length,

@@ -13,8 +13,8 @@ const RouteError = () => {
   return (
     <main className="grid min-h-dvh place-items-center bg-white px-6 py-16 text-center">
       <div className="flex max-w-md flex-col items-center">
-        <img src="/brand/homebase-mark.png" alt="HomeBase" className="h-14 w-14 rounded-[22%] shadow-lg shadow-brand-500/30" />
-        <h1 className="mt-6 text-2xl font-bold tracking-tight text-gray-900">{outdated ? "HomeBase has been updated" : "Something went wrong"}</h1>
+        <img src="/favicon-nyafie.png" alt="NyaFie" width="56" height="56" className="h-14 w-14 rounded-[22%] shadow-lg shadow-brand-500/30" />
+        <h1 className="mt-6 text-2xl font-bold tracking-tight text-gray-900">{outdated ? "NyaFie has been updated" : "Something went wrong"}</h1>
         <p className="mt-2 text-sm leading-relaxed text-gray-600">
           {outdated ? "A newer version of the site is available. Reload the page to continue." : "This page couldn’t be shown. Please reload, or go back to the homepage."}
         </p>

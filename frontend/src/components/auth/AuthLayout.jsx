@@ -11,7 +11,7 @@ const stories = {
     label: "A better way to find home",
     title: <>Your next chapter<br />starts here.</>,
     description: "Discover spaces that feel like you. Keep the homes you love and the conversations that matter, all in one place.",
-    perks: ["Save your favourite properties", "Connect directly with agents", "Keep track of every inquiry"],
+    perks: ["Save your favorite properties", "Connect directly with agents", "Keep track of every inquiry"],
     footnote: "Find a place. Make it yours.",
   },
   agent: {
@@ -60,7 +60,6 @@ const AuthLayout = ({ domain = "customer", children }) => {
           <motion.section className="auth-card" initial={reduceMotion ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}>
             {children}
           </motion.section>
-          {domain !== "admin" && <p className="auth-admin-link">Managing the platform? <Link to="/admin/login">Admin sign in<ArrowUpRight size={13} aria-hidden="true" /></Link></p>}
         </div>
         <footer className="auth-footer">© {new Date().getFullYear()} {siteName}. All rights reserved.</footer>
       </main>

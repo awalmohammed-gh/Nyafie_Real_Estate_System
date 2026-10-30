@@ -2,6 +2,7 @@ import client from "./client";
 import { inquiryStatusToApi, mapInquiry, mapPayment, mapProperty, mapUser, toApiProperty } from "./mappers";
 
 export const getAdminDashboard = async () => (await client.get("/admin/dashboard")).data;
+export const getFinancialInventory = async (params = {}) => (await client.get("/admin/inventory", { params })).data;
 // Platform performance chart: monthly totals for the last 3, 6 or 12 months and the period before
 export const getPerformance = async (months) => (await client.get("/admin/performance", { params: { months } })).data;
 // Sidebar badge counters

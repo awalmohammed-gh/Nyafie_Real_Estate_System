@@ -143,7 +143,7 @@ const startCheckout = async (req, res, { upgradeOnly = false } = {}) => {
   if (quote.amount <= 0) {
     const subscription = await Subscription.create({ ...record, amount: 0, paymentReference: newReference("HB-CR"), paymentMethod: "Plan credit", paymentStatus: "pending" });
     const agent = await activateSubscription(subscription);
-    setAuthCookie(res, agent._id, "agent");
+    setAuthCookie(res, agent._id, "agent", req.user.sessionVersion);
     return ok(res, { mode: "credit", user: await loadUser(agent._id) }, `You're now on ${plan.name}`);
   }
   if ((await paymentMode()) === "disabled") return fail(res, 503, "Subscription payments are not available right now.");
@@ -187,7 +187,7 @@ export const verifyPayment = async (req, res) => {
   // Idempotent: verifying twice (e.g. a page refresh) returns the same result
   if (subscription.paymentStatus === "paid") {
     await submitReadyApplication(req.user);
-    if (req.user.role === "agent") setAuthCookie(res, req.user._id, "agent");
+    if (req.user.role === "agent") setAuthCookie(res, req.user._id, "agent", req.user.sessionVersion);
     return ok(res, await loadUser(req.user._id), "Payment already confirmed. Agent approval remains a separate requirement.");
   }
 
@@ -207,7 +207,7 @@ export const verifyPayment = async (req, res) => {
   }
 
   const agent = await activateSubscription(subscription);
-  setAuthCookie(res, agent._id, "agent");
+  setAuthCookie(res, agent._id, "agent", req.user.sessionVersion);
   ok(res, await loadUser(req.user._id), "Subscription activated");
 };
 

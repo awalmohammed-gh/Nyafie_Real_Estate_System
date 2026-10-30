@@ -34,9 +34,10 @@ const Legend = ({ series }) => (
  * Column chart. data: [{ label, values: { [seriesKey]: number } }]
  * series: [{ key, label }] (one or two series)
  */
-export const BarChart = ({ title, data, series, format = (v) => v.toLocaleString(), height = 180 }) => {
+export const BarChart = ({ title, data, series, format = (v) => v.toLocaleString(), axisFormat = format, integer = false, height = 180 }) => {
   const [active, setActive] = useState(null);
-  const max = niceCeil(Math.max(...data.flatMap((d) => series.map((s) => d.values[s.key] || 0)), 0));
+  const ceiling = niceCeil(Math.max(...data.flatMap((d) => series.map((s) => d.values[s.key] || 0)), 0));
+  const max = integer ? Math.max(2, Math.ceil(ceiling / 2) * 2) : ceiling;
   const ticks = [max, max / 2, 0];
   const latest = data.length - 1;
 
@@ -51,7 +52,7 @@ export const BarChart = ({ title, data, series, format = (v) => v.toLocaleString
         {/* Gridlines + y labels */}
         {ticks.map((tick, i) => (
           <div key={tick} className="absolute inset-x-0 flex items-center gap-2" style={{ top: `${(i / (ticks.length - 1)) * 100}%` }}>
-            <span className="w-10 -translate-y-1/2 text-right text-[11px] text-gray-400 tabular-nums">{format(tick)}</span>
+            <span className="w-10 -translate-y-1/2 text-right text-[11px] text-gray-400 tabular-nums">{axisFormat(tick)}</span>
             <span className={`-translate-y-1/2 flex-1 border-t ${tick === 0 ? "border-gray-300" : "border-dashed border-gray-100"}`} />
           </div>
         ))}

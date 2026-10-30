@@ -1,14 +1,15 @@
 import mongoose from "mongoose";
-import Rental, { OCCUPYING_STATUSES } from "../models/Rental.js";
+import Rental from "../models/Rental.js";
 import { postSystemNote } from "./chatController.js";
 import { canManageRecord, formatGHS, isOwnListing, loadPublishedProperty, ownerFilter, ownerName, same } from "../utils/ownership.js";
 import { notifyOwner, notifyUser } from "../utils/notify.js";
 import { cleanText, validateContact } from "../utils/validation.js";
-import { ok, fail } from "../utils/response.js";
+import { HttpError, ok, fail } from "../utils/response.js";
 import { isHotel, quoteHotelRoom, hotelTransaction } from "../utils/hotel.js";
+import { hasRentalConflict, rentalInventoryTransaction } from "../utils/rentalAvailability.js";
+export { PAYMENT_HOLD } from "../utils/rentalAvailability.js";
 
 const DAY = 24 * 60 * 60 * 1000;
-export const PAYMENT_HOLD = 30 * 60 * 1000; // a checkout in progress holds the dates for 30 minutes
 const MAX_DAYS = 3 * 366;
 const PROPERTY_FIELDS = "title images location price pricePeriod propertyType listingType status availability owner ownerType contact";
 
@@ -85,7 +86,7 @@ const todayUTC = () => {
  */
 export const quoteRental = async (body, user, options = {}) => {
   const { propertyId, startDate: start, endDate: end } = body;
-  const property = await loadPublishedProperty(propertyId);
+  const property = await loadPublishedProperty(propertyId, options);
   if (!property) return { status: 404, error: "This property is not available." };
   if (property.listingType !== "Rent") return { status: 400, error: "This property is for sale. Contact the listing agent or make an offer instead." };
   if (property.currency !== "GHS") return { status: 400, error: "Online rental payments support GHS only. Contact the agent to arrange this rental." };
@@ -104,16 +105,7 @@ export const quoteRental = async (body, user, options = {}) => {
   if (days < 1) return { status: 400, error: "The end date must be after the move-in date." };
   if (days > MAX_DAYS) return { status: 400, error: "Rentals can be booked for up to 3 years at a time." };
 
-  // Dates already taken by a paid/confirmed/active rental, or held by someone else's checkout in progress
-  const clash = await Rental.exists({
-    property: property._id,
-    startDate: { $lt: endDate },
-    endDate: { $gt: startDate },
-    $or: [
-      { status: { $in: OCCUPYING_STATUSES } },
-      { status: "payment_pending", customer: { $ne: user._id }, paymentStartedAt: { $gt: new Date(Date.now() - PAYMENT_HOLD) } },
-    ],
-  });
+  const clash = await hasRentalConflict({ property: property._id, startDate, endDate }, options);
   if (clash) return { status: 409, error: "This property is already rented or booked for some of those dates. Try different dates." };
 
   const units = property.pricePeriod === "night" ? days : property.pricePeriod === "month" ? rentalMonths(startDate, endDate) : 1;
@@ -127,49 +119,50 @@ export const createRental = async (req, res) => {
   const contact = validateContact(req.body);
   if (contact.error) return fail(res, 400, contact.error);
 
-  const quote = await quoteRental(req.body, req.user);
+  // Request previews may revisit the customer's own checkout. Only the serialized
+  // checkout below grants a hold, and it excludes just that booking's ID.
+  const quote = await quoteRental(req.body, req.user, { ignoreHoldCustomer: req.user._id });
   if (quote.error) return fail(res, quote.status, quote.error);
-  const { property, startDate, endDate, units, fees, amount } = quote;
+  const { property } = quote;
   if (quote.room) return createHotelRental(req, res, quote, contact);
   const addressProblem = validateContact(req.body, { requireAddress: true });
   if (addressProblem.error) return fail(res, 400, addressProblem.error);
 
-  const fields = {
-    owner: property.owner, // from the database, never the request
-    assignedTo: property.assignedTo || null, // the agency staff member handling the listing
-    ownerType: property.ownerType,
-    startDate,
-    endDate,
-    pricePeriod: property.pricePeriod,
-    unitPrice: property.price,
-    units,
-    fees,
-    amount,
-    ...contact,
-    occupants: Math.min(50, Math.max(1, Math.round(Number(req.body.occupants) || 1))),
-    notes: cleanText(req.body.notes),
-  };
-
-  // Editing the request before paying updates the same unpaid rental instead of piling up requests
-  let rental = await Rental.findOne({ customer: req.user._id, property: property._id, status: { $in: ["pending", "payment_pending"] }, paymentStatus: { $ne: "paid" } });
-  const isNew = !rental;
-  if (rental) {
-    rental.set({ ...fields, status: "pending" });
-    addHistory(rental, req.user, "Rental details updated");
-  } else {
-    rental = new Rental({ customer: req.user._id, property: property._id, ...fields });
-    addHistory(rental, req.user, "Rental request submitted");
-  }
-  await rental.save();
+  const { rental, isNew } = await saveRegularRentalRequest(req, property, contact);
 
   if (isNew) {
     await Promise.all([
-      notifyUser(req.user._id, { type: "rental", title: "Rental request submitted", message: `Complete payment of ${formatGHS(amount)} to book "${property.title}".`, link: "/account/rentals" }),
-      notifyOwner(rental, { type: "rental", title: "New rental request", message: `${fields.contactName} wants to rent "${property.title}" from ${toDay(startDate)}.`, path: "rentals" }),
+      notifyUser(req.user._id, { type: "rental", title: "Rental request submitted", message: `Complete payment of ${formatGHS(rental.amount)} to book "${property.title}".`, link: "/account/rentals" }),
+      notifyOwner(rental, { type: "rental", title: "New rental request", message: `${rental.contactName} wants to rent "${property.title}" from ${toDay(rental.startDate)}.`, path: "rentals" }),
     ]);
   }
   ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), "Rental details saved", 201);
 };
+
+const saveRegularRentalRequest = (req, initial, contact) => rentalInventoryTransaction(initial._id, async (property, session) => {
+  const quote = await quoteRental(req.body, req.user, { session, ignoreHoldCustomer: req.user._id });
+  if (quote.error) throw new HttpError(quote.status, quote.error);
+  const fields = {
+    owner: property.owner, assignedTo: property.assignedTo || null, ownerType: property.ownerType,
+    startDate: quote.startDate, endDate: quote.endDate, pricePeriod: property.pricePeriod,
+    unitPrice: property.price, units: quote.units, fees: quote.fees, amount: quote.amount,
+    ...contact, occupants: Math.min(50, Math.max(1, Math.round(Number(req.body.occupants) || 1))), notes: cleanText(req.body.notes),
+  };
+  let rental = await Rental.findOne({ customer: req.user._id, property: property._id, status: { $in: ["pending", "payment_pending"] }, paymentStatus: { $ne: "paid" } }).sort({ createdAt: -1 }).session(session);
+  // Once a checkout exists, an earlier charge must keep referring to its original
+  // dates and price. Different terms create a new request instead of rewriting it.
+  if (rental?.paymentReference) {
+    const sameTerms = rental.startDate.getTime() === fields.startDate.getTime() && rental.endDate.getTime() === fields.endDate.getTime() && rental.amount === fields.amount;
+    if (sameTerms) return { rental, isNew: false };
+    rental = null;
+  }
+  const isNew = !rental;
+  if (rental) rental.set({ ...fields, status: "pending" });
+  else rental = new Rental({ customer: req.user._id, property: property._id, ...fields });
+  addHistory(rental, req.user, isNew ? "Rental request submitted" : "Rental details updated");
+  await rental.save({ session });
+  return { rental, isNew };
+});
 
 const createHotelRental = async (req, res, quote, contact) => {
   const { property, room } = quote;
@@ -234,15 +227,20 @@ export const updateRentalStatus = async (req, res) => {
   }
 
   const reason = cleanText(req.body.note, 300);
-  rental.status = status;
-  addHistory(rental, req.user, reason || `Rental ${STATUS_TEXT[status]}`);
+  const updated = await rentalInventoryTransaction(rental.property?._id || rental.property, async (_property, session) => {
+    const current = await Rental.findById(rental._id).session(session);
+    if (!current || !(TRANSITIONS[current.status] || []).includes(status)) throw new HttpError(409, "Rental status changed. Reload and try again.");
+    current.status = status;
+    addHistory(current, req.user, reason || `Rental ${STATUS_TEXT[status]}`);
+    await current.save({ session });
+    return current;
+  });
   if (rental.property?._id) {
     const conversation = await postSystemNote(rental.property, rental.customer._id, req.user, "owner", `Rental ${STATUS_TEXT[status]}.${reason ? `\n\n${reason}` : ""}`);
-    rental.conversation = conversation._id;
+    await Rental.updateOne({ _id: updated._id }, { $set: { conversation: conversation._id } });
   }
-  await rental.save();
 
-  const refund = status === "cancelled" && rental.paymentStatus === "paid" ? " The owner will contact you about your refund." : "";
+  const refund = status === "cancelled" && updated.paymentStatus === "paid" ? " The owner will contact you about your refund." : "";
   await notifyUser(rental.customer._id, {
     type: "status",
     title: `Rental ${STATUS_TEXT[status]}`,

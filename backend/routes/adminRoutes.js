@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { financialInventory } from "../controllers/financialInventoryController.js";
 import * as admin from "../controllers/adminController.js";
 import { dashboard, performance, counts } from "../controllers/adminDashboardController.js";
 import { adminListReviews, adminMarkReviewsSeen, adminSetReviewStatus, adminUnseenReviewCount } from "../controllers/reviewController.js";
@@ -21,6 +22,7 @@ router.use(protectAdmin, adminOnly);
 router.get("/dashboard", dashboard); // the admin overview, aggregated in one request
 router.get("/performance", performance); // Platform performance chart: ?months=3|6|12
 router.get("/counts", counts); // sidebar badges (pending agent applications)
+router.get("/inventory", financialInventory); // unified rental, hotel, sale and subscription ledger
 
 router.get("/users", admin.listUsers);
 router.get("/users/:id", admin.getUser);

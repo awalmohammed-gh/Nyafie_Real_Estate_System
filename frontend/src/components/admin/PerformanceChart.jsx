@@ -14,7 +14,7 @@ const METRICS = [
     empty: "No payments were confirmed",
     explain: "Payments confirmed as received: Paystack rental payments, office sale payments confirmed by the owner, and agent subscriptions. Failed, pending and duplicate payments, test payments and property asking prices are not included.",
   },
-  { key: "listings", label: "New property listings", short: "Listings", empty: "No properties were added", explain: "Properties added by agents and the HomeBase team. Drafts that were never submitted are not included." },
+  { key: "listings", label: "New property listings", short: "Listings", empty: "No properties were added", explain: "Properties added by agents and your team. Drafts that were never submitted are not included." },
   { key: "inquiries", label: "Customer inquiries", short: "Inquiries", empty: "No inquiries were received", explain: "Inquiries customers sent about any listing on the platform." },
   { key: "agents", label: "Agent registrations", short: "Agents", empty: "No agents registered", explain: "Agent accounts created, whether or not they have finished onboarding." },
 ];
@@ -40,13 +40,12 @@ const niceScale = (max, integer) => {
 };
 
 const Segmented = ({ label, options, value, onChange, className = "" }) => (
-  <div role="radiogroup" aria-label={label} className={`inline-flex rounded-xl bg-gray-100 p-1 ${className}`}>
+  <div role="group" aria-label={label} className={`inline-flex rounded-xl bg-gray-100 p-1 ${className}`}>
     {options.map((option) => (
       <button
         key={option.value}
         type="button"
-        role="radio"
-        aria-checked={value === option.value}
+        aria-pressed={value === option.value}
         onClick={() => onChange(option.value)}
         className={`min-h-9 flex-1 rounded-lg px-3 text-sm font-medium whitespace-nowrap transition-colors ${value === option.value ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
       >
@@ -128,7 +127,7 @@ const Columns = ({ series, format, axisFormat, integer, currentMonth, title }) =
               >
                 {m.value > 0 && (
                   <span
-                    className={`block w-[55%] max-w-6 rounded-t-[4px] transition-[height,background-color] duration-300 motion-reduce:transition-none ${isActive ? "bg-brand-700" : "bg-brand-500"}`}
+                    className={`overview-chart-bar block w-[55%] max-w-6 rounded-t-[4px] transition-[height,background-color] duration-300 motion-reduce:transition-none ${partial ? "is-current" : ""} ${isActive ? "is-active bg-brand-700" : "bg-brand-500"}`}
                     style={{ height: `${Math.max(height, 1.5)}%` }}
                   />
                 )}
@@ -178,11 +177,11 @@ const ChartSkeleton = () => (
  * Platform performance: one metric at a time over the last 3, 6 or 12 months, with the period
  * total and a comparison with the equal period before it. Data: GET /api/admin/performance.
  */
-const PerformanceChart = () => {
+const PerformanceChart = ({ refreshKey = "" }) => {
   const [metricKey, setMetricKey] = useState("revenue");
   const [months, setMonths] = useState(6);
   const [showTable, setShowTable] = useState(false);
-  const query = useApiQuery(`performance:${months}`, () => adminApi.getPerformance(months));
+  const query = useApiQuery(`performance:${months}:${refreshKey}`, () => adminApi.getPerformance(months));
   // A new period keeps the last chart on screen (dimmed) until its data arrives
   const result = query.data ?? query.previous;
   const refreshing = query.loading && Boolean(result);
@@ -198,26 +197,26 @@ const PerformanceChart = () => {
   const empty = data && series.every((m) => m.value === 0);
 
   return (
-    <section aria-labelledby="performance-title" className="admin-card overflow-hidden">
+    <section aria-labelledby="performance-title" className="admin-card overview-performance overflow-hidden">
       <header className="flex flex-col gap-4 border-b border-gray-100 px-4 py-4 sm:px-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <h2 id="performance-title" className="text-[0.9375rem] font-semibold text-gray-900">Platform performance</h2>
-          <p className="mt-0.5 max-w-xl text-xs leading-relaxed text-gray-500">{metric.explain}</p>
+          <p className="mt-1 text-xs text-gray-500">See how your platform is growing over time.</p>
         </div>
-        <Segmented label="Period" value={months} onChange={setMonths} options={PERIODS.map((p) => ({ value: p, label: `${p} months` }))} className="w-full shrink-0 sm:w-auto" />
+        <Segmented label="Period" value={months} onChange={setMonths} options={PERIODS.map((p) => ({ value: p, label: `${p} months` }))} className="overview-period w-full shrink-0 sm:w-auto" />
       </header>
 
-      <div className="px-4 pt-4 sm:px-6">
+      <div className="overview-metric-controls px-4 pt-4 sm:px-6">
         <Segmented
           label="Metric"
           value={metricKey}
           onChange={setMetricKey}
-          options={METRICS.map((m) => ({ value: m.key, label: <><span className="sm:hidden">{m.short}</span><span className="hidden sm:inline">{m.label}</span></> }))}
+          options={METRICS.map((m) => ({ value: m.key, label: m.short }))}
           className="grid w-full grid-cols-2 xl:flex xl:w-auto"
         />
       </div>
 
-      <div className="px-4 py-5 sm:px-6" aria-busy={query.loading}>
+      <div className="overview-chart-body px-4 py-5 sm:px-6" aria-busy={query.loading}>
         {!result && query.error ? (
           <div role="alert" className="flex flex-col items-start gap-3 rounded-xl border border-red-200 bg-red-50/60 p-4 sm:flex-row sm:items-center">
             <AlertTriangle className="h-5 w-5 shrink-0 text-red-600" aria-hidden="true" />
@@ -233,7 +232,7 @@ const PerformanceChart = () => {
         ) : (
           <div className={`transition-opacity ${refreshing ? "opacity-60" : ""}`}>
             {/* Period summary */}
-            <div className="mb-5 flex flex-col gap-1">
+            <div className="overview-chart-summary mb-5 flex flex-col gap-1">
               <p className="text-xs font-medium text-gray-500">{metric.label} · last {shownMonths} months <span className="text-gray-400">({range}, this month to date)</span></p>
               <p className="text-3xl font-semibold tracking-tight text-gray-900">{format(data.total)}</p>
               <Comparison data={data} metric={metric} months={shownMonths} format={format} />
@@ -255,13 +254,14 @@ const PerformanceChart = () => {
               <Columns key={`${metricKey}:${shownMonths}`} series={series} format={format} axisFormat={axisFormat} integer={!metric.currency} currentMonth={currentMonth} title={`${metric.label} per month, ${range}`} />
             )}
 
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
+            <div className="overview-chart-footer mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
               <p className="text-xs text-gray-500">{metric.currency ? "Ghana cedis, by the date each payment was confirmed." : "Counted by the date each record was created."}</p>
               <button type="button" onClick={() => setShowTable((v) => !v)} aria-expanded={showTable} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-brand-700 hover:bg-brand-50 hover:text-brand-800">
                 <Table2 className="h-4 w-4" aria-hidden="true" />
                 {showTable ? "Hide table" : "View as table"}
               </button>
             </div>
+            <details className="overview-chart-explanation"><summary>What’s included in {metric.short.toLowerCase()}?</summary><p>{metric.explain}</p></details>
             {showTable && (
               <div className="mt-3 overflow-x-auto rounded-xl border border-gray-200">
                 <table className="w-full text-sm">

@@ -52,9 +52,14 @@ const SiteHead = () => {
 
     const icon = document.head.querySelector('link[rel="icon"]');
     if (icon) {
-      icon.href = branding.favicon || "/favicon.png";
-      if (branding.favicon) icon.removeAttribute("type");
-      else icon.type = "image/png";
+      icon.href = branding.favicon || "/favicon-nyafie.png";
+      if (branding.favicon) {
+        icon.removeAttribute("type");
+        icon.removeAttribute("sizes");
+      } else {
+        icon.type = "image/png";
+        icon.setAttribute("sizes", "64x64");
+      }
     }
   }, [general, seo, branding, pathname, metadata, settings]);
 

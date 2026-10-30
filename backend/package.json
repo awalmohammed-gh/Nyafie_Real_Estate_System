@@ -12,7 +12,8 @@
     "start": "node server.js",
     "server": "nodemon server.js",
     "seed": "node seed/seed.js",
-    "admin:reset": "node seed/resetAdmin.js"
+    "admin:reset": "node seed/resetAdmin.js",
+    "views:reset": "node seed/resetViews.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
