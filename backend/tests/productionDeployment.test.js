@@ -11,6 +11,7 @@ import { cloudinary } from "../config/cloudinary.js";
 import { createApp } from "../app.js";
 import { validateRuntimeConfig, paymentReturnUrl, clientOrigins } from "../config/runtime.js";
 import { setAuthCookie } from "../utils/generateToken.js";
+import { TEST_CUSTOMER_TAB, customerTabClaims, customerTabHeaders } from "./support/customerTab.js";
 import { injectMetadata } from "../utils/seo.js";
 import { ensureAdmin } from "../utils/ensureAdmin.js";
 import { rateLimit } from "../middleware/security.js";
@@ -54,8 +55,8 @@ test("production configuration, metadata, uploads and marketplace security", asy
   const app = createApp({ initialize: async () => { initializations++; } });
   const server = http.createServer(app);
   const base = await listen(server);
-  const cookie = (user, session) => `${session}_token=${jwt.sign({ id: String(user._id), role: user.role, session }, process.env.JWT_KEY, { expiresIn: '1h' })}`;
-  const call = (path, user, session = 'customer', body) => fetch(base + path, { method: body ? 'POST' : 'GET', headers: { Origin: 'https://real-estate-home-phi.vercel.app', 'X-Session-Domain': session, ...(user ? { Cookie: cookie(user, session) } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+  const cookie = (user, session) => `${session}_token=${jwt.sign({ id: String(user._id), role: user.role, session, ...customerTabClaims(session) }, process.env.JWT_KEY, { expiresIn: '1h' })}`;
+  const call = (path, user, session = 'customer', body) => fetch(base + path, { method: body ? 'POST' : 'GET', headers: { ...customerTabHeaders(session), Origin: 'https://real-estate-home-phi.vercel.app', 'X-Session-Domain': session, ...(user ? { Cookie: cookie(user, session) } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
   try {
     await t.test('runtime rejects missing or weak production credentials without exposing values', () => {
       validateRuntimeConfig();
@@ -83,9 +84,9 @@ test("production configuration, metadata, uploads and marketplace security", asy
       process.env.CLIENT_URL = 'https://real-estate-home-phi.vercel.app';
     });
     await t.test('role cookies are host-only, HTTP-only, secure and same-site; cross-site requires explicit configuration', () => {
-      for (const session of ['customer', 'agent', 'admin']) setAuthCookie({ cookie: (_name, _token, options) => { assert.equal(options.secure, true); assert.equal(options.httpOnly, true); assert.equal(options.sameSite, 'lax'); assert.equal(options.domain, undefined); } }, customer._id, session);
+      for (const session of ['customer', 'agent', 'admin']) setAuthCookie({ cookie: (_name, _token, options) => { assert.equal(options.secure, true); assert.equal(options.httpOnly, true); assert.equal(options.sameSite, 'lax'); assert.equal(options.domain, undefined); } }, customer._id, session, "", TEST_CUSTOMER_TAB);
       process.env.COOKIE_SAME_SITE = 'none';
-      setAuthCookie({ cookie: (_name, _token, options) => assert.equal(options.sameSite, 'none') }, customer._id, 'customer');
+      setAuthCookie({ cookie: (_name, _token, options) => assert.equal(options.sameSite, 'none') }, customer._id, 'customer', "", TEST_CUSTOMER_TAB);
       delete process.env.COOKIE_SAME_SITE;
     });
     await t.test('app entrypoint initializes per request and serves health safely without opening a listener on import', async () => {

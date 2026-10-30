@@ -10,6 +10,7 @@ import authRoutes from "../routes/authRoutes.js";
 import subscriptionRoutes from "../routes/subscriptionRoutes.js";
 import { optionalAuth, viewerSessions } from "../middleware/authMiddleware.js";
 import { SESSION_ROLES } from "../utils/generateToken.js";
+import { customerTabHeaders } from "./support/customerTab.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
 
 test("password changes revoke older sessions while renewing only the requesting browser", { skip: process.env.RUN_AUTH_INTEGRATION !== "1", timeout: 90000 }, async (t) => {
@@ -35,7 +36,7 @@ test("password changes revoke older sessions while renewing only the requesting 
   const base = `http://127.0.0.1:${server.address().port}`;
   const request = (session, path, { method = "GET", cookie, body } = {}) => fetch(base + path, {
     method,
-    headers: { "X-Session-Domain": session, ...(cookie ? { Cookie: cookie } : {}), ...(body ? { "Content-Type": "application/json" } : {}) },
+    headers: { ...customerTabHeaders(session), "X-Session-Domain": session, ...(cookie ? { Cookie: cookie } : {}), ...(body ? { "Content-Type": "application/json" } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   const cookieFrom = response => response.headers.getSetCookie()[0]?.split(";")[0];
@@ -56,7 +57,7 @@ test("password changes revoke older sessions while renewing only the requesting 
       const legacy = `${session}_token=${legacyToken}`;
       const me = cookie => request(session, `/api/auth/${session}/me`, { cookie });
       const change = (cookie, currentPassword, newPassword) => request(session, `/api/auth/${session}/me/password`, { method: "PUT", cookie, body: { currentPassword, newPassword } });
-      assert.equal((await me(legacy)).status, 200, "legacy tokens remain valid until a password change");
+      assert.equal((await me(legacy)).status, session === "customer" ? 401 : 200, "customers must reauthenticate into a tab-bound session; other roles retain legacy compatibility until password change");
 
       for (const [current, next] of [["WrongPassword123", "NewPassword123"], ["OriginalPassword123", "short"]]) {
         const rejected = await change(first, current, next);

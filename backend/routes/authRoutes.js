@@ -6,6 +6,7 @@ import { uploadCustomerPhoto, removeCustomerPhoto } from "../controllers/custome
 import { rateLimit } from "../middleware/security.js";
 
 const router = Router();
+router.use((_req, res, next) => { res.set("Cache-Control", "private, no-store"); next(); });
 for (const [session, guard] of [["customer", protectCustomer], ["agent", protectAgentSession], ["admin", protectAdmin]]) {
   router.use('/' + session, (req, res, next) => {
     const selected = req.get("X-Session-Domain");

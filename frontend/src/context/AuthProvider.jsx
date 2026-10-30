@@ -3,6 +3,7 @@ import { AuthContext } from "./authContext";
 import { authApi, adminApi } from "../frontApi";
 import { sessionRole } from "../utils/sessionDomain";
 import { getSubscriptionState } from "../utils/subscription";
+import { CUSTOMER_SESSION_ENDED } from "../utils/customerTabSession";
 
 // Authentication state backed by the API. The session itself lives in an
 // HTTP-only cookie set by the backend; the frontend only keeps the user object.
@@ -40,6 +41,14 @@ export const AuthProvider = ({ children, domain }) => {
     const cancel = () => { ++revision.current; };
     return () => { cancel(); window.removeEventListener("focus", onFocus); };
   }, [refreshUser]);
+
+  useEffect(() => {
+    if (domain !== "customer") return;
+    // Recheck the current cookie: an old failed request must not undo a fresh login.
+    const expired = () => { refreshUser().catch(() => {}); };
+    window.addEventListener(CUSTOMER_SESSION_ENDED, expired);
+    return () => window.removeEventListener(CUSTOMER_SESSION_ENDED, expired);
+  }, [domain, refreshUser]);
 
   const refreshUsers = useCallback(async () => {
     setUsers(await adminApi.getUsers());

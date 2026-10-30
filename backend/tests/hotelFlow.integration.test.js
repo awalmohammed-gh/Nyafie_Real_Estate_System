@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "node:net";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
+import { customerTabClaims, customerTabHeaders } from "./support/customerTab.js";
 import { createApp } from "../app.js";
 import User from "../models/User.js";
 import Setting from "../models/Setting.js";
@@ -57,7 +58,7 @@ test("hotel marketplace: HTTP ownership, booking, payment, inventory and concurr
     const subscription = await Subscription.create({ user: agent._id, plan: plan._id, planName: plan.name, amount: 0, paymentReference: `test-${agent.id}`, status: "active", paymentStatus: "waived", expiresAt: new Date("2035-01-01") });
     agent.subscription = subscription._id; await agent.save();
   }
-  const tokens = (user) => { const session = user.role === "agent" ? "agent" : "customer"; return { "X-Session-Domain": session, Cookie: `${session}_token=${jwt.sign({ id: user.id, role: user.role, session }, process.env.JWT_KEY)}` }; };
+  const tokens = (user) => { const session = user.role === "agent" ? "agent" : "customer"; return { ...customerTabHeaders(session), "X-Session-Domain": session, Cookie: `${session}_token=${jwt.sign({ id: user.id, role: user.role, session, ...customerTabClaims(session) }, process.env.JWT_KEY)}` }; };
   server = createApp({ initialize: async () => {} }).listen(process.env.HOTEL_UI_PREVIEW ? Number(process.env.HOTEL_UI_PORT || 4011) : 0, "127.0.0.1");
   await new Promise((done) => server.once("listening", done));
   const base = `http://127.0.0.1:${server.address().port}`;

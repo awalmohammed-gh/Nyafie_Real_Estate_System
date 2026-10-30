@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import express from "express";
 import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
+import { customerTabClaims, customerTabHeaders } from "./support/customerTab.js";
 import mongoose from "mongoose";
 import User from "../models/User.js";
 import Plan from "../models/Plan.js";
@@ -161,8 +162,8 @@ test("the chat API refuses agents whose plan has no chat, whatever the client se
   await new Promise((resolve) => server.once("listening", resolve));
   t.after(() => server.close());
   const base = `http://127.0.0.1:${server.address().port}/api/conversations`;
-  const cookie = (user, session) => `${session}_token=${jwt.sign({ id: String(user._id), role: user.role, session }, process.env.JWT_KEY, { expiresIn: "1h" })}`;
-  const post = (path, user, session, body) => fetch(`${base}${path}`, { method: "POST", headers: { "Content-Type": "application/json", "X-Session-Domain": session, Cookie: cookie(user, session) }, body: JSON.stringify(body) });
+  const cookie = (user, session) => `${session}_token=${jwt.sign({ id: String(user._id), role: user.role, session, ...customerTabClaims(session) }, process.env.JWT_KEY, { expiresIn: "1h" })}`;
+  const post = (path, user, session, body) => fetch(`${base}${path}`, { method: "POST", headers: { ...customerTabHeaders(session), "Content-Type": "application/json", "X-Session-Domain": session, Cookie: cookie(user, session) }, body: JSON.stringify(body) });
 
   const start = await post("", customer, "customer", { propertyId: String(listing._id), message: "Is it available?", internalChat: true });
   assert.equal(start.status, 403);

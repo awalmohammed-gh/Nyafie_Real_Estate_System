@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import User from "../models/User.js";
 import { createApp } from "../app.js";
+import { customerTabHeaders } from "./support/customerTab.js";
 import { clientOrigins, paymentReturnUrl } from "../config/runtime.js";
 
 const environment = (t, values) => {
@@ -26,7 +27,7 @@ test("development login accepts both Vite loopback origins and rejects unrelated
   await new Promise((resolve) => server.once("listening", resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const signIn = (origin, extra = {}) => fetch(`${base}/api/auth/customer/login`, { method: "POST", headers: { "Content-Type": "application/json", "X-Session-Domain": "customer", ...(origin ? { Origin: origin } : {}), ...extra }, body: JSON.stringify({ email: user.email, password: "FixturePassword123" }) });
+  const signIn = (origin, extra = {}) => fetch(`${base}/api/auth/customer/login`, { method: "POST", headers: { ...customerTabHeaders(), "Content-Type": "application/json", "X-Session-Domain": "customer", ...(origin ? { Origin: origin } : {}), ...extra }, body: JSON.stringify({ email: user.email, password: "FixturePassword123" }) });
   for (const origin of ["http://localhost:5173", "http://127.0.0.1:5173"]) {
     assert.ok(clientOrigins().includes(origin));
     const preflight = await fetch(`${base}/api/auth/customer/login`, { method: "OPTIONS", headers: { Origin: origin, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "content-type,x-session-domain" } });

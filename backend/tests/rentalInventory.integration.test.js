@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import express from "express";
 import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
+import { customerTabClaims, customerTabHeaders } from "./support/customerTab.js";
 import User from "../models/User.js";
 import Property from "../models/Property.js";
 import Rental from "../models/Rental.js";
@@ -43,8 +44,8 @@ test("regular rental inventory: real HTTP, MongoDB transactions and competing pa
   });
   const api = async (path, { user = customers[0], body, method = body ? "POST" : "GET" } = {}) => {
     const session = user.role === "admin" ? "admin" : "customer";
-    const token = jwt.sign({ id: user.id, role: user.role, session }, process.env.JWT_KEY);
-    const response = await fetch(`${base}${path}`, { method, headers: { "Content-Type": "application/json", "X-Session-Domain": session, Cookie: `${session}_token=${token}` }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    const token = jwt.sign({ id: user.id, role: user.role, session, ...customerTabClaims(session) }, process.env.JWT_KEY);
+    const response = await fetch(`${base}${path}`, { method, headers: { ...customerTabHeaders(session), "Content-Type": "application/json", "X-Session-Domain": session, Cookie: `${session}_token=${token}` }, ...(body ? { body: JSON.stringify(body) } : {}) });
     return { code: response.status, ...(await response.json()) };
   };
   const property = () => Property.create({ title: "Test apartment", propertyType: "Apartment", listingType: "Rent", price: 100, pricePeriod: "month", owner: owner._id, ownerType: "admin", status: "published", availability: "Available" });

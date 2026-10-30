@@ -12,6 +12,7 @@ import agentRoutes from "../routes/agentRoutes.js";
 import userRoutes from "../routes/userRoutes.js";
 import { protect, protectCustomer, protectOwner } from "../middleware/authMiddleware.js";
 import { SESSION_ROLES, setAuthCookie } from "../utils/generateToken.js";
+import { TEST_CUSTOMER_TAB, customerTabHeaders } from "./support/customerTab.js";
 import { agentDestination, authRedirectDestination, sessionDomainForPath, sessionDestination } from "../../frontend/src/utils/sessionDomain.js";
 
 test("frontend destinations keep public pages and private areas in their own domain", () => {
@@ -75,6 +76,7 @@ test("role session isolation", async (t) => {
   const cookies = {};
   const call = (path, { domain, jar = cookies, data, method = data ? "POST" : "GET" } = {}) => fetch(base + path, {
     method, headers: {
+      ...customerTabHeaders(domain),
       "Content-Type": "application/json", Cookie: Object.entries(jar).map(([name, value]) => `${name}=${value}`).join("; "),
       ...(domain ? { "X-Session-Domain": domain } : {}),
     }, ...(data ? { body: JSON.stringify(data) } : {}),
@@ -98,7 +100,7 @@ test("role session isolation", async (t) => {
     assert.equal(body.data.token, undefined);
   };
   try {
-    await t.test("all three logins set only their own persistent HTTP-only cookie", async () => {
+    await t.test("each login sets its own HTTP-only cookie; customers use session-only cookies", async () => {
       for (const session of ["admin", "agent", "customer"]) await signIn(session);
       assert.equal(Object.keys(cookies).length, 3);
     });
@@ -207,9 +209,8 @@ test("role session isolation", async (t) => {
           assert.equal(options.httpOnly, true);
           assert.equal(options.secure, true);
           assert.equal(options.sameSite, "lax");
-          // Admin sessions last 12 hours; customer and agent sessions a week
-          assert.equal(options.maxAge, session === "admin" ? 43200000 : 604800000);
-        } }, accounts[0]._id, session);
+          assert.equal(options.maxAge, session === "customer" ? undefined : session === "admin" ? 43200000 : 604800000);
+        } }, accounts[0]._id, session, "", TEST_CUSTOMER_TAB);
       } finally {
         if (previous === undefined) delete process.env.NODE_ENV;
         else process.env.NODE_ENV = previous;

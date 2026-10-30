@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { customerTabHeaders } from "./support/customerTab.js";
 import assert from "node:assert/strict";
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -90,7 +91,7 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
   const base = `http://127.0.0.1:${server.address().port}`;
   const jar = {};
   const call = async (path, domain = "agent", body, method = body ? "POST" : "GET") => {
-    const response = await fetch(base + path, { method, headers: { "Content-Type": "application/json", "X-Session-Domain": domain, Cookie: Object.entries(jar).map(([name, token]) => `${name}=${token}`).join("; ") }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    const response = await fetch(base + path, { method, headers: { ...customerTabHeaders(domain), "Content-Type": "application/json", "X-Session-Domain": domain, Cookie: Object.entries(jar).map(([name, token]) => `${name}=${token}`).join("; ") }, ...(body ? { body: JSON.stringify(body) } : {}) });
     for (const cookie of response.headers.getSetCookie()) { const [name, token] = cookie.split(";")[0].split("="); jar[name] = token; }
     return response;
   };
