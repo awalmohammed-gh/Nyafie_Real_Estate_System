@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, ChevronDown, MapPin, Search, SlidersHorizontal } from "lucide-react";
+import { ArrowUpRight, MapPin, Search, SlidersHorizontal } from "lucide-react";
 import HeroSlider from "./HeroSlider";
+import HeroSearchSelect from "./HeroSearchSelect";
 import { usePropertyFacets } from "../../hooks/usePropertyFacets";
 import { usePlatform } from "../../context/usePlatform";
 import { useNavOverlay } from "../../context/navOverlay";
@@ -22,27 +23,14 @@ const fallbackSlide = {
   primaryLink: "/listings",
 };
 
-const SearchSelect = ({ icon: Icon, label, name, value, onChange, disabled, children }) => (
-  <label className="home-search-field">
-    <Icon size={19} aria-hidden="true" />
-    <span className="min-w-0 flex-1">
-      <span className="home-field-label">{label}</span>
-      <select name={name} value={value} onChange={onChange} disabled={disabled}>
-        {children}
-      </select>
-    </span>
-    <ChevronDown size={16} aria-hidden="true" className="pointer-events-none shrink-0" />
-  </label>
-);
-
 const Hero = () => {
   useNavOverlay(); // the navbar sits transparently over the photo
   const navigate = useNavigate();
   const { paths, settings } = usePlatform();
   const [search, setSearch] = useState({ status: "", area: "", type: "" });
   const facets = usePropertyFacets(search.status);
-  const areas = (facets.data?.areas || []).map((area) => area.name).sort();
-  const types = (facets.data?.types || []).map((type) => type.value).sort();
+  const areas = [...(facets.data?.areas || [])].sort((a, b) => a.name.localeCompare(b.name)).map((area) => ({ value: area.name, label: area.name, description: [area.city, area.region].filter(Boolean).join(" · "), count: area.count }));
+  const types = [...(facets.data?.types || [])].sort((a, b) => a.value.localeCompare(b.value)).map((type) => ({ value: type.value, label: formatType(type.value), count: type.count }));
   const active = settings.hero.slides.filter((slide) => slide.active && slide.image);
   const slides = active.length ? active : [fallbackSlide];
 
@@ -70,15 +58,9 @@ const Hero = () => {
             </fieldset>
             <p className="home-search-count" aria-live="polite">{facets.data ? `${facets.data.total} ${facets.data.total === 1 ? "home" : "homes"} to explore` : "Your search starts here"}</p>
           </div>
-          <form onSubmit={handleSearch} className="home-search-form">
-            <SearchSelect icon={MapPin} label="Where?" name="area" value={search.area} disabled={facets.loading} onChange={(event) => setSearch((previous) => ({ ...previous, area: event.target.value }))}>
-              <option value="">{facets.loading ? "Loading areas…" : "All locations"}</option>
-              {areas.map((area) => <option key={area} value={area}>{area}</option>)}
-            </SearchSelect>
-            <SearchSelect icon={SlidersHorizontal} label="Your kind of space" name="type" value={search.type} disabled={facets.loading} onChange={(event) => setSearch((previous) => ({ ...previous, type: event.target.value }))}>
-              <option value="">{facets.loading ? "Loading types…" : "Any property type"}</option>
-              {types.map((type) => <option key={type} value={type}>{formatType(type)}</option>)}
-            </SearchSelect>
+          <form key={search.status} onSubmit={handleSearch} className="home-search-form">
+            <HeroSearchSelect icon={MapPin} label="Where?" title="Choose your location" name="area" placeholder="All locations" value={search.area} disabled={facets.loading} onChange={(value) => setSearch((previous) => ({ ...previous, area: value }))} options={[{ value: "", label: "All locations", description: "Explore homes across Ghana", count: facets.data?.total }, ...areas]} />
+            <HeroSearchSelect icon={SlidersHorizontal} label="Your kind of space" title="Find your kind of space" name="type" placeholder="Any property type" value={search.type} disabled={facets.loading} onChange={(value) => setSearch((previous) => ({ ...previous, type: value }))} options={[{ value: "", label: "Any property type", description: "A little room for every possibility", count: facets.data?.total }, ...types]} />
             <button type="submit" className="home-search-submit"><Search size={18} aria-hidden="true" /> Find my home <ArrowUpRight size={18} aria-hidden="true" /></button>
           </form>
           {facets.error && <p role="status" className="home-search-error">Filter options couldn’t load. You can still browse all {search.status === "Rent" ? "rentals" : search.status === "Sale" ? "homes for sale" : "homes"}. <button type="button" onClick={facets.reload}>Try again</button></p>}
