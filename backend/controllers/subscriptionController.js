@@ -88,11 +88,11 @@ export const currentSubscription = async (req, res) => {
   ok(res, { subscription, state: subscriptionState(subscription), paymentMode: await paymentMode() });
 };
 
-// Only agents with a saved profile and a usable account may buy a plan
+// Existing customers may pay first, then finish their profile in agent onboarding.
 const checkoutBlocker = (user) => {
   if (user.role !== "agent") return [403, "Create an agent account before choosing an agent subscription."];
   if (!user.isActive || ["rejected", "suspended"].includes(user.agentApplication?.status)) return [403, "Check your agent application status before making a payment."];
-  if (!user.agentApplication?.profileCompletedAt) return [400, "Complete your agent profile before making a payment."];
+  if (!user.agentApplication?.profileCompletedAt && !user.customerAccess) return [400, "Complete your agent profile before making a payment."];
   if (user.agency?.owner) return [403, "Your agency owner manages the subscription for the team."];
   return null;
 };

@@ -1,10 +1,13 @@
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
+import Plan from "../models/Plan.js";
 import { setAuthCookie, clearAuthCookie } from "../utils/generateToken.js";
 import { ok, fail } from "../utils/response.js";
 import { notifyAdmins } from "../utils/notify.js";
 import { onboardingState, validPhone } from "../utils/agentApplication.js";
 import { CUSTOMER_TAB_HEADER, validTabSecret } from "../utils/customerTabSession.js";
+import { matchesSessionRole } from "../utils/sessionAccess.js";
+import { loginAttempts, rejectLoginAttempt } from "../utils/loginAttempts.js";
 
 const isEmail = (value) => typeof value === "string" && value.length <= 254 && /^\S+@\S+\.\S+$/.test(value.trim());
 const text = (value) => (typeof value === "string" ? value.trim() : "");
@@ -75,7 +78,7 @@ export const register = async (req, res) => {
   ok(res, await loadUser(user._id), "Account created", 201);
 };
 
-// A distinct agent identity starts with zero workspace permissions.
+// New agent registrations start with zero workspace permissions.
 export const registerAgent = async (req, res) => {
   const { fullName, email, phone, password, confirmPassword } = req.body;
   const normalizedEmail =
@@ -131,6 +134,27 @@ export const registerAgent = async (req, res) => {
   );
 };
 
+// POST /api/auth/customer/become-agent: reuse the authenticated customer's identity.
+// Opening onboarding creates no subscription and grants no publishing/dashboard permissions.
+export const becomeAgent = async (req, res) => {
+  const plan = await Plan.findById(req.body?.planId).catch(() => null);
+  if (!plan?.isActive) return fail(res, 404, "This plan is not available.");
+  let user = req.user;
+  if (user.role === "user") {
+    user = await User.findOneAndUpdate(
+      { _id: user._id, role: "user", isActive: true },
+      { $set: { role: "agent", customerAccess: true, agentApplication: { status: "incomplete", agentType: plan.accountType } } },
+      { returnDocument: "after", runValidators: true },
+    ).select("+sessionVersion");
+    // A concurrent click may already have opened onboarding; never overwrite its progress.
+    if (!user) user = await User.findById(req.user._id).select("+sessionVersion");
+  }
+  if (!user || user.role !== "agent" || !user.customerAccess || !user.isActive || user.agentApplication?.status === "removed")
+    return fail(res, 403, "Your account cannot start agent onboarding. Contact support for help.");
+  setAuthCookie(res, user._id, "agent", user.sessionVersion);
+  ok(res, await loadUser(user._id), "Continue with your existing account");
+};
+
 const checkCredentials = async (email, password) => {
   if (typeof email !== "string" || typeof password !== "string" || !password || Buffer.byteLength(password, "utf8") > 72) return null;
   const user = await User.findOne({ email: email.trim().toLowerCase().slice(0, 254) }).select("+password +sessionVersion");
@@ -144,13 +168,20 @@ const checkCredentials = async (email, password) => {
 // Each login authenticates only the role named by its route.
 export const loginFor = (session) => async (req, res) => {
   if (session === "customer" && !validTabSecret(req.get(CUSTOMER_TAB_HEADER))) return fail(res, 400, "Reload this tab to start a secure sign-in session.");
-  const user = await checkCredentials(req.body.email, req.body.password);
-  const role = session === "customer" ? "user" : session;
-  if (!user || user.role !== role || (session !== "agent" && !user.isActive))
+  const { email, password } = req.body || {};
+  if (!isEmail(email) || typeof password !== "string" || !password || Buffer.byteLength(password, "utf8") > 72)
+    return fail(res, 400, "Enter a valid email address and password.");
+  const attempt = await loginAttempts.check(email);
+  if (attempt.retryAfter) return rejectLoginAttempt(res, attempt);
+  const user = await checkCredentials(email, password);
+  if (!user) return rejectLoginAttempt(res, await loginAttempts.failure(email));
+  if (!matchesSessionRole(user, session) || (session !== "agent" && !user.isActive))
     return fail(res, 401, "Incorrect email or password for this area.");
   // Removed providers: a plain message, never the internal reason
   if (user.agentApplication?.status === "removed")
     return fail(res, 403, "Your provider account is no longer active. Contact HomeBase support if you believe this is an error.");
+  const cleared = await loginAttempts.success(email);
+  if (cleared.retryAfter) return rejectLoginAttempt(res, cleared);
   setAuthCookie(res, user._id, session, user.sessionVersion, req.get(CUSTOMER_TAB_HEADER));
   ok(res, await loadUser(user._id), "Signed in");
 };

@@ -80,7 +80,7 @@ export const listPropertyReviews = async (req, res) => {
   const sort = SORTS[req.query.sort] || SORTS.newest;
   const filter = { property: property._id, status: "published" };
   // Only customers write reviews, so only a customer session has a review of its own
-  const viewer = req.user?.role === "user" ? req.user : null;
+  const viewer = req.sessionDomain === "customer" || req.user?.role === "user" ? req.user : null;
 
   const [total, docs, summary, mine] = await Promise.all([
     Review.countDocuments(filter),

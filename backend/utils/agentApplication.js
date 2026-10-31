@@ -63,13 +63,14 @@ export const onboardingState = async (user) => {
   if (status === "suspended") step = "suspended";
   else if (status === "approved") step = "complete";
   else if (status === "rejected") step = "rejected";
-  else if (!profileComplete) step = "profile";
+  else if (!profileComplete && !(user.customerAccess && !subscriptionSatisfied)) step = "profile";
   else if (!subscriptionSatisfied) step = attemptStatus === "pending" ? "payment_pending" : attemptStatus === "failed" ? "payment_failed" : "subscription";
   else step = "review";
 
   const dashboardAccess = approvedAgent(user);
   return {
     step,
+    paymentFirst: Boolean(user.customerAccess),
     nextPath: STEP_PATHS[step],
     requireSubscription,
     profile: profileComplete ? "complete" : "incomplete",

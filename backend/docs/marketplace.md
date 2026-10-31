@@ -19,17 +19,48 @@ No existing data needs a destructive migration.
   Tab closure is not a reliable server event, so this is not a guarantee of
   immediate server-side revocation on every kind of browser restore. Explicit
   sign-out clears the cookie and proof; the JWT expiry remains enforced server-side.
-- Customer and agent login routes share a limit of five attempts per normalized
-  email/network in 15 minutes, plus 40 per network and 20 per email across networks.
-  Admin login remains five per email/network and 20 per network. Password-change
-  attempts are limited to five per network in 15 minutes. Limits count all attempts,
-  including successful ones; HTTP 429 includes `Retry-After`.
+- Customer, agent and admin sign-ins share three failed-password attempts per
+  normalized email, across networks and login aliases. The third failure starts a
+  full 30-minute lock. Correct passwords are blocked during that period; blocked
+  retries do not extend it. Successful sign-in before the lock resets the failure
+  count. Incomplete failure sequences expire after 30 minutes without another failure.
+  Responses show remaining attempts; locked responses use HTTP 429 and `Retry-After`.
+  Separate network flood limits allow 40 sign-in requests per 15 minutes (20 for
+  admin), counting all requests. Password-change attempts remain five per network
+  in 15 minutes.
 - Production counters use shared atomic MongoDB buckets; development counters are
   in memory. Authentication and protected responses use `private, no-store`.
   Password changes continue revoking earlier tokens through `sessionVersion`.
   Agent and admin cookie lifetimes and role isolation remain unchanged.
 
+Login-lock integration checks use `RUN_LOGIN_LOCKOUT_INTEGRATION=1 node --test
+tests/loginLockout.integration.test.js`. They use a disposable local MongoDB
+database and a simulated clock to verify production persistence, concurrent
+failures and the complete 30-minute deadline without waiting in real time.
+
 ## Ownership and public identity
+
+### Existing customers becoming agents
+
+- Signed-in customers choose a plan and continue through
+  `POST /api/auth/customer/become-agent`, using their verified, tab-bound customer
+  session. The existing user ID, email, password, saved properties and history stay
+  intact. No second account or password is created.
+- This explicit opt-in creates an incomplete agent application and an agent-area
+  session. It grants no workspace or publishing access. The selected active plan
+  determines the initial account type; client roles and approval fields are ignored.
+- These customers may pay before completing professional details. A confirmed
+  payment opens `/agent/onboarding/profile` with their personal details prefilled.
+  Saving the remaining details submits the paid application for admin review.
+  Pending/failed payments preserve the application and can be resumed.
+- The server-owned `customerAccess` flag keeps customer sign-in and customer history
+  available after opting in. Both areas use the same credentials and independent
+  cookies; a customer cookie cannot authorize agent-only routes or owner-side
+  conversations/records. New agent registrations retain their existing session rules.
+- Test with `RUN_CUSTOMER_AGENT_INTEGRATION=1 node --test tests/customerAgentUpgrade.integration.test.js`
+  against the disposable MongoDB test helper; no live payment is made.
+
+### Listing permissions
 
 - Agent posting routes require an approved, active account and a paid or waived,
   unexpired subscription when subscriptions are required. The server attaches
@@ -165,3 +196,19 @@ Local regression checks use a disposable MongoDB database:
 $env:RUN_FINANCE_INTEGRATION = '1'
 node --test tests/financialInventory.integration.test.js
 ```
+
+## Cleaning old demo view counts
+
+The original twelve company listings included fixed view totals. Removing those
+fields from `seed/companyListings.json` does not update listings already in MongoDB.
+From `backend`, run `npm run views:clean-seed` to preview, then
+`npm run views:clean-seed -- --apply` to subtract only those historical baselines.
+The cleanup matches admin ownership, the original title and the original image.
+Listings below their original baseline and unrelated listings are left alone.
+Later increments, existing view-deduplication records and listing timestamps are
+preserved. A transaction stores an audit receipt in `dataMigrations` together with
+the correction, making reruns harmless. Run once per database that contains the old
+demo seed. A replica set (including MongoDB Atlas) is required to apply it.
+`views:reset` is a separate destructive reset of all totals and tracking windows;
+it is unnecessary for this cleanup. View records expire for deduplication, so they
+cannot be used to reconstruct historical totals or distinguish older refresh counts.

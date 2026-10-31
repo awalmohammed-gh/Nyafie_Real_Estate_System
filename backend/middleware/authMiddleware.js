@@ -4,6 +4,7 @@ import { SESSION_ROLES, cookieName, clearAuthCookie } from "../utils/generateTok
 import { fail } from "../utils/response.js";
 import { approvedAgent, isRemoved } from "../utils/agentApplication.js";
 import { CUSTOMER_TAB_HEADER, matchesCustomerTab, validTabSecret } from "../utils/customerTabSession.js";
+import { matchesSessionRole } from "../utils/sessionAccess.js";
 
 const userFromCookie = async (req, session) => {
   const token = req.cookies?.[cookieName(session)];
@@ -26,7 +27,10 @@ const userFromCookie = async (req, session) => {
   const user = await User.findById(payload.id).select("+sessionVersion");
   const tokenVersion = payload.sessionVersion === undefined ? "" : payload.sessionVersion;
   if (!user || typeof tokenVersion !== "string" || tokenVersion !== (user.sessionVersion || "")) return null;
-  return user?.role === SESSION_ROLES[session] && (session === "agent" || user.isActive) && !isRemoved(user) ? user : null;
+  if (!matchesSessionRole(user, session) || (session !== "agent" && !user.isActive) || isRemoved(user)) return null;
+  // Request-only metadata keeps shared resources in the selected area, even for dual-access users.
+  if (user.$locals) user.$locals.sessionDomain = session;
+  return user;
 };
 
 // Property views: every verified session in this browser, whichever page sent the request, so an agent
