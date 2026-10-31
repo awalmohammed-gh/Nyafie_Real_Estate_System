@@ -46,6 +46,13 @@ const ApplicationStatus = () => {
 
   const onboarding = fresh.onboarding || {};
   const step = STEPS[onboarding.step] || STEPS.review;
+  const description = onboarding.step === "profile" && onboarding.payment === "paid"
+    ? "Your payment is confirmed. Complete the remaining professional details using your existing account, then submit your profile for admin review."
+    : onboarding.step === "profile" && !onboarding.requireSubscription
+      ? "Complete your professional details to submit your application for review. A subscription is not currently required."
+      : onboarding.step === "subscription" && onboarding.paymentFirst
+        ? "Choose a plan and complete payment. You can fill in your remaining professional details on the agent side next."
+        : step.text;
   const Icon = step.icon;
   const recheck = async () => {
     setBusy(true);
@@ -69,7 +76,7 @@ const ApplicationStatus = () => {
             <Icon className="h-7 w-7" aria-hidden="true" />
           </span>
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">{step.title}</h1>
-          <p className="mt-3 text-sm leading-relaxed text-gray-600">{onboarding.step === "profile" && !onboarding.requireSubscription ? "Complete your professional details to submit your application for review. A subscription is not currently required." : step.text}</p>
+          <p className="mt-3 text-sm leading-relaxed text-gray-600">{description}</p>
 
           {onboarding.step === "rejected" && fresh.agentApplication?.rejectionReason && (
             <div className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-800"><p className="font-semibold">Review feedback</p><p className="mt-2 whitespace-pre-wrap">{fresh.agentApplication.rejectionReason}</p></div>

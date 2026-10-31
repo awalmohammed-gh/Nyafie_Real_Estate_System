@@ -22,7 +22,8 @@ import { useAuth } from "../../context/useAuth";
 import Reveal from "../../components/ui/Reveal";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { formatDate } from "../../utils/date";
-import { canAccessAgent } from "../../utils/sessionDomain";
+import { agentDestination, canAccessAgent } from "../../utils/sessionDomain";
+import { authApi } from "../../frontApi";
 import OnboardingProgress from "../../components/agent/OnboardingProgress";
 import PageTitle from "../../components/agent/PageTitle";
 import EmptyState from "../../components/ui/EmptyState";
@@ -56,6 +57,8 @@ const Plans = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const [continuing, setContinuing] = useState(false);
+  const [continueError, setContinueError] = useState("");
   const currentPlanId = user?.subscription?.planId;
   // Inactive plans are hidden from new agents, but an existing subscriber can still see and renew theirs
   const available = allPlans.filter((p) => p.active || p.id === currentPlanId);
@@ -65,15 +68,16 @@ const Plans = () => {
 
   // Plans are shown for one account type at a time. Agents only see plans for their own account type;
   // visitors browse all. (The server enforces the same rule whatever plan id is sent.)
-  const accountType = isAgent ? accountTypeOf(user?.agentApplication?.agentType) : "individual";
-  const browsableTypes = !isAgent ? Object.keys(ACCOUNT_TYPES) : [accountType];
+  const existingProvider = isAgent || user?.agentAccess;
+  const accountType = existingProvider ? accountTypeOf(user?.agentApplication?.agentType) : "individual";
+  const browsableTypes = !existingProvider ? Object.keys(ACCOUNT_TYPES) : [accountType];
   const canBrowseTypes = browsableTypes.length > 1;
   const [viewType, setViewType] = useState(() => (browsableTypes.includes(searchParams.get("type")) ? searchParams.get("type") : accountType));
   const shownType = browsableTypes.includes(viewType) ? viewType : accountType;
   const plans = plansFor(available, shownType);
   // While a plan is active, only higher tiers of the same account type (or a renewal) can be bought
   const currentPlan = allPlans.find((p) => p.id === currentPlanId);
-  const onActivePlan = isAgent && isActive && Boolean(currentPlan);
+  const onActivePlan = existingProvider && isActive && Boolean(currentPlan);
 
   // undefined: the suggested plan (the one asked for, the current one, or the most popular); null: none, after unselecting
   const [selectedId, setSelectedId] = useState(() => searchParams.get("plan") || user?.onboarding?.planId || currentPlanId || undefined);
@@ -97,7 +101,7 @@ const Plans = () => {
     if (["review", "rejected", "suspended"].includes(user?.onboarding?.step)) return <Navigate to="/agent/status" replace />;
   }
 
-  const isRenewal = isAgent && selected?.id === currentPlanId;
+  const isRenewal = existingProvider && selected?.id === currentPlanId;
   const isUpgrade = onActivePlan && !isRenewal && selected?.sortOrder > currentPlan.sortOrder;
   const notAnUpgrade = onActivePlan && !isRenewal && !isUpgrade;
   const ctaLabel = !selected
@@ -114,18 +118,31 @@ const Plans = () => {
           ? `Upgrade to ${selected.name}`
           : `Choose ${selected.name}`;
 
-  const handleContinue = () => {
-    if (!selected || notAnUpgrade) return;
+  const handleContinue = async () => {
+    if (!selected || notAnUpgrade || continuing) return;
+    setContinueError("");
     if (isAdmin) {
       navigate("/admin/plans");
       return;
     }
     const target = `${user?.agentApplication?.status === "approved" ? "/agent/subscription/checkout" : "/agent/checkout"}?plan=${selected.id}`;
-    if (!isAuthenticated || !isAgent) {
-      navigate("/register?account=agent", { state: { from: `/agent/subscription/checkout?plan=${selected.id}` } });
+    if (!isAuthenticated) {
+      navigate("/login", { state: { from: `/agent/plans?plan=${selected.id}&type=${shownType}` } });
       return;
     }
-    if (!user.agentApplication?.profileCompletedAt) { navigate("/agent/onboarding/profile"); return; }
+    if (!isAgent) {
+      setContinuing(true);
+      try {
+        const agent = await authApi.becomeAgent(selected.id);
+        const checkout = `${canAccessAgent(agent) ? "/agent/subscription/checkout" : "/agent/checkout"}?plan=${selected.id}`;
+        // Resume an existing payment/profile instead of asking the customer to pay twice.
+        const missingPayment = ["none", "failed", "not_required"].includes(agent.onboarding?.payment);
+        navigate(!canAccessAgent(agent) && !missingPayment ? agentDestination(agent) : checkout);
+      } catch (error) { setContinueError(error.message); }
+      finally { setContinuing(false); }
+      return;
+    }
+    if (!user.agentApplication?.profileCompletedAt && !user.customerAccess) { navigate("/agent/onboarding/profile"); return; }
     if (user.status === "suspended" || ["suspended", "rejected"].includes(user.agentApplication?.status) || (user.agentApplication?.status === "pending" && isActive)) { navigate("/agent/status"); return; }
     navigate(target);
   };
@@ -137,9 +154,9 @@ const Plans = () => {
         <section className="border-b border-gray-200 bg-white">
           <div className="container-page py-8 sm:py-10">
             <div className="flex flex-wrap items-center justify-between gap-4"><OnboardingProgress onboarding={user?.onboarding} /><Link to="/agent/status" className="text-sm font-semibold text-brand-700">Onboarding status</Link></div>
-            <p className="mt-8 text-xs font-bold tracking-wider text-brand-700 uppercase">Step 3 of 4 · Subscription</p>
+            <p className="mt-8 text-xs font-bold tracking-wider text-brand-700 uppercase">Step {user?.onboarding?.paymentFirst ? "2" : "3"} of 4 · Subscription</p>
             <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-gray-900">Choose your plan.</h1>
-            <p className="mt-3 max-w-2xl text-gray-600">Your profile is saved. Pick a plan and pay securely with Paystack. Your dashboard opens once the payment is confirmed{user?.onboarding?.application === "approved" ? "" : " and your application is approved"}.</p>
+            <p className="mt-3 max-w-2xl text-gray-600">{user?.onboarding?.paymentFirst && !user?.agentApplication?.profileCompletedAt ? "Choose a plan and pay securely with Paystack. You’ll complete your professional details next, using your existing account. Admin approval is required before your dashboard opens." : `Your profile is saved. Pick a plan and pay securely with Paystack. Your dashboard opens once the payment is confirmed${user?.onboarding?.application === "approved" ? "" : " and your application is approved"}.`}</p>
             {user?.onboarding?.payment === "failed" && <p role="status" className="mt-5 flex max-w-2xl items-start gap-3 rounded-2xl bg-red-50 px-5 py-4 text-sm text-red-800 ring-1 ring-red-100"><Info className="mt-0.5 h-5 w-5 shrink-0" />Your last payment wasn’t completed. Nothing was charged to your plan, and your account and profile are saved. Choose a plan to try again.</p>}
           </div>
         </section>
@@ -320,11 +337,13 @@ const Plans = () => {
                 <p className="text-sm text-gray-500">While your plan is active you can renew it or upgrade to a higher plan.</p>
               )}
             </div>
-            <button onClick={handleContinue} disabled={notAnUpgrade && !isAdmin} className="btn btn-primary w-full px-8 py-3.5 sm:w-auto">
-              {isAdmin ? "Manage plans in admin" : isAuthenticated ? ctaLabel : "Sign in to continue"}
+            <button onClick={handleContinue} disabled={continuing || (notAnUpgrade && !isAdmin)} className="btn btn-primary w-full px-8 py-3.5 sm:w-auto">
+              {continuing ? "Opening agent onboarding..." : isAdmin ? "Manage plans in admin" : isAuthenticated ? ctaLabel : "Sign in to continue"}
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>}
+          {isAuthenticated && !isAgent && !isAdmin && <p className="mt-4 text-center text-sm text-gray-500">Continue as {user.email}. Your existing account and customer history stay with you. Complete your agent profile after payment.</p>}
+          {continueError && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700">{continueError}</p>}
           {!selected && plans.length > 0 && (
             <p role="status" className="mt-8 rounded-3xl bg-white p-6 text-center text-sm text-gray-600 ring-1 ring-gray-200 sm:p-8">Select a plan to continue.</p>
           )}

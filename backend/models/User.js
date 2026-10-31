@@ -63,6 +63,7 @@ const userSchema = new mongoose.Schema(
     profileImage: { type: String, default: "" },
     // Roles and application decisions are assigned only by server-owned flows.
     role: { type: String, enum: ["user", "agent", "admin"], default: "user" },
+    customerAccess: { type: Boolean, default: false }, // retained only when a customer starts agent onboarding
     isActive: { type: Boolean, default: true },
     agentApplication: { type: applicationSchema, default: undefined },
     // Current subscription for agents (full history lives in the Subscription collection)

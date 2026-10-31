@@ -81,14 +81,16 @@ const Checkout = () => {
   const finish = async (fresh, kind) => {
     await refreshUser();
     const approved = canAccessAgent(fresh);
+    const needsProfile = fresh?.onboarding?.step === "profile";
+    const nextPath = needsProfile ? "/agent/onboarding/profile" : approved ? "/agent/dashboard" : "/agent/status";
     const title = kind === "upgrade" ? "Plan upgraded" : kind === "renewal" ? "Subscription renewed" : "Payment confirmed";
-    setSubscription({ ...fresh?.subscription, title, approved });
+    setSubscription({ ...fresh?.subscription, title, approved, needsProfile, nextPath });
     setStatus("success");
     toast({
       title,
       description: fresh?.subscription ? `${fresh.subscription.planName} plan active until ${formatDate(fresh.subscription.expiryDate)}.` : undefined,
     });
-    timers.current.push(setTimeout(() => navigate(approved ? "/agent/dashboard" : "/agent/status"), 2600));
+    timers.current.push(setTimeout(() => navigate(nextPath, { replace: true }), 2600));
   };
 
   // Returning from Paystack: only the backend decides (it asks Paystack) whether the payment went through
@@ -172,7 +174,7 @@ const Checkout = () => {
   const isUpgrade = due?.kind === "upgrade";
   const summaryLabel = isUpgrade ? `Upgrade from ${due.currentPlan?.name}` : isRenewal ? "Renewal" : "Agent subscription";
   // Active subscribers came from their subscription page (renewals and upgrades); others from the plans list
-  const backTo = canAccessAgent(user) && currentState.isActive ? { to: isUpgrade ? "/agent/subscription/upgrade" : "/agent/subscription", label: isUpgrade ? "Back to upgrades" : "Back to subscription" } : { to: `${plansPath}?plan=${plan.id}`, label: "Back to plans" };
+  const backTo = canAccessAgent(user) && currentState.isActive ? { to: isUpgrade ? "/agent/subscription/upgrade" : "/agent/subscription", label: isUpgrade ? "Back to upgrades" : "Back to subscription" } : { to: plan ? `${plansPath}?plan=${plan.id}` : plansPath, label: "Back to plans" };
   const paymentsDisabled = paymentMode === "disabled";
 
   // Payment happens on Paystack; the backend verifies the transaction when the user returns
@@ -226,13 +228,13 @@ const Checkout = () => {
               <dd className="font-semibold text-gray-900">₵{subscription.price.toLocaleString()}</dd>
             </div>
           </dl>
-          {!subscription.approved && <p className="mt-4 text-sm leading-relaxed text-gray-600">Your application remains under review. Dashboard access begins after admin approval.</p>}
-          <Link to={subscription.approved ? "/agent/dashboard" : "/agent/status"} className="btn btn-primary mt-8 w-full">
-            {subscription.approved ? "Go to your dashboard" : "View application status"}
+          {!subscription.approved && <p className="mt-4 text-sm leading-relaxed text-gray-600">{subscription.needsProfile ? "Payment confirmed. Complete your remaining agent details using your existing account, then submit your profile for admin review." : "Your application remains under review. Dashboard access begins after admin approval."}</p>}
+          <Link to={subscription.nextPath} className="btn btn-primary mt-8 w-full">
+            {subscription.needsProfile ? "Complete your agent profile" : subscription.approved ? "Go to your dashboard" : "View application status"}
           </Link>
           <p className="mt-4 flex items-center justify-center gap-2 text-xs text-gray-400">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            {subscription.approved ? "Taking you to your dashboard..." : "Taking you to your application status..."}
+            {subscription.needsProfile ? "Opening your agent profile..." : subscription.approved ? "Taking you to your dashboard..." : "Taking you to your application status..."}
           </p>
         </motion.div>
       </div>
@@ -266,7 +268,7 @@ const Checkout = () => {
             ) : (
               <div className="mt-6 flex items-start gap-3 rounded-2xl bg-brand-50 p-4 text-sm text-brand-900 ring-1 ring-brand-100">
                 <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-500" />
-                <span>You will be taken to Paystack to pay securely with mobile money or card. Your subscription starts only after we confirm the payment with Paystack.{!canAccessAgent(user) && user?.onboarding?.application !== "approved" ? " Your application then goes to our team for review." : ""}</span>
+                <span>You will be taken to Paystack to pay securely with mobile money or card. Your subscription starts only after we confirm the payment with Paystack.{!user?.agentApplication?.profileCompletedAt ? " After payment, complete your agent profile with this same account." : !canAccessAgent(user) && user?.onboarding?.application !== "approved" ? " Your application then goes to our team for review." : ""}</span>
               </div>
             )}
 

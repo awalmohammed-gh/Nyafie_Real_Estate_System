@@ -114,17 +114,15 @@ export const rateLimit = ({ windowMs, max, key = (req) => req.ip, message = "Too
   };
 };
 
-const emailKey = (req) => `${req.ip}|${String(req.body?.email || "").trim().toLowerCase().slice(0, 254)}`;
-const accountKey = (req) => String(req.body?.email || "").trim().toLowerCase().slice(0, 254);
 const MINUTE = 60 * 1000;
-const loginMessage = "Too many sign-in attempts. Please wait 15 minutes and try again.";
+const loginMessage = "Too many sign-in requests from this network. Please wait 15 minutes and try again.";
 
 export const limits = {
   // Every API call: generous, only stops floods
   api: rateLimit({ windowMs: MINUTE, max: 300 }),
-  // Sign-in: per account (IP + email) and per IP across all emails (credential stuffing)
-  login: [rateLimit({ windowMs: 15 * MINUTE, max: 5, key: emailKey, message: loginMessage }), rateLimit({ windowMs: 15 * MINUTE, max: 40, message: loginMessage }), rateLimit({ windowMs: 15 * MINUTE, max: 20, key: accountKey, message: loginMessage })],
-  adminLogin: [rateLimit({ windowMs: 15 * MINUTE, max: 5, key: emailKey, message: loginMessage }), rateLimit({ windowMs: 15 * MINUTE, max: 20, message: loginMessage })],
+  // Separate flood protection; password failures use the shared 3-attempt/30-minute account lock.
+  login: rateLimit({ windowMs: 15 * MINUTE, max: 40, message: loginMessage }),
+  adminLogin: rateLimit({ windowMs: 15 * MINUTE, max: 20, message: loginMessage }),
   register: rateLimit({ windowMs: 60 * MINUTE, max: 10, message: "Too many accounts created from this network. Please try again later." }),
   password: rateLimit({ windowMs: 15 * MINUTE, max: 5, message: "Too many password attempts. Please wait 15 minutes and try again." }),
   // Payment starts and checks, and things customers send to owners

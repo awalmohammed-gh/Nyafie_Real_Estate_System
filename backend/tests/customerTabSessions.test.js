@@ -56,11 +56,13 @@ test("customer cookies require the original tab proof and expire after two hours
   for (const path of ["/api/agents/public", "/api/users/saved"]) assert.equal((await request(path, { cookie, proof: null })).status, 401, path);
 });
 
-test("sign-in aliases share five attempts per normalized email and network, with Retry-After", async (t) => {
+test("sign-in aliases share three failed passwords and a 30-minute lock, with Retry-After", async (t) => {
   const { request } = await setup(t);
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 3; i++) {
     const response = await request(i % 2 ? "/api/auth/login" : "/api/auth/customer/login", { method: "POST", body: { email: i % 2 ? "  LIMIT@example.test " : "limit@example.test", password: "WrongPassword123" } });
-    assert.equal(response.status, 401);
+    assert.equal(response.status, i === 2 ? 429 : 401);
+    assert.equal((await response.json()).attemptsRemaining, 2 - i);
+    if (i === 2) assert.equal(response.headers.get("retry-after"), "1800");
   }
   const limited = await request("/api/auth/customer/login", { method: "POST", body: { email: "limit@example.test", password: "WrongPassword123" } });
   assert.equal(limited.status, 429);

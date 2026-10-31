@@ -1,12 +1,15 @@
 import { Check } from "lucide-react";
 
 // Account -> Profile -> Subscription -> Review, from the server's onboarding state (user.onboarding)
-const onboardingSteps = (onboarding = {}) => [
-  { label: "Account", done: true },
-  { label: "Profile", done: onboarding.profile === "complete" },
-  { label: "Subscription", done: ["active", "not_required"].includes(onboarding.subscription) },
-  { label: "Review", done: onboarding.application === "approved" },
-];
+const onboardingSteps = (onboarding = {}) => {
+  const profile = { label: "Profile", done: onboarding.profile === "complete" };
+  const subscription = { label: "Subscription", done: ["active", "not_required"].includes(onboarding.subscription) };
+  return [
+    { label: "Account", done: true },
+    ...(onboarding.paymentFirst ? [subscription, profile] : [profile, subscription]),
+    { label: "Review", done: onboarding.application === "approved" },
+  ];
+};
 
 const OnboardingProgress = ({ onboarding, className = "" }) => {
   const steps = onboardingSteps(onboarding || {});

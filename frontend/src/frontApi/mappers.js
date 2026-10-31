@@ -82,7 +82,7 @@ export const mapPayment = (s) => ({
 });
 
 // ---------- Users ----------
-export const mapUser = (u) =>
+export const mapUser = (u, domain) =>
   u && {
     id: u.id,
     firstName: u.firstName,
@@ -91,7 +91,9 @@ export const mapUser = (u) =>
     email: u.email,
     phone: u.phone || "",
     profileImage: u.profileImage || "",
-    role: u.role,
+    role: domain === "customer" && u.role === "agent" && u.customerAccess ? "user" : u.role,
+    customerAccess: Boolean(u.customerAccess),
+    agentAccess: u.role === "agent" && Boolean(u.customerAccess),
     status: u.removal?.deletedAt ? "deleted" : u.agentApplication?.status === "removed" ? "removed" : u.isActive === false ? "suspended" : "active",
     // Admin views only: why and when the provider was removed
     removal: u.removal || null,

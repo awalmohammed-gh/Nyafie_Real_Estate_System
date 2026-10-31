@@ -292,7 +292,8 @@ export const recordView = async (req, res) => {
   if (!property) return fail(res, 404, "Property not found.");
   const result = (counted, views = property.views || 0) => ok(res, { counted, views });
   const { customer, agent, admin } = req.viewerSessions || {};
-  const ownTeam = Boolean(agent) && property.ownerType === "agent" && String(teamOf(agent).ownerId) === String(property.owner);
+  const provider = agent || (customer?.role === "agent" ? customer : null);
+  const ownTeam = Boolean(provider) && property.ownerType === "agent" && String(teamOf(provider).ownerId) === String(property.owner);
   if (admin || ownTeam) return result(false);
   if (!await isPubliclyVisible(property)) return fail(res, 404, "Property not found.");
   if (isCrawler(req.get("user-agent"))) return result(false);

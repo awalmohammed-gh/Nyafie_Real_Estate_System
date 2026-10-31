@@ -21,6 +21,7 @@ const same = (a, b) => a && b && String(a._id || a) === String(b._id || b);
  */
 const sideOf = (conversation, user) => {
   if (same(conversation.customer, user)) return "customer";
+  if (user.$locals?.sessionDomain === "customer") return null;
   if (conversation.ownerType === "agent" && canHandleTeamRecord(conversation, user)) return "owner";
   if (conversation.ownerType === "admin" && user.role === "admin") return "owner";
   return null;
@@ -147,6 +148,7 @@ export const listConversations = (scopeOverride) => async (req, res) => {
   const scope = scopeOverride || req.query.scope || "customer";
   let filter;
   if (scope === "customer") filter = { customer: req.user._id };
+  else if (req.sessionDomain === "customer") return ok(res, []);
   else if (req.user.role === "admin") filter = { ownerType: "admin" };
   else if (req.user.role === "agent") filter = { ownerType: "agent", ...teamFilter(req.user) };
   else return ok(res, []); // customers own no listings

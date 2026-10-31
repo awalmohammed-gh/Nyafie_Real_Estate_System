@@ -27,7 +27,7 @@ export const teamFilter = (user, field = "owner") => {
 
 // Whether this user may see/manage an agent record (property, inquiry, conversation, offer, rental, sale request)
 export const canHandleTeamRecord = (record, user, ownerField = "owner") => {
-  if (user?.role !== "agent") return false;
+  if (user?.role !== "agent" || user.$locals?.sessionDomain === "customer") return false;
   const { ownerId, role } = teamOf(user);
   if (!same(record[ownerField], ownerId)) return false;
   return role !== "agent" || same(record.assignedTo, user);

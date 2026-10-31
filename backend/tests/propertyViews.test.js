@@ -100,7 +100,7 @@ test("different people on a shared IP count separately, and signed-in customers 
 test("the owner organisation's staff and HomeBase admins never add views; other agents do", async (t) => {
   const { listing } = setup(t);
   const a = listing();
-  for (const sessions of [{ agent: company }, { agent: staff }, { admin }, { customer, admin }]) {
+  for (const sessions of [{ agent: company }, { agent: staff }, { customer: company }, { customer: staff }, { admin }, { customer, admin }]) {
     assert.deepEqual(data(await view(a, { sessions })), { counted: false, views: 0 });
   }
   assert.equal(data(await view(a, { sessions: { agent: otherAgent } })).counted, true);
