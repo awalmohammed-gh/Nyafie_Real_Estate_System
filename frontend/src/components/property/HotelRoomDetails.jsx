@@ -19,6 +19,7 @@ const Gallery = ({ room }) => {
         className="aspect-video w-full rounded-xl object-cover"
       />
       {room.images.length > 1 && (
+
         <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
           {room.images.map((src, i) => (
             <button
