@@ -38,9 +38,9 @@ const AuthLayout = ({ domain = "customer", children }) => {
   return (
     <div className={`auth-shell auth-shell-${domain}`}>
       <aside className="auth-story" aria-label={`${siteName} introduction`}>
-        <img src={heroImage} alt="" className="auth-story-image" />
-        <div className="auth-story-overlay" />
+        {domain !== "agent" && <><img src={heroImage} alt="" className="auth-story-image" /><div className="auth-story-overlay" /></>}
         <Link to="/" className="auth-story-brand"><BrandLogo tone="violet" size="lg" /></Link>
+        {domain === "agent" && <div className="auth-agent-art"><img src="/auth/agent-building-safety.png" width="2000" height="2000" alt="Property professional beside a building with a safety approval shield" decoding="async" /></div>}
         <div className="auth-story-content">
           <span className="auth-story-tag"><span aria-hidden="true" />{story.label}</span>
           <h2>{story.title}</h2>
