@@ -24,7 +24,7 @@ test("hotel marketplace: HTTP ownership, booking, payment, inventory and concurr
   const port = probe.address().port; await new Promise((done) => probe.close(done));
   const directory = await mkdtemp(join(tmpdir(), "homebase-hotel-test-"));
   const log = await open(join(directory, "mongod.log"), "w");
-  const binary = process.env.MONGOD_TEST_BINARY || "C:/Program Files/MongoDB/Server/8.2/bin/mongod.exe";
+  const binary = process.env.MONGOD_TEST_BINARY || "C:/Program Files/MongoDB/Server/9.0/bin/mongod.exe";
   const mongod = spawn(binary, ["--dbpath", directory, "--bind_ip", "127.0.0.1", "--port", String(port), "--replSet", "hoteltest"], { stdio: ["ignore", log.fd, log.fd], windowsHide: true });
   let server;
   t.after(async () => {
@@ -49,10 +49,10 @@ test("hotel marketplace: HTTP ownership, booking, payment, inventory and concurr
   process.env.Test_Secret_Key = "sk_test_isolated";
   process.env.PUBLIC_SITE_URL = "http://localhost:5173";
   await Setting.create({ key: "platform", agent: { requireSubscription: false }, property: { requireApproval: false, allowAgentPublishing: true, maxImages: 15, propertyTypes: ["Hotel", "Apartment"], rentPeriods: ["night", "month"] } });
-  const owner = await User.create({ firstName: "Hotel", lastName: "Owner", email: "owner@hotel.test", phone: "0241234567", password: "test-password", role: "agent", agentApplication: { status: "approved" } });
-  const stranger = await User.create({ firstName: "Other", lastName: "Agent", email: "stranger@hotel.test", phone: "0241234567", password: "test-password", role: "agent", agentApplication: { status: "approved" } });
-  const customer = await User.create({ firstName: "Test", lastName: "Guest", email: "guest@hotel.test", phone: "0241234567", password: "test-password" });
-  const customer2 = await User.create({ firstName: "Second", lastName: "Guest", email: "guest2@hotel.test", phone: "0241234567", password: "test-password" });
+  const owner = await User.create({ emailVerifiedAt: new Date(), firstName: "Hotel", lastName: "Owner", email: "owner@hotel.test", phone: "0241234567", password: "test-password", role: "agent", agentApplication: { status: "approved" } });
+  const stranger = await User.create({ emailVerifiedAt: new Date(), firstName: "Other", lastName: "Agent", email: "stranger@hotel.test", phone: "0241234567", password: "test-password", role: "agent", agentApplication: { status: "approved" } });
+  const customer = await User.create({ emailVerifiedAt: new Date(), firstName: "Test", lastName: "Guest", email: "guest@hotel.test", phone: "0241234567", password: "test-password" });
+  const customer2 = await User.create({ emailVerifiedAt: new Date(), firstName: "Second", lastName: "Guest", email: "guest2@hotel.test", phone: "0241234567", password: "test-password" });
   const plan = await Plan.create({ name: "Hotel Test", price: 0, duration: 365, propertyLimit: 20, imageLimit: 15 });
   for (const agent of [owner, stranger]) {
     const subscription = await Subscription.create({ user: agent._id, plan: plan._id, planName: plan.name, amount: 0, paymentReference: `test-${agent.id}`, status: "active", paymentStatus: "waived", expiresAt: new Date("2035-01-01") });
@@ -73,7 +73,9 @@ test("hotel marketplace: HTTP ownership, booking, payment, inventory and concurr
   });
   const api = async (path, { user, body, method = body ? "POST" : "GET" } = {}) => {
     const response = await fetch(`${base}/api${path}`, { method, headers: { "Content-Type": "application/json", ...(user ? tokens(user) : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
-    return { code: response.status, ...(await response.json()) };
+    // The HTTP status goes last: some bodies carry their own `code` (e.g. PAYMENT_PENDING)
+    const payload = await response.json();
+    return { ...payload, code: response.status, body: payload };
   };
   const room = { name: "Deluxe Room", description: "A spacious room with a balcony and king bed.", pricePerNight: 650, quantity: 10, maxGuests: 2, beds: 1, bedType: "King bed", size: 32, sizeUnit: "sqm", images: ["/hero/furnished-bedroom.jpg"], amenities: ["Private bathroom", "Air conditioning"], active: true };
   const created = await api("/properties", { user: owner, body: { title: "Test Hotel", description: "A welcoming hotel in Accra with a pool and restaurant.", propertyType: "Hotel", listingType: "Sale", price: 1, status: "published", location: { neighbourhood: "Airport", city: "Accra", address: "1 Airport Road" }, area: 500, images: ["/hero/resort-pool.jpg"], amenities: ["Swimming pool", "Restaurant"], roomTypes: [room], owner: stranger.id } });

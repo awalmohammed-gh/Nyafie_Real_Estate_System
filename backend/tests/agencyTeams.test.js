@@ -30,7 +30,7 @@ const q = (value) => {
   return self;
 };
 const id = () => new mongoose.Types.ObjectId();
-const agent = (fields = {}) => new User({ firstName: "Test", lastName: `Agent${Math.random().toString(36).slice(2, 6)}`, email: `${Math.random()}@example.test`, role: "agent", isActive: true, agentApplication: { status: "approved", agentType: "individual", profileCompletedAt: new Date() }, ...fields });
+const agent = (fields = {}) => new User({ emailVerifiedAt: new Date(), firstName: "Test", lastName: `Agent${Math.random().toString(36).slice(2, 6)}`, email: `${Math.random()}@example.test`, role: "agent", isActive: true, agentApplication: { status: "approved", agentType: "individual", profileCompletedAt: new Date() }, ...fields });
 
 test("team visibility: owners and managers see all agency work, agents only what is assigned to them", () => {
   const owner = agent({ agentApplication: { status: "approved", agentType: "agency" } });
@@ -46,7 +46,7 @@ test("team visibility: owners and managers see all agency work, agents only what
   assert.equal(canHandleTeamRecord(assigned, staff), true);
   assert.equal(canHandleTeamRecord(unassigned, staff), false, "staff agents don't see unassigned work");
   assert.equal(canHandleTeamRecord(assigned, outsider), false, "other agents never see the agency's work");
-  assert.equal(canHandleTeamRecord(assigned, new User({ firstName: "C", lastName: "U", email: "c@example.test", role: "user" })), false);
+  assert.equal(canHandleTeamRecord(assigned, new User({ emailVerifiedAt: new Date(), firstName: "C", lastName: "U", email: "c@example.test", role: "user" })), false);
   assert.deepEqual(Object.keys(teamFilter(staff)).sort(), ["assignedTo", "owner"]);
   assert.deepEqual(Object.keys(teamFilter(manager)), ["owner"]);
   assert.equal(String(teamFilter(manager).owner), String(owner._id), "staff queries are scoped to the agency owner's records");

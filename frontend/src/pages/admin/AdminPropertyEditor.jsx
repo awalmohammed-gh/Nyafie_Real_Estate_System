@@ -5,6 +5,7 @@ import { PropertyEditorForm } from "../agent/PropertyEditor";
 import EmptyState from "../../components/ui/EmptyState";
 import PageLoader from "../../components/ui/PageLoader";
 import { usePlatform } from "../../context/usePlatform";
+import { adminPath } from "../../utils/adminEntry";
 import "./adminPropertyEditor.css";
 
 // Add / edit HomeBase (admin-owned) listings with the shared property form.
@@ -22,7 +23,7 @@ const AdminPropertyEditor = () => {
         icon={AlertCircle}
         title={`This isn't a ${siteName} listing`}
         description={`Only ${siteName} listings are edited here. Agent listings are moderated from the Properties page.`}
-        action={<Link to="/admin/properties" className="btn btn-primary">Back to properties</Link>}
+        action={<Link to={adminPath("/properties")} className="btn btn-primary">Back to properties</Link>}
       />
     );
   }

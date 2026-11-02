@@ -3,6 +3,7 @@ import connectCloudinary from "./cloudinary.js";
 import { validateRuntimeConfig } from "./runtime.js";
 import { ensureAdmin } from "../utils/ensureAdmin.js";
 import { checkPaystackConfig } from "../utils/paystack.js";
+import { checkAdminEntryConfig } from "../utils/adminEntry.js";
 import Setting from "../models/Setting.js";
 import Plan from "../models/Plan.js";
 
@@ -41,6 +42,7 @@ export const initializeBackend = async () => {
       await Plan.updateMany({ internalChat: { $exists: false } }, { $set: { internalChat: false } });
       await assignMissingTiers();
       checkPaystackConfig();
+      checkAdminEntryConfig();
       initialized = true;
     })().finally(() => { initializing = undefined; });
   }

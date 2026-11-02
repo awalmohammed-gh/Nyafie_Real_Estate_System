@@ -19,8 +19,8 @@ test("regular rental inventory: real HTTP, MongoDB transactions and competing pa
   process.env.Test_Secret_Key = "sk_test_isolated_rental";
   process.env.PUBLIC_SITE_URL = "http://localhost:5173";
   await Setting.create({ key: "platform", payments: { rentalsEnabled: true } });
-  const owner = await User.create({ firstName: "Test", lastName: "Owner", email: "owner@rental.test", password: "test-password", role: "admin" });
-  const customers = await User.create([1, 2].map((n) => ({ firstName: "Guest", lastName: String(n), email: `guest${n}@rental.test`, phone: "0241234567", password: "test-password" })));
+  const owner = await User.create({ emailVerifiedAt: new Date(), firstName: "Test", lastName: "Owner", email: "owner@rental.test", password: "test-password", role: "admin" });
+  const customers = await User.create([1, 2].map((n) => ({ emailVerifiedAt: new Date(), firstName: "Guest", lastName: String(n), email: `guest${n}@rental.test`, phone: "0241234567", password: "test-password" })));
   const app = express();
   app.use(express.json(), cookieParser());
   app.use("/api/rentals", rentalRoutes);

@@ -27,6 +27,7 @@ import { authApi } from "../../frontApi";
 import OnboardingProgress from "../../components/agent/OnboardingProgress";
 import PageTitle from "../../components/agent/PageTitle";
 import EmptyState from "../../components/ui/EmptyState";
+import { adminPath } from "../../utils/adminEntry";
 
 const benefits = [
   { icon: Users, title: "Reach serious buyers", text: "Put your listings in front of buyers and renters searching across Ghana." },
@@ -122,7 +123,7 @@ const Plans = () => {
     if (!selected || notAnUpgrade || continuing) return;
     setContinueError("");
     if (isAdmin) {
-      navigate("/admin/plans");
+      navigate(adminPath("/plans"));
       return;
     }
     const target = `${user?.agentApplication?.status === "approved" ? "/agent/subscription/checkout" : "/agent/checkout"}?plan=${selected.id}`;

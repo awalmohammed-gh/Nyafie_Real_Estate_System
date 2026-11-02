@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
 import { customerTabClaims, customerTabHeaders } from "./support/customerTab.js";
 import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
 import User from "../models/User.js";
 import Plan from "../models/Plan.js";
 import Property from "../models/Property.js";
@@ -34,8 +35,9 @@ const PASSWORD = "correct-horse-1";
 const HASH = bcrypt.hashSync(PASSWORD, 4);
 
 test("removing a provider ends access and public presence, keeps history; permanent delete is separate", async (t) => {
+  t.mock.method(mongoose.connection, "transaction", async (work) => work({}));
   process.env.JWT_KEY = "provider-removal-test-key";
-  const person = (first, last, fields = {}) => new User({ firstName: first, lastName: last, email: `${first.toLowerCase()}.${crypto.randomUUID()}@example.test`, phone: "+233241234567", password: HASH, role: "agent", isActive: true, ...fields });
+  const person = (first, last, fields = {}) => new User({ emailVerifiedAt: new Date(), firstName: first, lastName: last, email: `${first.toLowerCase()}.${crypto.randomUUID()}@example.test`, phone: "+233241234567", password: HASH, role: "agent", isActive: true, ...fields });
   const approved = (agentType, companyName = "") => ({ status: "approved", agentType, companyName, profileCompletedAt: new Date(), approvedAt: new Date() });
 
   const admin = person("Platform", "Admin", { role: "admin" });

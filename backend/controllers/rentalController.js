@@ -7,6 +7,13 @@ import { cleanText, validateContact } from "../utils/validation.js";
 import { HttpError, ok, fail } from "../utils/response.js";
 import { isHotel, quoteHotelRoom, hotelTransaction } from "../utils/hotel.js";
 import { hasRentalConflict, rentalInventoryTransaction } from "../utils/rentalAvailability.js";
+import { announceCancelledBookingRefund, flagCancelledBookingPayment } from "../utils/refunds.js";
+
+// What the customer is told about their money when a paid booking is cancelled
+const refundNotice = (flagged, cancelledPaid, fallback) => {
+  if (flagged) return ` Your payment of ${formatGHS(flagged.amount)} will be refunded; we will let you know when it is processed.`;
+  return cancelledPaid ? fallback : "";
+};
 export { PAYMENT_HOLD } from "../utils/rentalAvailability.js";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -116,7 +123,7 @@ export const quoteRental = async (body, user, options = {}) => {
 // POST /api/rentals { propertyId, startDate, endDate, fullName, email, phone, currentAddress, occupants, notes }
 // Saves the rental request with a server-calculated amount. Payment starts separately (/api/payments/initialize).
 export const createRental = async (req, res) => {
-  const contact = validateContact(req.body);
+  const contact = validateContact({ ...req.body, email: req.user.email });
   if (contact.error) return fail(res, 400, contact.error);
 
   // Request previews may revisit the customer's own checkout. Only the serialized
@@ -125,7 +132,7 @@ export const createRental = async (req, res) => {
   if (quote.error) return fail(res, quote.status, quote.error);
   const { property } = quote;
   if (quote.room) return createHotelRental(req, res, quote, contact);
-  const addressProblem = validateContact(req.body, { requireAddress: true });
+  const addressProblem = validateContact({ ...req.body, email: req.user.email }, { requireAddress: true });
   if (addressProblem.error) return fail(res, 400, addressProblem.error);
 
   const { rental, isNew } = await saveRegularRentalRequest(req, property, contact);
@@ -214,6 +221,8 @@ export const updateRentalStatus = async (req, res) => {
   const allowed = TRANSITIONS[rental.status] || [];
   if (!allowed.includes(status)) return fail(res, 400, `A ${rental.status.replace("_", " ")} rental can't be changed to ${String(status || "that status").replace("_", " ")}.`);
 
+  // A paid booking that is cancelled flags its Paystack charge for a refund in the same transaction
+  let flagged = null;
   if (rental.hotelId) {
     await hotelTransaction(rental.hotelId, async (_hotel, session) => {
       const current = await Rental.findById(rental._id).session(session);
@@ -221,8 +230,10 @@ export const updateRentalStatus = async (req, res) => {
       current.status = status;
       addHistory(current, req.user, cleanText(req.body.note, 300) || `Hotel booking ${STATUS_TEXT[status]}`);
       await current.save({ session });
+      flagged = status === "cancelled" && current.paymentStatus === "paid" ? await flagCancelledBookingPayment(current, session) : null;
     });
-    await notifyUser(rental.customer._id, { type: "status", title: `Hotel booking ${status}`, message: `Your ${rental.roomName} booking was ${status}.${status === "cancelled" && rental.paymentStatus === "paid" ? " Contact the hotel about your refund." : ""}`, link: "/account/rentals" });
+    if (flagged) await announceCancelledBookingRefund(flagged);
+    await notifyUser(rental.customer._id, { type: "status", title: `Hotel booking ${status}`, message: `Your ${rental.roomName} booking was ${status}.${refundNotice(flagged, status === "cancelled" && rental.paymentStatus === "paid", " Contact the hotel about your refund.")}`, link: "/account/rentals" });
     return ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), "Hotel booking updated");
   }
 
@@ -233,14 +244,16 @@ export const updateRentalStatus = async (req, res) => {
     current.status = status;
     addHistory(current, req.user, reason || `Rental ${STATUS_TEXT[status]}`);
     await current.save({ session });
+    flagged = status === "cancelled" && current.paymentStatus === "paid" ? await flagCancelledBookingPayment(current, session) : null;
     return current;
   });
+  if (flagged) await announceCancelledBookingRefund(flagged);
   if (rental.property?._id) {
     const conversation = await postSystemNote(rental.property, rental.customer._id, req.user, "owner", `Rental ${STATUS_TEXT[status]}.${reason ? `\n\n${reason}` : ""}`);
     await Rental.updateOne({ _id: updated._id }, { $set: { conversation: conversation._id } });
   }
 
-  const refund = status === "cancelled" && updated.paymentStatus === "paid" ? " The owner will contact you about your refund." : "";
+  const refund = refundNotice(flagged, status === "cancelled" && updated.paymentStatus === "paid", " The owner will contact you about your refund.");
   await notifyUser(rental.customer._id, {
     type: "status",
     title: `Rental ${STATUS_TEXT[status]}`,

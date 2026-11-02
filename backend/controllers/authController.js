@@ -8,8 +8,9 @@ import { onboardingState, validPhone } from "../utils/agentApplication.js";
 import { CUSTOMER_TAB_HEADER, validTabSecret } from "../utils/customerTabSession.js";
 import { matchesSessionRole } from "../utils/sessionAccess.js";
 import { loginAttempts, rejectLoginAttempt } from "../utils/loginAttempts.js";
+import { startEmailVerification } from "./emailVerificationController.js";
 
-const isEmail = (value) => typeof value === "string" && value.length <= 254 && /^\S+@\S+\.\S+$/.test(value.trim());
+const isEmail = (value) => typeof value === "string" && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 const text = (value) => (typeof value === "string" ? value.trim() : "");
 // bcrypt only uses the first 72 bytes, so longer passwords are refused rather than silently cut
 const passwordProblem = (value) =>
@@ -60,22 +61,20 @@ export const register = async (req, res) => {
   }
 
   // Role is never taken from the request: every new account is a normal user
-  const user = await User.create({
-    firstName,
-    lastName,
-    email,
-    phone,
-    password,
-    role: "user",
-  });
-  setAuthCookie(res, user._id, "customer", user.sessionVersion, req.get(CUSTOMER_TAB_HEADER));
+  let user;
+  try {
+    user = await User.create({ firstName, lastName, email, phone, password, role: "user" });
+  } catch (error) {
+    if (error.code === 11000) return fail(res, 409, "An account with this email already exists. Try signing in.");
+    throw error;
+  }
   notifyAdmins({
     type: "user",
     title: "New account",
     message: `${user.firstName} ${user.lastName} (${user.email}) signed up.`,
     link: "/admin/customers",
   });
-  ok(res, await loadUser(user._id), "Account created", 201);
+  return startEmailVerification(req, res, user);
 };
 
 // New agent registrations start with zero workspace permissions.
@@ -182,6 +181,7 @@ export const loginFor = (session) => async (req, res) => {
     return fail(res, 403, "Your provider account is no longer active. Contact HomeBase support if you believe this is an error.");
   const cleared = await loginAttempts.success(email);
   if (cleared.retryAfter) return rejectLoginAttempt(res, cleared);
+  if (session === "customer" && !user.emailVerifiedAt) return startEmailVerification(req, res, user);
   setAuthCookie(res, user._id, session, user.sessionVersion, req.get(CUSTOMER_TAB_HEADER));
   ok(res, await loadUser(user._id), "Signed in");
 };

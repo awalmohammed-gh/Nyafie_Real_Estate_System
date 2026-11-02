@@ -83,8 +83,8 @@ const InquiryModal = ({ property, open, onClose }) => {
             </div>
           </div>
           <div>
-            <label htmlFor="inq-email" className="mb-1.5 block text-sm font-medium text-gray-700">Email</label>
-            <input id="inq-email" name="email" type="email" value={form.email} onChange={handleChange} required autoComplete="email" className="field" />
+            <label htmlFor="inq-email" className="mb-1.5 block text-sm font-medium text-gray-700">Verified email</label>
+            <input id="inq-email" name="email" type="email" value={user.email} readOnly required autoComplete="email" className="field" />
           </div>
           <div>
             <label htmlFor="inq-message" className="mb-1.5 block text-sm font-medium text-gray-700">Message</label>

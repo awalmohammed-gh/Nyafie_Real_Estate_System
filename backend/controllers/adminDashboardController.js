@@ -11,6 +11,7 @@ import Review from "../models/Review.js";
 import { subscriptionState } from "../utils/permissions.js";
 import { visibleAgentIds } from "./propertyController.js";
 import { ok } from "../utils/response.js";
+import { providerScope } from "../utils/paystack.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 const EXPIRING_SOON_DAYS = 7; // same window as the frontend's subscription state
@@ -40,8 +41,9 @@ const OPEN_SALE_STATUSES = [
  * Excluded: pending and failed attempts, duplicate charges (to be refunded), "Test payment"
  * records, waived subscriptions, and property asking prices. Dated by when the payment was confirmed.
  */
-const PAID_PAYMENT = { status: "paid", method: { $ne: "Test payment" } };
-const PAID_SUBSCRIPTION = { paymentStatus: "paid" };
+// Paystack money counts only for the current Paystack mode, so test checkouts never appear as live revenue
+const PAID_PAYMENT = () => ({ status: "paid", method: { $ne: "Test payment" }, ...providerScope() });
+const PAID_SUBSCRIPTION = () => ({ paymentStatus: "paid", ...providerScope("paymentMethod") });
 const paidAt = { $ifNull: ["$paidAt", "$createdAt"] };
 
 const revenueSummary = async (now) => {
@@ -71,12 +73,12 @@ const revenueSummary = async (now) => {
   };
   const [[payments], [subscriptions]] = await Promise.all([
     Payment.aggregate([
-      { $match: PAID_PAYMENT },
+      { $match: PAID_PAYMENT() },
       { $project: { kind: 1, amount: 1, at: paidAt } },
       { $facet: facets },
     ]),
     Subscription.aggregate([
-      { $match: PAID_SUBSCRIPTION },
+      { $match: PAID_SUBSCRIPTION() },
       { $project: { kind: "subscription", amount: 1, at: paidAt } },
       { $facet: facets },
     ]),
@@ -340,21 +342,21 @@ export const performance = async (req, res) => {
     agents,
     revenueByKind,
   ] = await Promise.all([
-    monthly(Payment, PAID_PAYMENT, "$amount", paidAt),
-    monthly(Subscription, PAID_SUBSCRIPTION, "$amount", paidAt),
+    monthly(Payment, PAID_PAYMENT(), "$amount", paidAt),
+    monthly(Subscription, PAID_SUBSCRIPTION(), "$amount", paidAt),
     monthly(Property, { status: { $ne: "draft" } }, COUNT),
     monthly(Inquiry, {}, COUNT),
     monthly(User, CURRENT_AGENTS, COUNT),
     // Where the selected period's revenue came from
     Promise.all([
       Payment.aggregate([
-        { $match: PAID_PAYMENT },
+        { $match: PAID_PAYMENT() },
         { $project: { kind: 1, amount: 1, at: paidAt } },
         { $match: { at: { $gte: periodStart, $lte: now } } },
         { $group: { _id: "$kind", total: { $sum: "$amount" } } },
       ]),
       Subscription.aggregate([
-        { $match: PAID_SUBSCRIPTION },
+        { $match: PAID_SUBSCRIPTION() },
         { $project: { amount: 1, at: paidAt } },
         { $match: { at: { $gte: periodStart, $lte: now } } },
         { $group: { _id: "subscription", total: { $sum: "$amount" } } },

@@ -20,8 +20,8 @@ const query = (value) => ({
 
 test("agent directory and listing identities require a valid selected session", async (t) => {
   process.env.JWT_KEY = "agent-visibility-regression-test-key";
-  const customer = new User({ firstName: "Customer", lastName: "Test", email: "customer@example.test", role: "user", isActive: true });
-  const agent = new User({ firstName: "Akua", lastName: "Mensah", email: "akua@example.test", phone: "+233241234567", role: "agent", isActive: true, agentApplication: { status: "approved" } });
+  const customer = new User({ emailVerifiedAt: new Date(), firstName: "Customer", lastName: "Test", email: "customer@example.test", role: "user", isActive: true });
+  const agent = new User({ emailVerifiedAt: new Date(), firstName: "Akua", lastName: "Mensah", email: "akua@example.test", phone: "+233241234567", role: "agent", isActive: true, agentApplication: { status: "approved" } });
   const listing = new Property({ title: "Accra Apartment", description: "A comfortable apartment in Accra.", owner: agent._id, ownerType: "agent", status: "published", listingType: "Rent", price: 2000, location: { city: "Accra", neighbourhood: "East Legon" }, contact: { name: "Stale Agent", phone: "0000000", email: "stale@example.test" } });
   t.mock.method(User, "findById", (id) => query([customer, agent].find((user) => String(user._id) === String(id))));
   t.mock.method(User, "find", () => query([agent]));

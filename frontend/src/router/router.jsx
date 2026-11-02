@@ -8,6 +8,11 @@ import RequireAgent from '../components/auth/RequireAgent'
 import RequireAgentSession from '../components/auth/RequireAgentSession'
 import OnboardingRedirect from '../components/auth/OnboardingRedirect'
 import RequireAdmin from '../components/auth/RequireAdmin'
+import { adminEntry, adminPath } from '../utils/adminEntry'
+
+// The admin console exists only at its private address, and only in a tab that opened it;
+// anywhere else (including /admin) these routes are absent and the URL is "page not found".
+const entry = adminEntry()
 
 const router = createBrowserRouter(
     createRoutesFromElements(
@@ -65,7 +70,7 @@ const router = createBrowserRouter(
 
          <Route path='agent/login' element={<AuthPage />} />
          <Route path='agent/register' element={<AuthPage mode="signup" />} />
-         <Route path='admin/login' element={<AdminLogin />} />
+         {entry && <Route path={`${entry}/login`} element={<AdminLogin />} />}
 
          {/* Agent-only workspace */}
          <Route element={<RequireAgent />}>
@@ -91,12 +96,12 @@ const router = createBrowserRouter(
             </Route>
          </Route>
          {/* Admin console */}
-         <Route element={<RequireAdmin />}>
-            <Route path='admin' element={<AdminLayout />}>
+         {entry && <Route element={<RequireAdmin />}>
+            <Route path={entry} element={<AdminLayout />}>
                <Route index element={<Navigate to='dashboard' replace />} />
                <Route path='dashboard' element={<AdminDashboard />} />
                <Route path='customers' element={<AdminUsers />} />
-               <Route path='users' element={<Navigate to='/admin/customers' replace />} />
+               <Route path='users' element={<Navigate to={adminPath('/customers')} replace />} />
                <Route path='agents' element={<AdminAgents />} />
                <Route path='agent-applications' element={<AdminAgentApplications />} />
                <Route path='properties' element={<AdminProperties />} />
@@ -116,7 +121,7 @@ const router = createBrowserRouter(
                <Route path='reports' element={<AdminReports />} />
                <Route path='settings' element={<AdminSettings />} />
             </Route>
-         </Route>
+         </Route>}
         </Route>
     )
 )

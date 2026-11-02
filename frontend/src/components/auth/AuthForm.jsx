@@ -2,16 +2,22 @@ import { useId, useState } from "react";
 import { AlertCircle, ArrowRight, Loader2, Mail, Phone, User } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { AuthField, AuthPasswordField } from "./AuthField";
+import EmailVerificationForm from "./EmailVerificationForm";
+import PasswordResetForm from "./PasswordResetForm";
+import GoogleSignIn from "./GoogleSignIn";
 
 const emptyForm = { fullName: "", firstName: "", lastName: "", email: "", phone: "", password: "", confirmPassword: "", termsAgree: false };
 
 const AuthForm = ({ initialMode = "login", onSuccess, onModeChange }) => {
-  const { login, register, domain } = useAuth();
+  const { login, register, googleLogin, domain } = useAuth();
   const [localMode, setLocalMode] = useState(initialMode);
   const mode = onModeChange ? initialMode : localMode;
   const [formData, setFormData] = useState(emptyForm);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [verification, setVerification] = useState(null);
+  const [recovering, setRecovering] = useState(false);
+  const [googleAttempt, setGoogleAttempt] = useState(0);
   const errorId = useId();
   const isSignup = mode === "signup";
   const isAgent = domain === "agent";
@@ -43,12 +49,35 @@ const AuthForm = ({ initialMode = "login", onSuccess, onModeChange }) => {
     setSubmitting(true);
     try {
       const user = isSignup ? await register(formData) : await login(formData);
+      if (user?.verificationRequired) {
+        setVerification(user);
+        setFormData((previous) => ({ ...previous, password: "", confirmPassword: "" }));
+        setSubmitting(false);
+        return;
+      }
       onSuccess?.(user, mode);
     } catch (err) {
       setError(err.message || "We couldn't complete your request. Please try again.");
       setSubmitting(false);
     }
   };
+
+  const handleGoogle = async (credential, challenge) => {
+    if (submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const user = await googleLogin(credential, challenge);
+      onSuccess?.(user, user.createdWithGoogle ? "signup" : "login");
+    } catch (err) {
+      setError(err.message || "Google sign-in failed. Please try again.");
+      setSubmitting(false);
+      setGoogleAttempt((value) => value + 1);
+    }
+  };
+
+  if (verification) return <EmailVerificationForm verification={verification} onSuccess={(user) => onSuccess?.(user, mode)} onBack={() => { setVerification(null); setError(""); switchMode("login"); }} />;
+  if (recovering) return <PasswordResetForm initialEmail={formData.email} onBack={(email) => { setRecovering(false); setError(""); setFormData((previous) => ({ ...previous, email, password: "", confirmPassword: "" })); }} />;
 
   return (
     <div>
@@ -90,6 +119,8 @@ const AuthForm = ({ initialMode = "login", onSuccess, onModeChange }) => {
         </button>
         {isSignup && isAgent && <p className="auth-onboarding-note">Next: complete your profile and submit your application. Your dashboard opens after admin approval and any required subscription.</p>}
       </form>
+      {!isSignup && domain === "customer" && <button type="button" className="account-text-button mt-5" disabled={submitting} onClick={() => { setRecovering(true); setError(""); setFormData((previous) => ({ ...previous, password: "", confirmPassword: "" })); }}>Forgot your password?</button>}
+      {domain === "customer" && <GoogleSignIn key={googleAttempt} onCredential={handleGoogle} disabled={submitting} />}
     </div>
   );
 };

@@ -9,6 +9,7 @@ import { useToast } from "../../context/useToast";
 import { timeAgo } from "../../utils/date";
 import ConfirmDialog from "./ConfirmDialog";
 import PageLoader from "./PageLoader";
+import { resolveAdminLink } from "../../utils/adminEntry";
 
 const ICONS = { message: MessageCircle, offer: HandCoins, rental: KeyRound, sale: Building, payment: CreditCard, status: RefreshCw, user: UserPlus, review: ClipboardCheck, customer_review: Star };
 const plural = (count) => `${count} ${count === 1 ? "notification" : "notifications"}`;
@@ -71,7 +72,7 @@ const NotificationBell = ({ className = "", onDark = false }) => {
     setOpen(false);
     setSelected(new Set());
     if (!item.read) markRead(item.id).catch(() => {});
-    if (item.link) navigate(item.link);
+    if (item.link) navigate(resolveAdminLink(item.link));
   };
 
   const toggleOne = (id) => setSelected((prev) => {

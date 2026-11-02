@@ -2,7 +2,7 @@ import { siteUrl } from "../config/runtime.js";
 
 export const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 export const absoluteUrl = (path) => new URL(path, siteUrl()).href;
-export const privatePath = (path, settings) => /^\/(admin|account|agent|agents|checkout|make-offer|login|register|offer|payment)(\/|$)/.test(path) || path === `/${settings.slugs.agents}`;
+export const privatePath = (path, settings) => /^\/(account|agent|agents|checkout|make-offer|login|register|offer|payment)(\/|$)/.test(path) || path === `/${settings.slugs.agents}`;
 
 export const pageMetadata = (path, settings, property) => {
   const name = settings.general.siteName;

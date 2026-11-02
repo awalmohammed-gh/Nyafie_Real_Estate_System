@@ -27,7 +27,8 @@ import { listConversations } from "./controllers/chatController.js";
 import { protectCustomer } from "./middleware/authMiddleware.js";
 import { allowedOrigins, limits, originCheck, rejectOperatorKeys, securityHeaders } from "./middleware/security.js";
 import { authenticatePaystackWebhook, authenticatePaymentRecovery } from "./middleware/paymentCallbacks.js";
-import { paystackWebhook, reconcileRentalPayments } from "./controllers/paymentCallbackController.js";
+import { paystackWebhook, reconcilePayments } from "./controllers/paymentCallbackController.js";
+import { requireAdminEntry } from "./utils/adminEntry.js";
 
 
 // Exported without a listener: Vercel imports the app; server.js starts local development.
@@ -50,13 +51,16 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
   // Provider/service authentication replaces browser cookies and Origin checks.
   // Raw bytes must be authenticated before JSON parsing or any database work.
   app.post("/api/payments/paystack/webhook", express.raw({ type: "application/json", limit: "256kb", inflate: false }), authenticatePaystackWebhook, initializeRequest, paystackWebhook);
-  app.get("/api/payments/reconcile", authenticatePaymentRecovery, initializeRequest, reconcileRentalPayments);
+  app.get("/api/payments/reconcile", authenticatePaymentRecovery, initializeRequest, reconcilePayments);
   app.use(cors({ origin: (origin, callback) => callback(null, !origin || allowedOrigins().includes(origin)), credentials: true }));
   // Individual image uploads are <= 3 MB; listing saves contain only cloud URLs.
   app.use(express.json({ limit: "4mb" }));
   app.use(rejectOperatorKeys);
   app.use(cookieParser());
   app.use("/api", originCheck);
+  // The admin console's private address must accompany every admin request, before any database
+  // work: without it the admin login and API are indistinguishable from unknown endpoints.
+  app.use(["/api/admin", "/api/auth/admin"], requireAdminEntry);
 
 
   // One connection/bootstrap promise is reused across concurrent function requests.

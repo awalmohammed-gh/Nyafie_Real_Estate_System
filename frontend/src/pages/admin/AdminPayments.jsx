@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Wallet } from "lucide-react";
+import { RotateCcw, Wallet } from "lucide-react";
 import AdminPageTitle from "../../components/admin/AdminPageTitle";
 import DataTable from "../../components/ui/DataTable";
 import EmptyState from "../../components/ui/EmptyState";
@@ -8,18 +8,27 @@ import { ErrorState, TableSkeleton } from "../../components/dashboard/States";
 import TransactionNav from "../../components/offers/TransactionNav";
 import SearchInput from "../../components/ui/SearchInput";
 import StatusBadge from "../../components/ui/StatusBadge";
+import RefundDialog from "../../components/admin/RefundDialog";
+import { usePlatform } from "../../context/usePlatform";
+import { useApiQuery } from "../../hooks/useApiQuery";
 import { useAdminData } from "../../hooks/useAdminData";
-import { paymentApi } from "../../frontApi";
+import { adminApi, paymentApi } from "../../frontApi";
 import { formatDate } from "../../utils/date";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 const cap = (s = "") => s.charAt(0).toUpperCase() + s.slice(1);
 const TYPE_LABEL = { rental: "Rental", sale: "Sale (office)", subscription: "Subscription" };
 const TYPE_TONE = { rental: "sky", sale: "green", subscription: "brand" };
+const FLAGGED = ["duplicate", "refund_required"];
+// Flagged Paystack charges can be refunded; once a refund exists it can be followed up from here
+const refundAction = (p) => (p.refund && p.refund.status !== "failed" ? "manage" : p.method === "Paystack" && FLAGGED.includes(p.statusKey) ? "refund" : null);
 
 // Every payment on the platform: rentals (Paystack), sales (paid at the office) and agent subscriptions
 const AdminPayments = () => {
   const { payments, users } = useAdminData();
+  const { refreshPayments } = usePlatform();
+  const provider = useApiQuery("payment-status", adminApi.getPaymentStatus);
+  const [refunding, setRefunding] = useState(null);
   const [records, setRecords] = useState(null);
   const [error, setError] = useState("");
   const [type, setType] = useState("all");
@@ -40,6 +49,11 @@ const AdminPayments = () => {
     setError("");
     setAttempt((a) => a + 1);
   };
+  const refundChanged = () => {
+    setRefunding(null);
+    setAttempt((a) => a + 1);
+    refreshPayments().catch(() => {});
+  };
   if (error) return <>{header}<ErrorState title="Couldn't load payments" message={error} onRetry={retry} /></>;
   if (!records) return <>{header}<TableSkeleton /></>;
 
@@ -47,6 +61,11 @@ const AdminPayments = () => {
     // One record per Paystack attempt or confirmed office payment
     ...records.map((p) => ({
       id: `p-${p.id}`,
+      source: "payment",
+      recordId: p.id,
+      statusKey: p.statusKey,
+      refund: p.refund,
+      environment: p.environment,
       type: p.kind,
       reference: p.reference,
       payer: p.customer,
@@ -60,6 +79,11 @@ const AdminPayments = () => {
     })),
     ...payments.map((p) => ({
       id: `s-${p.id}`,
+      source: "subscription",
+      recordId: p.id,
+      statusKey: p.status === "refund_required" ? "refund_required" : p.status,
+      refund: p.refund,
+      environment: p.environment,
       type: "subscription",
       reference: p.reference,
       payer: users.find((u) => u.id === p.userId)?.name || "Deleted user",
@@ -67,7 +91,8 @@ const AdminPayments = () => {
       listing: "",
       amount: p.amount,
       method: p.method,
-      status: cap(p.status),
+      status: p.status === "refund_required" ? "Refund required" : p.status === "refunded" ? "Refunded" : cap(p.status),
+      note: p.note,
       date: p.createdAt,
     })),
   ].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -78,7 +103,17 @@ const AdminPayments = () => {
 
   const columns = [
     { key: "type", header: "Type", render: (p) => <StatusBadge status={TYPE_LABEL[p.type]} tone={TYPE_TONE[p.type]} dot={false} /> },
-    { key: "method", header: "Method", render: (p) => <span className="whitespace-nowrap text-gray-600">{p.method}</span> },
+    {
+      key: "method",
+      header: "Method",
+      render: (p) => (
+        <span className="whitespace-nowrap text-gray-600">
+          {p.method}
+          {/* Once live, older test-mode checkouts stay visible but are not real money */}
+          {p.method === "Paystack" && provider.data?.environment === "live" && p.environment === "test" && <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">Test mode</span>}
+        </span>
+      ),
+    },
     {
       key: "item",
       header: "For",
@@ -94,7 +129,26 @@ const AdminPayments = () => {
     { key: "amount", header: "Amount", render: (p) => <span className="font-bold whitespace-nowrap text-gray-900">{ghs(p.amount)}</span> },
     { key: "reference", header: "Reference", render: (p) => <span className="font-mono text-xs text-gray-500">{p.reference}</span> },
     { key: "date", header: "Date", render: (p) => <span className="whitespace-nowrap text-gray-600">{formatDate(p.date)}</span> },
-    { key: "status", header: "Status", render: (p) => <StatusBadge status={p.status} /> },
+    {
+      key: "status",
+      header: "Status",
+      render: (p) => (
+        <div className="flex flex-col items-start gap-1">
+          <StatusBadge status={p.status} />
+          {p.refund && p.refund.status !== "processed" && <StatusBadge status={p.refund.label} dot={false} />}
+        </div>
+      ),
+    },
+    {
+      key: "action",
+      header: <span className="sr-only">Refund</span>,
+      align: "right",
+      render: (p) => refundAction(p) && (
+        <button type="button" onClick={() => setRefunding(p)} className="btn btn-light whitespace-nowrap px-3 py-1.5 text-xs">
+          <RotateCcw size={14} aria-hidden="true" />{refundAction(p) === "refund" ? "Refund" : "Manage refund"}
+        </button>
+      ),
+    },
   ];
 
   return (
@@ -133,10 +187,19 @@ const AdminPayments = () => {
               </div>
               <StatusBadge status={p.status} />
             </div>
-            <p className="mt-2 text-sm font-bold text-gray-900">{ghs(p.amount)}</p>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-sm font-bold text-gray-900">{ghs(p.amount)}</p>
+              {p.refund && p.refund.status !== "processed" && <StatusBadge status={p.refund.label} dot={false} />}
+            </div>
+            {refundAction(p) && (
+              <button type="button" onClick={() => setRefunding(p)} className="btn btn-light mt-3 w-full text-sm">
+                <RotateCcw size={15} aria-hidden="true" />{refundAction(p) === "refund" ? "Refund" : "Manage refund"}
+              </button>
+            )}
           </div>
         )}
       />
+      <RefundDialog key={refunding?.id || "none"} payment={refunding} onClose={() => setRefunding(null)} onChanged={refundChanged} />
     </>
   );
 };

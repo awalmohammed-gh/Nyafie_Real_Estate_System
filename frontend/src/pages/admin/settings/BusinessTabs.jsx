@@ -168,20 +168,32 @@ export const PaymentsTab = () => {
                 <div>
                   <p className="font-semibold text-gray-900">{s.provider}</p>
                   <span className={`mt-0.5 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${s.environment === "test" ? "bg-amber-50 text-amber-800 ring-1 ring-amber-200" : s.environment === "live" ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-slate-100 text-slate-600"}`}>
-                    {s.environment === "test" ? "Test mode" : s.environment === "live" ? "Live key (not accepted)" : "Not configured"}
+                    {s.environment === "test" ? "Test mode" : s.environment === "live" ? "Live: real money" : s.mode === "live" ? "Live mode not ready" : "Not configured"}
                   </span>
                 </div>
               </div>
               <ul className="space-y-2.5">
-                <StatusItem ok={s.secretKeyConfigured} label="Secret key" detail="Test_Secret_Key in backend/.env (server only)" />
-                <StatusItem ok={s.publicKeyConfigured} label="Public key" detail="Test_Public_Key in backend/.env" />
+                <StatusItem ok={s.secretKeyConfigured} label="Secret key" detail={`PAYSTACK_SECRET_KEY (sk_${s.mode === "live" ? "live" : "test"}_…, server only)`} />
+                <StatusItem ok={s.publicKeyConfigured} label="Public key" detail={`PAYSTACK_PUBLIC_KEY (pk_${s.mode === "live" ? "live" : "test"}_…)`} />
                 <StatusItem ok={s.active} label="Online payments available" detail={`Charged in ${s.currency}`} />
               </ul>
             </div>
           )}
         </div>
         <div className="px-5 pb-5 sm:px-6">
-          <Callout icon={KeyRound}>To change the keys, update backend/.env on the server and restart it. Only Paystack TEST keys (sk_test_…) are accepted, so no real money is charged.</Callout>
+          {s?.liveBlockers?.length > 0 && (
+            <Callout tone="red">
+              Live payments are switched off until these are fixed:
+              <ul className="mt-1 list-disc pl-5">{s.liveBlockers.map((item) => <li key={item}>{item}</li>)}</ul>
+            </Callout>
+          )}
+          <div className={s?.liveBlockers?.length ? "mt-3" : ""}>
+            <Callout icon={KeyRound}>
+              {s?.environment === "live"
+                ? "Checkouts charge real money. Refund flagged payments from Payments. To change keys or go back to test mode, update the server environment (PAYSTACK_MODE, PAYSTACK_SECRET_KEY) and redeploy."
+                : "Test mode: no real money is charged. Live payments need PAYSTACK_MODE=live, a live secret key and the scheduled recovery job; follow the go-live checklist in DEPLOYMENT.md."}
+            </Callout>
+          </div>
         </div>
       </Panel>
 

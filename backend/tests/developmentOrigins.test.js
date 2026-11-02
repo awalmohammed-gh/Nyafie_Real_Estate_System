@@ -18,7 +18,7 @@ const environment = (t, values) => {
 
 test("development login accepts both Vite loopback origins and rejects unrelated origins", async (t) => {
   environment(t, { NODE_ENV: "development", PUBLIC_SITE_URL: "http://localhost:5173", CLIENT_URL: "http://localhost:5173", JWT_KEY: "development-origin-regression-test-key" });
-  const user = new User({ firstName: "Local", lastName: "Test", email: "local@example.test", role: "user", isActive: true });
+  const user = new User({ emailVerifiedAt: new Date(), firstName: "Local", lastName: "Test", email: "local@example.test", role: "user", isActive: true });
   user.matchPassword = async (password) => password === "FixturePassword123";
   const query = (value) => ({ then: (yes, no) => Promise.resolve(value).then(yes, no), select: () => query(value), populate: () => query(value) });
   t.mock.method(User, "findOne", () => query(user));

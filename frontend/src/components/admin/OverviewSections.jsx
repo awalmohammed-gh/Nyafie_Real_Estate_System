@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Building2, CheckCheck, ChevronDown, ChevronRight, Eye, Minus, Plus, RefreshCw } from "lucide-react";
 import { formatCedis } from "../../utils/reports";
+import { adminPath } from "../../utils/adminEntry";
 
 const plural = (count, one, many) => count === 1 ? one : many;
 
@@ -20,7 +21,7 @@ export const OverviewHeader = ({ name, siteName, generatedAt, loading, onRefresh
           <RefreshCw size={15} aria-hidden="true" className={loading ? "animate-spin motion-reduce:animate-none" : ""} />
           <span>{loading ? "Refreshing" : "Refresh"}</span>
         </button>
-        <Link to="/admin/properties/add" className="overview-button overview-button-primary"><Plus size={17} aria-hidden="true" />Add property</Link>
+        <Link to={adminPath("/properties/add")} className="overview-button overview-button-primary"><Plus size={17} aria-hidden="true" />Add property</Link>
       </div>
       <div className="overview-dateline">
         <span>{new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span>
@@ -75,7 +76,7 @@ export const AttentionQueue = ({ items, total }) => {
           ))}
         </ul>
         {items.length > 4 && <button type="button" className="overview-queue-toggle" aria-expanded={expanded} aria-controls="overview-action-queue" onClick={() => setExpanded(!expanded)}>{expanded ? "Show fewer tasks" : `Show all ${items.length} task categories`}<ChevronDown size={15} className={expanded ? "rotate-180" : ""} aria-hidden="true" /></button>}
-      </> : <div className="overview-all-clear"><span><CheckCheck size={26} aria-hidden="true" /></span><h3>You’re all caught up</h3><p>Applications, listing reviews and payments that need your attention will appear here.</p><Link className="overview-text-link" to="/admin/properties">Explore your properties<ArrowRight size={15} aria-hidden="true" /></Link></div>}
+      </> : <div className="overview-all-clear"><span><CheckCheck size={26} aria-hidden="true" /></span><h3>You’re all caught up</h3><p>Applications, listing reviews and payments that need your attention will appear here.</p><Link className="overview-text-link" to={adminPath("/properties")}>Explore your properties<ArrowRight size={15} aria-hidden="true" /></Link></div>}
     </section>
   );
 };
@@ -97,13 +98,13 @@ export const InventorySummary = ({ properties }) => {
     { label: "Other / hidden", value: properties.hidden + (properties.rejected || 0) + (properties.suspended || 0), color: "#e5e7ee" },
   ];
   return <section className="overview-panel">
-    <SectionHeading title="Property portfolio" description="Publication status" to="/admin/properties" toLabel="Manage" />
+    <SectionHeading title="Property portfolio" description="Publication status" to={adminPath("/properties")} toLabel="Manage" />
     <div className="overview-inventory-body">
       <div className="overview-inventory-total"><strong>{properties.total.toLocaleString()}</strong><span>total {plural(properties.total, "property", "properties")}</span><span className="overview-neutral-pill">+{properties.addedThisMonth} this month</span></div>
       <div className="overview-stacked-bar" role="img" aria-label={states.map(s => `${s.label}: ${s.value}`).join(", ")}>{states.map(s => s.value > 0 && <span key={s.label} style={{ width: `${properties.total > 0 ? s.value / properties.total * 100 : 0}%`, backgroundColor: s.color }} />)}</div>
       <dl className="overview-inventory-legend">{states.map(s => <div key={s.label}><dt><span style={{ backgroundColor: s.color }} />{s.label}</dt><dd>{s.value.toLocaleString()}</dd></div>)}</dl>
     </div>
-    <Link to="/admin/properties" className="overview-panel-footer">{properties.available.toLocaleString()} available · {properties.rented.toLocaleString()} rented · {properties.sold.toLocaleString()} sold<ArrowRight size={15} aria-hidden="true" /></Link>
+    <Link to={adminPath("/properties")} className="overview-panel-footer">{properties.available.toLocaleString()} available · {properties.rented.toLocaleString()} rented · {properties.sold.toLocaleString()} sold<ArrowRight size={15} aria-hidden="true" /></Link>
   </section>;
 };
 
@@ -114,22 +115,22 @@ export const RevenueSources = ({ revenue }) => {
     { label: "Agent subscriptions", value: revenue.breakdown.subscription, color: "#e7b24e" },
   ];
   return <section className="overview-panel">
-    <SectionHeading title="Revenue sources" description="Collected since launch" to="/admin/payments" toLabel="Payments" />
+    <SectionHeading title="Revenue sources" description="Collected since launch" to={adminPath("/payments")} toLabel="Payments" />
     <div className="overview-revenue-body"><p className="overview-revenue-total">{formatCedis(revenue.total)}</p><dl className="overview-revenue-list">{rows.map(({ label, value, color }) => <div key={label}><div className="overview-revenue-row"><dt><span style={{ backgroundColor: color }} />{label}</dt><dd>{formatCedis(value)}</dd></div><div className="overview-source-track" aria-hidden="true"><span style={{ width: `${revenue.total > 0 ? value / revenue.total * 100 : 0}%`, backgroundColor: color }} /></div></div>)}</dl></div>
   </section>;
 };
 
 export const PopularListings = ({ properties, siteName }) => (
   <section className="overview-panel overview-popular">
-    <SectionHeading title="Most viewed properties" description="The listings getting the most attention" to="/admin/properties" toLabel="All properties" />
+    <SectionHeading title="Most viewed properties" description="The listings getting the most attention" to={adminPath("/properties")} toLabel="All properties" />
     <div className="overview-popular-labels" aria-hidden="true"><span>Property</span><span>Listing owner</span><span>Views</span></div>
-    {properties.mostViewed?.length ? <ol className="overview-property-list">{properties.mostViewed.map((property, index) => <li key={property.id}><Link to={`/admin/properties?open=${encodeURIComponent(property.id)}`}>
+    {properties.mostViewed?.length ? <ol className="overview-property-list">{properties.mostViewed.map((property, index) => <li key={property.id}><Link to={adminPath(`/properties?open=${encodeURIComponent(property.id)}`)}>
       <span className="overview-property-rank">{String(index + 1).padStart(2, "0")}</span>
       {property.image ? <img src={property.image} alt="" loading="lazy" className="overview-property-image" /> : <span className="overview-property-image overview-property-placeholder"><Building2 size={21} aria-hidden="true" /></span>}
       <span className="overview-property-name"><strong>{property.title}</strong><span>{property.area || "Location not provided"}</span></span>
       <span className={`overview-owner ${property.ownerType === "admin" ? "is-team" : ""}`}>{property.ownerType === "admin" ? siteName : "Agent"}</span>
       <span className="overview-property-views"><Eye size={15} aria-hidden="true" />{property.views.toLocaleString()}<span className="sr-only"> views</span></span><ArrowUpRight size={16} className="overview-property-arrow" aria-hidden="true" />
-    </Link></li>)}</ol> : <div className="overview-empty-properties"><Eye size={25} aria-hidden="true" /><h3>Your next popular listing starts here</h3><p>Once customers view your properties, the most popular ones will appear here.</p><Link to="/admin/properties" className="overview-text-link">Manage properties<ArrowRight size={15} aria-hidden="true" /></Link></div>}
+    </Link></li>)}</ol> : <div className="overview-empty-properties"><Eye size={25} aria-hidden="true" /><h3>Your next popular listing starts here</h3><p>Once customers view your properties, the most popular ones will appear here.</p><Link to={adminPath("/properties")} className="overview-text-link">Manage properties<ArrowRight size={15} aria-hidden="true" /></Link></div>}
     <footer className="overview-views-footer"><Eye size={15} aria-hidden="true" /><strong>{(properties.views || 0).toLocaleString()}</strong> views across all properties</footer>
   </section>
 );

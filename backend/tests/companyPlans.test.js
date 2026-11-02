@@ -21,7 +21,7 @@ const q = (value) => {
   return self;
 };
 const plan = (fields) => new Plan({ name: `Plan ${Math.random()}`, duration: 30, imageLimit: 5, ...fields });
-const agent = (type, fields = {}) => new User({ firstName: "Test", lastName: type, email: `${Math.random()}@example.test`, phone: "+233241234567", role: "agent", isActive: true, agentApplication: { status: "approved", agentType: type, companyName: type === "individual" ? "" : `${type} Ltd`, profileCompletedAt: new Date() }, ...fields });
+const agent = (type, fields = {}) => new User({ emailVerifiedAt: new Date(), firstName: "Test", lastName: type, email: `${Math.random()}@example.test`, phone: "+233241234567", role: "agent", isActive: true, agentApplication: { status: "approved", agentType: type, companyName: type === "individual" ? "" : `${type} Ltd`, profileCompletedAt: new Date() }, ...fields });
 
 test("company plans: eligibility, limits, team, billing and payments are enforced on the server", async (t) => {
   process.env.JWT_KEY = "company-plans-test-key";

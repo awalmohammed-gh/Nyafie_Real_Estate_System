@@ -73,7 +73,13 @@ export const createLoginAttempts = ({ persistent = () => process.env.NODE_ENV ==
     memory.delete(id);
     return state(null, time);
   };
-  return { check, failure, success };
+  // Only call after the customer has proved mailbox ownership and changed their password.
+  const resetAfterRecovery = async (email) => {
+    const id = identifier(email);
+    if (persistent()) await LoginAttempt.collection.deleteOne({ _id: id });
+    else memory.delete(id);
+  };
+  return { check, failure, success, resetAfterRecovery };
 };
 
 export const loginAttempts = createLoginAttempts();

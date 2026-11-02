@@ -9,6 +9,7 @@ import { ownerOffers } from "../controllers/offerController.js";
 import { ownerRentals } from "../controllers/rentalController.js";
 import { ownerSaleRequests } from "../controllers/saleRequestController.js";
 import { listPayments } from "../controllers/paymentController.js";
+import { checkRefund, createRefund, listRefunds, settleRefund } from "../controllers/refundController.js";
 import { protectAdmin } from "../middleware/authMiddleware.js";
 import { listApplications, reviewApplication } from "../controllers/agentApplicationController.js";
 import { adminOnly } from "../middleware/adminMiddleware.js";
@@ -41,6 +42,12 @@ router.get("/agents/:id/deletion", admin.getDeletionPlan);
 router.delete("/agents/:id", admin.deleteAgentPermanently); // separate, high-risk: only after removal
 
 router.get("/subscriptions", admin.listSubscriptions);
+
+// Refunds of flagged payments: through Paystack, or recorded after returning the money another way
+router.get("/refunds", listRefunds);
+router.post("/refunds", createRefund);
+router.post("/refunds/:id/check", checkRefund);
+router.post("/refunds/:id/resolve", settleRefund);
 
 router.get("/properties", admin.listProperties);
 router.post("/properties", admin.createProperty);

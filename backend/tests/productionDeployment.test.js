@@ -20,16 +20,16 @@ const query = (value) => ({ then: (yes, no) => Promise.resolve(value).then(yes, 
 const listen = async (server) => { server.listen(0, '127.0.0.1'); await new Promise((resolve) => server.once('listening', resolve)); return `http://127.0.0.1:${server.address().port}`; };
 
 test("production configuration, metadata, uploads and marketplace security", async (t) => {
-  const keys = ['NODE_ENV', 'PUBLIC_SITE_URL', 'CLIENT_URL', 'JWT_KEY', 'COOKIE_SAME_SITE', 'VERCEL_ENV', 'VERCEL_URL', 'VERCEL_BRANCH_URL', 'FRONTEND_INTERNAL_URL', 'MONGODB_URI', 'CLOUD_NAME', 'CLOUD_API_KEY', 'CLOUD_SECRET_KEY', 'ADMIN_EMAIL', 'ADMIN_PSD'];
+  const keys = ['NODE_ENV', 'PUBLIC_SITE_URL', 'CLIENT_URL', 'JWT_KEY', 'COOKIE_SAME_SITE', 'VERCEL_ENV', 'VERCEL_URL', 'VERCEL_BRANCH_URL', 'FRONTEND_INTERNAL_URL', 'MONGODB_URI', 'CLOUD_NAME', 'CLOUD_API_KEY', 'CLOUD_SECRET_KEY', 'ADMIN_EMAIL', 'ADMIN_PSD', 'ADMIN_ENTRY_PATH'];
   const original = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
-  Object.assign(process.env, { NODE_ENV: 'production', PUBLIC_SITE_URL: 'https://real-estate-home-phi.vercel.app', CLIENT_URL: 'https://real-estate-home-phi.vercel.app', JWT_KEY: 'production-fixture-signing-key-at-least-32-characters', MONGODB_URI: 'mongodb://example.test/test', CLOUD_NAME: 'test', CLOUD_API_KEY: 'fixture', CLOUD_SECRET_KEY: 'fixture' });
+  Object.assign(process.env, { NODE_ENV: 'production', PUBLIC_SITE_URL: 'https://real-estate-home-phi.vercel.app', CLIENT_URL: 'https://real-estate-home-phi.vercel.app', JWT_KEY: 'production-fixture-signing-key-at-least-32-characters', MONGODB_URI: 'mongodb://example.test/test', CLOUD_NAME: 'test', CLOUD_API_KEY: 'fixture', CLOUD_SECRET_KEY: 'fixture', ADMIN_ENTRY_PATH: 'hb-production-fixture-entry' });
   delete process.env.COOKIE_SAME_SITE;
   delete process.env.VERCEL_ENV;
   delete process.env.VERCEL_URL;
   delete process.env.VERCEL_BRANCH_URL;
-  const customer = new User({ firstName: 'Customer', lastName: 'Test', email: 'customer@example.test', role: 'user', isActive: true });
-  const agent = new User({ firstName: 'Agent', lastName: 'Test', email: 'agent@example.test', role: 'agent', isActive: true, agentApplication: { status: 'approved' } });
-  const admin = new User({ firstName: 'Admin', lastName: 'Test', email: 'admin@example.test', role: 'admin', isActive: true });
+  const customer = new User({ emailVerifiedAt: new Date(), firstName: 'Customer', lastName: 'Test', email: 'customer@example.test', role: 'user', isActive: true });
+  const agent = new User({ emailVerifiedAt: new Date(), firstName: 'Agent', lastName: 'Test', email: 'agent@example.test', role: 'agent', isActive: true, agentApplication: { status: 'approved' } });
+  const admin = new User({ emailVerifiedAt: new Date(), firstName: 'Admin', lastName: 'Test', email: 'admin@example.test', role: 'admin', isActive: true });
   const property = new Property({ title: 'Accra & East Legon Home', description: 'A comfortable home with a garden in Accra.', owner: agent._id, ownerType: 'agent', status: 'published', images: ['/home.jpg'], location: { city: 'Accra' } });
   let requireSubscription = false;
   let savedSubscription = null;
@@ -107,7 +107,7 @@ test("production configuration, metadata, uploads and marketplace security", asy
       assert.equal(html.includes('Old description'), false);
     });
     await t.test('private deep links are noindex and unknown public routes return 404', async () => {
-      for (const path of ['/agents', '/agents/123', '/agent/login', '/agent/dashboard', '/account/profile', '/admin/dashboard', '/payment/success', '/payment/failed']) {
+      for (const path of ['/agents', '/agents/123', '/agent/login', '/agent/dashboard', '/account/profile', '/payment/success', '/payment/failed']) {
         const response = await call(path);
         assert.equal(response.status, 200, path);
         assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow', path);
@@ -115,11 +115,18 @@ test("production configuration, metadata, uploads and marketplace security", asy
       assert.equal((await call('/unknown-page')).status, 404);
       assert.equal((await call('/unknown/nested/page')).status, 404);
       assert.equal((await call('/house/invalid-id')).status, 404);
+      // The admin console is never advertised: /admin, guesses and even its private address look like missing pages
+      for (const path of ['/admin', '/admin/login', '/admin/dashboard', '/amin', '/hb-production-fixture-entry/login']) {
+        const response = await call(path);
+        assert.equal(response.status, 404, path);
+        assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow', path);
+      }
     });
     await t.test('robots and sitemap contain canonical public pages and visible properties, never private profiles', async () => {
       const robots = await (await call('/robots.txt')).text();
       assert.match(robots, /Sitemap: https:\/\/real-estate-home-phi.vercel.app\/sitemap.xml/);
       assert.match(robots, /Disallow: \/agents/);
+      assert.doesNotMatch(robots, /admin|hb-production-fixture-entry/i, 'robots.txt never points at the admin console');
       const index = await (await call('/sitemap.xml')).text();
       assert.match(index, /sitemap-properties-1.xml/);
       const pages = await (await call('/sitemap-pages.xml')).text();
@@ -151,9 +158,10 @@ test("production configuration, metadata, uploads and marketplace security", asy
       agent.isActive = true;
     });
     await t.test('customers cannot enter role APIs; unsubscribed and expired agents cannot add listings', async () => {
-      assert.equal((await call('/api/admin/dashboard', customer)).status, 403);
+      // Admin APIs are hidden (404) unless the request carries the console's private address
+      assert.equal((await call('/api/admin/dashboard', customer)).status, 404);
       assert.equal((await call('/api/agents/dashboard', customer)).status, 403);
-      assert.equal((await call('/api/admin/dashboard', agent, 'agent')).status, 403);
+      assert.equal((await call('/api/admin/dashboard', agent, 'agent')).status, 404);
       assert.equal((await call('/api/users/saved')).status, 401);
       requireSubscription = true;
       assert.equal((await call('/api/properties', agent, 'agent', { title: 'Bypass' })).status, 403);

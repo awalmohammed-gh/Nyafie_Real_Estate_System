@@ -46,6 +46,14 @@ const statusTone = {
   "Offer Received": "brand",
   Negotiating: "sky",
   Duplicate: "red",
+  "Refund required": "red",
+  Refunded: "gray",
+  "Sending refund": "sky",
+  "Refund unconfirmed": "amber",
+  "Refund pending": "sky",
+  "Refund processing": "sky",
+  "Refund needs attention": "amber",
+  "Refund failed": "red",
 };
 
 const StatusBadge = ({ status, tone, dot = true, className = "" }) => {

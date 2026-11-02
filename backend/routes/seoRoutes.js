@@ -27,7 +27,7 @@ const template = () => {
 router.get('/robots.txt', async (_req, res) => {
   const settings = await getSettings();
   const blocked = !settings.seo.allowIndexing || process.env.VERCEL_ENV === 'preview';
-  const rules = blocked ? ['User-agent: *', 'Disallow: /'] : ['User-agent: *', ...['/api/', '/admin', '/agent', `/${settings.slugs.agents}`, '/account', '/login', '/register', '/checkout', '/make-offer', '/payment', '/offer'].map((path) => `Disallow: ${path}`), `Sitemap: ${absoluteUrl('/sitemap.xml')}`];
+  const rules = blocked ? ['User-agent: *', 'Disallow: /'] : ['User-agent: *', ...['/api/', '/agent', `/${settings.slugs.agents}`, '/account', '/login', '/register', '/checkout', '/make-offer', '/payment', '/offer'].map((path) => `Disallow: ${path}`), `Sitemap: ${absoluteUrl('/sitemap.xml')}`];
   res.type('text/plain').set('Cache-Control', 'public, max-age=300').send(rules.join('\n') + '\n');
 });
 
@@ -55,7 +55,7 @@ router.get(['/sitemap-pages.xml', '/sitemap-properties-:page.xml'], async (req, 
   res.type('application/xml').set('Cache-Control', 'public, max-age=300').send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${entries.map((entry) => `<url><loc>${escapeHtml(entry.url)}</loc>${entry.modified ? `<lastmod>${new Date(entry.modified).toISOString()}</lastmod>` : ''}</url>`).join('')}</urlset>`);
 });
 
-router.get(['/', '/:slug', '/house/:id', '/agents/:id', '/agent/{*path}', '/admin/{*path}', '/account/{*path}', '/checkout/{*path}', '/payment/{*path}', '/make-offer/:id', '/{*unmatched}'], async (req, res) => {
+router.get(['/', '/:slug', '/house/:id', '/agents/:id', '/agent/{*path}', '/account/{*path}', '/checkout/{*path}', '/payment/{*path}', '/make-offer/:id', '/{*unmatched}'], async (req, res) => {
   const settings = await getSettings();
   let property;
   let status = 200;
@@ -66,7 +66,8 @@ router.get(['/', '/:slug', '/house/:id', '/agents/:id', '/agent/{*path}', '/admi
     const { query } = await publicQuery();
     property = mongoose.isValidObjectId(req.params.id) ? await Property.findOne({ _id: req.params.id, ...query }).select('title description images location').lean() : null;
     if (!property) status = 404;
-  } else if (req.params.slug && ![...Object.values(settings.slugs), 'sale', 'rent', 'contact', 'login', 'register', 'offer', 'agent', 'admin', 'account'].includes(req.params.slug)) status = 404;
+  } else if (req.params.slug && ![...Object.values(settings.slugs), 'sale', 'rent', 'contact', 'login', 'register', 'offer', 'agent', 'account'].includes(req.params.slug)) status = 404;
+  // The admin console (at its private address, or the old /admin) is served exactly like a missing page
   const metadata = pageMetadata(req.path, settings, property);
   if (status === 404) { metadata.title = `Page not found | ${settings.general.siteName}`; metadata.noindex = true; }
   res.set({ 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'strict-origin-when-cross-origin' });

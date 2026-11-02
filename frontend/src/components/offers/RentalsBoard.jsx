@@ -20,6 +20,7 @@ import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { rentalApi } from "../../frontApi";
 import { formatDate, isWithinDays } from "../../utils/date";
 import { toWhatsAppNumber } from "../../utils/whatsapp";
+import { adminPath } from "../../utils/adminEntry";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 const FILTERS = [
@@ -83,7 +84,7 @@ const RentalsBoard = ({ scope }) => {
     .filter((r) => !q || `${r.contactName} ${r.property.title} ${r.roomName} ${r.reference || ""}`.toLowerCase().includes(q));
   const counts = Object.fromEntries(FILTERS.map((f) => [f.id, scoped.filter(f.match).length]));
   const open = openId && rentals.find((r) => r.id === openId);
-  const chatLink = open?.conversationId && (isAdmin ? open.ownerType === "admin" && `/admin/messages?c=${open.conversationId}` : `/agent/messages?c=${open.conversationId}`);
+  const chatLink = open?.conversationId && (isAdmin ? open.ownerType === "admin" && adminPath(`/messages?c=${open.conversationId}`) : `/agent/messages?c=${open.conversationId}`);
   const whatsapp = open && toWhatsAppNumber(open.contactPhone);
 
   const apply = async () => {

@@ -21,11 +21,21 @@ const subscriptionSchema = new mongoose.Schema(
     previousSubscription: { type: mongoose.Schema.Types.ObjectId, ref: "Subscription" }, // the record it replaced (set on activation)
     paymentReference: { type: String, required: true, unique: true },
     paymentMethod: { type: String, default: "Paystack" },
-    paymentStatus: { type: String, enum: ["pending", "paid", "failed", "waived"], default: "pending" },
+    // refund_required: paid after a newer plan became current; the account was left unchanged
+    // refunded: the payment went back to the agent (see the Refund ledger)
+    paymentStatus: { type: String, enum: ["pending", "paid", "failed", "waived", "refund_required", "refunded"], default: "pending" },
+    environment: { type: String, enum: ["test", "live", null], default: null }, // Paystack mode at checkout; null = before modes were stored (test)
+    note: { type: String, default: "" }, // why a payment needs review
     paidAt: { type: Date },
+    activationProcessedAt: { type: Date }, // committed once with the account/plan changes
     cancelledAt: { type: Date },
+    nextReconcileAt: { type: Date, default: null }, // scheduled recovery lease
+    refund: { type: mongoose.Schema.Types.ObjectId, ref: "Refund", default: null }, // the latest refund attempt
+    refundStatus: { type: String, default: null }, // mirrors that refund; claims one refund at a time
   },
-  schemaOptions
+  { ...schemaOptions, optimisticConcurrency: true }
 );
+
+subscriptionSchema.index({ paymentMethod: 1, paymentStatus: 1, nextReconcileAt: 1, createdAt: 1 });
 
 export default mongoose.models.Subscription || mongoose.model("Subscription", subscriptionSchema);

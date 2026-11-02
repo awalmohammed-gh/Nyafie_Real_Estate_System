@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import express from "express";
 import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 import User from "../models/User.js";
 import Plan from "../models/Plan.js";
 import Setting from "../models/Setting.js";
@@ -13,15 +14,16 @@ const DAY = 24 * 60 * 60 * 1000;
 // A chainable, awaitable stand-in for a Mongoose query
 const q = (value) => {
   const promise = Promise.resolve(value);
-  const self = { then: promise.then.bind(promise), catch: promise.catch.bind(promise), select: () => self, populate: () => self, sort: () => self, limit: () => self, skip: () => self, lean: () => self };
+  const self = { then: promise.then.bind(promise), catch: promise.catch.bind(promise), session: () => self, select: () => self, populate: () => self, sort: () => self, limit: () => self, skip: () => self, lean: () => self };
   return self;
 };
 const idOf = (value) => String(value?._id ?? value);
 const byId = (list, value) => list.find((item) => String(item._id) === idOf(value)) || null;
 const plan = (name, accountType, sortOrder, fields = {}) => new Plan({ name, accountType, sortOrder, price: 1000 * sortOrder, duration: 30, propertyLimit: 50 * sortOrder, imageLimit: 10, teamMemberLimit: accountType === "individual" ? 0 : 5 * sortOrder, ...fields });
-const provider = (type, fields = {}) => new User({ firstName: "Test", lastName: type, email: `${Math.random()}@example.test`, phone: "+233241234567", role: "agent", isActive: true, agentApplication: { status: "approved", agentType: type, companyName: type === "individual" ? "" : `${type} Ltd`, profileCompletedAt: new Date() }, ...fields });
+const provider = (type, fields = {}) => new User({ emailVerifiedAt: new Date(), firstName: "Test", lastName: type, email: `${Math.random()}@example.test`, phone: "+233241234567", role: "agent", isActive: true, agentApplication: { status: "approved", agentType: type, companyName: type === "individual" ? "" : `${type} Ltd`, profileCompletedAt: new Date() }, ...fields });
 
 test("plan upgrades: only higher plans of the provider's own type, priced and confirmed by the server", async (t) => {
+  t.mock.method(mongoose.connection, "transaction", async (work) => work({}));
   process.env.JWT_KEY = "subscription-upgrades-test-key";
   const savedKey = process.env.Test_Secret_Key;
   process.env.Test_Secret_Key = "sk_test_upgrades";

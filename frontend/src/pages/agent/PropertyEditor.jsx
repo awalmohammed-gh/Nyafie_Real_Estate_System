@@ -16,6 +16,7 @@ import EmptyState from "../../components/ui/EmptyState";
 import PageLoader from "../../components/ui/PageLoader";
 import { formatPrice, formatType, getPriceParts, statusLabel } from "../../utils/property";
 import ListingEditorGuide from "../../components/agent/ListingEditorGuide";
+import { adminPath } from "../../utils/adminEntry";
 import "./propertyEditor.css";
 
 const RENT_PERIOD_LABELS = { month: "Per month", night: "Per night" };
@@ -167,7 +168,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
   const isAdminEditor = variant === "admin";
   const user = agent.user;
   const perms = isAdminEditor ? adminPermissions(settings) : agent.permissions;
-  const basePath = isAdminEditor ? "/admin/properties" : "/agent/properties";
+  const basePath = isAdminEditor ? adminPath("/properties") : "/agent/properties";
   const platformContact = { name: settings.general.siteName, phone: settings.contact.phone, email: settings.contact.email };
   // Options from Admin Settings > Property; a listing keeps a type/period it already has even if it was removed since
   const { propertyTypes, rentPeriods } = settings.property;

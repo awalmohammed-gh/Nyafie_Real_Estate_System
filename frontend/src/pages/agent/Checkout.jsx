@@ -13,6 +13,7 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import PageLoader from "../../components/ui/PageLoader";
 import { canAccessAgent } from "../../utils/sessionDomain";
 import OnboardingProgress from "../../components/agent/OnboardingProgress";
+import { adminPath } from "../../utils/adminEntry";
 
 // Renewals and upgrades from the dashboard (new agents see the onboarding progress instead)
 const steps = ["Choose plan", "Payment", "Confirmed"];
@@ -122,7 +123,7 @@ const Checkout = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [returnReference]);
 
-  if (isAdmin) return <Navigate to="/admin/plans" replace />;
+  if (isAdmin) return <Navigate to={adminPath("/plans")} replace />;
 
   if (returnReference && status !== "success") {
     return (

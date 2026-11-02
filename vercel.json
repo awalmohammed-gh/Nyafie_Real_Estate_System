@@ -25,7 +25,6 @@
     { "source": "/house/:id", "destination": { "service": "backend" } },
     { "source": "/agents/:id", "destination": { "service": "backend" } },
     { "source": "/agent/:path*", "destination": { "service": "backend" } },
-    { "source": "/admin/:path*", "destination": { "service": "backend" } },
     { "source": "/account/:path*", "destination": { "service": "backend" } },
     { "source": "/checkout/:path*", "destination": { "service": "backend" } },
     { "source": "/payment/:path*", "destination": { "service": "backend" } },

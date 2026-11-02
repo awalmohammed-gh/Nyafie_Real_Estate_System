@@ -5,6 +5,7 @@ import { fail } from "../utils/response.js";
 import { approvedAgent, isRemoved } from "../utils/agentApplication.js";
 import { CUSTOMER_TAB_HEADER, matchesCustomerTab, validTabSecret } from "../utils/customerTabSession.js";
 import { matchesSessionRole } from "../utils/sessionAccess.js";
+import { hasAdminEntry, hideAdmin } from "../utils/adminEntry.js";
 
 const userFromCookie = async (req, session) => {
   const token = req.cookies?.[cookieName(session)];
@@ -28,6 +29,7 @@ const userFromCookie = async (req, session) => {
   const tokenVersion = payload.sessionVersion === undefined ? "" : payload.sessionVersion;
   if (!user || typeof tokenVersion !== "string" || tokenVersion !== (user.sessionVersion || "")) return null;
   if (!matchesSessionRole(user, session) || (session !== "agent" && !user.isActive) || isRemoved(user)) return null;
+  if (session === "customer" && !user.emailVerifiedAt) return null;
   // Request-only metadata keeps shared resources in the selected area, even for dual-access users.
   if (user.$locals) user.$locals.sessionDomain = session;
   return user;
@@ -49,6 +51,8 @@ const sessionGuard = (allowApplicant, ...allowed) => async (req, res, next) => {
   res.set("Cache-Control", "private, no-store");
   const session = req.sessionDomain || req.get("X-Session-Domain") || allowed[0];
   if (!allowed.includes(session)) return fail(res, 403, "This session cannot access this area.");
+  // Admin sessions anywhere (plans, uploads, settings...) also need the console's private address
+  if (session === "admin" && !hasAdminEntry(req)) return hideAdmin(res);
   try {
     const user = req.user && req.sessionDomain === session ? req.user : await userFromCookie(req, session);
     if (!user) {

@@ -13,6 +13,7 @@ import "./adminPlans.css";
 
 const TYPE_ORDER = Object.keys(ACCOUNT_TYPES); // individual, agency, company
 import { formatDate } from "../../utils/date";
+import { adminPath } from "../../utils/adminEntry";
 
 const emptyPlan = {
   name: "", tagline: "", accountType: "individual", internalChat: false, teamMemberLimit: 0, sortOrder: 0, price: "", durationDays: 30, propertyLimit: 5, imageLimit: 5, featuredLimit: 0,
@@ -193,7 +194,7 @@ const AdminPlans = () => {
   const resetFilters = () => { setSearch("");setTypeFilter("all");setAvailability("all"); };
   return (
     <div className="admin-reports admin-plans">
-      <header className="reports-heading"><div><p className="reports-eyebrow">The right plan for every provider</p><h1>Plans &amp; pricing<span>.</span></h1><p>Manage pricing, access and upgrade paths in one place.</p></div><div className="reports-heading-actions"><Link to="/admin/inventory" className="reports-button is-secondary">Financial inventory<ArrowUpRight size={15} aria-hidden="true" /></Link><button type="button" disabled={Boolean(plansError)} onClick={()=>setEditing("new")} className="reports-button is-primary"><Plus size={16} aria-hidden="true" />Create plan</button></div></header>
+      <header className="reports-heading"><div><p className="reports-eyebrow">The right plan for every provider</p><h1>Plans &amp; pricing<span>.</span></h1><p>Manage pricing, access and upgrade paths in one place.</p></div><div className="reports-heading-actions"><Link to={adminPath("/inventory")} className="reports-button is-secondary">Financial inventory<ArrowUpRight size={15} aria-hidden="true" /></Link><button type="button" disabled={Boolean(plansError)} onClick={()=>setEditing("new")} className="reports-button is-primary"><Plus size={16} aria-hidden="true" />Create plan</button></div></header>
       {plansError && <div className="plans-load-error" role="alert"><div><h2>Couldn't load the latest plans</h2><p>{plansError}{plans.length ? " Showing the last loaded plans." : " Please retry before making changes."}</p></div><button type="button" disabled={working} onClick={async()=>{setWorking(true);try{await run(refreshPlans(),{});}finally{setWorking(false);}}} className="reports-button is-secondary">Retry plans</button></div>}
       {(!plansError || plans.length > 0) && <>
       <dl className="plans-summary">{[["Plans available",plans.filter(plan=>plan.active).length,"Open to new subscriptions"],["Active subscribers",agents.filter(agent=>agent.sub.isActive).length,"Across current agent accounts"],["Account types",new Set(plans.map(plan=>plan.accountType)).size,"Individuals, agencies and companies"],["Hidden plans",plans.filter(plan=>!plan.active).length,"Existing subscribers keep access"]].map(([label,value,hint])=><div key={label}><dt>{label}</dt><dd>{value}</dd><p>{hint}</p></div>)}</dl>
@@ -214,7 +215,7 @@ const AdminPlans = () => {
           </article>;
         })}</div>}
       </div>
-      <aside className="plans-guidance"><span><Layers size={20} aria-hidden="true" /></span><div><h2>Keep upgrade paths simple.</h2><p>Agents can upgrade to a higher tier within their account type. Changes to limits apply immediately; deactivating a plan hides it from new subscriptions.</p></div><Link to="/admin/subscriptions">Manage subscriptions<ArrowUpRight size={15} aria-hidden="true" /></Link></aside>
+      <aside className="plans-guidance"><span><Layers size={20} aria-hidden="true" /></span><div><h2>Keep upgrade paths simple.</h2><p>Agents can upgrade to a higher tier within their account type. Changes to limits apply immediately; deactivating a plan hides it from new subscriptions.</p></div><Link to={adminPath("/subscriptions")}>Manage subscriptions<ArrowUpRight size={15} aria-hidden="true" /></Link></aside>
 
       </>}
       {editing && (

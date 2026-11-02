@@ -17,6 +17,7 @@ import EmptyState from "../../components/ui/EmptyState";
 import { formatDate, formatRelative, isWithinDays } from "../../utils/date";
 import { getInitials } from "../../utils/property";
 import { formatCedis } from "../../utils/reports";
+import { adminPath } from "../../utils/adminEntry";
 
 const statusBadge = (status) => <StatusBadge status={status === "suspended" ? "Suspended" : "Active"} tone={status === "suspended" ? "red" : "green"} />;
 
@@ -247,7 +248,7 @@ const AdminUsers = () => {
               )}
               {timeline.length > 0 && (
                 <p className="mt-3 text-xs text-gray-500">
-                  Manage these from <Link to="/admin/offers" className="font-semibold text-brand-600">Offers</Link>, <Link to="/admin/rentals" className="font-semibold text-brand-600">Rentals</Link>, <Link to="/admin/sale-requests" className="font-semibold text-brand-600">Sales</Link> and <Link to="/admin/inquiries" className="font-semibold text-brand-600">Inquiries</Link>.
+                  Manage these from <Link to={adminPath("/offers")} className="font-semibold text-brand-600">Offers</Link>, <Link to={adminPath("/rentals")} className="font-semibold text-brand-600">Rentals</Link>, <Link to={adminPath("/sale-requests")} className="font-semibold text-brand-600">Sales</Link> and <Link to={adminPath("/inquiries")} className="font-semibold text-brand-600">Inquiries</Link>.
                 </p>
               )}
             </div>

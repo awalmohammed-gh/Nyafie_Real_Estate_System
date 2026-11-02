@@ -12,8 +12,9 @@ test("production failed-password lockouts persist across instances and protect e
   skip: process.env.RUN_LOGIN_LOCKOUT_INTEGRATION !== "1", timeout: 90000,
 }, async (t) => {
   await isolatedMongo(t);
-  const previous = { NODE_ENV: process.env.NODE_ENV, JWT_KEY: process.env.JWT_KEY, PUBLIC_SITE_URL: process.env.PUBLIC_SITE_URL };
+  const previous = { NODE_ENV: process.env.NODE_ENV, JWT_KEY: process.env.JWT_KEY, PUBLIC_SITE_URL: process.env.PUBLIC_SITE_URL, ADMIN_ENTRY_PATH: process.env.ADMIN_ENTRY_PATH };
   process.env.NODE_ENV = "production";
+  process.env.ADMIN_ENTRY_PATH = "hb-lockout-fixture-entry";
   process.env.JWT_KEY = "production-login-lockout-regression-signing-key";
   process.env.PUBLIC_SITE_URL = "https://nyafie.example";
   t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
@@ -22,7 +23,7 @@ test("production failed-password lockouts persist across instances and protect e
   await Setting.create({ key: "platform", agent: { requireSubscription: false } });
   const users = {};
   for (const [session, role] of Object.entries({ customer: "user", agent: "agent", admin: "admin" })) {
-    users[session] = await User.create({ firstName: "Login", lastName: session, email: `${session}@example.test`, password: "CorrectPassword123", role, ...(role === "agent" ? { agentApplication: { status: "incomplete" } } : {}) });
+    users[session] = await User.create({ emailVerifiedAt: new Date(), firstName: "Login", lastName: session, email: `${session}@example.test`, password: "CorrectPassword123", role, ...(role === "agent" ? { agentApplication: { status: "incomplete" } } : {}) });
   }
   const server = createApp({ initialize: async () => {} }).listen(0, "127.0.0.1");
   await new Promise((done) => server.once("listening", done));

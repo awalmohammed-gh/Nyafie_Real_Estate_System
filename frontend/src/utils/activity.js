@@ -1,4 +1,5 @@
 import { BadgeCheck, Building, Building2, CreditCard, HandCoins, Home, Inbox, KeyRound, UserPlus, Wallet, XCircle } from "lucide-react";
+import { adminPath } from "./adminEntry";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
@@ -21,7 +22,7 @@ const SALE_EVENTS = {
 /**
  * Builds a recent-activity timeline from data the dashboard already has.
  * Every entry is a real event with its own timestamp; nothing is estimated.
- * base: "/admin" or "/agent" (where the links go)
+ * base: "/agent", or "admin" for the admin console (where the links go)
  */
 export const buildActivity = ({ base, listings = [], agents = [], offers = [], rentals = [], sales = [], inquiries = [], findProperty = () => null, limit = 12 }) => {
   const items = [];
@@ -36,12 +37,12 @@ export const buildActivity = ({ base, listings = [], agents = [], offers = [], r
       detail: [p.location.name, p.location.city].filter(Boolean).join(", "),
       at: p.listing.createdAt,
       status: { pending: "Pending Review", published: "Published", draft: "Draft", rejected: "Rejected", suspended: "Hidden" }[p.listing.state],
-      to: base === "/admin" ? `/admin/properties?open=${p.id}` : `/agent/properties/${p.id}`,
+      to: base !== "/agent" ? adminPath(`/properties?open=${p.id}`) : `/agent/properties/${p.id}`,
     })
   );
 
   agents.forEach((a) =>
-    items.push({ id: `agent-${a.id}`, icon: UserPlus, tone: "sky", title: "New agent registered", subject: a.name, detail: a.email, at: a.createdAt, to: `/admin/agents?open=${a.id}` })
+    items.push({ id: `agent-${a.id}`, icon: UserPlus, tone: "sky", title: "New agent registered", subject: a.name, detail: a.email, at: a.createdAt, to: adminPath(`/agents?open=${a.id}`) })
   );
 
   offers.forEach((o) => {
