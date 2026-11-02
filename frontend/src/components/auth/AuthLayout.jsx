@@ -30,17 +30,24 @@ const stories = {
   },
 };
 
+// Illustrated panels; the customer side keeps the photo
+const art = {
+  agent: { src: "/auth/agent-building-safety.png", alt: "Property professional beside a building with a safety approval shield" },
+  admin: { src: "/auth/admin-security-shield.png", alt: "Two security guards beside a computer protected by a shield and padlock" },
+};
+
 const AuthLayout = ({ domain = "customer", children }) => {
   const { siteName } = usePlatform();
   const reduceMotion = useReducedMotion();
   const story = stories[domain];
+  const illustration = art[domain];
 
   return (
     <div className={`auth-shell auth-shell-${domain}`}>
       <aside className="auth-story" aria-label={`${siteName} introduction`}>
-        {domain !== "agent" && <><img src={heroImage} alt="" className="auth-story-image" /><div className="auth-story-overlay" /></>}
+        {!illustration && <><img src={heroImage} alt="" className="auth-story-image" /><div className="auth-story-overlay" /></>}
         <Link to="/" className="auth-story-brand"><BrandLogo tone="violet" size="lg" /></Link>
-        {domain === "agent" && <div className="auth-agent-art"><img src="/auth/agent-building-safety.png" width="2000" height="2000" alt="Property professional beside a building with a safety approval shield" decoding="async" /></div>}
+        {illustration && <div className="auth-story-art"><img src={illustration.src} width="2000" height="2000" alt={illustration.alt} decoding="async" /></div>}
         <div className="auth-story-content">
           <span className="auth-story-tag"><span aria-hidden="true" />{story.label}</span>
           <h2>{story.title}</h2>
