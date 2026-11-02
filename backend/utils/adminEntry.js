@@ -12,20 +12,16 @@ const RESERVED = ["admin", "agent", "agents", "account", "api", "login", "regist
 
 /** Why ADMIN_ENTRY_PATH is unusable, or "" when it is fine. */
 export const adminEntryProblem = (value = process.env.ADMIN_ENTRY_PATH?.trim()) => {
-  if (!value) return process.env.NODE_ENV === "production" ? "ADMIN_ENTRY_PATH is not set, so the admin console is disabled." : "";
+  if (!value) return "ADMIN_ENTRY_PATH is not set, so the admin console is disabled.";
   if (!PATTERN.test(value)) return "ADMIN_ENTRY_PATH must be 16-64 letters, digits, '-' or '_' (no slashes).";
   if (RESERVED.includes(value.toLowerCase())) return "ADMIN_ENTRY_PATH must not be a public page name.";
   return "";
 };
 
-/**
- * The private first path segment of the admin console, or null when the console is disabled.
- * Local development without a value keeps the old /admin address for convenience.
- */
+/** The private first path segment of the admin console, or null when the console is disabled (in every environment). */
 export const adminEntryPath = () => {
   const value = process.env.ADMIN_ENTRY_PATH?.trim();
-  if (!value) return process.env.NODE_ENV === "production" ? null : "admin";
-  return adminEntryProblem(value) ? null : value;
+  return value && !adminEntryProblem(value) ? value : null;
 };
 
 const digest = (value) => crypto.createHash("sha256").update(value).digest();
@@ -45,5 +41,4 @@ export const requireAdminEntry = (req, res, next) => (hasAdminEntry(req) ? next(
 export const checkAdminEntryConfig = () => {
   const problem = adminEntryProblem();
   if (problem) console.error(`Admin console: ${problem}`);
-  else if (!process.env.ADMIN_ENTRY_PATH?.trim()) console.warn("ADMIN_ENTRY_PATH is not set: the admin console uses /admin in development only.");
 };

@@ -45,9 +45,9 @@ test("the private address must be long, unguessable and not a public page", asyn
     assert.equal(adminEntryPath(), null);
     assert.match(adminEntryProblem(), /not set/);
   });
-  await t.test("development without it keeps /admin for local work", (st) => {
+  await t.test("development without it has no admin console either, so /admin never works", (st) => {
     configure(st, { NODE_ENV: "development" });
-    assert.equal(adminEntryPath(), "admin");
+    assert.equal(adminEntryPath(), null);
   });
   for (const bad of ["admin", "short-entry", "has/slash-in-entry-path", "Admin".padEnd(16, "x").replace("x", " ")]) {
     await t.test(`"${bad}" is refused`, (st) => {
