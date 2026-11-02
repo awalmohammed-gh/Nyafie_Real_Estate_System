@@ -8,6 +8,7 @@ import { useAuth } from "../../context/useAuth";
 import { useToast } from "../../context/useToast";
 import { formatDate } from "../../utils/date";
 import { usePlatform } from "../../context/usePlatform";
+import { adminPath } from "../../utils/adminEntry";
 
 const Profile = () => {
   const { siteName } = usePlatform();
@@ -19,7 +20,7 @@ const Profile = () => {
   const dirty = form.firstName !== user.firstName || form.lastName !== user.lastName || form.phone !== (user.phone || "");
 
   // Admins have no customer profile; their account lives in the admin console
-  if (isAdmin) return <Navigate to="/admin/settings" replace />;
+  if (isAdmin) return <Navigate to={adminPath("/settings")} replace />;
   if (!isAgent) return <AccountShell title="My profile" description="Your photo and personal details, all in one place."><div className="account-surface overflow-hidden"><CustomerProfileForm showPhoto /></div></AccountShell>;
 
   const handleSubmit = async (e) => {

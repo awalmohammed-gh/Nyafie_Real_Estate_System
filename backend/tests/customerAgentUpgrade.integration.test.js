@@ -23,7 +23,7 @@ test("customers become agents on the same account, pay first, and retain custome
   await isolatedMongo(t);
   await Setting.create({ key: "platform", agent: { requireSubscription: true }, payments: { subscriptionsEnabled: true } });
   const savedProperty = new mongoose.Types.ObjectId();
-  const account = await User.create({ firstName: "Existing", lastName: "Customer", email: "existing@example.test", password: "OriginalPassword123", savedProperties: [savedProperty], preferences: { offerUpdates: false } });
+  const account = await User.create({ emailVerifiedAt: new Date(), firstName: "Existing", lastName: "Customer", email: "existing@example.test", password: "OriginalPassword123", savedProperties: [savedProperty], preferences: { offerUpdates: false } });
   const plan = await Plan.create({ name: "Individual Starter", accountType: "individual", price: 150, duration: 30, propertyLimit: 5, imageLimit: 3 });
   const agencyPlan = await Plan.create({ name: "Agency Starter", accountType: "agency", price: 500, duration: 30, propertyLimit: 20, imageLimit: 5 });
   const retiredPlan = await Plan.create({ name: "Retired", accountType: "individual", price: 100, duration: 30, propertyLimit: 5, imageLimit: 3, isActive: false });
@@ -156,7 +156,7 @@ test("customers become agents on the same account, pay first, and retain custome
   });
 
   await t.test("returning after closing the payment tab reconciles payment and resumes profile completion", async () => {
-    const other = await User.create({ firstName: "Another", lastName: "Customer", email: "another@example.test", password: "OriginalPassword123", role: "agent", customerAccess: true, agentApplication: { status: "incomplete", agentType: "agency" } });
+    const other = await User.create({ emailVerifiedAt: new Date(), firstName: "Another", lastName: "Customer", email: "another@example.test", password: "OriginalPassword123", role: "agent", customerAccess: true, agentApplication: { status: "incomplete", agentType: "agency" } });
     const attempt = await Subscription.create({ user: other.id, plan: agencyPlan.id, planName: agencyPlan.name, accountType: "agency", amount: 500, paymentReference: "customer-agent-recovery", paymentStatus: "pending" });
     amount = 50000;
     const signIn = await request("/api/auth/agent/login", { session: "agent", method: "POST", body: { email: other.email, password: "OriginalPassword123" } });

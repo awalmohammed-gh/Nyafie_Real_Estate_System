@@ -20,10 +20,9 @@ test("frontend destinations keep public pages and private areas in their own dom
   for (const path of ["/agent", "/agent/login", "/agent/register", "/agent/onboarding", "/agent/status", "/agent/checkout", "/agent/dashboard", "/agent/profile", "/agent/subscription/checkout"]) assert.equal(sessionDomainForPath(path), "agent");
   assert.equal(sessionDomainForPath("/login", "?account=agent"), "agent");
   assert.equal(sessionDomainForPath("/register", "?account=agent"), "agent");
-  assert.equal(sessionDomainForPath("/admin/dashboard"), "admin");
-  assert.equal(sessionDestination("customer", "/admin/dashboard"), "/");
+  // /admin is an ordinary public page (not found); the console lives at its private address (adminEntry.test.js)
+  assert.equal(sessionDomainForPath("/admin/dashboard"), "customer");
   assert.equal(sessionDestination("agent", "//example.com"), "/agent/dashboard");
-  assert.equal(sessionDestination("admin", "/admin/settings?tab=account"), "/admin/settings?tab=account");
 });
 
 test("explicit account switching keeps both auth forms open with an existing role session", () => {
@@ -45,7 +44,7 @@ test("explicit account switching keeps both auth forms open with an existing rol
 test("role session isolation", async (t) => {
   process.env.JWT_KEY = "isolated-auth-regression-test-key";
   const accounts = Object.entries(SESSION_ROLES).map(([session, role], index) => ({
-    _id: String(index + 1).padStart(24, "0"), role, isActive: true,
+    emailVerifiedAt: new Date(), _id: String(index + 1).padStart(24, "0"), role, isActive: true,
     ...(role === "agent" ? { agentApplication: { status: "approved", profileCompletedAt: new Date(), approvedAt: new Date() } } : {}),
     email: `${session}@example.test`, firstName: session, lastName: "Test",
     matchPassword: async (password) => password === "TestPassword123",
@@ -157,8 +156,10 @@ test("role session isolation", async (t) => {
     await t.test("role-only APIs reject customer/agent access even with all cookies present", async () => {
       for (const [path, domain] of [["/api/admin/users", "customer"], ["/api/admin/users", "agent"], ["/api/agents/dashboard", "customer"], ["/api/users/saved", "agent"], ["/api/users/saved", "admin"]])
         assert.equal((await call(path, { domain })).status, 403);
-      for (const [path, jar] of [["/api/admin/users", { customer_token: cookies.customer_token }], ["/api/admin/users", { agent_token: cookies.agent_token }], ["/api/agents/dashboard", { customer_token: cookies.customer_token }]])
-        assert.equal((await call(path, { jar })).status, 401);
+      // Without a selector these default to the route's own session. Admin routes then also lack the
+      // console's private address, so they answer like unknown endpoints instead of asking for a login.
+      for (const [path, jar, status] of [["/api/admin/users", { customer_token: cookies.customer_token }, 404], ["/api/admin/users", { agent_token: cookies.agent_token }, 404], ["/api/agents/dashboard", { customer_token: cookies.customer_token }, 401]])
+        assert.equal((await call(path, { jar })).status, status);
     });
     await t.test("shared endpoints select exactly one role and retain it through subsequent guards", async () => {
       for (const session of Object.keys(SESSION_ROLES)) {

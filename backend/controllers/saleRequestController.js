@@ -166,7 +166,7 @@ const loadManaged = async (req, res) => {
 
 // POST /api/sale-requests { propertyId, fullName, email, phone, message } -> "Buy Now"
 export const createSaleRequest = async (req, res) => {
-  const contact = validateContact(req.body);
+  const contact = validateContact({ ...req.body, email: req.user.email });
   if (contact.error) return fail(res, 400, contact.error);
 
   const property = await loadPublishedProperty(req.body.propertyId);

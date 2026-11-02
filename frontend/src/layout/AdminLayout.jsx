@@ -32,6 +32,7 @@ import PageLoader from "../components/ui/PageLoader";
 import NotificationBell from "../components/ui/NotificationBell";
 import AccountMenu from "../components/account/AccountMenu";
 import SidebarAccount from "../components/dashboard/SidebarAccount";
+import { adminPath } from "../utils/adminEntry";
 
 // Grouped the way the platform is run: the portfolio, the deals in progress, the conversations
 // with customers, the money, and the system itself. Only routes that exist in the admin console.
@@ -39,48 +40,48 @@ const groups = [
   {
     label: "Overview",
     items: [
-      { label: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboard },
-      { label: "Reports", to: "/admin/reports", icon: BarChart3 },
+      { label: "Dashboard", to: adminPath("/dashboard"), icon: LayoutDashboard },
+      { label: "Reports", to: adminPath("/reports"), icon: BarChart3 },
     ],
   },
   {
     label: "Real estate",
     items: [
-      { label: "Properties", to: "/admin/properties", icon: Building2, badge: "review", urgent: true },
-      { label: "Agents", to: "/admin/agents", icon: UserCog },
-      { label: "Agent Applications", to: "/admin/agent-applications", icon: ClipboardCheck, badge: "applications", urgent: true },
-      { label: "Customers", to: "/admin/customers", icon: Users },
+      { label: "Properties", to: adminPath("/properties"), icon: Building2, badge: "review", urgent: true },
+      { label: "Agents", to: adminPath("/agents"), icon: UserCog },
+      { label: "Agent Applications", to: adminPath("/agent-applications"), icon: ClipboardCheck, badge: "applications", urgent: true },
+      { label: "Customers", to: adminPath("/customers"), icon: Users },
     ],
   },
   {
     label: "Deals",
     items: [
-      { label: "Offers", to: "/admin/offers", icon: HandCoins, badge: "offers" },
-      { label: "Rentals", to: "/admin/rentals", icon: KeyRound, badge: "rentals" },
-      { label: "Sales", to: "/admin/sale-requests", icon: Building, badge: "sales" },
+      { label: "Offers", to: adminPath("/offers"), icon: HandCoins, badge: "offers" },
+      { label: "Rentals", to: adminPath("/rentals"), icon: KeyRound, badge: "rentals" },
+      { label: "Sales", to: adminPath("/sale-requests"), icon: Building, badge: "sales" },
     ],
   },
   {
     label: "Communication",
     items: [
-      { label: "Inquiries", to: "/admin/inquiries", icon: Inbox, badge: "inquiries" },
-      { label: "Contact messages", to: "/admin/contact-messages", icon: Mail },
-      { label: "Messages", to: "/admin/messages", icon: MessageCircle, badge: "messages" },
-      { label: "Reviews", to: "/admin/reviews", icon: Star, badge: "reviews" },
+      { label: "Inquiries", to: adminPath("/inquiries"), icon: Inbox, badge: "inquiries" },
+      { label: "Contact messages", to: adminPath("/contact-messages"), icon: Mail },
+      { label: "Messages", to: adminPath("/messages"), icon: MessageCircle, badge: "messages" },
+      { label: "Reviews", to: adminPath("/reviews"), icon: Star, badge: "reviews" },
     ],
   },
   {
     label: "Finance",
     items: [
-      { label: "Inventory", to: "/admin/inventory", icon: BarChart3 },
-      { label: "Payments", to: "/admin/payments", icon: Wallet },
-      { label: "Subscriptions", to: "/admin/subscriptions", icon: CreditCard },
-      { label: "Plans", to: "/admin/plans", icon: Layers },
+      { label: "Inventory", to: adminPath("/inventory"), icon: BarChart3 },
+      { label: "Payments", to: adminPath("/payments"), icon: Wallet },
+      { label: "Subscriptions", to: adminPath("/subscriptions"), icon: CreditCard },
+      { label: "Plans", to: adminPath("/plans"), icon: Layers },
     ],
   },
   {
     label: "System",
-    items: [{ label: "Settings", to: "/admin/settings", icon: Settings }],
+    items: [{ label: "Settings", to: adminPath("/settings"), icon: Settings }],
   },
 ];
 
@@ -117,7 +118,7 @@ const AdminShell = () => {
       headerActions={
         <>
           <Link
-            to="/admin/properties?status=pending"
+            to={adminPath("/properties?status=pending")}
             title="Properties awaiting review"
             aria-label={`${review} properties awaiting review`}
             className="relative grid h-10 w-10 place-items-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900"

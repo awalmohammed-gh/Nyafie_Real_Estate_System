@@ -11,14 +11,15 @@ import Payment from "../models/Payment.js";
 import Subscription from "../models/Subscription.js";
 import adminRoutes from "../routes/adminRoutes.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
+import { customerTabHeaders } from "./support/customerTab.js";
 
 test("financial inventory combines cash ledgers without counting attempts, credits or refunds as receipts", {skip:process.env.RUN_FINANCE_INTEGRATION!=="1",timeout:90000}, async t=>{
   await isolatedMongo(t);
   const oldKey=process.env.JWT_KEY;process.env.JWT_KEY="isolated-finance-test-signing-key-only";
   t.after(()=>{if(oldKey===undefined)delete process.env.JWT_KEY;else process.env.JWT_KEY=oldKey;});
-  const admin=await User.create({firstName:"Finance",lastName:"Admin",email:"admin@finance.test",password:"FinanceTest123",role:"admin"});
-  const customer=await User.create({firstName:"Rental",lastName:"Customer",email:"customer@finance.test",password:"FinanceTest123"});
-  const agent=await User.create({firstName:"Plan",lastName:"Agent",email:"agent@finance.test",password:"FinanceTest123",role:"agent"});
+  const admin=await User.create({ emailVerifiedAt: new Date(),firstName:"Finance",lastName:"Admin",email:"admin@finance.test",password:"FinanceTest123",role:"admin"});
+  const customer=await User.create({ emailVerifiedAt: new Date(),firstName:"Rental",lastName:"Customer",email:"customer@finance.test",password:"FinanceTest123"});
+  const agent=await User.create({ emailVerifiedAt: new Date(),firstName:"Plan",lastName:"Agent",email:"agent@finance.test",password:"FinanceTest123",role:"agent"});
   const home=await Property.create({title:"Finance test home",owner:admin.id,ownerType:"admin",propertyType:"Apartment",listingType:"Rent",price:100,pricePeriod:"month",status:"published"});
   const hotel=await Property.create({title:"Finance test hotel",owner:admin.id,ownerType:"admin",propertyType:"Hotel",listingType:"Rent",price:100,pricePeriod:"night",status:"published"});
   const booking=await Rental.create({property:home.id,hotelId:hotel.id,customer:customer.id,owner:admin.id,ownerType:"admin",startDate:"2024-02-01",endDate:"2024-02-02",pricePeriod:"night",unitPrice:20,units:1,amount:20,contactName:"Test",contactEmail:"test@finance.test",contactPhone:"0241234567"});
@@ -26,7 +27,7 @@ test("financial inventory combines cash ledgers without counting attempts, credi
   const server=app.listen(0,"127.0.0.1");await new Promise(done=>server.once("listening",done));t.after(()=>new Promise(done=>server.close(done)));
   const url=`http://127.0.0.1:${server.address().port}/api/admin/inventory`;
   const cookie=(user,session)=>`${session}_token=${jwt.sign({id:user.id,role:user.role,session},process.env.JWT_KEY)}`;
-  const call=async(query="",auth=cookie(admin,"admin"),domain="admin")=>{const response=await fetch(url+query,{headers:{"X-Session-Domain":domain,...(auth?{Cookie:auth}:{})}});return {status:response.status,headers:response.headers,...await response.json()};};
+  const call=async(query="",auth=cookie(admin,"admin"),domain="admin")=>{const response=await fetch(url+query,{headers:{"X-Session-Domain":domain,...customerTabHeaders(domain),...(auth?{Cookie:auth}:{})}});return {status:response.status,headers:response.headers,...await response.json()};};
   let sequence=0;
   const payment=(amount,status="paid",extra={})=>Payment.create({kind:"rental",customer:customer.id,property:home.id,owner:admin.id,ownerType:"admin",amount,method:"Paystack",reference:`FIN-${++sequence}`,status,createdAt:new Date("2024-02-15"),...extra});
   const subscription=(amount,paymentStatus="paid",extra={})=>Subscription.create({user:agent.id,plan:new mongoose.Types.ObjectId(),planName:"Finance plan",amount,paymentReference:`SUB-${++sequence}`,paymentStatus,createdAt:new Date("2024-02-15"),...extra});

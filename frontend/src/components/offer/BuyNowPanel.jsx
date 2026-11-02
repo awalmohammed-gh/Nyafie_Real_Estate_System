@@ -107,8 +107,8 @@ const BuyNowPanel = ({ property, ownerName, whatsappLink, onChat }) => {
             <input type="tel" value={form.phone} onChange={set("phone")} required autoComplete="tel" placeholder="024 000 0000" className="field" />
           </label>
           <label className="block text-sm">
-            <span className="mb-1.5 block font-medium text-gray-700">Email</span>
-            <input type="email" value={form.email} onChange={set("email")} required autoComplete="email" className="field" />
+            <span className="mb-1.5 block font-medium text-gray-700">Verified email</span>
+            <input type="email" value={user.email} readOnly required autoComplete="email" className="field" />
           </label>
         </div>
         <label className="block text-sm">

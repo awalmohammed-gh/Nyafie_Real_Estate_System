@@ -14,9 +14,9 @@ test("customer profile photos use authenticated HTTP uploads and persist through
   const previous = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
   Object.assign(process.env, env);
   t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
-  const customer = new User({ firstName: "Photo", lastName: "Customer", email: "photo@example.test", role: "user", isActive: true, password: "NeverExposeThis123", preferences: { inquiryUpdates: false } });
-  const other = new User({ firstName: "Other", lastName: "Customer", email: "other@example.test", role: "user", isActive: true });
-  const agent = new User({ firstName: "Agent", lastName: "Test", email: "agent@example.test", role: "agent", isActive: true });
+  const customer = new User({ emailVerifiedAt: new Date(), firstName: "Photo", lastName: "Customer", email: "photo@example.test", role: "user", isActive: true, password: "NeverExposeThis123", preferences: { inquiryUpdates: false } });
+  const other = new User({ emailVerifiedAt: new Date(), firstName: "Other", lastName: "Customer", email: "other@example.test", role: "user", isActive: true });
+  const agent = new User({ emailVerifiedAt: new Date(), firstName: "Agent", lastName: "Test", email: "agent@example.test", role: "agent", isActive: true });
   const accounts = [customer, other, agent];
   let providerFailure = false;
   let databaseFailure = false;

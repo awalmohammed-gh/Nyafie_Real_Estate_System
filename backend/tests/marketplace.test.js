@@ -23,8 +23,8 @@ const query = (value) => ({
   select: () => query(value), sort: () => query(value), populate: () => query(value), lean: () => Promise.resolve(value),
 });
 const response = () => ({ code: 200, status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } });
-const agent = new User({ firstName: "Akua", lastName: "Mensah", phone: "+233241234567", email: "akua@example.test", role: "agent", password: "password123", agentApplication: { status: "approved", companyName: "Akua Homes", whatsapp: "+233209876543", approvedBy: new mongoose.Types.ObjectId(), rejectionReason: "Private note" }, savedProperties: [new mongoose.Types.ObjectId()] });
-const customer = new User({ firstName: "Customer", lastName: "Test", phone: "+233201234567", email: "customer@example.test", password: "password123" });
+const agent = new User({ emailVerifiedAt: new Date(), firstName: "Akua", lastName: "Mensah", phone: "+233241234567", email: "akua@example.test", role: "agent", password: "password123", agentApplication: { status: "approved", companyName: "Akua Homes", whatsapp: "+233209876543", approvedBy: new mongoose.Types.ObjectId(), rejectionReason: "Private note" }, savedProperties: [new mongoose.Types.ObjectId()] });
+const customer = new User({ emailVerifiedAt: new Date(), firstName: "Customer", lastName: "Test", phone: "+233201234567", email: "customer@example.test", password: "password123" });
 const listing = (extra = {}) => new Property({ title: "East Legon Apartment", description: "A comfortable home with parking and a garden in East Legon.", propertyType: "Apartment", listingType: "Rent", price: 2000, pricePeriod: "month", location: { city: "Accra", neighbourhood: "East Legon", region: "Greater Accra", address: "12 Palm Street" }, area: 90, images: ["/home.jpg"], owner: agent._id, ownerType: "agent", contact: { id: String(customer._id), name: "Stale Name", phone: "0000000", email: "stale@example.test" }, status: "published", ...extra });
 const settings = (t, overrides = {}) => t.mock.method(Setting, "findOneAndUpdate", () => query({ agent: { requireSubscription: false }, ...overrides }));
 

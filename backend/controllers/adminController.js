@@ -25,6 +25,7 @@ import { activateSubscription } from "./subscriptionController.js";
 import { removalImpact, removeProvider, restoreProvider, deletionPlan, permanentlyDeleteProvider } from "../utils/providerRemoval.js";
 import { ok, fail } from "../utils/response.js";
 import { prepareHotelFields, saveHotelProperty } from "../utils/hotel.js";
+import { REFUND_SUMMARY } from "./refundController.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -69,7 +70,12 @@ export const updateUser = async (req, res) => {
   if (email !== undefined) {
     if (typeof email !== "string" || email.length > 254 || !/^\S+@\S+\.\S+$/.test(email)) return fail(res, 400, "Enter a valid email address.");
     if (await User.exists({ email: email.toLowerCase(), _id: { $ne: user._id } })) return fail(res, 409, "Another account already uses this email.");
-    user.email = email;
+    const normalizedEmail = email.trim().toLowerCase();
+    if (user.email !== normalizedEmail) {
+      user.emailVerifiedAt = null;
+      user.sessionVersion = crypto.randomUUID();
+    }
+    user.email = normalizedEmail;
   }
   if (firstName !== undefined) user.firstName = firstName;
   if (lastName !== undefined) user.lastName = lastName;
@@ -175,7 +181,7 @@ export const manageSubscription = async (req, res) => {
       }
     } else {
       const subscription = await Subscription.create({
-        user: user._id, plan: plan._id, planName: plan.name, amount: 0, paymentReference: newReference(), paymentMethod: "Admin",
+        user: user._id, plan: plan._id, planName: plan.name, accountType: plan.accountType, planPrice: plan.price, durationDays: plan.duration, amount: 0, paymentReference: newReference(), paymentMethod: "Admin",
       });
       await activateSubscription(subscription, { paymentStatus: "waived" });
     }
@@ -209,7 +215,7 @@ export const manageSubscription = async (req, res) => {
       const now = new Date();
       current.status = "active";
       current.startDate = now;
-      current.expiresAt = new Date(now.getTime() + (plan?.duration || 30) * DAY);
+      current.expiresAt = new Date(now.getTime() + (current.durationDays ?? plan?.duration ?? 30) * DAY);
       await current.save();
     }
     return ok(res, null, "Subscription activated");
@@ -220,7 +226,7 @@ export const manageSubscription = async (req, res) => {
 
 // GET /api/admin/subscriptions -> every subscription record (also the payment history)
 export const listSubscriptions = async (_req, res) => {
-  ok(res, await Subscription.find().sort({ createdAt: -1 }));
+  ok(res, await Subscription.find().sort({ createdAt: -1 }).populate("refund", REFUND_SUMMARY));
 };
 
 // ---------- Properties ----------

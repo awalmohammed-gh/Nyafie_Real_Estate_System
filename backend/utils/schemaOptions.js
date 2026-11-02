@@ -8,6 +8,7 @@ export const schemaOptions = {
       delete ret._id;
       delete ret.password;
       delete ret.sessionVersion;
+      delete ret.googleId;
       return ret;
     },
   },

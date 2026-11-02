@@ -11,7 +11,7 @@ const setup = async (t) => {
   t.mock.method(console, "error", () => {});
   process.env.JWT_KEY = "customer-tab-regression-signing-key";
   process.env.NODE_ENV = "development";
-  const user = new User({ firstName: "Tab", lastName: "Customer", email: "tab@example.test", role: "user", isActive: true });
+  const user = new User({ emailVerifiedAt: new Date(), firstName: "Tab", lastName: "Customer", email: "tab@example.test", role: "user", isActive: true });
   user.matchPassword = async (value) => value === "CorrectPassword123";
   t.mock.method(User, "findOne", ({ email }) => query(email === user.email ? user : null));
   t.mock.method(User, "findById", () => query(user));

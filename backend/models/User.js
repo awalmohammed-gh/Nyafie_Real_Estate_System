@@ -55,6 +55,8 @@ const userSchema = new mongoose.Schema(
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    emailVerifiedAt: { type: Date, default: null },
+    googleId: { type: String, unique: true, sparse: true, select: false },
     phone: { type: String, default: "", trim: true },
     password: { type: String, required: true, minlength: 8, select: false },
     // Empty only for accounts whose password has never changed. Older cookies

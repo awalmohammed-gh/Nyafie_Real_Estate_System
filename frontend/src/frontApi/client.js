@@ -1,5 +1,6 @@
 import axios from "axios";
 import { sessionDomainForPath } from "../utils/sessionDomain";
+import { adminEntry } from "../utils/adminEntry";
 import { prepareRequestImagePayload } from "../utils/imagePayload";
 import { readCustomerTabSecret, CUSTOMER_SESSION_ENDED } from "../utils/customerTabSession";
 
@@ -14,6 +15,8 @@ const client = axios.create({
 client.interceptors.request.use(async (config) => {
   // An explicit selector for shared APIs, never a token or authorization claim.
   config.headers["X-Session-Domain"] ||= sessionDomainForPath(window.location.pathname, window.location.search);
+  // Admin requests carry the console's private address; the server rejects them without it
+  if (config.headers["X-Session-Domain"] === "admin" && adminEntry()) config.headers["X-Admin-Entry"] = adminEntry();
   if (config.headers["X-Session-Domain"] === "customer") {
     const tabSecret = readCustomerTabSecret();
     if (tabSecret) config.headers["X-Customer-Tab"] = tabSecret;
@@ -35,6 +38,8 @@ client.interceptors.response.use(
     const wrapped = new Error(message);
     wrapped.status = error.response?.status;
     wrapped.code = error.response?.data?.code;
+    const retryAfter = Number(error.response?.headers?.["retry-after"]);
+    if (Number.isFinite(retryAfter) && retryAfter > 0) wrapped.retryAfter = retryAfter;
     return Promise.reject(wrapped);
   }
 );

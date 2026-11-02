@@ -69,7 +69,7 @@ const HotelCheckout = ({ property, ownerName }) => {
       {estimate != null && <p className="rounded-xl bg-brand-50 p-4 text-sm text-brand-800">Estimated stay: {roomPrice(room.pricePerNight)} × {nights} night(s) × {form.numberOfRooms} room(s) = <strong>{roomPrice(estimate)}</strong></p>}
       <fieldset className="grid gap-4 border-t border-gray-100 pt-5 sm:grid-cols-2"><legend className="pt-4 font-semibold text-gray-900">Guest contact details</legend>
         <label className="text-sm font-medium text-gray-700 sm:col-span-2">Full name<input required minLength={2} maxLength={120} autoComplete="name" value={form.fullName} onChange={set("fullName")} className="field mt-1.5" /></label>
-        <label className="text-sm font-medium text-gray-700">Email<input required type="email" autoComplete="email" value={form.email} onChange={set("email")} className="field mt-1.5" /></label>
+        <label className="text-sm font-medium text-gray-700">Verified email<input required type="email" autoComplete="email" value={user.email} readOnly className="field mt-1.5" /></label>
         <label className="text-sm font-medium text-gray-700">Phone<input required type="tel" autoComplete="tel" maxLength={30} value={form.phone} onChange={set("phone")} className="field mt-1.5" /></label>
         <label className="text-sm font-medium text-gray-700 sm:col-span-2">Special requests (optional)<textarea value={form.notes} onChange={set("notes")} maxLength={1000} rows={2} className="field mt-1.5" /></label>
       </fieldset>

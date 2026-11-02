@@ -7,7 +7,7 @@ login and logout changes only its role's persistent HTTP-only cookie.
 | --- | --- | --- | --- | --- |
 | customer | user | customer_token | /api/auth/customer/me | /login |
 | agent | agent | agent_token | /api/auth/agent/me | /login?account=agent (also /agent/login) |
-| admin | admin | admin_token | /api/auth/admin/me | /admin/login |
+| admin | admin | admin_token | /api/auth/admin/me | /&lt;ADMIN_ENTRY_PATH&gt;/login (private) |
 
 Each domain also exposes `POST /api/auth/:domain/login`,
 `POST /api/auth/:domain/logout`, `PUT /api/auth/:domain/me`, and
@@ -15,6 +15,39 @@ Each domain also exposes `POST /api/auth/:domain/login`,
 `POST /api/auth/customer/register`; agents through `POST /api/auth/agent/register`.
 Existing unscoped auth endpoints are customer-only compatibility aliases.
 The old `token` cookie is ignored; existing users need to sign in again once.
+
+Customer signup and correct-password sign-in require a verified email address.
+Unverified customers receive HTTP 202 with `verificationRequired`, `email`, and
+a thirty-minute `challenge`, without an authenticated customer cookie. Confirm
+the six-digit Google SMTP code at `POST /api/auth/customer/verify-email` using
+`{ challenge, code }` and the customer tab header; this creates the session.
+`POST /api/auth/customer/resend-verification` accepts `{ challenge }`. Codes
+expire after ten minutes with five attempts, sixty seconds between sends, and
+five sends per account per hour. Existing unverified accounts and old customer
+cookies are subject to the same requirement. Challenges are not ordinary auth
+tokens and become invalid when the account email or password changes.
+See [Google SMTP setup](../../DEPLOYMENT.md#google-smtp-customer-verification).
+
+Customer password recovery uses `POST /api/auth/customer/forgot-password`
+with `{ email }`, followed by `POST /api/auth/customer/reset-password` with
+`{ email, code, newPassword }`. Request responses do not disclose whether the
+account exists. Codes are separate from verification codes, expire in ten
+minutes, permit five attempts and one use, and have per-account and IP limits.
+Resetting the password verifies mailbox ownership, revokes all existing role
+sessions for that identity and clears failed-login locks, without signing the
+customer in automatically. Standalone agents and admins cannot use these
+customer recovery endpoints.
+
+Google customer sign-in starts with `POST /api/auth/customer/google/challenge`
+and the customer tab header. This returns Google's public client ID, a nonce
+and a single-use challenge. The Google Identity Services button includes the
+nonce in its signed ID token. Submit `{ credential, challenge }` to
+`POST /api/auth/customer/google` to verify the Google token and issue the usual
+customer cookie. Only Google-verified Gmail or Workspace email identities are
+accepted. New customers are created automatically; existing eligible customer
+accounts are linked by Google subject ID after authoritative email matching.
+Role/status checks still apply, and the challenge is bound to its issuing tab.
+See [Google client setup](../../DEPLOYMENT.md#google-customer-sign-in).
 
 JWT verification checks HS256 signature, expiry, account ID, signed session
 domain, signed role and current database role. Customer/admin identities also
@@ -64,7 +97,7 @@ must exist before submission or approval. Verified payment sets the application
 to pending and never approves it. Existing paid subscription dates are preserved;
 the plan duration begins at payment as it did before this change.
 
-Admins review `/admin/agent-applications` using the admin-only application API.
+Admins review applications at `/<ADMIN_ENTRY_PATH>/agent-applications` using the admin-only application API. Every admin request must carry the console's private address in `X-Admin-Entry`; without it admin endpoints return the same 404 as unknown endpoints.
 Approval records `approvedAt` and `approvedBy`. Rejection stores optional feedback;
 the applicant can update and resubmit. Suspension revokes workspace and public
 listing access immediately, including for an already issued token. Reactivation

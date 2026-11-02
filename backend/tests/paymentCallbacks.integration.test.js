@@ -10,6 +10,9 @@ import Rental from "../models/Rental.js";
 import Payment from "../models/Payment.js";
 import Setting from "../models/Setting.js";
 import Notification from "../models/Notification.js";
+import Plan from "../models/Plan.js";
+import Subscription from "../models/Subscription.js";
+import { reconcileOpenPayments } from "../controllers/subscriptionController.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
 
 test("rental payments recover without a browser callback using signed webhooks and scheduled checks", { skip: process.env.RUN_PAYMENT_INTEGRATION !== "1", timeout: 90000 }, async (t) => {
@@ -19,8 +22,8 @@ test("rental payments recover without a browser callback using signed webhooks a
   process.env.CRON_SECRET = "isolated-recovery-secret-at-least-32-characters";
   process.env.PUBLIC_SITE_URL = "http://localhost:5173";
   await Setting.create({ key: "platform", payments: { rentalsEnabled: true } });
-  const owner = await User.create({ firstName: "Test", lastName: "Owner", email: "owner@callback.test", password: "test-password", role: "admin" });
-  const customer = await User.create({ firstName: "Test", lastName: "Guest", email: "guest@callback.test", phone: "0241234567", password: "test-password" });
+  const owner = await User.create({ emailVerifiedAt: new Date(), firstName: "Test", lastName: "Owner", email: "owner@callback.test", password: "test-password", role: "admin" });
+  const customer = await User.create({ emailVerifiedAt: new Date(), firstName: "Test", lastName: "Guest", email: "guest@callback.test", phone: "0241234567", password: "test-password" });
   const server = createApp({ initialize: async () => {} }).listen(0, "127.0.0.1");
   await new Promise((done) => server.once("listening", done));
   t.after(() => new Promise((done) => server.close(done)));
@@ -34,7 +37,7 @@ test("rental payments recover without a browser callback using signed webhooks a
     const reference = decodeURIComponent(String(url).split("/").at(-1));
     const changes = provider.get(reference);
     if (changes instanceof Error) throw changes;
-    const payment = await Payment.findOne({ reference });
+    const payment = await Payment.findOne({ reference }) || await Subscription.findOne({ paymentReference: reference });
     return { json: async () => ({ status: true, data: { status: "success", reference, amount: Math.round(payment.amount * 100), currency: "GHS", ...changes } }) };
   });
   const api = async (path, body) => {
@@ -158,5 +161,69 @@ test("rental payments recover without a browser callback using signed webhooks a
     assert.equal((await Rental.findById(f.booking.id)).status, "cancelled");
     assert.equal((await Payment.findOne({ reference: f.reference })).status, "refund_required");
     assert.equal((await webhook(f.reference)).code, 200);
+  });
+
+  let sequence = 0;
+  const plan = await Plan.create({ name: "Callback plan", price: 100, duration: 30, propertyLimit: 10, imageLimit: 5 });
+  const agent = () => User.create({ emailVerifiedAt: new Date(), firstName: "Test", lastName: "Agent", email: `agent${++sequence}@callback.test`, password: "test-password", role: "agent", agentApplication: { status: "approved", agentType: "individual" } });
+  const checkout = (user, fields = {}) => Subscription.create({ user: user.id, plan: plan.id, planName: plan.name, amount: plan.price, planPrice: plan.price, durationDays: plan.duration, paymentReference: `HB-CALLBACK-${++sequence}`, ...fields });
+  const daysAgo = (days) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  await t.test("a signed webhook activates an agent subscription without the browser returning", async () => {
+    const user = await agent(), record = await checkout(user);
+    assert.equal((await webhook(record.paymentReference, { metadata: { userId: customer.id, planId: "forged" }, amount: 1 })).code, 200);
+    const settled = await Subscription.findById(record.id);
+    assert.equal(settled.paymentStatus, "paid");
+    assert.equal(settled.status, "active");
+    assert.equal(String((await User.findById(user.id)).subscription), record.id);
+    assert.ok(!(await User.findById(customer.id)).subscription, "callback metadata never chooses the account");
+    const expiry = +settled.expiresAt;
+    assert.equal((await webhook(record.paymentReference)).code, 200);
+    assert.equal(+(await Subscription.findById(record.id)).expiresAt, expiry, "replays do not extend the plan again");
+  });
+
+  await t.test("a subscription webhook ahead of provider confirmation is retried without changing the record", async () => {
+    const user = await agent(), record = await checkout(user);
+    for (const change of [{ status: "pending" }, { amount: 1 }]) {
+      provider.set(record.paymentReference, change);
+      assert.equal((await webhook(record.paymentReference)).code, 503);
+      assert.equal((await Subscription.findById(record.id)).paymentStatus, "pending");
+    }
+    provider.delete(record.paymentReference);
+    assert.equal((await webhook(record.paymentReference)).code, 200);
+    assert.equal((await Subscription.findById(record.id)).paymentStatus, "paid");
+  });
+
+  await t.test("scheduled recovery settles subscription checkouts whose webhook and browser return were missed", async () => {
+    const paid = await checkout(await agent());
+    const abandoned = await checkout(await agent());
+    const lateFailure = await checkout(await agent(), { paymentStatus: "failed" });
+    const expired = await checkout(await agent(), { paymentStatus: "failed", createdAt: daysAgo(8) });
+    const credit = await checkout(await agent(), { paymentMethod: "Plan credit", amount: 0 });
+    provider.set(abandoned.paymentReference, { status: "abandoned" });
+    const recovered = await recover();
+    assert.equal(recovered.code, 200, JSON.stringify(recovered));
+    assert.equal(recovered.data.subscriptions.checked, 3);
+    assert.equal(recovered.data.subscriptions.paid, 2);
+    assert.equal(recovered.data.subscriptions.failed, 1);
+    assert.equal((await Subscription.findById(paid.id)).status, "active");
+    assert.equal((await Subscription.findById(lateFailure.id)).paymentStatus, "paid", "a failed checkout completed later is still activated");
+    assert.equal((await Subscription.findById(abandoned.id)).paymentStatus, "failed");
+    assert.equal((await Subscription.findById(expired.id)).paymentStatus, "failed", "failed checkouts older than seven days are no longer rechecked");
+    assert.equal((await Subscription.findById(credit.id)).paymentStatus, "pending", "plan-credit changes never go to Paystack");
+    assert.equal((await recover()).data.subscriptions.checked, 0, "leases stop the same records being claimed again immediately");
+    provider.delete(abandoned.paymentReference);
+  });
+
+  await t.test("opening onboarding rechecks older unsettled checkouts, not only the latest one", async () => {
+    const user = await agent();
+    const earlier = await checkout(user, { createdAt: daysAgo(3) });
+    const latest = await checkout(user);
+    provider.set(latest.paymentReference, { status: "abandoned" });
+    await reconcileOpenPayments(user);
+    assert.equal((await Subscription.findById(earlier.id)).paymentStatus, "paid");
+    assert.equal((await Subscription.findById(latest.id)).paymentStatus, "failed");
+    assert.equal(String((await User.findById(user.id)).subscription), earlier.id);
+    provider.delete(latest.paymentReference);
   });
 });

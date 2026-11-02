@@ -4,6 +4,9 @@ import { protectCustomer, protectAgentSession, protectAdmin } from "../middlewar
 import { fail } from "../utils/response.js";
 import { uploadCustomerPhoto, removeCustomerPhoto } from "../controllers/customerPhotoController.js";
 import { rateLimit } from "../middleware/security.js";
+import { verifyCustomerEmail, resendEmailVerification } from "../controllers/emailVerificationController.js";
+import { requestPasswordReset, resetCustomerPassword } from "../controllers/passwordResetController.js";
+import { createGoogleChallenge, googleCustomerLogin } from "../controllers/googleAuthController.js";
 
 const router = Router();
 router.use((_req, res, next) => { res.set("Cache-Control", "private, no-store"); next(); });
@@ -20,6 +23,15 @@ for (const [session, guard] of [["customer", protectCustomer], ["agent", protect
   router.put('/' + session + '/me/password', guard, changePassword);
 }
 router.post("/customer/register", register);
+const googleLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
+router.post("/customer/google/challenge", googleLimit, createGoogleChallenge);
+router.post("/customer/google", googleLimit, googleCustomerLogin);
+const verificationLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
+router.post("/customer/verify-email", verificationLimit, verifyCustomerEmail);
+router.post("/customer/resend-verification", verificationLimit, resendEmailVerification);
+const recoveryLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
+router.post("/customer/forgot-password", recoveryLimit, requestPasswordReset);
+router.post("/customer/reset-password", recoveryLimit, resetCustomerPassword);
 router.post("/agent/register", registerAgent);
 router.post("/customer/become-agent", protectCustomer, rateLimit({ windowMs: 15 * 60 * 1000, max: 10, key: (req) => String(req.user._id) }), becomeAgent);
 router.post("/customer/me/photo", protectCustomer, rateLimit({ windowMs: 15 * 60 * 1000, max: 20, key: (req) => String(req.user._id) }), uploadCustomerPhoto);

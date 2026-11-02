@@ -3,7 +3,7 @@ import Property from "../models/Property.js";
 import User from "../models/User.js";
 import { isHotel, hotelTransaction } from "./hotel.js";
 import Payment from "../models/Payment.js";
-import { paymentMode, paystackPaymentStatus } from "./paystack.js";
+import { inCurrentEnvironment, paymentMode, paystackPaymentStatus } from "./paystack.js";
 import { confirmRentalPayment, recordFailedRentalPayment, rentalPaymentMatchesBooking, rentalPaymentNeedsReview } from "./confirmRentalPayment.js";
 import { confirmHotelPayment } from "./confirmHotelPayment.js";
 import { HttpError } from "./response.js";
@@ -43,8 +43,10 @@ export const processRentalPayment = async (payment, user, { successExpected = fa
   const rental = await Rental.findById(payment.rental);
   if (!rental) throw new HttpError(409, "Booking is missing. Contact support about your payment.");
   if (rentalPaymentMatchesBooking(payment, rental)) return { state: "paid", rental, payment, repeated: true };
-  if (rentalPaymentNeedsReview(payment)) return { state: "review", rental, payment, review: payment.status, repeated: true };
+  if (rentalPaymentNeedsReview(payment)) return { state: payment.status === "refunded" ? "refunded" : "review", rental, payment, review: payment.status, repeated: true };
   if (payment.status !== "paid" && paymentMode() === "disabled") throw new HttpError(503, "Online payments are not available right now. Please try again later.");
+  // A key only sees its own mode: a test-mode checkout cannot be checked with the live key
+  if (payment.status !== "paid" && !inCurrentEnvironment(payment)) throw new HttpError(409, "This payment was started in a different Paystack mode and can no longer be confirmed. Start a new checkout.");
   const status = payment.status === "paid" ? "paid" : await paystackPaymentStatus(payment.reference, payment.amount);
   // A webhook may arrive before the verification API reflects the final result.
   // Keep the booking hold intact and let the caller retry.

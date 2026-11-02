@@ -25,7 +25,7 @@ const q = (value) => {
   return self;
 };
 const plan = (fields) => new Plan({ name: `Plan ${Math.random()}`, price: 100, duration: 30, propertyLimit: 5, imageLimit: 2, ...fields });
-const agent = (fields = {}) => new User({ firstName: "Akua", lastName: "Mensah", email: `${Math.random()}@example.test`, role: "agent", isActive: true, agentApplication: { status: "approved", agentType: "individual" }, ...fields });
+const agent = (fields = {}) => new User({ emailVerifiedAt: new Date(), firstName: "Akua", lastName: "Mensah", email: `${Math.random()}@example.test`, role: "agent", isActive: true, agentApplication: { status: "approved", agentType: "individual" }, ...fields });
 const activeSub = (user, forPlan, fields = {}) => new Subscription({ user: user._id, plan: forPlan, planName: forPlan.name, status: "active", paymentStatus: "paid", amount: forPlan.price, planPrice: forPlan.price, durationDays: forPlan.duration, paymentReference: `R${Math.random()}`, startDate: new Date(NOW.getTime() - 15 * DAY), expiresAt: new Date(NOW.getTime() + 15 * DAY), ...fields });
 const settingsDoc = (agentSettings = { requireSubscription: true }) => q({ key: "platform", agent: agentSettings });
 
@@ -141,7 +141,7 @@ test("the chat API refuses agents whose plan has no chat, whatever the client se
   const sub = activeSub(starterAgent, starterPlan, { startDate: new Date(Date.now() - DAY), expiresAt: new Date(Date.now() + DAY) });
   sub.plan = starterPlan;
   starterAgent.subscription = sub._id;
-  const customer = new User({ firstName: "Ama", lastName: "Owusu", email: "ama@example.test", role: "user", isActive: true });
+  const customer = new User({ emailVerifiedAt: new Date(), firstName: "Ama", lastName: "Owusu", email: "ama@example.test", role: "user", isActive: true });
   const listing = new Property({ title: "Starter listing", owner: starterAgent._id, ownerType: "agent", status: "published", listingType: "Rent", price: 2000 });
   const conversation = new Conversation({ property: listing._id, customer: customer._id, owner: starterAgent._id, ownerType: "agent", status: "open" });
   const users = [customer, starterAgent];

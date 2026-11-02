@@ -17,6 +17,7 @@ import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import EmptyState from "../../components/ui/EmptyState";
 import { formatDate, isWithinDays } from "../../utils/date";
 import { formatPrice, getInitials, getListingStatus } from "../../utils/property";
+import { adminPath } from "../../utils/adminEntry";
 
 const UsageBar = ({ used, limit }) => {
   const pct = limit ? Math.min(100, (used / limit) * 100) : 0;
@@ -75,18 +76,18 @@ const AdminAgents = () => {
 
   const actionsFor = (a) => isGone(a) ? [
     { label: "View agent", icon: Eye, onClick: () => setOpen(a.id) },
-    { label: "View properties", icon: Building2, onClick: () => navigate(`/admin/properties?owner=${a.id}`) },
+    { label: "View properties", icon: Building2, onClick: () => navigate(adminPath(`/properties?owner=${a.id}`)) },
     { label: "Restore agent", icon: RotateCcw, hidden: a.status === "deleted", onClick: () => setRemoval({ type: "restore", agent: a }) },
   ] : [
-    { label: "View application", icon: Eye, onClick: () => navigate(`/admin/agent-applications?open=${a.id}`) },
+    { label: "View application", icon: Eye, onClick: () => navigate(adminPath(`/agent-applications?open=${a.id}`)) },
     { label: "View agent", icon: Eye, onClick: () => setOpen(a.id) },
     { label: "Edit agent", icon: Pencil, onClick: () => setEditing(a) },
     { label: "Change plan", icon: Repeat, onClick: () => setSubAction({ type: "changePlan", agent: a }) },
     { label: "Extend subscription", icon: CalendarPlus, onClick: () => setSubAction({ type: "extend", agent: a }), hidden: !a.subscription },
     { label: "Activate subscription", icon: Zap, onClick: () => setSubAction({ type: "activate", agent: a }), hidden: !a.subscription || a.sub.isActive },
     { label: "Cancel subscription", icon: XCircle, danger: true, onClick: () => setSubAction({ type: "cancel", agent: a }), hidden: !a.sub.isActive },
-    { label: "View properties", icon: Building2, onClick: () => navigate(`/admin/properties?owner=${a.id}`) },
-    { label: "View inquiries", icon: Inbox, onClick: () => navigate(`/admin/inquiries?agent=${a.id}`) },
+    { label: "View properties", icon: Building2, onClick: () => navigate(adminPath(`/properties?owner=${a.id}`)) },
+    { label: "View inquiries", icon: Inbox, onClick: () => navigate(adminPath(`/inquiries?agent=${a.id}`)) },
     a.status === "suspended"
       ? { label: "Activate agent", icon: CheckCircle2, onClick: () => setConfirm({ type: "activate", agent: a }) }
       : { label: "Suspend agent", icon: Ban, danger: true, hidden: a.agentApplication?.status !== "approved", onClick: () => setConfirm({ type: "suspend", agent: a }) },
@@ -280,7 +281,7 @@ const AdminAgents = () => {
             <div>
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-sm font-semibold text-gray-900">Properties ({viewed.properties.length})</p>
-                <Link to={`/admin/properties?owner=${viewed.id}`} className="text-sm font-semibold text-brand-600">Manage</Link>
+                <Link to={adminPath(`/properties?owner=${viewed.id}`)} className="text-sm font-semibold text-brand-600">Manage</Link>
               </div>
               {viewed.properties.length === 0 ? (
                 <p className="text-sm text-gray-500">No properties yet.</p>
@@ -302,7 +303,7 @@ const AdminAgents = () => {
 
             <div className="flex items-center justify-between rounded-lg border border-gray-200 p-4">
               <p className="text-sm text-gray-700"><span className="font-semibold">{viewed.inquiries.length}</span> inquiries received</p>
-              <Link to={`/admin/inquiries?agent=${viewed.id}`} className="text-sm font-semibold text-brand-600">View inquiries</Link>
+              <Link to={adminPath(`/inquiries?agent=${viewed.id}`)} className="text-sm font-semibold text-brand-600">View inquiries</Link>
             </div>
 
             {!isGone(viewed) && <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-5">

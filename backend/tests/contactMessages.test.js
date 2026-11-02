@@ -10,6 +10,7 @@ import Setting from "../models/Setting.js";
 import User from "../models/User.js";
 import contactRoutes from "../routes/contactRoutes.js";
 import adminRoutes from "../routes/adminRoutes.js";
+import { adminEntryHeaders } from "./support/customerTab.js";
 import { createContactMessage } from "../controllers/contactController.js";
 import { originCheck, rejectOperatorKeys } from "../middleware/security.js";
 
@@ -74,7 +75,7 @@ test("anonymous contact submission reaches an admin-only inbox and survives stat
   await new Promise((resolve) => server.once("listening", resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   const token = jwt.sign({ id: String(admin._id), role: "admin", session: "admin" }, process.env.JWT_KEY);
-  const call = (path, { data, method = data ? "POST" : "GET", authenticated = false, headers = {} } = {}) => fetch(base + path, { method, headers: { "Content-Type": "application/json", ...(authenticated ? { Cookie: `admin_token=${token}`, "X-Session-Domain": "admin" } : {}), ...headers }, ...(data ? { body: JSON.stringify(data) } : {}) });
+  const call = (path, { data, method = data ? "POST" : "GET", authenticated = false, headers = {} } = {}) => fetch(base + path, { method, headers: { "Content-Type": "application/json", ...(authenticated ? { Cookie: `admin_token=${token}`, "X-Session-Domain": "admin", ...adminEntryHeaders() } : {}), ...headers }, ...(data ? { body: JSON.stringify(data) } : {}) });
   try {
     await t.test("public submission saves normalized, allowlisted fields and notifies admins", async () => {
       const res = await call("/api/contact", { data: { ...valid, status: "closed", ownerType: "agent", recipient: "forged" } });
@@ -90,7 +91,8 @@ test("anonymous contact submission reaches an admin-only inbox and survives stat
     });
     await t.test("visitors and unrelated role sessions cannot read or modify the inbox", async () => {
       assert.equal((await call("/api/contact")).status, 404);
-      assert.equal((await call("/api/admin/contact-messages")).status, 401);
+      // Without the admin console's private address the inbox does not appear to exist
+      assert.equal((await call("/api/admin/contact-messages")).status, 404);
       for (const role of ["customer", "agent"]) {
         assert.equal((await call("/api/admin/contact-messages", { headers: { "X-Session-Domain": role } })).status, 403);
         assert.equal((await call(`/api/admin/contact-messages/${records[0]._id}/status`, { method: "PATCH", data: { status: "closed" }, headers: { "X-Session-Domain": role } })).status, 403);

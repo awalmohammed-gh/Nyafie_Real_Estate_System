@@ -19,10 +19,10 @@ const chain = (rows) => ({ select: () => chain(rows), sort: () => chain(rows), l
 
 const setup = async (t) => {
   process.env.JWT_KEY = "notification-deletion-test-key";
-  const customer = new User({ firstName: "Ama", lastName: "Owusu", email: "ama@example.test", role: "user", isActive: true });
-  const other = new User({ firstName: "Kofi", lastName: "Boateng", email: "kofi@example.test", role: "user", isActive: true });
-  const agent = new User({ firstName: "Akua", lastName: "Mensah", email: "akua@example.test", role: "agent", isActive: true, agentApplication: { status: "approved" } });
-  const admin = new User({ firstName: "Platform", lastName: "Admin", email: "admin@example.test", role: "admin", isActive: true });
+  const customer = new User({ emailVerifiedAt: new Date(), firstName: "Ama", lastName: "Owusu", email: "ama@example.test", role: "user", isActive: true });
+  const other = new User({ emailVerifiedAt: new Date(), firstName: "Kofi", lastName: "Boateng", email: "kofi@example.test", role: "user", isActive: true });
+  const agent = new User({ emailVerifiedAt: new Date(), firstName: "Akua", lastName: "Mensah", email: "akua@example.test", role: "agent", isActive: true, agentApplication: { status: "approved" } });
+  const admin = new User({ emailVerifiedAt: new Date(), firstName: "Platform", lastName: "Admin", email: "admin@example.test", role: "admin", isActive: true });
   const users = [customer, other, agent, admin];
   const make = (recipient, extra = {}) => ({ _id: new mongoose.Types.ObjectId(), id: "", recipient: recipient?._id ?? null, audience: "user", type: "status", title: "Update", read: false, ...extra });
   let docs = [make(customer), make(customer, { read: true }), make(customer), make(other), make(agent), make(null, { audience: "admins" })];

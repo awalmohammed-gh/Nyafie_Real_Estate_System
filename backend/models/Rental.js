@@ -40,7 +40,7 @@ const rentalSchema = new mongoose.Schema(
     paymentReference: { type: String, unique: true, sparse: true },
     paymentStartedAt: { type: Date },
     paymentMethod: { type: String, default: "Paystack" },
-    paymentStatus: { type: String, enum: ["pending", "paid", "failed"], default: "pending" },
+    paymentStatus: { type: String, enum: ["pending", "paid", "failed", "refunded"], default: "pending" },
     paidAt: { type: Date },
     conversation: { type: mongoose.Schema.Types.ObjectId, ref: "Conversation" },
     history: [historySchema],

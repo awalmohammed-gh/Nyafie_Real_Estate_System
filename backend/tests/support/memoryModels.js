@@ -91,6 +91,7 @@ export const q = (value) => {
     then: promise.then.bind(promise),
     catch: promise.catch.bind(promise),
     select: () => self,
+    session: () => self,
     populate: () => self,
     sort: () => self,
     limit: () => self,

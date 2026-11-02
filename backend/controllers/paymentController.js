@@ -10,6 +10,7 @@ import { initializeHotelPayment } from "./hotelPaymentController.js";
 import { recordFailedRentalPayment } from "../utils/confirmRentalPayment.js";
 import { processRentalPayment } from "../utils/rentalPaymentProcessing.js";
 import { prepareRentalCheckout } from "../utils/prepareRentalCheckout.js";
+import { REFUND_SUMMARY } from "./refundController.js";
 
 const rentalResult = async (rentalId, user) => presentRental(await populateRental(Rental.findById(rentalId)), user);
 
@@ -68,6 +69,7 @@ export const verifyPayment = async (req, res) => {
     });
   }
   if (outcome.state === "failed") return fail(res, 402, "Your payment was not completed. Your rental has not been confirmed.");
+  if (outcome.state === "refunded") return fail(res, 409, "This payment has been refunded. Start a new booking if you still want this property.");
   if (outcome.state === "review") {
     const message = outcome.review === "duplicate"
       ? `This rental was already paid. Contact ${siteName()} about the duplicate payment refund; do not pay again.`
@@ -84,6 +86,7 @@ export const listPayments = async (_req, res) => {
     .populate("customer", "firstName lastName email")
     .populate("property", "title")
     .populate("owner", "firstName lastName")
-    .populate("confirmedBy", "firstName lastName");
+    .populate("confirmedBy", "firstName lastName")
+    .populate("refund", REFUND_SUMMARY);
   ok(res, payments);
 };

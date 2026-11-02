@@ -1,18 +1,21 @@
+import { adminPath, isAdminPath } from "./adminEntry.js";
+
 // Public browsing uses customer auth; selected agent auth and onboarding use agent auth.
 export const sessionDomainForPath = (pathname, search = "") => {
   if (["/login", "/register"].includes(pathname) && new URLSearchParams(search).get("account") === "agent") return "agent";
-  if (/^\/admin(?:\/|$)/.test(pathname)) return "admin";
+  if (isAdminPath(pathname)) return "admin";
   if (pathname === "/agent" || /^\/agent\/(?:login|register|onboarding|status|checkout|dashboard|properties|inquiries|offers|rentals|sale-requests|messages|subscription|profile|settings|team|join)(?:\/|$)/.test(pathname)) return "agent";
   return "customer";
 };
 
 export const sessionRole = { customer: "user", agent: "agent", admin: "admin" };
-export const sessionHome = { customer: "/", agent: "/agent/dashboard", admin: "/admin/dashboard" };
-export const sessionLogin = { customer: "/login", agent: "/agent/login", admin: "/admin/login" };
+// Getters: the admin console's address is only known once this tab has opened it
+export const sessionHome = { customer: "/", agent: "/agent/dashboard", get admin() { return adminPath("/dashboard"); } };
+export const sessionLogin = { customer: "/login", agent: "/agent/login", get admin() { return adminPath("/login"); } };
 export const sessionDestination = (domain, from) => {
   if (typeof from !== "string" || !from.startsWith("/") || from.startsWith("//") || from.includes("\\")) return sessionHome[domain];
   const url = new URL(from, "https://homebase.invalid");
-  if (["/login", "/register", "/agent/login", "/agent/register", "/admin/login"].includes(url.pathname)) return sessionHome[domain];
+  if (["/login", "/register", "/agent/login", "/agent/register", adminPath("/login")].includes(url.pathname)) return sessionHome[domain];
   return sessionDomainForPath(url.pathname, url.search) === domain ? url.pathname + url.search + url.hash : sessionHome[domain];
 };
 

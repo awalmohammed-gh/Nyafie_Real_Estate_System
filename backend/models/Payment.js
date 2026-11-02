@@ -19,12 +19,16 @@ const paymentSchema = new mongoose.Schema(
     method: { type: String, enum: ["Paystack", "Test payment", "Office"], required: true },
     reference: { type: String, required: true, unique: true },
     // duplicate: a second successful charge for something already paid (needs a refund)
-    status: { type: String, enum: ["pending", "paid", "failed", "duplicate", "refund_required"], default: "pending", index: true },
+    // refunded: the whole amount went back to the customer (see the Refund ledger)
+    status: { type: String, enum: ["pending", "paid", "failed", "duplicate", "refund_required", "refunded"], default: "pending", index: true },
+    environment: { type: String, enum: ["test", "live", null], default: null }, // Paystack mode at checkout; null = before modes were stored (test)
     authorizationUrl: { type: String, default: "" }, // reused if the customer clicks Pay again during the same checkout
     paidAt: { type: Date },
     confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // office payments
     note: { type: String, default: "" },
     nextReconcileAt: { type: Date, default: null },
+    refund: { type: mongoose.Schema.Types.ObjectId, ref: "Refund", default: null }, // the latest refund attempt
+    refundStatus: { type: String, default: null }, // mirrors that refund; claims one refund at a time
   },
   schemaOptions
 );

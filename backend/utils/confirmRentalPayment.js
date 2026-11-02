@@ -6,7 +6,8 @@ import { addHistory } from "../controllers/rentalController.js";
 import { formatGHS } from "./ownership.js";
 import { hasRentalConflict, lockRentalProperty } from "./rentalAvailability.js";
 
-export const rentalPaymentNeedsReview = (payment) => ["duplicate", "refund_required"].includes(payment.status);
+// Settled outside a normal booking: flagged for a refund, or already refunded. Never re-confirmed.
+export const rentalPaymentNeedsReview = (payment) => ["duplicate", "refund_required", "refunded"].includes(payment.status);
 
 export const rentalPaymentMatchesBooking = (payment, rental) =>
   payment.status === "paid" && rental.paymentStatus === "paid" && rental.paymentReference === payment.reference;

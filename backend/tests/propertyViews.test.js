@@ -13,7 +13,7 @@ const query = (value) => ({
   select: () => query(value), sort: () => query(value), populate: () => query(value), lean: () => Promise.resolve(value),
 });
 const response = () => ({ code: 200, status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } });
-const person = (fields) => new User({ firstName: "Test", lastName: "Person", phone: "+233200000000", email: `${Math.random()}@example.test`, password: "password123", ...fields });
+const person = (fields) => new User({ emailVerifiedAt: new Date(), firstName: "Test", lastName: "Person", phone: "+233200000000", email: `${Math.random()}@example.test`, password: "password123", ...fields });
 const admin = person({ role: "admin" });
 const company = person({ role: "agent", isActive: true, agentApplication: { status: "approved", agentType: "company" } });
 const staff = person({ role: "agent", isActive: true, agentApplication: { status: "approved" }, agency: { owner: company._id, role: "agent" } });

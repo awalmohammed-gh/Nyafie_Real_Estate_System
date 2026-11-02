@@ -12,7 +12,7 @@ export const createInquiry = async (req, res) => {
   // Strings only, trimmed and length-limited: objects, arrays and oversized text are refused
   const str = (value) => (typeof value === "string" ? value.trim() : "");
   const name = str(req.body.name);
-  const email = str(req.body.email).toLowerCase();
+  const email = req.user.email;
   const phone = str(req.body.phone);
   const message = str(req.body.message);
   if (!name || !message) return fail(res, 400, "Name and message are required.");

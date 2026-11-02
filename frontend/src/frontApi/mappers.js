@@ -70,6 +70,33 @@ export const mapSubscription = (s) =>
     : null;
 
 // Subscription records double as the payment ledger for admin reports
+// ---------- Refunds of flagged payments ----------
+const REFUND_LABEL = {
+  submitting: "Sending refund",
+  unconfirmed: "Refund unconfirmed",
+  pending: "Refund pending",
+  processing: "Refund processing",
+  "needs-attention": "Refund needs attention",
+  processed: "Refunded",
+  failed: "Refund failed",
+};
+export const mapRefund = (r) =>
+  r && typeof r === "object"
+    ? {
+        id: r.id || r._id,
+        status: r.status,
+        label: REFUND_LABEL[r.status] || r.status,
+        method: r.method,
+        amount: r.amount,
+        providerRefundId: r.providerRefundId || "",
+        externalReference: r.externalReference || "",
+        reason: r.reason || "",
+        failureReason: r.failureReason || "",
+        processedAt: r.processedAt,
+        createdAt: r.createdAt,
+      }
+    : null;
+
 export const mapPayment = (s) => ({
   id: s.id,
   userId: idOf(s.user),
@@ -77,6 +104,9 @@ export const mapPayment = (s) => ({
   amount: s.amount,
   method: s.paymentMethod,
   status: s.paymentStatus,
+  note: s.note || "",
+  environment: s.environment || "test",
+  refund: mapRefund(s.refund),
   createdAt: s.paidAt || s.createdAt,
   reference: s.paymentReference,
 });
@@ -304,7 +334,7 @@ export const RENTAL_STATUS = {
   completed: "Completed",
   cancelled: "Cancelled",
 };
-const PAYMENT_STATUS = { pending: "Pending", paid: "Paid", failed: "Failed", duplicate: "Duplicate" };
+const PAYMENT_STATUS = { pending: "Pending", paid: "Paid", failed: "Failed", duplicate: "Duplicate", refunded: "Refunded" };
 
 export const mapRental = (r) => ({
   id: r.id,
@@ -389,6 +419,9 @@ export const mapPaymentRecord = (p) => ({
   amount: p.amount,
   method: p.method,
   status: p.status === "refund_required" ? "Refund required" : PAYMENT_STATUS[p.status] || p.status,
+  statusKey: p.status,
+  environment: p.environment || "test",
+  refund: mapRefund(p.refund),
   customer: p.customer?.firstName ? `${p.customer.firstName} ${p.customer.lastName}` : "Deleted user",
   property: p.property?.title || "Removed property",
   ownerType: p.ownerType,

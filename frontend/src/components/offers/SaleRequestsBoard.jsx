@@ -22,6 +22,7 @@ import { SALE_STATUS } from "../../frontApi/mappers";
 import { formatDate, formatRelative, isWithinDays } from "../../utils/date";
 import { toWhatsAppNumber } from "../../utils/whatsapp";
 import { usePlatform } from "../../context/usePlatform";
+import { adminPath } from "../../utils/adminEntry";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 const CLOSED = ["completed", "cancelled", "rejected"];
@@ -78,7 +79,7 @@ const SaleRequestsBoard = ({ scope }) => {
   const open = openId && requests.find((r) => r.id === openId);
   const closed = open && CLOSED.includes(open.statusKey);
   const paymentConfirmed = open?.paymentStatusKey === "confirmed";
-  const chatLink = open?.conversationId && (isAdmin ? open.ownerType === "admin" && `/admin/messages?c=${open.conversationId}` : `/agent/messages?c=${open.conversationId}`);
+  const chatLink = open?.conversationId && (isAdmin ? open.ownerType === "admin" && adminPath(`/messages?c=${open.conversationId}`) : `/agent/messages?c=${open.conversationId}`);
   const whatsapp = open && toWhatsAppNumber(open.contactPhone);
 
   const replace = (updated) => {

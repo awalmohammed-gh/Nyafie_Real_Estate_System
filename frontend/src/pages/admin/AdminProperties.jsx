@@ -20,6 +20,7 @@ import { useViewMode } from "../../hooks/useViewMode";
 import PropertyTile from "../../components/dashboard/PropertyTile";
 import ViewToggle from "../../components/dashboard/ViewToggle";
 import { propertyCardImageSources } from "../../utils/propertyImages";
+import { adminPath } from "../../utils/adminEntry";
 import "./adminProperties.css";
 
 const priceOf = (property) => {
@@ -165,7 +166,7 @@ const AdminProperties = () => {
     const state = p.listing.state;
     return [
     { label: "View property", icon: Eye, onClick: () => setParam("open", p.id) },
-    { label: "Edit property", icon: Pencil, onClick: () => (own ? navigate(`/admin/properties/${p.id}/edit`) : setEditing(p)) },
+    { label: "Edit property", icon: Pencil, onClick: () => (own ? navigate(adminPath(`/properties/${p.id}/edit`)) : setEditing(p)) },
     { label: "Publish", icon: CheckCircle2, onClick: () => run(setListingState(p.id, "published"), { success: "Property published", description: p.title }), hidden: !own || state === "published" },
     { label: "Unpublish", icon: EyeOff, onClick: () => run(setListingState(p.id, "draft"), { success: "Moved to drafts", description: p.title }), hidden: !own || state !== "published" },
     { label: `Mark as ${soldLabel(p).toLowerCase()}`, icon: Tag, onClick: () => setAvailability(p, soldLabel(p)), hidden: !own || p.listing.availability === soldLabel(p) },
@@ -226,7 +227,7 @@ const AdminProperties = () => {
     <div className="admin-properties">
       <header className="ap-heading">
         <div><p className="ap-eyebrow"><span />PROPERTY WORKSPACE</p><h1>Your property portfolio<span>.</span></h1><p>Keep every listing in view. Review, publish, and make room for what’s next.</p></div>
-        <div className="ap-heading-actions"><Link to={paths.listings} className="ap-public-link">View marketplace<ArrowUpRight size={16} aria-hidden="true" /></Link><Link to="/admin/properties/add" className="btn btn-primary"><Plus size={17} aria-hidden="true" />Add property</Link></div>
+        <div className="ap-heading-actions"><Link to={paths.listings} className="ap-public-link">View marketplace<ArrowUpRight size={16} aria-hidden="true" /></Link><Link to={adminPath("/properties/add")} className="btn btn-primary"><Plus size={17} aria-hidden="true" />Add property</Link></div>
       </header>
 
       <section className="ap-summary" aria-label="Property overview">{summary.map(({ id, label, icon: Icon, note, tone }) => (
@@ -278,7 +279,7 @@ const AdminProperties = () => {
       {view === "grid" ? (
         rows.length === 0 ? (
           listings.length === 0 ? (
-            <EmptyState icon={Building2} title="No properties yet" description="Properties added to the platform will appear here." action={<Link to="/admin/properties/add" className="btn btn-primary px-3.5 py-2"><Plus className="h-4 w-4" />Add Property</Link>} />
+            <EmptyState icon={Building2} title="No properties yet" description="Properties added to the platform will appear here." action={<Link to={adminPath("/properties/add")} className="btn btn-primary px-3.5 py-2"><Plus className="h-4 w-4" />Add Property</Link>} />
           ) : (
             <EmptyState icon={Building2} title="No matching properties" description="Try another area, owner, or listing status." action={<button type="button" onClick={resetFilters} className="btn btn-light">Clear filters</button>} />
           )
@@ -303,7 +304,7 @@ const AdminProperties = () => {
         rows={rows}
         minWidth={980}
         onRowClick={(p) => setParam("open", p.id)}
-        empty={<EmptyState icon={Building2} title={listings.length ? "No matching properties" : "No properties yet"} description={listings.length ? "Try another area, owner, or listing status." : "Add your first property to start your portfolio."} action={filtered ? <button type="button" onClick={resetFilters} className="btn btn-light">Clear filters</button> : <Link to="/admin/properties/add" className="btn btn-primary">Add property</Link>} />}
+        empty={<EmptyState icon={Building2} title={listings.length ? "No matching properties" : "No properties yet"} description={listings.length ? "Try another area, owner, or listing status." : "Add your first property to start your portfolio."} action={filtered ? <button type="button" onClick={resetFilters} className="btn btn-light">Clear filters</button> : <Link to={adminPath("/properties/add")} className="btn btn-primary">Add property</Link>} />}
         mobileCard={(p) => (
           <div className="flex gap-3">
             <img src={p.media.images[0]} alt="" className="h-20 w-24 shrink-0 rounded-xl object-cover" />

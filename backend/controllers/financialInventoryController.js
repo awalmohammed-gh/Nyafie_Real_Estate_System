@@ -1,10 +1,10 @@
 import Payment from "../models/Payment.js";
 import Subscription from "../models/Subscription.js";
-import { paymentStatus } from "../utils/paystack.js";
+import { paymentStatus, providerScope } from "../utils/paystack.js";
 import { ok, HttpError } from "../utils/response.js";
 
 const SECTORS = ["rental", "hotel", "sale", "subscription"];
-const STATUSES = ["paid", "pending", "failed", "review"];
+const STATUSES = ["paid", "pending", "failed", "review", "refunded"];
 // Match checkout's Math.round(amount * 100), including half-pesewa values.
 const minor = { $toLong: { $floor: { $add: [{ $multiply: ["$amount", 100] }, 0.5] } } };
 const day = (value, label) => {
@@ -36,7 +36,8 @@ export const financialInventory = async (req, res) => {
   const at = { ...(from ? { $gte: from } : {}), $lt: to ? new Date(to.getTime() + 86400000) : new Date(now.getTime() + 1) };
   const ledgerFilter = { ...(sector !== "all" ? { sector } : {}), ...(status !== "all" ? { state: status } : {}), ...(search.trim() ? { reference: { $regex: search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } } : {}) };
   const [result] = await Payment.aggregate([
-    { $match: { amount: { $gt: 0 }, method: { $ne: "Test payment" }, currency: { $in: ["GHS", null] } } },
+    // Only the current Paystack mode: test checkouts never mix with live money
+    { $match: { amount: { $gt: 0 }, method: { $ne: "Test payment" }, currency: { $in: ["GHS", null] }, ...providerScope() } },
     { $lookup: { from: "rentals", localField: "rental", foreignField: "_id", pipeline: [{ $project: { hotelId: 1, roomTypeId: 1 } }], as: "booking" } },
     { $lookup: { from: "properties", localField: "property", foreignField: "_id", pipeline: [{ $project: { title: 1, propertyType: 1 } }], as: "listing" } },
     { $project: {
@@ -46,8 +47,8 @@ export const financialInventory = async (req, res) => {
       state: { $cond: [{ $in: ["$status", ["duplicate", "refund_required"]] }, "review", "$status"] },
     } },
     { $unionWith: { coll: Subscription.collection.name, pipeline: [
-      { $match: { amount: { $gt: 0 }, paymentStatus: { $in: ["paid", "pending", "failed"] }, paymentMethod: { $nin: ["Test payment", "Plan credit"] } } },
-      { $project: { source: { $literal: "subscription" }, sector: { $literal: "subscription" }, reference: "$paymentReference", amountMinor: minor, at: { $ifNull: ["$paidAt", "$createdAt"] }, method: "$paymentMethod", state: "$paymentStatus", account: "$user", subject: "$planName", ownerType: { $literal: "admin" } } },
+      { $match: { amount: { $gt: 0 }, paymentStatus: { $in: ["paid", "pending", "failed", "refund_required", "refunded"] }, paymentMethod: { $nin: ["Test payment", "Plan credit"] }, ...providerScope("paymentMethod") } },
+      { $project: { source: { $literal: "subscription" }, sector: { $literal: "subscription" }, reference: "$paymentReference", amountMinor: minor, at: { $ifNull: ["$paidAt", "$createdAt"] }, method: "$paymentMethod", state: { $cond: [{ $eq: ["$paymentStatus", "refund_required"] }, "review", "$paymentStatus"] }, account: "$user", subject: "$planName", ownerType: { $literal: "admin" } } },
     ] } },
     { $match: { at } },
     { $facet: {
@@ -58,8 +59,8 @@ export const financialInventory = async (req, res) => {
         { $project: { source: 1, reference: 1, amountMinor: 1, at: 1, method: 1, state: 1, sector: 1, subject: 1, ownerType: 1, name: { $trim: { input: { $concat: [{ $ifNull: [{ $arrayElemAt: ["$person.firstName", 0] }, ""] }, " ", { $ifNull: [{ $arrayElemAt: ["$person.lastName", 0] }, ""] }] } } } } }],
     } },
   ]);
-  const sectors = SECTORS.map(key => ({ key, paid: 0, pending: 0, failed: 0, review: 0, paidCount: 0, pendingCount: 0, failedCount: 0, reviewCount: 0 }));
-  const totals = { paid: 0, pending: 0, failed: 0, review: 0, paidCount: 0, pendingCount: 0, failedCount: 0, reviewCount: 0 };
+  const sectors = SECTORS.map(key => ({ key, paid: 0, pending: 0, failed: 0, review: 0, refunded: 0, paidCount: 0, pendingCount: 0, failedCount: 0, reviewCount: 0, refundedCount: 0 }));
+  const totals = { paid: 0, pending: 0, failed: 0, review: 0, refunded: 0, paidCount: 0, pendingCount: 0, failedCount: 0, reviewCount: 0, refundedCount: 0 };
   for (const group of result.summary) {
     const item = sectors.find(item => item.key === group._id.sector);
     if (!item || !STATUSES.includes(group._id.status)) continue;

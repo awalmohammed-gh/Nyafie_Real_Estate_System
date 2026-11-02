@@ -18,6 +18,7 @@ import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { offerApi } from "../../frontApi";
 import { formatDate, formatRelative, isWithinDays } from "../../utils/date";
 import { toWhatsAppNumber } from "../../utils/whatsapp";
+import { adminPath } from "../../utils/adminEntry";
 
 const STATUSES = ["Pending", "Countered", "Accepted", "Rejected", "Withdrawn"];
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
@@ -60,7 +61,7 @@ const OffersBoard = ({ scope }) => {
   const open = openId && offers.find((o) => o.id === openId);
   const canRespond = open && (open.status === "Pending" || open.status === "Countered");
   // The admin inbox only holds chats about HomeBase listings
-  const chatLink = open && (isAdmin ? open.ownerType === "admin" && `/admin/messages?c=${open.conversationId}` : `/agent/messages?c=${open.conversationId}`);
+  const chatLink = open && (isAdmin ? open.ownerType === "admin" && adminPath(`/messages?c=${open.conversationId}`) : `/agent/messages?c=${open.conversationId}`);
   const whatsapp = open?.customer.phone && toWhatsAppNumber(open.customer.phone);
 
   const replace = (updated) => {

@@ -30,6 +30,7 @@ import { useScrim } from "../../hooks/useScrim";
 import { useToast } from "../../context/useToast";
 import UserAvatar from "./UserAvatar";
 import { canAccessAgent } from "../../utils/sessionDomain";
+import { adminPath } from "../../utils/adminEntry";
 
 const userItems = [
   { label: "My Profile", to: "/account/profile", icon: UserRound },
@@ -44,10 +45,10 @@ const userItems = [
 ];
 
 const adminItems = [
-  { label: "Admin Dashboard", to: "/admin/dashboard", icon: ShieldCheck, highlight: true },
-  { label: "Review properties", to: "/admin/properties?status=pending", icon: ClipboardCheck },
-  { label: "Messages", to: "/admin/messages", icon: MessageCircle },
-  { label: "Platform settings", to: "/admin/settings", icon: SlidersHorizontal },
+  { label: "Admin Dashboard", to: adminPath("/dashboard"), icon: ShieldCheck, highlight: true },
+  { label: "Review properties", to: adminPath("/properties?status=pending"), icon: ClipboardCheck },
+  { label: "Messages", to: adminPath("/messages"), icon: MessageCircle },
+  { label: "Platform settings", to: adminPath("/settings"), icon: SlidersHorizontal },
 ];
 
 const agentItems = [

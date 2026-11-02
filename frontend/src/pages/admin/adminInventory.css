@@ -11,7 +11,7 @@
 .inventory-dates label { display: grid; gap: 6px; }
 .inventory-dates > p { flex-basis: 100%; color: #ad334c; font-size: 12px; }
 .inventory-test-note { padding: 12px 16px; border: 1px solid #eedbb1; border-radius: 10px; background: #fff8e9; color: #8b652c; font-size: 12px; line-height: 1.8; }
-.inventory-totals { display: grid; grid-template-columns: 1.3fr repeat(3,minmax(0,1fr)); gap: 14px; }
+.inventory-totals { display: grid; grid-template-columns: 1.3fr repeat(4,minmax(0,1fr)); gap: 14px; }
 .inventory-total { min-width: 0; padding: 22px 20px; border: 1px solid #e7e0ee; border-radius: 14px; background: white; }
 .inventory-total > p { font-size: 12px; color: #796686; }
 .inventory-total > strong { display: block; margin: 10px 0; overflow-wrap: anywhere; font-size: 26px; font-weight: 650; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
@@ -50,6 +50,7 @@
 .inventory-status.status-pending { background: #fff4dd; color: #92702e; }
 .inventory-status.status-failed { background: #fff0f1; color: #a74355; }
 .inventory-status.status-review { background: #f9eefd; color: #9352a4; }
+.inventory-status.status-refunded { background: #eef2f7; color: #475569; }
 .inventory-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 23px; border-top: 1px solid #eee7f3; font-size: 11px; color: #776083; }
 .inventory-pagination > div { display: flex; gap: 8px; }
 .inventory-pagination button { display: inline-flex; align-items: center; gap: 4px; min-height: 35px; padding: 5px 9px; border: 1px solid #e8dfee; border-radius: 6px; color: #785c8a; }

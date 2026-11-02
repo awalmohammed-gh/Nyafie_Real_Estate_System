@@ -3,6 +3,7 @@ import { customerTabHeaders } from "./support/customerTab.js";
 import assert from "node:assert/strict";
 import express from "express";
 import cookieParser from "cookie-parser";
+import mongoose from "mongoose";
 import User from "../models/User.js";
 import Subscription from "../models/Subscription.js";
 import Plan from "../models/Plan.js";
@@ -32,6 +33,7 @@ test("agent permission and return navigation fail closed", () => {
 });
 
 test("agent registration, onboarding, payment and admin review use real HTTP guards", async (t) => {
+  t.mock.method(mongoose.connection, "transaction", async (work) => work({}));
   process.env.JWT_KEY = "agent-application-regression-key";
   const users = [];
   const subscriptions = [];
@@ -39,7 +41,7 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
   const originals = [];
   const replace = (model, method, fn) => { originals.push([model, method, model[method]]); model[method] = fn; };
   const id = (value) => String(value?._id || value);
-  const query = (value) => ({ then: (yes, no) => Promise.resolve(value).then(yes, no), catch: (no) => Promise.resolve(value).catch(no), select: () => query(value), populate: () => query(value), sort: () => query(value), lean: () => Promise.resolve(value) });
+  const query = (value) => ({ then: (yes, no) => Promise.resolve(value).then(yes, no), catch: (no) => Promise.resolve(value).catch(no), session: () => query(value), select: () => query(value), populate: () => query(value), sort: () => query(value), lean: () => Promise.resolve(value) });
   const matches = (user, filter) => Object.entries(filter).every(([key, value]) => {
     if (key === "$or") return value.some((choice) => matches(user, choice));
     const current = key.split(".").reduce((object, part) => object?.[part], user);
@@ -55,7 +57,7 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
     users.push(user);
     return user;
   };
-  const customer = await create({ firstName: "Customer", lastName: "Test", email: "customer@example.test", password: "password123", role: "user" });
+  const customer = await create({ emailVerifiedAt: new Date(), firstName: "Customer", lastName: "Test", email: "customer@example.test", password: "password123", role: "user" });
   const admin = await create({ firstName: "Admin", lastName: "Test", email: "admin@example.test", password: "password123", role: "admin" });
   const plan = new Plan({ name: "Test plan", price: 100, duration: 30, propertyLimit: 10, imageLimit: 10 });
   replace(User, "exists", async (filter) => users.some((user) => matches(user, filter)));
@@ -147,6 +149,7 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
       assert.equal((await call("/api/agents/application", "agent", profile, "PUT")).status, 409);
       assert.equal((await call("/api/subscriptions/verify", "agent", { reference: "unknown" })).status, 404);
       const forged = new Subscription({ user: customer._id, plan: plan._id, planName: plan.name, amount: 100, paymentReference: "CUSTOMER" });
+      subscriptions.push(forged);
       await assert.rejects(activateSubscription(forged), /agent account/);
       assert.equal(customer.role, "user");
     });
@@ -219,7 +222,7 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
       assert.equal(second.agentApplication.approvedBy, null);
     });
     await t.test("restoring a legacy suspended identity resumes onboarding without approval", async () => {
-      const legacy = await User.create({ firstName: "Legacy", lastName: "Agent", email: "legacy@example.test", password: signup.password, role: "agent", isActive: false });
+      const legacy = await User.create({ emailVerifiedAt: new Date(), firstName: "Legacy", lastName: "Agent", email: "legacy@example.test", password: signup.password, role: "agent", isActive: false });
       const path = `/api/admin/agent-applications/${id(legacy)}`;
       assert.equal((await call(path, "admin", { action: "reactivate" }, "PATCH")).status, 200);
       assert.equal(legacy.isActive, true);
@@ -230,12 +233,13 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
     });
     await t.test("customer registration remains customer-only even with forged agent fields", async () => {
       const response = await call("/api/auth/customer/register", "customer", { firstName: "New", lastName: "Customer", email: "new-customer@example.test", password: "password123", role: "agent", isActive: false, agentApplication: { status: "approved" } });
-      assert.equal(response.status, 201);
-      const account = (await response.json()).data;
+      assert.equal(response.status, 202);
+      assert.equal((await response.json()).data.verificationRequired, true);
+      const account = users.find((user) => user.email === "new-customer@example.test");
       assert.equal(account.role, "user"); assert.equal(account.isActive, true);
       assert.equal(account.agentApplication, undefined);
-      assert.equal(response.headers.getSetCookie().length, 1);
-      assert.match(response.headers.getSetCookie()[0], /^customer_token=/);
+      assert.equal(account.emailVerifiedAt, null);
+      assert.ok(response.headers.getSetCookie().every((cookie) => !cookie.includes("customer_token=ey")));
     });
   } finally {
     await new Promise((resolve) => server.close(resolve));

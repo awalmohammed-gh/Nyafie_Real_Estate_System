@@ -21,7 +21,7 @@ test("password changes revoke older sessions while renewing only the requesting 
   await Setting.create({ key: "platform", agent: { requireSubscription: false } });
   const accounts = {};
   for (const [session, role] of Object.entries(SESSION_ROLES)) {
-    accounts[session] = await User.create({ firstName: "Session", lastName: session, email: `${session}@sessions.test`, password: "OriginalPassword123", role, ...(role === "agent" ? { agentApplication: { status: "approved" } } : {}) });
+    accounts[session] = await User.create({ emailVerifiedAt: new Date(), firstName: "Session", lastName: session, email: `${session}@sessions.test`, password: "OriginalPassword123", role, ...(role === "agent" ? { agentApplication: { status: "approved" } } : {}) });
   }
   const app = express();
   app.use(express.json(), cookieParser());

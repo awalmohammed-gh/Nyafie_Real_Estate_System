@@ -3,6 +3,7 @@ import { LogOut } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { useToast } from "../../context/useToast";
 import { getInitials } from "../../utils/property";
+import { adminPath } from "../../utils/adminEntry";
 
 // Signed-in account at the bottom of the dashboard sidebar, with its role and a logout button
 const SidebarAccount = ({ roleLabel, tone = "light" }) => {
@@ -16,7 +17,7 @@ const SidebarAccount = ({ roleLabel, tone = "light" }) => {
     try {
       await logout();
       toast({ title: "You've been signed out", type: "info" });
-      navigate(user.role === "admin" ? "/admin/login" : "/agent/login");
+      navigate(user.role === "admin" ? adminPath("/login") : "/agent/login");
     } catch (error) {
       toast({ title: "Could not sign out", description: error.message, type: "error" });
     }

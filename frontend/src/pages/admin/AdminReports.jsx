@@ -7,6 +7,7 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import { adminApi } from "../../frontApi";
 import { BarChart } from "../../components/ui/Charts";
 import { buildAdminReport, sumReportValues } from "../../utils/adminReport";
+import { adminPath } from "../../utils/adminEntry";
 import "./adminReports.css";
 
 const loadReport = async () => ({ ...await adminApi.getReportSnapshot(), generatedAt: new Date().toISOString() });
@@ -44,7 +45,7 @@ const SubscriptionHealth = ({ report }) => {
     <header className="reports-panel-heading"><div><p className="reports-eyebrow">Right now</p><h2 id="subscription-health-heading">Subscription health</h2><p>Current agents, across all periods</p></div></header>
     <div className="reports-donut" role="img" aria-label={rows.map(row => `${row.label}: ${row.value}`).join(", ")} style={{ background: total ? `conic-gradient(${gradient})` : "#eeedf3" }}><div><strong>{total ? Math.round(active / total * 100) : 0}%</strong><span>of agents active</span></div></div>
     <dl className="reports-health-legend">{rows.map(row => <div key={row.label}><dt><span style={{backgroundColor:row.color}} />{row.label}</dt><dd>{count(row.value)}<span>{total ? Math.round(row.value / total * 100) : 0}%</span></dd></div>)}</dl>
-    <Link to="/admin/subscriptions" className="reports-panel-link">Manage subscriptions<ChevronRight size={15} aria-hidden="true" /></Link>
+    <Link to={adminPath("/subscriptions")} className="reports-panel-link">Manage subscriptions<ChevronRight size={15} aria-hidden="true" /></Link>
   </section>;
 };
 

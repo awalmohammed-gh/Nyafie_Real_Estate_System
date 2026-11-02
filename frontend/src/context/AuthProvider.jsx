@@ -60,7 +60,9 @@ export const AuthProvider = ({ children, domain }) => {
 
   const login = useCallback(async (credentials) => {
     ++revision.current;
-    const next = checkRole(await api.login(credentials));
+    const result = await api.login(credentials);
+    if (result?.verificationRequired) { ++revision.current; setUser(null); setReady(true); return result; }
+    const next = checkRole(result);
     ++revision.current; // Ignore an older bootstrap/focus response arriving after login.
     setUser(next);
     setReady(true);
@@ -69,12 +71,41 @@ export const AuthProvider = ({ children, domain }) => {
 
   const register = useCallback(async (details) => {
     ++revision.current;
-    const next = checkRole(await api.register(details));
+    const result = await api.register(details);
+    if (result?.verificationRequired) { ++revision.current; setUser(null); setReady(true); return result; }
+    const next = checkRole(result);
     ++revision.current;
     setUser(next);
     setReady(true);
     return next;
   }, [api, checkRole]);
+
+  const verifyEmail = useCallback(async (challenge, code) => {
+    ++revision.current;
+    const next = checkRole(await api.verifyEmail(challenge, code));
+    ++revision.current;
+    setUser(next);
+    setReady(true);
+    return next;
+  }, [api, checkRole]);
+  const resendVerification = useCallback((challenge) => api.resendVerification(challenge), [api]);
+  const requestPasswordReset = useCallback((email) => api.requestPasswordReset(email), [api]);
+  const googleLogin = useCallback(async (credential, challenge) => {
+    ++revision.current;
+    const next = checkRole(await api.googleLogin(credential, challenge));
+    ++revision.current;
+    setUser(next);
+    setReady(true);
+    return next;
+  }, [api, checkRole]);
+  const resetPassword = useCallback(async (email, code, newPassword) => {
+    ++revision.current;
+    const result = await api.resetPassword(email, code, newPassword);
+    ++revision.current;
+    setUser(null);
+    setReady(true);
+    return result;
+  }, [api]);
 
   const logout = useCallback(async () => {
     ++revision.current;
@@ -139,6 +170,11 @@ export const AuthProvider = ({ children, domain }) => {
       login,
       adminLogin: domain === "admin" ? login : undefined,
       register,
+      verifyEmail,
+      resendVerification,
+      requestPasswordReset,
+      resetPassword,
+      googleLogin,
       logout,
       refreshUser,
       refreshUsers,
@@ -148,7 +184,7 @@ export const AuthProvider = ({ children, domain }) => {
       removeProfilePhoto,
       admin,
     }),
-    [domain, user, users, ready, isAdmin, login, register, logout, refreshUser, refreshUsers, updateProfile, changePassword, uploadProfilePhoto, removeProfilePhoto, admin]
+    [domain, user, users, ready, isAdmin, login, register, verifyEmail, resendVerification, requestPasswordReset, resetPassword, googleLogin, logout, refreshUser, refreshUsers, updateProfile, changePassword, uploadProfilePhoto, removeProfilePhoto, admin]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

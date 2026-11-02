@@ -11,12 +11,12 @@ import { ACCOUNT_LABELS, isOrganization } from "../utils/accountTypes.js";
 import { notifyAdmins, notifyUser } from "../utils/notify.js";
 import { ok, fail } from "../utils/response.js";
 import { loadUser } from "./authController.js";
-import { reconcileLatestPayment } from "./subscriptionController.js";
+import { reconcileOpenPayments } from "./subscriptionController.js";
 
-// GET /api/agents/application -> the onboarding status page. Re-checks an unfinished payment with
+// GET /api/agents/application -> the onboarding status page. Re-checks unfinished payments with
 // Paystack first, and submits the application for review once profile and subscription are done.
 export const getApplication = async (req, res) => {
-  await reconcileLatestPayment(req.user);
+  await reconcileOpenPayments(req.user);
   await submitReadyApplication(await User.findById(req.user._id));
   const user = await User.findById(req.user._id);
   ok(res, {

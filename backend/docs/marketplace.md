@@ -119,9 +119,16 @@ failures and the complete 30-minute deadline without waiting in real time.
   Refund flags require admin handling; this flow does not issue provider refunds.
 - Payment and booking saves commit together. MongoDB must support transactions
   (Atlas or a replica set), as required by hotel bookings too.
-- Only payment-provider verification can confirm rental payment. The existing
-  Paystack integration supports **test keys only**. Production charges have not
-  been enabled by this change. Customer and owner notifications remain in place.
+- Only payment-provider verification can confirm rental payment. Paystack runs in
+  test mode unless `PAYSTACK_MODE=live` is set with a live key and `CRON_SECRET`
+  (see the deployment guide's go-live checklist). Each payment stores the mode it
+  was made in; revenue, recovery and refunds only use records from the current mode.
+  Customer and owner notifications remain in place.
+- Flagged charges (duplicates, late payments, bookings cancelled after payment,
+  subscriptions paid after a newer plan) are refunded in full by an admin, through
+  Paystack or recorded as returned another way. The `Refund` ledger, `refund.*`
+  webhooks and the recovery job track each refund; an unanswered Paystack request
+  is never resent automatically.
 - `POST /api/payments/paystack/webhook` authenticates Paystack's HMAC-SHA512 over
   the exact raw body, then verifies successful charges with Paystack itself. It
   does not need a browser cookie or trusted browser Origin. Unsupported events and
@@ -132,9 +139,19 @@ failures and the complete 30-minute deadline without waiting in real time.
   `processRentalPayment`. Replays do not pay the booking twice. Processing payments
   retain their hold and do not become failed. Cancellation, duplicate-charge and
   inventory checks apply identically when the customer closes the payment tab.
+- Agent subscription checkouts use the same webhook and recovery job through
+  `processSubscriptionPayment`, which subscription verification and onboarding
+  also use. Only the stored record decides the account, plan and amount; replays
+  never extend a plan twice. Opening onboarding rechecks the agent's three most
+  recent unsettled checkouts, not only the latest. Plan-credit changes never reach
+  Paystack. A checkout paid after a newer plan became current (for example an older
+  tab completed later) is recorded as `refund_required` instead of replacing that
+  plan or reusing an upgrade credit; admins and the agent are notified once.
+  Full-price renewals of the same plan still stack.
 - `GET /api/payments/reconcile` requires the `CRON_SECRET` Bearer credential. The
-  supplied daily Vercel schedule checks up to 20 due attempts; failed attempts are
-  retried for seven days and pending attempts remain eligible. Atomic ten-minute
+  supplied daily Vercel schedule checks up to 20 due rental and subscription
+  attempts, alternating between them; failed attempts are retried for seven days
+  and pending attempts remain eligible. Atomic ten-minute
   leases prevent concurrent scheduled calls claiming the same attempt. Configure
   the Paystack test webhook URL and `CRON_SECRET` after deployment; adjust recovery
   frequency to payment volume. See the deployment guide for exact settings.

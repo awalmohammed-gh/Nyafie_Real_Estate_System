@@ -15,7 +15,8 @@ export default defineConfig([
     ],
     languageOptions: {
       ecmaVersion: 2020,
-      globals: globals.browser,
+      // Build-time constant from vite.config.js (the admin console address hash)
+      globals: { ...globals.browser, __ADMIN_ENTRY_HASH__: "readonly" },
       parserOptions: {
         ecmaVersion: 'latest',
         ecmaFeatures: { jsx: true },
