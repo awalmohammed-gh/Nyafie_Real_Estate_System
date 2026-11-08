@@ -20,6 +20,7 @@ import {
 import { usePlatform } from "../../context/usePlatform";
 import { useAuth } from "../../context/useAuth";
 import { propertyCardImageSources } from "../../utils/propertyImages";
+import { formatDistance } from "../../utils/geo";
 
 const HouseCard = ({ house }) => {
   const { isFavorite, toggleFavorite } = useRealEstate();
@@ -154,6 +155,7 @@ const HouseCard = ({ house }) => {
         <p className="mt-1 mb-4 flex items-center gap-1.5 text-sm text-gray-500">
           <MapPin className="h-4 w-4 shrink-0" />
           <span className="truncate">{formatLocation(location)}</span>
+          {house.distance != null && <span className="ml-auto shrink-0 whitespace-nowrap rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">{formatDistance(house.distance)}</span>}
         </p>
 
         <div className="mt-auto flex items-center justify-between gap-2 border-t border-gray-100 pt-4 text-sm text-gray-600">

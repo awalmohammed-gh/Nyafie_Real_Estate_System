@@ -1,7 +1,11 @@
-import { useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AlertCircle, ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Heart, House, KeyRound, RotateCcw, Search, SlidersHorizontal, Tag, X } from "lucide-react";
+import { AlertCircle, ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Heart, House, KeyRound, MapPin, RotateCcw, Search, SlidersHorizontal, Tag, X } from "lucide-react";
 import HouseCard from "./card/HouseCard";
+import NearbyBar from "./location/NearbyBar";
+import { useVisitorLocation } from "../hooks/useVisitorLocation";
+import { LOCATION_PROBLEMS } from "../utils/visitorLocation";
+import { DEFAULT_RADIUS_KM, DEVICE, describeSearchArea, nearToParams, parseNear, widerRadius } from "../utils/geo";
 import ListingsBanner from "./property/ListingsBanner";
 import SkeletonGrid from "./ui/SkeletonGrid";
 import { PropertyFilterDialog, PropertyFilterPanel } from "./property/PropertyFilters";
@@ -21,23 +25,67 @@ const SORTS = [
   { value: "priceAsc", label: "Price: low to high" }, { value: "priceDesc", label: "Price: high to low" },
   { value: "popular", label: "Most viewed" }, { value: "rating", label: "Top rated" },
 ];
+// Searching near a place: distance replaces "Recommended" as the default order
+const NEARBY_SORTS = [{ value: "", label: "Nearest first" }, ...SORTS.slice(1)];
+const MAP_MARKER_LIMIT = 200;
+// Leaflet is loaded only when someone opens the map
+const DiscoveryMap = lazy(() => import("./location/DiscoveryMap"));
 
 // banner (optional): { image: { src, srcSet, position }, heading } shows the full-width image banner
 const PropertyBrowser = ({ title, description, fixedListingType, banner }) => {
   const { paths } = usePlatform();
   const navigate = useNavigate();
-  const { filters, query, search, sort, page, update, clear } = usePropertyBrowseState(fixedListingType);
+  const { filters, query, search, sort, page, view, params: urlParams, update, clear } = usePropertyBrowseState(fixedListingType);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [changingLocation, setChangingLocation] = useState(false);
   const resultsRef = useRef(null);
+  const locationInputRef = useRef(null);
   const allFacets = usePropertyFacets();
   const facets = usePropertyFacets(filters.listingType);
+  const visitor = useVisitorLocation();
+  // ?near=me (device, approximate) or ?near=lat,lng&place=… ; pending while the device position loads
+  const near = parseNear(urlParams, visitor.position);
+  const nearbyActive = Boolean(near && !near.pending);
+  const locating = near?.source === "device" && near.pending && ["idle", "locating"].includes(visitor.status);
+  const locationProblem = near?.source === "device" && near.pending ? LOCATION_PROBLEMS[visitor.status] || "" : "";
   const params = {
     page, limit: PAGE_SIZE, search, sort, listingType: filters.listingType,
     type: filters.types, area: filters.area, city: filters.city, region: filters.region, minPrice: filters.price?.min ?? undefined,
     maxPrice: filters.price?.max ?? undefined, bedrooms: filters.beds || undefined,
-    bathrooms: filters.baths || undefined, availability: filters.availability,
+    bathrooms: filters.baths || undefined, availability: filters.availability, amenities: filters.amenities,
   };
-  const results = useApiQuery(JSON.stringify(params), () => propertyApi.searchProperties(params));
+  const searchArea = nearbyActive ? { latitude: near.latitude, longitude: near.longitude, radius: near.radius } : null;
+  // Without a usable location this is the normal search, so the page is never empty while locating
+  const results = useApiQuery(JSON.stringify({ params, searchArea }), (signal) => searchArea
+    ? propertyApi.nearbyProperties({ ...params, ...searchArea }, { signal })
+    : propertyApi.searchProperties(params, { signal }));
+  const showMap = nearbyActive && view === "map";
+  const markerParams = { ...params, page: undefined, limit: undefined };
+  const markers = useApiQuery(showMap ? JSON.stringify({ markerParams, searchArea }) : null, (signal) => propertyApi.nearbyMarkers({ ...markerParams, ...searchArea }, { signal }));
+  const shownMarkers = markers.data || markers.previous;
+
+  // Arriving with ?near=me (e.g. from the homepage): ask for the position the visitor chose to share.
+  // A permission they already refused is not asked again (utils/visitorLocation.js).
+  const { status: visitorStatus, requestDevicePosition } = visitor;
+  useEffect(() => {
+    if (near?.source === "device" && near.pending && visitorStatus === "idle") requestDevicePosition();
+  }, [near?.source, near?.pending, visitorStatus, requestDevicePosition]);
+
+  const selectPlace = (place) => {
+    visitor.setChoice("manual");
+    visitor.rememberPlace(place);
+    update({ ...nearToParams(place), radius: near?.radius || DEFAULT_RADIUS_KM });
+  };
+  const useDevice = () => {
+    update({ near: DEVICE, place: "", radius: near?.radius || DEFAULT_RADIUS_KM });
+    if (!visitor.position) visitor.requestDevicePosition();
+  };
+  const clearLocation = () => update({ near: "", place: "", radius: "", view: "" });
+  const searchMapArea = (center) => update({ ...nearToParams({ source: "place", ...center, label: "the area on the map" }) });
+  const changeLocation = () => {
+    setChangingLocation(true);
+    requestAnimationFrame(() => locationInputRef.current?.focus());
+  };
   const shown = results.data || results.previous;
   const pending = results.loading || query.trim() !== search;
   const total = shown?.total ?? 0;
@@ -62,6 +110,7 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner }) => {
     filters.beds > 0 && { key: "beds", kind: "beds", value: filters.beds, label: `${filters.beds}+ beds`, clear: () => update({ beds: 0 }) },
     filters.baths > 0 && { key: "baths", kind: "baths", value: filters.baths, label: `${filters.baths}+ baths`, clear: () => update({ baths: 0 }) },
     filters.availability && { key: "availability", kind: "availability", value: filters.availability, label: filters.availability, clear: () => update({ availability: "" }) },
+    ...filters.amenities.map((amenity) => ({ key: `amenity:${amenity}`, kind: "amenity", value: amenity, label: amenity, clear: () => update({ amenities: filters.amenities.filter((value) => value !== amenity) }) })),
     query.trim() && { key: "search", kind: "search", value: query.trim(), label: `“${query.trim()}”`, clear: () => update({ query: "" }, { replace: true }) },
   ].filter(Boolean);
   const hasFilters = activeFilters.length > 0 || Boolean(!fixedListingType && filters.listingType);
@@ -135,23 +184,42 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner }) => {
         </aside>
 
         <section ref={resultsRef} className="catalogue-results" aria-label="Property results">
+          <NearbyBar
+            near={near} locating={locating} problem={locationProblem} view={view}
+            onView={(next) => update({ view: next === "map" ? "map" : "", page })}
+            onSelectPlace={selectPlace} onUseDevice={useDevice} onRadius={(radius) => update({ radius })} onClear={clearLocation}
+            searchInputRef={locationInputRef} changing={changingLocation} onChanging={setChangingLocation}
+          />
           <div className="catalogue-results-heading">
             <div className="catalogue-result-count" role="status" aria-live="polite">
-              <h2>{firstLoad ? "Finding homes…" : results.error ? "Your search" : <><strong>{total}</strong> {total === 1 ? "home" : "homes"}{filters.listingType === "Sale" ? " for sale" : filters.listingType === "Rent" ? " to rent" : " to explore"}</>}</h2>
-              <p>{pending && !firstLoad ? "Updating your results…" : total ? `Showing ${first}–${last} · Find the one that fits.` : "Your next chapter starts here."}</p>
+              <h2>{firstLoad ? "Finding homes…" : results.error ? "Your search" : <><strong>{total}</strong> {total === 1 ? "home" : "homes"}{filters.listingType === "Sale" ? " for sale" : filters.listingType === "Rent" ? " to rent" : nearbyActive ? "" : " to explore"}{nearbyActive && ` ${describeSearchArea(near)}`}</>}</h2>
+              <p>{pending && !firstLoad ? "Updating your results…" : showMap ? (total > MAP_MARKER_LIMIT ? `The ${MAP_MARKER_LIMIT} nearest are on the map. Narrow the radius or filters to see the rest.` : "Select a price on the map to preview the home.") : total ? `Showing ${first}–${last} · ${nearbyActive ? "Nearest first unless you sort otherwise." : "Find the one that fits."}` : "Your next chapter starts here."}</p>
             </div>
-            <div className="catalogue-sort"><label htmlFor="catalogue-sort">Sort by</label><div className="catalogue-select-wrap"><select id="catalogue-sort" aria-label="Sort properties" value={sort} onChange={(event) => update({ sort: event.target.value })}>{SORTS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div></div>
+            <div className="catalogue-sort"><label htmlFor="catalogue-sort">Sort by</label><div className="catalogue-select-wrap"><select id="catalogue-sort" aria-label="Sort properties" value={sort} onChange={(event) => update({ sort: event.target.value })}>{(nearbyActive ? NEARBY_SORTS : SORTS).map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div></div>
           </div>
 
           {activeFilters.length > 0 && <div className="catalogue-active-filters" aria-label="Selected filters">{activeFilters.map((filter) => <button key={filter.key} type="button" onClick={filter.clear} aria-label={`Remove ${filter.label} filter`}>{filter.label}<X size={12} aria-hidden="true" /></button>)}<button type="button" onClick={clear} className="catalogue-clear-all">Clear all</button></div>}
 
-          {results.error ? (
+          {showMap ? (
+            <Suspense fallback={<div className="discovery-map discovery-map-canvas grid place-items-center text-sm text-gray-500" role="status">Loading the map…</div>}>
+              <DiscoveryMap
+                center={near} radius={near.radius} markers={shownMarkers?.items || []}
+                loading={markers.loading} error={markers.error} onRetry={markers.reload} onSearchArea={searchMapArea}
+              />
+            </Suspense>
+          ) : results.error ? (
             <div role="alert" className="catalogue-message"><AlertCircle size={30} strokeWidth={1.4} aria-hidden="true" /><h3>We couldn’t load the homes.</h3><p>Please try again in a moment.</p><button type="button" onClick={results.reload} className="catalogue-primary">Try again</button></div>
-          ) : firstLoad ? <SkeletonGrid count={6} className="catalogue-grid catalogue-skeletons" /> : !shown?.items.length ? (
+          ) : firstLoad ? <SkeletonGrid count={6} className="catalogue-grid catalogue-skeletons" /> : !shown?.items.length && nearbyActive ? (
+            <div className="catalogue-message"><MapPin size={34} strokeWidth={1.3} aria-hidden="true" /><h3>No properties found around this location.</h3><p>Try a wider radius, another location or fewer filters.</p>
+              {widerRadius(near.radius) && <button type="button" onClick={() => update({ radius: widerRadius(near.radius) })} className="catalogue-primary">Expand to {widerRadius(near.radius)} km</button>}
+              <button type="button" onClick={changeLocation} className="catalogue-reset">Change location</button>
+              {activeFilters.length > 0 && <button type="button" onClick={clear} className="catalogue-reset">Remove filters</button>}
+            </div>
+          ) : !shown?.items.length ? (
             <div className="catalogue-message"><House size={34} strokeWidth={1.3} aria-hidden="true" /><h3>{facets.data?.total === 0 ? "New homes are on their way." : "A little room to rethink your search."}</h3><p>{facets.data?.total === 0 ? "Check back for homes as they become available." : "Try a different area, a wider budget or fewer filters."}</p>{hasFilters && <button type="button" onClick={clear} className="catalogue-primary">Clear all filters</button>}{page > 1 && <button type="button" onClick={() => goToPage(1)} className="catalogue-reset">Back to the first page</button>}</div>
           ) : <div className={`catalogue-grid ${pending ? "is-loading" : ""}`} aria-busy={pending}>{shown.items.map((house) => <HouseCard key={house.id} house={house} />)}</div>}
 
-          {!results.error && shown?.pages > 1 && <nav aria-label="Pagination" className="catalogue-pagination">
+          {!showMap && !results.error && shown?.pages > 1 && <nav aria-label="Pagination" className="catalogue-pagination">
             <p>Page {shownPage} of {shown.pages}</p>
             <div><button type="button" onClick={() => goToPage(page - 1)} disabled={pending || page <= 1} aria-label="Previous page"><ChevronLeft size={17} aria-hidden="true" /></button>{pageNumbers.map((number, index) => <span key={number}>{index > 0 && number - pageNumbers[index - 1] > 1 && <span className="catalogue-page-gap">…</span>}<button type="button" onClick={() => goToPage(number)} aria-label={`Page ${number}`} aria-current={page === number ? "page" : undefined} disabled={pending}>{number}</button></span>)}<button type="button" onClick={() => goToPage(page + 1)} disabled={pending || page >= shown.pages} aria-label="Next page"><ChevronRight size={17} aria-hidden="true" /></button></div>
           </nav>}

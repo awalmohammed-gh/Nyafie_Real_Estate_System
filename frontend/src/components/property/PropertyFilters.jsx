@@ -8,10 +8,11 @@ import {
   CircleCheck,
   MapPin,
   SlidersHorizontal,
+  Sparkles,
   Wallet,
   X,
 } from "lucide-react";
-import { PRICE_RANGES } from "../../hooks/usePropertyBrowseState";
+import { FEATURE_OPTIONS, PRICE_RANGES } from "../../hooks/usePropertyBrowseState";
 import { useLockBodyScroll } from "../../hooks/useLockBodyScroll";
 import { formatType } from "../../utils/property";
 
@@ -311,6 +312,34 @@ export const PropertyFilterPanel = ({ filters, update, facets }) => {
           <option value="Available">Available</option>
           <option value="Under Offer">Under offer</option>
         </FilterSelect>
+      </FilterGroup>
+
+      <FilterGroup
+        title="Features"
+        icon={Sparkles}
+        summary={filters.amenities.length ? `${filters.amenities.length} selected` : "Any"}
+      >
+        <div className="catalogue-type-options">
+          {FEATURE_OPTIONS.map((feature) => (
+            <label key={feature} className="catalogue-checkbox">
+              <input
+                type="checkbox"
+                checked={filters.amenities.includes(feature)}
+                onChange={() =>
+                  update({
+                    amenities: filters.amenities.includes(feature)
+                      ? filters.amenities.filter((value) => value !== feature)
+                      : [...filters.amenities, feature],
+                  })
+                }
+              />
+              <span className="catalogue-type-check">
+                <Check size={12} aria-hidden="true" />
+              </span>
+              <span>{feature}</span>
+            </label>
+          ))}
+        </div>
       </FilterGroup>
     </div>
   );

@@ -10,6 +10,7 @@ import DataTable from "../../components/ui/DataTable";
 import FilterTabs from "../../components/ui/FilterTabs";
 import SearchInput from "../../components/ui/SearchInput";
 import StatusBadge from "../../components/ui/StatusBadge";
+import { hasMapPin } from "../../utils/geo";
 import ActionMenu from "../../components/ui/ActionMenu";
 import EmptyState from "../../components/ui/EmptyState";
 import LockedFeature from "../../components/ui/LockedFeature";
@@ -99,6 +100,7 @@ const MyProperties = () => {
     <div className="flex flex-wrap items-center gap-1.5">
       <StatusBadge status={statusOf(p)} />
       {p.listing.state === "published" && !["Available", statusOf(p)].includes(p.listing.availability) && <StatusBadge status={p.listing.availability} dot={false} />}
+      {!hasMapPin(p) && <span title="Add a map pin in the editor so this listing appears in “near me” search"><StatusBadge status="No map pin" tone="gray" dot={false} /></span>}
     </div>
   );
 

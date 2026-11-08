@@ -4,19 +4,24 @@ import { useCallback, useEffect, useState } from "react";
  * Runs an API request and tracks { data, loading, error } plus reload().
  * `key` identifies the request (e.g. JSON of its params); when it changes the request runs again.
  * Responses from an outdated key are ignored, so fast filter changes never show stale results.
+ * `request` receives an AbortSignal; requests that pass it on are also cancelled when outdated.
+ * A null `key` means "nothing to load yet": no request is made.
  */
 export const useApiQuery = (key, request) => {
   const [state, setState] = useState({ key: null, data: undefined, error: "" });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    if (key === null) return undefined;
     let active = true;
-    request().then(
+    const controller = new AbortController();
+    request(controller.signal).then(
       (data) => active && setState({ key, data, error: "" }),
       (err) => active && setState({ key, data: undefined, error: err.message || "Something went wrong." })
     );
     return () => {
       active = false;
+      controller.abort();
     };
     // `request` is recreated every render; `key` captures everything it depends on
     // eslint-disable-next-line react-hooks/exhaustive-deps

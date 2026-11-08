@@ -190,6 +190,8 @@ export const mapProperty = (p) => ({
   meta: { isFeatured: Boolean(p.isFeatured), rating: p.ratingCount ? p.ratingAverage : null, ratingCount: p.ratingCount || 0, views: p.views || 0 },
   owner: { type: p.ownerType, id: p.ownerType === "admin" ? "admin" : idOf(p.owner) },
   ownerUserId: idOf(p.owner),
+  // Nearby search only: metres from the search location, measured by the server
+  distance: Number.isFinite(p.distance) ? p.distance : null,
   listing: {
     state: p.status,
     availability: p.availability,

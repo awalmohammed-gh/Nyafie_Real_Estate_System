@@ -50,4 +50,5 @@ export const isolatedMongo = async (t) => {
   }
   assert.ok(primary, "isolated replica set becomes writable");
   await Promise.all(Object.values(mongoose.models).map(async (model) => { await model.createCollection(); await model.createIndexes(); }));
+  return `mongodb://127.0.0.1:${port}/rental_test?directConnection=true`; // for child processes such as maintenance scripts
 };
