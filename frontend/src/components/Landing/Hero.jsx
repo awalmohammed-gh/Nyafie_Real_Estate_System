@@ -7,6 +7,9 @@ import { usePropertyFacets } from "../../hooks/usePropertyFacets";
 import { usePlatform } from "../../context/usePlatform";
 import { useNavOverlay } from "../../context/navOverlay";
 import { formatType } from "../../utils/property";
+import { DEFAULT_RADIUS_KM, DEVICE } from "../../utils/geo";
+
+const NEAR_ME = "__near_me__"; // an option value no neighbourhood can have
 
 const statuses = [
   { label: "All homes", value: "" },
@@ -36,7 +39,10 @@ const Hero = () => {
 
   const handleSearch = (event) => {
     event.preventDefault();
-    const params = new URLSearchParams(Object.entries(search).filter(([, value]) => value));
+    // "Near me": the listings page asks for the visitor's location (or offers a place search)
+    const { area, ...rest } = search;
+    const chosen = area === NEAR_ME ? { ...rest, near: DEVICE, radius: String(DEFAULT_RADIUS_KM) } : search;
+    const params = new URLSearchParams(Object.entries(chosen).filter(([, value]) => value));
     navigate(`${paths.listings}${params.size ? `?${params}` : ""}`);
   };
 
@@ -59,7 +65,7 @@ const Hero = () => {
             <p className="home-search-count" aria-live="polite">{facets.data ? `${facets.data.total} ${facets.data.total === 1 ? "home" : "homes"} to explore` : "Your search starts here"}</p>
           </div>
           <form key={search.status} onSubmit={handleSearch} className="home-search-form">
-            <HeroSearchSelect icon={MapPin} label="Where?" title="Choose your location" name="area" placeholder="All locations" value={search.area} disabled={facets.loading} onChange={(value) => setSearch((previous) => ({ ...previous, area: value }))} options={[{ value: "", label: "All locations", description: "Explore homes across Ghana", count: facets.data?.total }, ...areas]} />
+            <HeroSearchSelect icon={MapPin} label="Where?" title="Choose your location" name="area" placeholder="All locations" value={search.area} disabled={facets.loading} onChange={(value) => setSearch((previous) => ({ ...previous, area: value }))} options={[{ value: "", label: "All locations", description: "Explore homes across Ghana", count: facets.data?.total }, { value: NEAR_ME, label: "Near me", description: "Homes within 5 km of your location" }, ...areas]} />
             <HeroSearchSelect icon={SlidersHorizontal} label="Your kind of space" title="Find your kind of space" name="type" placeholder="Any property type" value={search.type} disabled={facets.loading} onChange={(value) => setSearch((previous) => ({ ...previous, type: value }))} options={[{ value: "", label: "Any property type", description: "A little room for every possibility", count: facets.data?.total }, ...types]} />
             <button type="submit" className="home-search-submit"><Search size={18} aria-hidden="true" /> Find my home <ArrowUpRight size={18} aria-hidden="true" /></button>
           </form>

@@ -18,6 +18,7 @@ import SaleRequest from "../models/SaleRequest.js";
 import { canHandleTeamRecord, canSeeAllAgencyWork, isTeamMember, teamFilter, teamOf } from "../utils/team.js";
 import { agencyAssignee } from "./agentController.js";
 import { isHotel, prepareHotelFields, saveHotelProperty, validateHotelPublishing } from "../utils/hotel.js";
+import { SEARCH_RADII_KM, parseCenter, parseRadius, withinRadius } from "../utils/geo.js";
 
 const TYPES_OF_PRICE = ["total", "month", "night"];
 
@@ -129,7 +130,8 @@ const SORTS = {
 /**
  * Turns query-string filters into a MongoDB filter on top of the public visibility rules.
  * Supported: search, listingType, type (comma list), area, city, availability (comma list),
- * minPrice, maxPrice, bedrooms, bathrooms (minimums), featured, owner, ids, exclude.
+ * minPrice, maxPrice, bedrooms, bathrooms (minimums), amenities (comma list, all required),
+ * featured, owner, ids, exclude.
  * ObjectIds are cast explicitly because the recommended sort runs as an aggregation.
  */
 export const buildPublicFilter = (q, base) => {
@@ -152,6 +154,8 @@ export const buildPublicFilter = (q, base) => {
   if (minPrice !== null || maxPrice !== null) and.push({ price: { ...(minPrice !== null && { $gte: minPrice }), ...(maxPrice !== null && { $lte: maxPrice }) } });
   if (number(q.bedrooms) !== null) and.push({ bedrooms: { $gte: number(q.bedrooms) } });
   if (number(q.bathrooms) !== null) and.push({ bathrooms: { $gte: number(q.bathrooms) } });
+  const amenities = list(q.amenities).slice(0, 10).map((a) => a.slice(0, 60));
+  if (amenities.length) and.push({ amenities: { $all: amenities.map(exact) } });
   if (q.featured === "true") and.push({ isFeatured: true });
   if (q.owner && mongoose.isValidObjectId(q.owner)) and.push({ owner: new ObjectId(String(q.owner)) });
   if (q.ids) and.push({ _id: { $in: toIds(list(q.ids)).slice(0, 100) } });
@@ -194,6 +198,70 @@ export const listPublicProperties = async (req, res) => {
       : Property.aggregate([{ $match: filter }, ...recommended, { $skip: skip }, { $limit: limit }, { $project: { _rank: 0 } }]).then((rows) => rows.map((d) => Property.hydrate(d))),
   ]);
   ok(res, { items: await presentProperties(docs, { includeAgentDetails: Boolean(req.user) }), total, page, pages: Math.max(1, Math.ceil(total / limit)), limit });
+};
+
+// Nearby search lists homes people can still take: sold and rented listings stay public elsewhere
+const OPEN_AVAILABILITY = ["Available", "Under Offer"];
+const NEARBY_SORTS = { priceAsc: { price: 1 }, priceDesc: { price: -1 }, latest: { createdAt: -1 }, popular: { views: -1 }, rating: { ratingAverage: -1, ratingCount: -1 } };
+// The compact shape map markers need: public listing facts only, no agent or contact details
+const MARKER_FIELDS = { title: 1, price: 1, pricePeriod: 1, currency: 1, listingType: 1, propertyType: 1, bedrooms: 1, bathrooms: 1, availability: 1, ownerType: 1, isFeatured: 1, "location.neighbourhood": 1, "location.city": 1, "location.region": 1, "location.latitude": 1, "location.longitude": 1, image: { $arrayElemAt: ["$images", 0] }, distance: 1 };
+
+// Filter values are checked rather than ignored, so a bad link says what is wrong
+const nearbyProblem = (q) => {
+  if (q.listingType !== undefined && q.listingType !== "" && !["Sale", "Rent"].includes(q.listingType)) return "Choose Rent or Sale.";
+  for (const key of ["minPrice", "maxPrice", "bedrooms", "bathrooms"]) {
+    if (q[key] === undefined || q[key] === "") continue;
+    const value = Number(q[key]);
+    if (!Number.isFinite(value) || value < 0 || (key.startsWith("b") && value > 50)) return `Enter a valid ${({ minPrice: "minimum price", maxPrice: "maximum price", bedrooms: "number of bedrooms", bathrooms: "number of bathrooms" })[key]}.`;
+  }
+  if (number(q.minPrice) !== null && number(q.maxPrice) !== null && number(q.minPrice) > number(q.maxPrice)) return "The minimum price is higher than the maximum.";
+  if (q.sort && !["nearest", ...Object.keys(NEARBY_SORTS)].includes(q.sort)) return "Choose a valid sort order.";
+  return null;
+};
+
+/**
+ * GET /api/properties/nearby?latitude&longitude&radius (km: 1, 2, 5, 10, 20, 50; default 5)
+ *   plus the normal search filters (listingType, type, minPrice, maxPrice, bedrooms, bathrooms,
+ *   amenities, search...), sort (nearest by default), page, limit.
+ * Only listings that are publicly visible, open (Available / Under Offer) and have a map pin.
+ * Each item carries `distance` in metres from the search centre, measured by MongoDB.
+ * format=markers returns up to 200 compact items for the map instead of full cards.
+ * The centre is used for this query only: it is never stored or sent back.
+ */
+export const nearbyProperties = async (req, res) => {
+  const center = parseCenter(req.query);
+  if (!center) return fail(res, 400, "Choose a valid location (latitude -90 to 90, longitude -180 to 180).");
+  const radius = parseRadius(req.query.radius);
+  if (!radius) return fail(res, 400, `Choose a search radius of ${SEARCH_RADII_KM.join(", ")} km.`);
+  const problem = nearbyProblem(req.query);
+  if (problem) return fail(res, 400, problem);
+
+  const { agents } = await publicQuery();
+  const requested = list(req.query.availability).filter((a) => OPEN_AVAILABILITY.includes(a));
+  const filter = buildPublicFilter({ ...req.query, availability: (requested.length ? requested : OPEN_AVAILABILITY).join(",") }, publicBase(agents));
+  const markers = req.query.format === "markers";
+  const limit = markers ? Math.min(200, Math.max(1, Math.round(number(req.query.limit) || 200))) : Math.min(48, Math.max(1, Math.round(number(req.query.limit) || 12)));
+  const page = markers ? 1 : Math.max(1, Math.round(number(req.query.page) || 1));
+  const sort = NEARBY_SORTS[req.query.sort];
+
+  const [total, rows] = await Promise.all([
+    Property.countDocuments({ $and: [filter, { geo: withinRadius(center, radius) }] }),
+    Property.aggregate([
+      // Nearest first by default; distance is measured on the sphere, in metres
+      { $geoNear: { near: { type: "Point", coordinates: [center.longitude, center.latitude] }, key: "geo", distanceField: "distance", maxDistance: radius * 1000, spherical: true, query: filter } },
+      ...(sort ? [{ $sort: { ...sort, distance: 1 } }] : []),
+      { $skip: (page - 1) * limit },
+      { $limit: limit },
+      ...(markers ? [{ $project: MARKER_FIELDS }] : []),
+    ]),
+  ]);
+  const distanceOf = (row) => Math.round(row.distance / 10) * 10; // nearest 10 m
+
+  const items = markers
+    ? rows.map(({ _id, distance, ...row }) => ({ id: String(_id), ...row, image: row.image || "", distance: distanceOf({ distance }) }))
+    : (await presentProperties(rows.map((row) => Property.hydrate(row)), { includeAgentDetails: Boolean(req.user) }))
+      .map((item, index) => ({ ...item, distance: distanceOf(rows[index]) }));
+  ok(res, { items, total, page, pages: Math.max(1, Math.ceil(total / limit)), limit, radius });
 };
 
 /**

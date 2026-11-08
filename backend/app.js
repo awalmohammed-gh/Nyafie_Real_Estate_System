@@ -23,6 +23,7 @@ import notificationRoutes from "./routes/notificationRoutes.js";
 import teamRoutes from "./routes/teamRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import contactRoutes from "./routes/contactRoutes.js";
+import geoRoutes from "./routes/geoRoutes.js";
 import { listConversations } from "./controllers/chatController.js";
 import { protectCustomer } from "./middleware/authMiddleware.js";
 import { allowedOrigins, limits, originCheck, rejectOperatorKeys, securityHeaders } from "./middleware/security.js";
@@ -77,6 +78,7 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
   app.put(["/api/auth/me/password", "/api/auth/customer/me/password", "/api/auth/agent/me/password", "/api/auth/admin/me/password", "/api/admin/account"], limits.password);
   app.use(["/api/payments", "/api/subscriptions/initialize", "/api/subscriptions/verify"], limits.payments);
   app.post("/api/properties/:id/view", limits.views);
+  app.get("/api/geo/search", limits.geo);
   app.post(["/api/inquiries", "/api/offers", "/api/rentals", "/api/sale-requests", "/api/conversations", "/api/properties/:id/reviews", "/api/team/invites/:token/accept"], limits.contact);
 
   app.use("/api/auth", authRoutes);
@@ -97,6 +99,7 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
   app.use("/api/team", teamRoutes);
   app.use("/api/reviews", reviewRoutes);
   app.use("/api/contact", contactRoutes);
+  app.use("/api/geo", geoRoutes);
   app.use("/api/uploads", uploadRoutes);
   app.get("/api/messages", protectCustomer, listConversations("customer")); // conversations the user started
 

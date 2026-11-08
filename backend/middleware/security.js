@@ -130,6 +130,8 @@ export const limits = {
   contact: rateLimit({ windowMs: 15 * MINUTE, max: 30, message: "You're sending a lot of requests. Please wait a few minutes and try again." }),
   // Property views: plenty for real browsing, stops scripts inflating counts with fresh visitor ids
   views: rateLimit({ windowMs: 15 * MINUTE, max: 120 }),
+  // Place search is typed a letter at a time (debounced in the browser) and proxies a shared free service
+  geo: rateLimit({ windowMs: MINUTE, max: 60, message: "Too many location searches. Please wait a moment and try again." }),
 };
 
 /**

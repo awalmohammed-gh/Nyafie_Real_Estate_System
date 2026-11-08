@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
-import { Eye, HandCoins, Home, Inbox, MapPin, Star } from "lucide-react";
+import { Eye, HandCoins, Home, Inbox, MapPin, MapPinOff, Star } from "lucide-react";
+import { hasMapPin } from "../../utils/geo";
 import StatusBadge from "../ui/StatusBadge";
 import ActionMenu from "../ui/ActionMenu";
 import { formatDate } from "../../utils/date";
@@ -44,6 +45,12 @@ const PropertyTile = ({ property: p, status, owner, metrics, actions, onOpen, in
           <span className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-md bg-amber-400 px-1.5 py-0.5 text-[11px] font-semibold text-amber-950">
             <Star className="h-3 w-3 fill-current" />
             Featured
+          </span>
+        )}
+        {!hasMapPin(p) && (
+          <span className="absolute right-2.5 bottom-2.5 inline-flex items-center gap-1 rounded-md bg-white/95 px-1.5 py-0.5 text-[11px] font-semibold text-gray-600 shadow-sm" title="Add a map pin in the editor so this listing appears in “near me” search">
+            <MapPinOff className="h-3 w-3" aria-hidden="true" />
+            No map pin
           </span>
         )}
       </div>

@@ -12,6 +12,7 @@ import RecentListings from "../components/Landing/RecentListings";
 import WhyHomeBase from "../components/Landing/WhyHomeBase";
 import FinalCta from "../components/Landing/FinalCta";
 import AboutNyaFie from "../components/Landing/AboutNyaFie";
+import NearbyHomes from "../components/Landing/NearbyHomes";
 import { useHomeListings } from "../hooks/useHomeListings";
 import { usePropertyFacets } from "../hooks/usePropertyFacets";
 import { usePlatform } from "../context/usePlatform";
@@ -25,6 +26,7 @@ const Home = () => {
   return (
     <div className="home-page">
       <Hero />
+      <NearbyHomes />
       <DiscoverCategories />
       <FeatureListings query={listings.featuredQuery} items={listings.featured} />
       <PromoSection

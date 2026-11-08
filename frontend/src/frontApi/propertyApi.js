@@ -30,10 +30,28 @@ const cleanParams = (params) => Object.fromEntries(Object.entries(params).filter
  * area, city, availability, minPrice, maxPrice, bedrooms, bathrooms, featured, owner, ids, exclude, sort.
  * Returns { items, total, page, pages, limit }.
  */
-export const searchProperties = async (params = {}) => {
-  const data = (await client.get("/properties", { params: cleanParams({ page: 1, ...params }) })).data;
+export const searchProperties = async (params = {}, { signal } = {}) => {
+  const data = (await client.get("/properties", { params: cleanParams({ page: 1, ...params }), signal })).data;
   return { ...data, items: data.items.map(mapProperty) };
 };
+
+/**
+ * Listings around a point, nearest first, filtered on the server.
+ * params: latitude, longitude, radius (km: 1, 2, 5, 10, 20, 50) plus the searchProperties filters
+ * (listingType, type, minPrice, maxPrice, bedrooms, bathrooms, amenities, search, sort, page, limit).
+ * Each item has `distance` in metres. Returns { items, total, page, pages, limit, radius }.
+ */
+export const nearbyProperties = async (params, { signal } = {}) => {
+  const data = (await client.get("/properties/nearby", { params: cleanParams({ page: 1, ...params }), signal })).data;
+  return { ...data, items: data.items.map(mapProperty) };
+};
+
+/**
+ * The same search for the map: up to 200 compact markers
+ * ({ id, title, price, listingType, propertyType, bedrooms, location, image, distance, ... }).
+ */
+export const nearbyMarkers = async (params, { signal } = {}) =>
+  (await client.get("/properties/nearby", { params: cleanParams({ ...params, page: undefined, limit: 200, format: "markers" }), signal })).data;
 
 // Load only referenced listings, with bounded batches even for a long inquiry history.
 export const getPropertiesByIds = async (ids) => {

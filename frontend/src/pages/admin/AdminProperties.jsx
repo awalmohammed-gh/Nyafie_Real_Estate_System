@@ -8,6 +8,7 @@ import DataTable from "../../components/ui/DataTable";
 import FilterTabs from "../../components/ui/FilterTabs";
 import SearchInput from "../../components/ui/SearchInput";
 import StatusBadge from "../../components/ui/StatusBadge";
+import { hasMapPin } from "../../utils/geo";
 import ActionMenu from "../../components/ui/ActionMenu";
 import AdminRecordModal from "../../components/admin/AdminRecordModal";
 import Modal from "../../components/ui/Modal";
@@ -198,6 +199,7 @@ const AdminProperties = () => {
         <StatusBadge status={getListingStatus(p, visible)} />
         {p.listing.state === "published" && !["Available", getListingStatus(p, visible)].includes(p.listing.availability) && <StatusBadge status={p.listing.availability} dot={false} />}
         {p.meta?.isFeatured && <StatusBadge status="Featured" dot={false} />}
+        {!hasMapPin(p) && <span title="No map pin: this listing doesn't appear in “near me” search until one is added"><StatusBadge status="No map pin" tone="gray" dot={false} /></span>}
       </div>
     );
   };

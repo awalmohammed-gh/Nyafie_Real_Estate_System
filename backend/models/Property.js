@@ -2,6 +2,12 @@ import mongoose from "mongoose";
 import { schemaOptions } from "../utils/schemaOptions.js";
 import { roomTypeSchema } from "./roomTypeSchema.js";
 
+// GeoJSON point for nearby search. Coordinates are always [longitude, latitude].
+const pointSchema = new mongoose.Schema({
+  type: { type: String, enum: ["Point"], required: true },
+  coordinates: { type: [Number], required: true },
+}, { _id: false });
+
 const propertySchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true, maxlength: 120 },
@@ -21,6 +27,9 @@ const propertySchema = new mongoose.Schema(
       latitude: { type: Number, default: null, min: -90, max: 90 },
       longitude: { type: Number, default: null, min: -180, max: 180 },
     },
+    // Derived from location.latitude/longitude on every save (see the hook below); never written by clients.
+    // Absent when the listing has no map pin, so it is left out of nearby search instead of guessed.
+    geo: { type: pointSchema, default: undefined },
     bedrooms: { type: Number, default: 0, min: 0 },
     bathrooms: { type: Number, default: 0, min: 0 },
     area: { type: Number, default: 0, min: 0 },
@@ -51,7 +60,28 @@ const propertySchema = new mongoose.Schema(
     ratingAverage: { type: Number, default: null, min: 1, max: 5 },
     ratingCount: { type: Number, default: 0, min: 0 },
   },
-  { ...schemaOptions, optimisticConcurrency: true }
+  {
+    ...schemaOptions,
+    optimisticConcurrency: true,
+    // geo duplicates location.latitude/longitude, which API consumers already read
+    toJSON: { ...schemaOptions.toJSON, transform: (doc, ret) => { schemaOptions.toJSON.transform(doc, ret); delete ret.geo; return ret; } },
+  }
 );
+
+export const geoPoint = (location) => {
+  const latitude = location?.latitude, longitude = location?.longitude;
+  const valid = Number.isFinite(latitude) && Number.isFinite(longitude) && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+  return valid ? { type: "Point", coordinates: [longitude, latitude] } : undefined;
+};
+
+// Every create/save path (agent, admin, hotel transaction) passes through validation
+propertySchema.pre("validate", function syncGeo() {
+  const point = geoPoint(this.location);
+  const current = this.geo?.coordinates;
+  if (!point) { if (this.geo !== undefined) this.geo = undefined; return; }
+  if (current?.[0] !== point.coordinates[0] || current?.[1] !== point.coordinates[1]) this.geo = point;
+});
+
+propertySchema.index({ geo: "2dsphere" });
 
 export default mongoose.models.Property || mongoose.model("Property", propertySchema);

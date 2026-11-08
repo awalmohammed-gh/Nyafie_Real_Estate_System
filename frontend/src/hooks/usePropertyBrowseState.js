@@ -10,7 +10,11 @@ export const PRICE_RANGES = [
   { label: "Over ₵700,000", min: 700001, max: null },
 ];
 
-const URL_KEYS = ["status", "purpose", "type", "region", "city", "area", "minPrice", "maxPrice", "bedrooms", "bathrooms", "availability", "search", "sort", "page"];
+// Listing features people filter by most; matched against each listing's amenities on the server
+export const FEATURE_OPTIONS = ["Parking", "Furnished", "Swimming Pool", "24/7 Security", "Air Conditioning", "Borehole", "Solar Backup", "Garden"];
+
+// Filters. The search location (near, place, radius) and view (list/map) are kept by "Clear all".
+const URL_KEYS = ["status", "purpose", "type", "region", "city", "area", "minPrice", "maxPrice", "bedrooms", "bathrooms", "availability", "amenities", "search", "sort", "page"];
 const SORTS = ["latest", "priceAsc", "priceDesc", "popular", "rating"];
 const numberParam = (params, key) => {
   const raw = params.get(key);
@@ -40,7 +44,9 @@ export const usePropertyBrowseState = (fixedListingType) => {
     beds: Math.floor(numberParam(params, "bedrooms") || 0),
     baths: Math.floor(numberParam(params, "bathrooms") || 0),
     availability: ["Available", "Under Offer"].includes(params.get("availability")) ? params.get("availability") : "",
+    amenities: [...new Set((params.get("amenities") || "").split(",").map((value) => value.trim()).filter((value) => FEATURE_OPTIONS.includes(value)))],
   };
+  const view = params.get("view") === "map" ? "map" : "list";
   const query = params.get("search") || "";
   const sort = SORTS.includes(params.get("sort")) ? params.get("sort") : "";
   const page = Math.max(1, Math.floor(numberParam(params, "page") || 1));
@@ -60,6 +66,7 @@ export const usePropertyBrowseState = (fixedListingType) => {
       for (const [key, value] of Object.entries(changes)) {
         if (key === "listingType") next.delete("purpose");
         if (key === "types") write("type", value.join(","));
+        else if (key === "amenities") write("amenities", value.join(","));
         else if (key === "price") {
           // A zero lower bound is equivalent to no lower restriction.
           write("minPrice", value?.min);
@@ -76,5 +83,6 @@ export const usePropertyBrowseState = (fixedListingType) => {
     return next;
   }, { preventScrollReset: true });
 
-  return { filters, query, search, sort, page, update, clear };
+  // params: the raw URL values, for the search location (utils/geo.js parseNear)
+  return { filters, query, search, sort, page, view, params, update, clear };
 };

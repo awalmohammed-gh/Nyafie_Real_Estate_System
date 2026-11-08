@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { motion } from "motion/react";
 import { AlertCircle, ArrowLeft, Bath, Bed, Building2, Check, Eye, ImagePlus, KeyRound, Lightbulb, Loader2, MapPin, Maximize2, Minus, Plus, Save, Send, Tag } from "lucide-react";
@@ -17,7 +17,11 @@ import PageLoader from "../../components/ui/PageLoader";
 import { formatPrice, formatType, getPriceParts, statusLabel } from "../../utils/property";
 import ListingEditorGuide from "../../components/agent/ListingEditorGuide";
 import { adminPath } from "../../utils/adminEntry";
+import { isCoordinate } from "../../utils/geo";
 import "./propertyEditor.css";
+
+// Leaflet loads with the editor's map only
+const LocationPicker = lazy(() => import("../../components/location/LocationPicker"));
 
 const RENT_PERIOD_LABELS = { month: "Per month", night: "Per night" };
 
@@ -28,7 +32,7 @@ const REGIONS = [
 
 const AMENITIES = [
   "Swimming Pool", "Gym", "24/7 Security", "Parking", "Garage", "Garden", "Balcony", "Borehole",
-  "Solar Backup", "Air Conditioning", "Fitted Kitchen", "Staff Quarters", "Elevator", "Walled Compound",
+  "Solar Backup", "Air Conditioning", "Fitted Kitchen", "Staff Quarters", "Elevator", "Walled Compound", "Furnished",
 ];
 
 const toForm = (property, user, contact) => {
@@ -235,6 +239,13 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }));
   };
   const bind = (key) => ({ value: form[key], onChange: (e) => set(key, e.target.value) });
+  // The map pin and the two coordinate boxes edit the same values
+  const pin = form.latitude !== "" && form.longitude !== "" && isCoordinate(Number(form.latitude), Number(form.longitude))
+    ? { latitude: Number(form.latitude), longitude: Number(form.longitude) } : null;
+  const setPin = (value) => {
+    set("latitude", value ? value.latitude : "");
+    set("longitude", value ? value.longitude : "");
+  };
 
   const toggleAmenity = (amenity) =>
     set("amenities", form.amenities.includes(amenity) ? form.amenities.filter((a) => a !== amenity) : [...form.amenities, amenity]);
@@ -554,7 +565,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
           )}
 
           {/* 05 Location */}
-          <Chapter id="chapter-location" number={next()} title={isAdminEditor ? "Where is it?" : "Location"} description="These details appear publicly on the listing. Add coordinates to show the property's map location.">
+          <Chapter id="chapter-location" number={next()} title={isAdminEditor ? "Where is it?" : "Location"} description="These details appear publicly on the listing. Pin it on the map so people searching nearby can find it.">
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
               <Field label="Street address" error={errors.address} className="sm:col-span-2">
                 <input {...inputProps("address")} placeholder="e.g. 12 Palm Street" />
@@ -575,8 +586,19 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
               </Field>
               <Field label="Country"><input {...inputProps("country")} maxLength={100} /></Field>
               <Field label="GhanaPost GPS / digital address (optional)"><input {...inputProps("digitalAddress")} maxLength={30} placeholder="e.g. GA-123-4567" /></Field>
-              <Field label="Latitude (optional)" error={errors.latitude}><input {...inputProps("latitude")} type="number" step="any" min={-90} max={90} /></Field>
-              <Field label="Longitude (optional)" error={errors.longitude}><input {...inputProps("longitude")} type="number" step="any" min={-180} max={180} /></Field>
+              <div className="sm:col-span-2">
+                <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-gray-700"><MapPin className="h-4 w-4 text-gray-400" />Map pin <span className="font-normal text-gray-400">· shows the listing in “near me” search</span></p>
+                <Suspense fallback={<div className="grid h-80 place-items-center rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-500" role="status">Loading the map…</div>}>
+                  <LocationPicker
+                    latitude={pin ? pin.latitude : null}
+                    longitude={pin ? pin.longitude : null}
+                    onChange={setPin}
+                    addressQuery={[form.address, form.neighbourhood, form.city, form.region, form.country].map((part) => part.trim()).filter(Boolean).join(", ")}
+                  />
+                </Suspense>
+              </div>
+              <Field label="Latitude (exact, optional)" error={errors.latitude}><input {...inputProps("latitude")} type="number" step="any" min={-90} max={90} /></Field>
+              <Field label="Longitude (exact, optional)" error={errors.longitude}><input {...inputProps("longitude")} type="number" step="any" min={-180} max={180} /></Field>
             </div>
           </Chapter>
 
