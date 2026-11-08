@@ -101,6 +101,7 @@ const MyProperties = () => {
       <StatusBadge status={statusOf(p)} />
       {p.listing.state === "published" && !["Available", statusOf(p)].includes(p.listing.availability) && <StatusBadge status={p.listing.availability} dot={false} />}
       {!hasMapPin(p) && <span title="Add a map pin in the editor so this listing appears in “near me” search"><StatusBadge status="No map pin" tone="gray" dot={false} /></span>}
+      {hasMapPin(p) && p.location.approximate && <span title="Placed automatically from the address. Drag the pin onto the exact building in the editor."><StatusBadge status="Area pin" tone="gray" dot={false} /></span>}
     </div>
   );
 

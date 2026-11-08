@@ -47,6 +47,12 @@ const PropertyTile = ({ property: p, status, owner, metrics, actions, onOpen, in
             Featured
           </span>
         )}
+        {hasMapPin(p) && p.location.approximate && (
+          <span className="absolute right-2.5 bottom-2.5 inline-flex items-center gap-1 rounded-md bg-white/95 px-1.5 py-0.5 text-[11px] font-semibold text-gray-600 shadow-sm" title="Placed automatically from the address. Drag the pin onto the exact building in the editor.">
+            <MapPin className="h-3 w-3" aria-hidden="true" />
+            Area pin
+          </span>
+        )}
         {!hasMapPin(p) && (
           <span className="absolute right-2.5 bottom-2.5 inline-flex items-center gap-1 rounded-md bg-white/95 px-1.5 py-0.5 text-[11px] font-semibold text-gray-600 shadow-sm" title="Add a map pin in the editor so this listing appears in “near me” search">
             <MapPinOff className="h-3 w-3" aria-hidden="true" />

@@ -593,6 +593,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
                     latitude={pin ? pin.latitude : null}
                     longitude={pin ? pin.longitude : null}
                     onChange={setPin}
+                    approximate={Boolean(pin && existing?.location.approximate && pin.latitude === existing.location.latitude && pin.longitude === existing.location.longitude)}
                     addressQuery={[form.address, form.neighbourhood, form.city, form.region, form.country].map((part) => part.trim()).filter(Boolean).join(", ")}
                   />
                 </Suspense>

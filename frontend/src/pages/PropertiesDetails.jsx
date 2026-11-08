@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   Link,
   useLocation,
@@ -55,6 +55,9 @@ import {
 import { formatDate } from "../utils/date";
 import { propertyUrl } from "../utils/siteUrl";
 import PageMetadata from "../components/brand/PageMetadata";
+
+// The map (and Leaflet) loads only when a listing has a location to show
+const PropertyMap = lazy(() => import("../components/location/PropertyMap"));
 import {
   formatType,
   getInitials,
@@ -446,7 +449,7 @@ const PropertiesDetails = () => {
 
         <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem] xl:gap-10">
           <div className="min-w-0">
-            <PropertyGallery key={property.id} images={images} title={title} />
+            <PropertyGallery key={`gallery-${property.id}`} images={images} title={title} />
             <section
               aria-labelledby="property-specs-heading"
               className="mt-6 border-y border-gray-200 py-5"
@@ -568,6 +571,11 @@ const PropertiesDetails = () => {
                   </div>
                 ))}
               </dl>
+              {hasCoordinates && (
+                <Suspense fallback={<div className="mt-5 grid h-75 place-items-center rounded-2xl border border-gray-200 bg-gray-50 text-sm text-gray-500" role="status">Loading the map…</div>}>
+                  <PropertyMap latitude={place.latitude} longitude={place.longitude} title={property.title} approximate={place.approximate} />
+                </Suspense>
+              )}
               {mapLink && (
                 <a
                   href={mapLink}
@@ -577,7 +585,7 @@ const PropertiesDetails = () => {
                 >
                   <MapPin className="h-4 w-4" />
                   {hasCoordinates
-                    ? "View property on map"
+                    ? "Open in Google Maps for directions"
                     : "Explore location on map"}
                 </a>
               )}
@@ -611,7 +619,7 @@ const PropertiesDetails = () => {
             </section>
 
             <PropertyReviews
-              key={property.id}
+              key={`reviews-${property.id}`}
               propertyId={property.id}
               user={user}
               onRequireSignIn={requireSignInToReview}
@@ -619,7 +627,7 @@ const PropertiesDetails = () => {
               onResumeHandled={clearResume}
               onSummary={setReviewSummary}
             />
-            {hotel && <HotelRooms key={property.id} property={property} canBook={!isOwnListing && availability === "Available"} />}
+            {hotel && <HotelRooms key={`rooms-${property.id}`} property={property} canBook={!isOwnListing && availability === "Available"} />}
           </div>
 
           <aside className="min-w-0 lg:sticky lg:top-24">

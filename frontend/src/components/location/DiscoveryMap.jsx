@@ -151,7 +151,7 @@ const DiscoveryMap = ({ center, radius, markers = [], loading = false, error = "
             <h3>{selected.title}</h3>
             <p className="map-preview-meta"><MapPin size={13} aria-hidden="true" />{[selected.location?.neighbourhood, selected.location?.city].filter(Boolean).join(", ")}</p>
             <p className="map-preview-meta">
-              <span>{formatDistance(selected.distance)}</span>
+              <span>{formatDistance(selected.distance, { approximate: selected.location?.pinSource === "address" })}</span>
               {selected.bedrooms > 0 && <span><Bed size={13} aria-hidden="true" />{selected.bedrooms} {selected.bedrooms === 1 ? "bed" : "beds"}</span>}
               <span>{formatType(selected.propertyType || "")}</span>
             </p>

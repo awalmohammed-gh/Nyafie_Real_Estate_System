@@ -4,9 +4,15 @@ export const SEARCH_RADII_KM = [1, 2, 5, 10, 20, 50];
 export const DEFAULT_RADIUS_KM = 5;
 export const DEVICE = "me"; // ?near=me: the visitor's own (approximate) position, never written into the URL
 
-// "500 m away", "1.2 km away", "12 km away"
-export const formatDistance = (metres) => {
+// "500 m away", "1.2 km away", "12 km away". Pins found from the address only know the area, so
+// they read "Within about 1 km" / "About 3.3 km away" and never claim metre precision.
+export const formatDistance = (metres, { approximate = false } = {}) => {
   if (!Number.isFinite(metres) || metres < 0) return "";
+  if (approximate) {
+    if (metres < 1000) return "Within about 1 km";
+    const km = metres / 1000;
+    return `About ${km < 10 ? (Math.round(km * 10) / 10).toFixed(1).replace(/\.0$/, "") : Math.round(km)} km away`;
+  }
   if (metres < 50) return "Under 50 m away";
   if (metres < 1000) return `${Math.round(metres / 10) * 10} m away`;
   const km = metres / 1000;

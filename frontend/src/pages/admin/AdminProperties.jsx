@@ -200,6 +200,7 @@ const AdminProperties = () => {
         {p.listing.state === "published" && !["Available", getListingStatus(p, visible)].includes(p.listing.availability) && <StatusBadge status={p.listing.availability} dot={false} />}
         {p.meta?.isFeatured && <StatusBadge status="Featured" dot={false} />}
         {!hasMapPin(p) && <span title="No map pin: this listing doesn't appear in “near me” search until one is added"><StatusBadge status="No map pin" tone="gray" dot={false} /></span>}
+        {hasMapPin(p) && p.location.approximate && <span title="Placed automatically from the address. Drag the pin onto the exact building in the editor."><StatusBadge status="Area pin" tone="gray" dot={false} /></span>}
       </div>
     );
   };
