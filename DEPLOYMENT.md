@@ -2,7 +2,7 @@
 
 HomeBase remains a Vite 8 / React 19 SPA with React Router 7, an Express 5 API, Mongoose 9 / MongoDB, Cloudinary images, and Paystack payments (test mode by default; live mode only after the go-live checklist below). No Next.js migration is required. The canonical production origin is **https://nyafie.vercel.app**.
 
-The repository is prepared for deployment. No Vercel production deployment or production browser/payment verification has been performed in this session. Local checks and the remaining production checks are listed below.
+The app is deployed from `main` to the Vercel project **`nyafie`** (team `awalmohammed-ghs-projects`). The production checklist below has not been signed off yet, so keep Paystack in test mode until it has. Local checks and the remaining production checks are listed below.
 
 ## Architecture and Vercel configuration
 
@@ -193,10 +193,10 @@ Public listing queries are bounded (48 maximum per page); the agent profile pagi
 
 ## Exact deployment steps
 
-1. From `backend`, run `npm ci` and `npm test`. From `frontend`, run `npm ci`, `npm test`, and `npm run build`. Use Node 24.x. The deployment preparation checks have passed locally.
-2. Commit the reviewed deployment changes and push the `platform-redesign` branch to `awalmohammed-gh/Real-Estate`. The environment examples and this guide may be committed; actual `.env`, dependencies and build output must remain ignored.
-3. In Vercel, import that GitHub repository into the intended account/team. Choose root directory `./` and retain the committed `vercel.json`. Configure `platform-redesign` as the production branch if deploying this branch directly; otherwise merge the reviewed branch into the project's production branch first.
-4. Set the project framework to **Services** and verify the two service roots/frameworks and Node 24.x settings against the table above. Add the Production and Preview environment variables to the correct environments before building. Do not use `frontend` as the project root.
+1. From `backend`, run `npm ci` and `npm test`. From `frontend`, run `npm ci`, `npm test`, `npm run lint` and `npm run build`. Use Node 24.x.
+2. Commit the reviewed changes to `main` and push them. The environment examples and this guide may be committed; actual `.env`, dependencies and build output must remain ignored.
+3. The Vercel project is `nyafie`, with root directory `./` and the committed `vercel.json`; `main` is the production branch. Link a fresh checkout with `vercel link --project nyafie`. To set up a new project instead, import the repository with root `./`.
+4. Keep the project framework on **Services** and verify the two service roots/frameworks against the table above. Set the project's Node.js version to **24.x** to match both `package.json` files. Add the Production and Preview environment variables to the correct environments before building. Do not use `frontend` as the project root.
 5. Deploy. Inspect both service build logs and backend runtime logs. Confirm that the backend binding was injected and MongoDB/Cloudinary initialization succeeds. Visit `/api/health` and expect HTTP 200 with `{ "success": true, "service": "HomeBase" }`.
 6. In project Domains, confirm this project owns `nyafie.vercel.app`. Naming the project does not guarantee that hostname is available. If Vercel assigns a different domain, update both canonical URL variables and `CLIENT_URL` to the actual chosen domain and redeploy before sharing links.
 7. Sign in through `https://nyafie.vercel.app/<ADMIN_ENTRY_PATH>/login`, review settings, property publication rules and subscription requirements, and check the payment summary says Paystack test and active. Verify the first admin account, then remove its bootstrap variables and redeploy. MongoDB retains the account.
@@ -204,9 +204,9 @@ Public listing queries are bounded (48 maximum per page); the agent profile pagi
 
 ## Verification results and production checklist
 
-Local automated verification completed: **66 backend tests and 7 frontend tests passed**, production Vite build passed, targeted lint passed. Vercel CLI 63.1.0 recognized both services in unlinked local mode. Read-only requests through its routing table verified the API health endpoint, page HTML/canonical URLs, private-route noindex, robots/sitemap responses, guest directory denial, favicon/banner image responses and JavaScript asset delivery, using the actual local database connection. Backend tests use real HTTP requests with controlled database/provider fixtures; they do not constitute an Atlas write test or a live Paystack checkout. Tests cover role isolation, cookie restoration, logout, approval/subscription bypasses, property ownership, contact inbox permissions, rental quotes/payment verification, concurrent connection reuse/retry, dynamic HTML metadata, robots/sitemaps, upload guards and shared rate limits. PDF tests generate real three-page reports.
+Local automated verification (2026-11-08): **226 backend unit tests, 112 backend integration tests and 16 frontend tests passed**, the production Vite build passed and lint is clean; `npm audit` reports no vulnerabilities in either package. The integration suites are opt-in: set the matching `RUN_*_INTEGRATION=1` variable (for example `RUN_RENTAL_INTEGRATION=1`) and run `node --test tests/<name>.integration.test.js` from `backend/`. Each one starts its own temporary MongoDB replica set (`MONGOD_TEST_BINARY` overrides the default `C:/Program Files/MongoDB/Server/9.0/bin/mongod.exe`) and never touches the application database. Vercel CLI 63.1.0 recognized both services in unlinked local mode. Read-only requests through its routing table verified the API health endpoint, page HTML/canonical URLs, private-route noindex, robots/sitemap responses, guest directory denial, favicon/banner image responses and JavaScript asset delivery, using the actual local database connection. Backend tests use real HTTP requests with controlled database/provider fixtures; they do not constitute an Atlas write test or a live Paystack checkout. Tests cover role isolation, cookie restoration, logout, approval/subscription bypasses, property ownership, contact inbox permissions, rental quotes/payment verification, concurrent connection reuse/retry, dynamic HTML metadata, robots/sitemaps, upload guards and shared rate limits. PDF tests generate real three-page reports.
 
-Production results: **not deployed or tested yet**. The service binding, Vercel ingress, HTTPS cookies in a browser, real Cloudinary upload, and test Paystack checkout must be verified on the actual deployment. Use this checklist:
+Production results: **deployed, checklist not yet signed off**. The service binding, Vercel ingress, HTTPS cookies in a browser, real Cloudinary upload, and test Paystack checkout must be verified on the actual deployment. Use this checklist:
 
 | Area | Production checks |
 | --- | --- |

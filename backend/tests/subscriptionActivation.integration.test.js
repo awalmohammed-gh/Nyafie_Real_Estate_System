@@ -15,8 +15,8 @@ const DAY = 86400000;
 test("subscription activation commits payment, history and account together exactly once", {
   skip: process.env.RUN_SUBSCRIPTION_INTEGRATION !== "1", timeout: 90000,
 }, async (t) => {
-  const previous = { JWT_KEY: process.env.JWT_KEY, Test_Secret_Key: process.env.Test_Secret_Key, NODE_ENV: process.env.NODE_ENV };
-  Object.assign(process.env, { JWT_KEY: "subscription-activation-integration-key", Test_Secret_Key: "sk_test_subscription_activation", NODE_ENV: "development" });
+  const previous = { JWT_KEY: process.env.JWT_KEY, PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY, NODE_ENV: process.env.NODE_ENV };
+  Object.assign(process.env, { JWT_KEY: "subscription-activation-integration-key", PAYSTACK_SECRET_KEY: "sk_test_subscription_activation", NODE_ENV: "development" });
   t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
   await isolatedMongo(t);
   await Setting.create({ key: "platform", agent: { requireSubscription: true } });

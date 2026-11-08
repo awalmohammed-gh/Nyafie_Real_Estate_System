@@ -25,9 +25,9 @@ const agent = (type, fields = {}) => new User({ emailVerifiedAt: new Date(), fir
 
 test("company plans: eligibility, limits, team, billing and payments are enforced on the server", async (t) => {
   process.env.JWT_KEY = "company-plans-test-key";
-  const savedKey = process.env.Test_Secret_Key;
-  process.env.Test_Secret_Key = "sk_test_company_plans";
-  t.after(() => { process.env.Test_Secret_Key = savedKey; });
+  const savedKey = process.env.PAYSTACK_SECRET_KEY;
+  process.env.PAYSTACK_SECRET_KEY = "sk_test_company_plans";
+  t.after(() => { process.env.PAYSTACK_SECRET_KEY = savedKey; });
 
   const individualPlan = plan({ name: "Starter", accountType: "individual", price: 150, propertyLimit: 5 });
   const agencyPlan = plan({ name: "Agency Starter", accountType: "agency", price: 600, propertyLimit: 25, teamMemberLimit: 3 });

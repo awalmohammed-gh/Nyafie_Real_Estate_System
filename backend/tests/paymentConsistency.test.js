@@ -76,9 +76,9 @@ const fixture = (t, paymentStatus = "pending") => {
     onProvider?.();
     return { json: async () => ({ status: providerResponseStatus, data: { status: providerStatus, reference: payment.reference, amount: 10000, currency: "GHS" } }) };
   });
-  const originalKey = process.env.Test_Secret_Key;
-  process.env.Test_Secret_Key = "sk_test_consistency";
-  t.after(() => { if (originalKey === undefined) delete process.env.Test_Secret_Key; else process.env.Test_Secret_Key = originalKey; });
+  const originalKey = process.env.PAYSTACK_SECRET_KEY;
+  process.env.PAYSTACK_SECRET_KEY = "sk_test_consistency";
+  t.after(() => { if (originalKey === undefined) delete process.env.PAYSTACK_SECRET_KEY; else process.env.PAYSTACK_SECRET_KEY = originalKey; });
   const verify = async () => {
     const res = response();
     await verifyPayment({ params: { reference: payment.reference }, user: { _id: customer } }, res);

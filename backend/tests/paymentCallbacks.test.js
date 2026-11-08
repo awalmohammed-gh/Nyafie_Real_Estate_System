@@ -9,12 +9,12 @@ import { createApp } from "../app.js";
 import { validPaystackSignature } from "../utils/paystack.js";
 
 test("payment callbacks authenticate raw bytes and service credentials before database initialization", async (t) => {
-  const keys = ["Test_Secret_Key", "CRON_SECRET"];
+  const keys = ["PAYSTACK_SECRET_KEY", "CRON_SECRET"];
   const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
-  process.env.Test_Secret_Key = "sk_test_callback_security";
+  process.env.PAYSTACK_SECRET_KEY = "sk_test_callback_security";
   process.env.CRON_SECRET = "test-cron-secret-with-at-least-32-characters";
   t.after(() => { for (const key of keys) { if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key]; } });
-  const sign = (body) => crypto.createHmac("sha512", process.env.Test_Secret_Key).update(body).digest("hex");
+  const sign = (body) => crypto.createHmac("sha512", process.env.PAYSTACK_SECRET_KEY).update(body).digest("hex");
   let initializations = 0, lookups = 0, claims = 0;
   const server = createApp({ initialize: async () => { initializations += 1; } }).listen(0, "127.0.0.1");
   await new Promise((done) => server.once("listening", done));
@@ -125,7 +125,7 @@ test("payment callbacks authenticate raw bytes and service credentials before da
 
   await t.test("unconfigured payment callbacks fail closed", async () => {
     const before = initializations;
-    process.env.Test_Secret_Key = "";
+    process.env.PAYSTACK_SECRET_KEY = "";
     assert.equal((await send("{}", "0".repeat(128))).status, 503);
     assert.equal(initializations, before);
   });

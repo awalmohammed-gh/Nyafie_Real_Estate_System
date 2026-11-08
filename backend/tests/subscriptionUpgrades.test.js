@@ -25,9 +25,9 @@ const provider = (type, fields = {}) => new User({ emailVerifiedAt: new Date(), 
 test("plan upgrades: only higher plans of the provider's own type, priced and confirmed by the server", async (t) => {
   t.mock.method(mongoose.connection, "transaction", async (work) => work({}));
   process.env.JWT_KEY = "subscription-upgrades-test-key";
-  const savedKey = process.env.Test_Secret_Key;
-  process.env.Test_Secret_Key = "sk_test_upgrades";
-  t.after(() => { process.env.Test_Secret_Key = savedKey; });
+  const savedKey = process.env.PAYSTACK_SECRET_KEY;
+  process.env.PAYSTACK_SECRET_KEY = "sk_test_upgrades";
+  t.after(() => { process.env.PAYSTACK_SECRET_KEY = savedKey; });
 
   const indStarter = plan("Individual Basic", "individual", 1);
   const indPro = plan("Individual Pro", "individual", 2);

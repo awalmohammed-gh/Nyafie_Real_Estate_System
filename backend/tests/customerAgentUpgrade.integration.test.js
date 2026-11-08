@@ -12,9 +12,9 @@ import { customerTabHeaders } from "./support/customerTab.js";
 test("customers become agents on the same account, pay first, and retain customer access", {
   skip: process.env.RUN_CUSTOMER_AGENT_INTEGRATION !== "1",
 }, async (t) => {
-  const previous = { JWT_KEY: process.env.JWT_KEY, Test_Secret_Key: process.env.Test_Secret_Key };
+  const previous = { JWT_KEY: process.env.JWT_KEY, PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY };
   process.env.JWT_KEY = "customer-agent-upgrade-regression-key";
-  process.env.Test_Secret_Key = "sk_test_customer_agent_upgrade";
+  process.env.PAYSTACK_SECRET_KEY = "sk_test_customer_agent_upgrade";
   t.after(() => {
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;

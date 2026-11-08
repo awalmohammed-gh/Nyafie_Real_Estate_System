@@ -46,7 +46,7 @@ test("hotel marketplace: HTTP ownership, booking, payment, inventory and concurr
   for (let i = 0; i < 60; i++) { if ((await mongoose.connection.db.admin().command({ hello: 1 })).isWritablePrimary) break; await delay(200); }
   await Promise.all(Object.values(mongoose.models).map(async (model) => { await model.createCollection(); await model.createIndexes(); }));
   process.env.JWT_KEY = "isolated-hotel-test-jwt-secret-key";
-  process.env.Test_Secret_Key = "sk_test_isolated";
+  process.env.PAYSTACK_SECRET_KEY = "sk_test_isolated";
   process.env.PUBLIC_SITE_URL = "http://localhost:5173";
   await Setting.create({ key: "platform", agent: { requireSubscription: false }, property: { requireApproval: false, allowAgentPublishing: true, maxImages: 15, propertyTypes: ["Hotel", "Apartment"], rentPeriods: ["night", "month"] } });
   const owner = await User.create({ emailVerifiedAt: new Date(), firstName: "Hotel", lastName: "Owner", email: "owner@hotel.test", phone: "0241234567", password: "test-password", role: "agent", agentApplication: { status: "approved" } });

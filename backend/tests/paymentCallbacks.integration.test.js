@@ -18,7 +18,7 @@ import { isolatedMongo } from "./support/isolatedMongo.js";
 test("rental payments recover without a browser callback using signed webhooks and scheduled checks", { skip: process.env.RUN_PAYMENT_INTEGRATION !== "1", timeout: 90000 }, async (t) => {
   await isolatedMongo(t);
   process.env.JWT_KEY = "isolated-callback-signing-key-at-least-32-characters";
-  process.env.Test_Secret_Key = "sk_test_isolated_callback";
+  process.env.PAYSTACK_SECRET_KEY = "sk_test_isolated_callback";
   process.env.CRON_SECRET = "isolated-recovery-secret-at-least-32-characters";
   process.env.PUBLIC_SITE_URL = "http://localhost:5173";
   await Setting.create({ key: "platform", payments: { rentalsEnabled: true } });
@@ -47,7 +47,7 @@ test("rental payments recover without a browser callback using signed webhooks a
   };
   const webhook = async (reference, extra = {}) => {
     const body = JSON.stringify({ event: "charge.success", data: { reference, ...extra } });
-    const signature = crypto.createHmac("sha512", process.env.Test_Secret_Key).update(body).digest("hex");
+    const signature = crypto.createHmac("sha512", process.env.PAYSTACK_SECRET_KEY).update(body).digest("hex");
     const response = await fetch(`${base}/payments/paystack/webhook`, { method: "POST", headers: { "Content-Type": "application/json", "x-paystack-signature": signature }, body });
     return { code: response.status, ...(await response.json()) };
   };
