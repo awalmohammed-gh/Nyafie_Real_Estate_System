@@ -32,10 +32,10 @@ const PropertyMap = ({ latitude, longitude, title, approximate = false }) => {
   }, [latitude, longitude, title, approximate]);
 
   return (
-    <div className="property-map">
+    <figure className="property-map">
       <div ref={element} className="property-map-canvas" role="img" aria-label={approximate ? `Map of the area around ${title}` : `Map showing where ${title} is`} />
-      {approximate && <p className="property-map-note">Approximate area. The exact address is shared by the agent.</p>}
-    </div>
+      {approximate && <figcaption className="property-map-note">The shaded circle shows the neighbourhood, not the exact house. Use the address above for the precise location.</figcaption>}
+    </figure>
   );
 };
 
