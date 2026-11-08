@@ -16,7 +16,7 @@ import { isolatedMongo } from "./support/isolatedMongo.js";
 test("regular rental inventory: real HTTP, MongoDB transactions and competing payments", { skip: process.env.RUN_RENTAL_INTEGRATION !== "1", timeout: 90000 }, async (t) => {
   await isolatedMongo(t);
   process.env.JWT_KEY = "isolated-rental-test-signing-key-long-enough";
-  process.env.Test_Secret_Key = "sk_test_isolated_rental";
+  process.env.PAYSTACK_SECRET_KEY = "sk_test_isolated_rental";
   process.env.PUBLIC_SITE_URL = "http://localhost:5173";
   await Setting.create({ key: "platform", payments: { rentalsEnabled: true } });
   const owner = await User.create({ emailVerifiedAt: new Date(), firstName: "Test", lastName: "Owner", email: "owner@rental.test", password: "test-password", role: "admin" });
