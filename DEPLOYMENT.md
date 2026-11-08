@@ -115,7 +115,7 @@ The admin console is not linked or listed anywhere: not in the site, robots.txt,
 
 Give Preview a separate MongoDB database/user, JWT key, first admin account, and preferably separate Cloudinary credentials. Keep Paystack test keys. Use the same canonical `PUBLIC_SITE_URL` and `VITE_PUBLIC_SITE_URL`; Preview HTML is automatically `noindex`, and Preview robots disallows indexing. The backend allows its exact Vercel preview deployment and branch origins and returns test payment callbacks to the trusted preview origin. Add any extra preview alias explicitly to Preview `CLIENT_URL`.
 
-Development retains actual values in `backend/.env` and `frontend/.env`. Local API calls use the Vite proxy from `/api` to port 4000. Local MongoDB credentials are not automatically suitable for Production. In particular, create a fresh sufficiently long production JWT secret rather than copying a short development value.
+Development retains actual values in `backend/.env` and `frontend/.env`. Local API calls use the Vite proxy from `/api` to the backend's `PORT` in `backend/.env` (4000 when unset; set it to another port, such as 4100, if another project's server already uses 4000). The proxy reads only that line; `API_PROXY_TARGET` in `frontend/.env` overrides it. Run the backend with `npm run server` (Node's built-in `--watch`). If its port is taken it stops with "port … is already used by another program" instead of appearing to run. Local MongoDB credentials are not automatically suitable for Production. In particular, create a fresh sufficiently long production JWT secret rather than copying a short development value.
 
 ## MongoDB and persistent storage
 

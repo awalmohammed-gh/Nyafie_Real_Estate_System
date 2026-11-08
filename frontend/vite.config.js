@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from "path"
 import crypto from "crypto"
+import fs from "fs"
 import { fileURLToPath } from "url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -16,20 +17,34 @@ const adminEntryHash = (env) => {
   return entry ? crypto.createHash("sha256").update(entry).digest("hex") : ""
 }
 
-export default defineConfig(({ mode }) => ({
-  plugins: [react(), tailwindcss()],
-  define: {
-    __ADMIN_ENTRY_HASH__: JSON.stringify(adminEntryHash(loadEnv(mode, __dirname, ""))),
-  },
-  server: {
-    host: '127.0.0.1',
-    port: 5173,
-    open: false,
-    proxy: { '/api': { target: 'http://localhost:4000', changeOrigin: true } },
-  },
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
+// The dev proxy follows the backend's PORT (backend/.env), so changing it in one place is enough.
+// Only that one line is read; API_PROXY_TARGET in frontend/.env overrides it (e.g. a remote API).
+const backendPort = () => {
+  try {
+    const line = fs.readFileSync(path.resolve(__dirname, "../backend/.env"), "utf8").split(/\r?\n/).find((text) => /^\s*PORT\s*=/.test(text))
+    const port = Number(line?.split("=")[1]?.trim())
+    if (Number.isInteger(port) && port > 0) return port
+  } catch { /* no backend/.env (frontend-only checkout): use the default */ }
+  return 4000
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, __dirname, "")
+  return {
+    plugins: [react(), tailwindcss()],
+    define: {
+      __ADMIN_ENTRY_HASH__: JSON.stringify(adminEntryHash(env)),
     },
-  },
-}))
+    server: {
+      host: '127.0.0.1',
+      port: 5173,
+      open: false,
+      proxy: { '/api': { target: env.API_PROXY_TARGET || `http://localhost:${backendPort()}`, changeOrigin: true } },
+    },
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
+      },
+    },
+  }
+})
