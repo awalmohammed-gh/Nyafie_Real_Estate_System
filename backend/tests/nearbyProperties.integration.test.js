@@ -158,6 +158,38 @@ test("nearby search uses real coordinates, public visibility rules and every fil
     assert.equal(listing.data.total, 1);
   });
 
+  await t.test("saving a listing without a pin places it from its address; placing a pin makes it exact", async () => {
+    const entry = "hbNearbyEntry_1234567890ab";
+    const saved = { entry: process.env.ADMIN_ENTRY_PATH, geocoder: process.env.GEOCODER_URL };
+    process.env.ADMIN_ENTRY_PATH = entry;
+    delete process.env.GEOCODER_URL;
+    t.after(() => { for (const [key, value] of [["ADMIN_ENTRY_PATH", saved.entry], ["GEOCODER_URL", saved.geocoder]]) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+    const realFetch = globalThis.fetch;
+    const spintex = { type: "Feature", geometry: { type: "Point", coordinates: [-0.0902, 5.6288] }, properties: { osm_type: "N", osm_id: 1, name: "Spintex", type: "locality", city: "Accra", country: "Ghana", countrycode: "GH" } };
+    t.mock.method(globalThis, "fetch", async (url, options) => String(url).startsWith("https://photon.komoot.io/")
+      ? { ok: true, json: async () => ({ features: new URL(url).searchParams.get("q").startsWith("Spintex") ? [spintex] : [] }) }
+      : realFetch(url, options));
+    const { default: jwt } = await import("jsonwebtoken");
+    const headers = { "Content-Type": "application/json", "X-Session-Domain": "admin", "X-Admin-Entry": entry, Cookie: `admin_token=${jwt.sign({ id: String(admin._id), role: "admin", session: "admin" }, process.env.JWT_KEY)}` };
+    const call = async (method, path, body) => (await fetch(`http://127.0.0.1:${server.address().port}${path}`, { method, headers, body: JSON.stringify(body) })).json();
+
+    const created = await call("POST", "/api/admin/properties", { title: "Spintex draft", listingType: "Rent", pricePeriod: "month", propertyType: "Apartment", price: 2500, status: "draft", location: { address: "Spintex Road", neighbourhood: "Spintex", city: "Accra" } });
+    assert.equal(created.success, true, created.message);
+    let doc = await Property.findById(created.data.id).lean();
+    assert.equal(doc.location.pinSource, "address");
+    assert.deepEqual(doc.geo.coordinates, [-0.0902, 5.6288], "placed at Spintex from the address");
+
+    const moved = await call("PUT", `/api/admin/properties/${created.data.id}`, { location: { address: "Spintex Road", neighbourhood: "Spintex", city: "Accra", latitude: 5.6301, longitude: -0.0911 } });
+    assert.equal(moved.success, true, moved.message);
+    doc = await Property.findById(created.data.id).lean();
+    assert.equal(doc.location.pinSource, "map", "a pin someone placed is exact");
+    assert.deepEqual(doc.geo.coordinates, [-0.0911, 5.6301]);
+
+    const renamed = await call("PUT", `/api/admin/properties/${created.data.id}`, { location: { address: "Spintex Road", neighbourhood: "Spintex East", city: "Accra", latitude: 5.6301, longitude: -0.0911 } });
+    assert.equal(renamed.success, true, renamed.message);
+    assert.deepEqual((await Property.findById(created.data.id).lean()).geo.coordinates, [-0.0911, 5.6301], "editing the address never moves a placed pin");
+  });
+
   await t.test("normal search can filter by amenities too", async () => {
     const body = await (await fetch(`http://127.0.0.1:${server.address().port}/api/properties?page=1&amenities=Furnished`)).json();
     assert.deepEqual(body.data.items.map((item) => item.title), ["Furnished flat"]);

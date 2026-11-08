@@ -17,7 +17,8 @@
     "admin:reset": "node seed/resetAdmin.js",
     "views:reset": "node seed/resetViews.js",
     "views:clean-seed": "node seed/removeSeedViews.js",
-    "geo:backfill": "node seed/backfillGeo.js"
+    "geo:backfill": "node seed/backfillGeo.js",
+    "geo:locate": "node seed/locateFromAddress.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

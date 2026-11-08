@@ -18,6 +18,7 @@ import SaleRequest from "../models/SaleRequest.js";
 import { canHandleTeamRecord, canSeeAllAgencyWork, isTeamMember, teamFilter, teamOf } from "../utils/team.js";
 import { agencyAssignee } from "./agentController.js";
 import { isHotel, prepareHotelFields, saveHotelProperty, validateHotelPublishing } from "../utils/hotel.js";
+import { locationSnapshot, settleLocation } from "../utils/autoLocate.js";
 import { SEARCH_RADII_KM, parseCenter, parseRadius, withinRadius } from "../utils/geo.js";
 
 const TYPES_OF_PRICE = ["total", "month", "night"];
@@ -204,7 +205,7 @@ export const listPublicProperties = async (req, res) => {
 const OPEN_AVAILABILITY = ["Available", "Under Offer"];
 const NEARBY_SORTS = { priceAsc: { price: 1 }, priceDesc: { price: -1 }, latest: { createdAt: -1 }, popular: { views: -1 }, rating: { ratingAverage: -1, ratingCount: -1 } };
 // The compact shape map markers need: public listing facts only, no agent or contact details
-const MARKER_FIELDS = { title: 1, price: 1, pricePeriod: 1, currency: 1, listingType: 1, propertyType: 1, bedrooms: 1, bathrooms: 1, availability: 1, ownerType: 1, isFeatured: 1, "location.neighbourhood": 1, "location.city": 1, "location.region": 1, "location.latitude": 1, "location.longitude": 1, image: { $arrayElemAt: ["$images", 0] }, distance: 1 };
+const MARKER_FIELDS = { title: 1, price: 1, pricePeriod: 1, currency: 1, listingType: 1, propertyType: 1, bedrooms: 1, bathrooms: 1, availability: 1, ownerType: 1, isFeatured: 1, "location.neighbourhood": 1, "location.city": 1, "location.region": 1, "location.latitude": 1, "location.longitude": 1, "location.pinSource": 1, image: { $arrayElemAt: ["$images", 0] }, distance: 1 };
 
 // Filter values are checked rather than ignored, so a bad link says what is wrong
 const nearbyProblem = (q) => {
@@ -447,6 +448,8 @@ export const createProperty = async (req, res) => {
   }
   draft.status = resolveAgentStatus(intent, null, access);
 
+  // No pin placed: the listing is put on the map from its address (approximate)
+  if (draft.location) Object.assign(draft.location, await settleLocation(draft.location));
   const property = await Property.create(draft);
   if (property.status === "pending") notifyReview(property, req.user);
   const message = property.status === "pending" ? "Submitted for review" : property.status === "published" ? "Property published" : "Draft saved";
@@ -500,6 +503,7 @@ export const updateProperty = async (req, res) => {
     }
   }
 
+  const before = locationSnapshot(property.location);
   Object.assign(property, fields);
   if (fields.contact) property.contact = { ...fields.contact, id: String(req.user._id) };
   if (images) property.images = await resolveImages(images);
@@ -512,6 +516,10 @@ export const updateProperty = async (req, res) => {
     if (status === "pending") notifyReview(property, req.user);
     if (status !== "rejected") property.rejectionReason = "";
     if (status !== "published") property.isFeatured = false;
+  }
+  if (fields.location) {
+    const settled = await settleLocation(property.location, before);
+    property.set({ "location.latitude": settled.latitude, "location.longitude": settled.longitude, "location.pinSource": settled.pinSource });
   }
   await saveHotelProperty(property);
   ok(res, property, status === "pending" ? "Submitted for review" : "Property updated");

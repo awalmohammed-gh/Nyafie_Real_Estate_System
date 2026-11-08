@@ -160,6 +160,8 @@ export const mapProperty = (p) => ({
     digitalAddress: p.location?.digitalAddress || "",
     latitude: p.location?.latitude ?? null,
     longitude: p.location?.longitude ?? null,
+    // The pin was found from the address (the area), not placed on the building
+    approximate: p.location?.pinSource === "address",
   },
   property: {
     type: p.propertyType,

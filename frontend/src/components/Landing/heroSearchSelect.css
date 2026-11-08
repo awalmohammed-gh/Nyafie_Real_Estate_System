@@ -42,3 +42,13 @@
   .hero-select-footer span { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .hero-select-panel { animation: none; } .hero-select-chevron { transition: none; } }
+
+/* Location search: a pinned action ("Use my current location"), places from the map, a spinner */
+.hero-select-option.is-action { color: #1d4ed8; }
+.hero-select-option.is-action .hero-option-icon { background: #eaf1ff; color: #2563eb; }
+.hero-select-option.is-action .hero-option-copy > span { color: #1d4ed8; font-weight: 600; }
+.hero-select-group { padding: 12px 14px 6px; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #8b8290; list-style: none; }
+.hero-select-search { position: relative; }
+.hero-select-spinner { flex-shrink: 0; color: #8b8290; animation: hero-select-spin .9s linear infinite; }
+@keyframes hero-select-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .hero-select-spinner { animation-duration: 2s; } }

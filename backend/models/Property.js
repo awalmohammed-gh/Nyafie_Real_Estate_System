@@ -26,6 +26,9 @@ const propertySchema = new mongoose.Schema(
       digitalAddress: { type: String, default: "", trim: true, maxlength: 30 },
       latitude: { type: Number, default: null, min: -90, max: 90 },
       longitude: { type: Number, default: null, min: -180, max: 180 },
+      // How the coordinates were set: "map" = placed by a person (exact), "address" = found from the
+      // neighbourhood and city (approximate, shown as "About … away"). Unset on older pins = exact.
+      pinSource: { type: String, enum: ["map", "address"], default: undefined },
     },
     // Derived from location.latitude/longitude on every save (see the hook below); never written by clients.
     // Absent when the listing has no map pin, so it is left out of nearby search instead of guessed.

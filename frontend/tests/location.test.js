@@ -11,6 +11,18 @@ test("distances read naturally", () => {
   assert.equal(formatDistance(3550), "3.6 km away");
   assert.equal(formatDistance(12400), "12 km away");
   for (const bad of [null, undefined, -5, NaN, "far"]) assert.equal(formatDistance(bad), "");
+  // Pins found from the address know the area, not the building: no false precision
+  assert.equal(formatDistance(0, { approximate: true }), "Within about 1 km");
+  assert.equal(formatDistance(640, { approximate: true }), "Within about 1 km");
+  assert.equal(formatDistance(3270, { approximate: true }), "About 3.3 km away");
+  assert.equal(formatDistance(12400, { approximate: true }), "About 12 km away");
+});
+
+test("listings know whether their pin is exact or found from the address", () => {
+  const base = { id: "p1", title: "Flat", listingType: "Rent", pricePeriod: "month", price: 3000, images: [] };
+  assert.equal(mapProperty({ ...base, location: { latitude: 5.6, longitude: -0.1, pinSource: "address" } }).location.approximate, true);
+  assert.equal(mapProperty({ ...base, location: { latitude: 5.6, longitude: -0.1, pinSource: "map" } }).location.approximate, false);
+  assert.equal(mapProperty({ ...base, location: { latitude: 5.6, longitude: -0.1 } }).location.approximate, false, "older pins are exact");
 });
 
 test("the search location comes from the URL; the device position never does", () => {

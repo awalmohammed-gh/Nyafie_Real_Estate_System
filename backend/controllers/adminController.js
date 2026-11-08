@@ -19,6 +19,7 @@ import { validateSection } from "../utils/settingsValidation.js";
 import { paymentStatus } from "../utils/paystack.js";
 import { COUNTED_STATES, subscriptionState } from "../utils/permissions.js";
 import { checkPropertyOptions, pickPropertyFields, validateForPublishing } from "./propertyController.js";
+import { locationSnapshot, settleLocation } from "../utils/autoLocate.js";
 import { resolveImages } from "../utils/uploadImages.js";
 import { updateInquiryStatus } from "./inquiryController.js";
 import { activateSubscription } from "./subscriptionController.js";
@@ -269,6 +270,11 @@ export const createProperty = async (req, res) => {
     if (problem) return fail(res, 400, problem);
     property.isFeatured = Boolean(req.body.isFeatured);
   }
+  const before = null;
+  if (fields.location) {
+    const settled = await settleLocation(property.location, before);
+    property.set({ "location.latitude": settled.latitude, "location.longitude": settled.longitude, "location.pinSource": settled.pinSource });
+  }
   await property.save();
   ok(res, property, draft ? "Draft saved" : "Property published", 201);
 };
@@ -283,6 +289,7 @@ export const updateProperty = async (req, res) => {
   const optionProblem = checkPropertyOptions(fields, settings, property);
   if (optionProblem) return fail(res, 400, optionProblem);
   if (fields.contact) fields.contact = { ...fields.contact, id: property.contact?.id || (property.ownerType === "admin" ? "homebase" : String(property.owner)) };
+  const before = locationSnapshot(property.location);
   Object.assign(property, fields);
   if (Array.isArray(req.body.images)) {
     if (req.body.images.length > settings.property.maxImages) return fail(res, 400, `Up to ${settings.property.maxImages} photos per property.`);
@@ -303,6 +310,10 @@ export const updateProperty = async (req, res) => {
   if (["published", "pending"].includes(property.status)) {
     const problem = validateForPublishing(property);
     if (problem) return fail(res, 400, problem);
+  }
+  if (fields.location) {
+    const settled = await settleLocation(property.location, before);
+    property.set({ "location.latitude": settled.latitude, "location.longitude": settled.longitude, "location.pinSource": settled.pinSource });
   }
   await saveHotelProperty(property);
   ok(res, property, "Property updated");

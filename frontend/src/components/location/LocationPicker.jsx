@@ -14,7 +14,7 @@ const round = (value) => Math.round(value * 1e6) / 1e6; // about 10 cm: plenty f
  * exact building. Nothing is saved until the form is. Without a pin the listing still publishes,
  * it just doesn't appear in nearby search.
  */
-const LocationPicker = ({ latitude, longitude, onChange, addressQuery }) => {
+const LocationPicker = ({ latitude, longitude, onChange, addressQuery, approximate = false }) => {
   const element = useRef(null);
   const map = useRef(null);
   const marker = useRef(null);
@@ -113,7 +113,11 @@ const LocationPicker = ({ latitude, longitude, onChange, addressQuery }) => {
       )}
       <div ref={element} className="location-picker-map" role="application" aria-label="Map: click to place the property pin, drag the pin to adjust" />
       <p className={`location-picker-note ${message.tone === "error" ? "is-error" : ""}`} role="status">
-        {message.text || (hasPin ? `Pinned at ${latitude.toFixed(5)}, ${longitude.toFixed(5)}. Drag the pin to adjust.` : "No pin yet. Find the address or click the map. Listings with a pin appear in “near me” search.")}
+        {message.text || (hasPin
+          ? approximate
+            ? "Placed automatically at the neighbourhood from the address. Drag the pin onto the exact building so distances are precise."
+            : `Pinned at ${latitude.toFixed(5)}, ${longitude.toFixed(5)}. Drag the pin to adjust.`
+          : "No pin yet. Find the address or click the map. Otherwise the listing is placed at its neighbourhood automatically when you save.")}
       </p>
     </div>
   );

@@ -55,18 +55,17 @@ export const toPlace = (feature) => {
   };
 };
 
-// GET /api/geo/search?q=East+Legon&purpose=place|address[&latitude&longitude to rank nearby places first]
-export const searchPlaces = async (req, res) => {
-  const q = text(req.query.q).replace(/\s+/g, " ");
-  if (q.length < 2 || q.length > 100) return fail(res, 400, "Type at least 2 characters to search for a place.");
-  const purpose = req.query.purpose === "address" ? "address" : "place";
-  const near = parseCenter(req.query);
+/**
+ * Looks places up (cached). Used by the place search route and to locate listings from their
+ * address. Throws an error with a short, safe `reason` when the geocoder can't answer.
+ */
+export const geocode = async (query, { purpose = "place", near } = {}) => {
+  const q = text(query).replace(/\s+/g, " ");
   // A rough bias only (about 11 km), so the cache is shared and no precise position leaves the server
   const bias = near ? { latitude: Math.round(near.latitude * 10) / 10, longitude: Math.round(near.longitude * 10) / 10, zoom: 10 } : DEFAULT_BIAS;
   const key = `${purpose}|${q.toLowerCase()}|${bias.latitude},${bias.longitude}`;
   const cached = recall(key);
-  res.set("Cache-Control", "public, max-age=3600");
-  if (cached) return ok(res, cached);
+  if (cached) return cached;
 
   let body;
   try {
@@ -84,8 +83,7 @@ export const searchPlaces = async (req, res) => {
   } catch (error) {
     const reason = error.reason || (error.name === "TimeoutError" ? "timeout" : error.code === "ERR_INVALID_URL" ? "GEOCODER_URL is not a valid URL" : error.name === "SyntaxError" ? "invalid JSON" : "network error");
     console.warn(`[geo] place search unavailable: ${reason}`);
-    res.set("Cache-Control", "no-store");
-    return fail(res, 503, "Location search is unavailable right now. Please try again in a moment.");
+    throw Object.assign(new Error("geocoder unavailable"), { reason });
   }
 
   const seen = new Set();
@@ -95,5 +93,19 @@ export const searchPlaces = async (req, res) => {
     .filter((place) => place && !seen.has(place.label.toLowerCase()) && seen.add(place.label.toLowerCase()))
     .slice(0, 8);
   remember(key, places);
-  ok(res, places);
+  return places;
+};
+
+// GET /api/geo/search?q=East+Legon&purpose=place|address[&latitude&longitude to rank nearby places first]
+export const searchPlaces = async (req, res) => {
+  const q = text(req.query.q).replace(/\s+/g, " ");
+  if (q.length < 2 || q.length > 100) return fail(res, 400, "Type at least 2 characters to search for a place.");
+  try {
+    const places = await geocode(q, { purpose: req.query.purpose === "address" ? "address" : "place", near: parseCenter(req.query) });
+    res.set("Cache-Control", "public, max-age=3600");
+    ok(res, places);
+  } catch {
+    res.set("Cache-Control", "no-store");
+    fail(res, 503, "Location search is unavailable right now. Please try again in a moment.");
+  }
 };
