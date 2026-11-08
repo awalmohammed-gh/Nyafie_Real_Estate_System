@@ -68,18 +68,22 @@ export const searchPlaces = async (req, res) => {
   res.set("Cache-Control", "public, max-age=3600");
   if (cached) return ok(res, cached);
 
-  const url = new URL(process.env.GEOCODER_URL?.trim() || DEFAULT_GEOCODER);
-  for (const [name, value] of Object.entries({ q, limit: 12, lang: "en", lat: bias.latitude, lon: bias.longitude, zoom: bias.zoom, location_bias_scale: 0.3 })) url.searchParams.set(name, String(value));
   let body;
   try {
+    // A paid geocoder's URL can carry its API key, so the URL and error details (which can quote it)
+    // never appear in a response or a log line: only a short reason does.
+    const url = new URL(process.env.GEOCODER_URL?.trim() || DEFAULT_GEOCODER);
+    for (const [name, value] of Object.entries({ q, limit: 12, lang: "en", lat: bias.latitude, lon: bias.longitude, zoom: bias.zoom, location_bias_scale: 0.3 })) url.searchParams.set(name, String(value));
     const response = await fetch(url, {
       headers: { Accept: "application/json", "User-Agent": `${siteName()} property search (${siteUrl()})` },
       signal: AbortSignal.timeout(6000),
+      redirect: "error", // a key in the URL is never forwarded to another host
     });
-    if (!response.ok) throw new Error(`geocoder answered ${response.status}`);
+    if (!response.ok) throw Object.assign(new Error("bad status"), { reason: `status ${response.status}` });
     body = await response.json();
   } catch (error) {
-    console.warn(`[geo] place search unavailable: ${error.message}`);
+    const reason = error.reason || (error.name === "TimeoutError" ? "timeout" : error.code === "ERR_INVALID_URL" ? "GEOCODER_URL is not a valid URL" : error.name === "SyntaxError" ? "invalid JSON" : "network error");
+    console.warn(`[geo] place search unavailable: ${reason}`);
     res.set("Cache-Control", "no-store");
     return fail(res, 503, "Location search is unavailable right now. Please try again in a moment.");
   }

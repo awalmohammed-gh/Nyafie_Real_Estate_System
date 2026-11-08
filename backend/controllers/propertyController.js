@@ -244,7 +244,30 @@ export const nearbyProperties = async (req, res) => {
   const page = markers ? 1 : Math.max(1, Math.round(number(req.query.page) || 1));
   const sort = NEARBY_SORTS[req.query.sort];
 
-  const [total, rows] = await Promise.all([
+  // The 2dsphere index is built in the background when the app connects; a search in that first
+  // moment waits for it instead of failing. Without the index (e.g. a database user that may not
+  // create indexes) the search says it is unavailable rather than crashing.
+  try { await Property.init(); } catch (error) { console.error(`[nearby] index setup failed: ${error.message}`); }
+  let total, rows;
+  try {
+    [total, rows] = await nearbyQuery({ filter, center, radius, sort, page, limit, markers });
+  } catch (error) {
+    if (!/index|geoNear|enumerating plans/i.test(error.message)) throw error;
+    // The error text quotes the query (and so the visitor's search point): log only its code
+    console.error(`[nearby] geo index missing (MongoDB code ${error.code ?? "unknown"}): run "npm run geo:backfill" or allow the database user to create indexes.`);
+    return fail(res, 503, "Nearby search is temporarily unavailable. Please try again shortly.");
+  }
+  const distanceOf = (row) => Math.round(row.distance / 10) * 10; // nearest 10 m
+
+  const items = markers
+    ? rows.map(({ _id, distance, ...row }) => ({ id: String(_id), ...row, image: row.image || "", distance: distanceOf({ distance }) }))
+    : (await presentProperties(rows.map((row) => Property.hydrate(row)), { includeAgentDetails: Boolean(req.user) }))
+      .map((item, index) => ({ ...item, distance: distanceOf(rows[index]) }));
+  ok(res, { items, total, page, pages: Math.max(1, Math.ceil(total / limit)), limit, radius });
+};
+
+const nearbyQuery = ({ filter, center, radius, sort, page, limit, markers }) =>
+  Promise.all([
     Property.countDocuments({ $and: [filter, { geo: withinRadius(center, radius) }] }),
     Property.aggregate([
       // Nearest first by default; distance is measured on the sphere, in metres
@@ -255,14 +278,6 @@ export const nearbyProperties = async (req, res) => {
       ...(markers ? [{ $project: MARKER_FIELDS }] : []),
     ]),
   ]);
-  const distanceOf = (row) => Math.round(row.distance / 10) * 10; // nearest 10 m
-
-  const items = markers
-    ? rows.map(({ _id, distance, ...row }) => ({ id: String(_id), ...row, image: row.image || "", distance: distanceOf({ distance }) }))
-    : (await presentProperties(rows.map((row) => Property.hydrate(row)), { includeAgentDetails: Boolean(req.user) }))
-      .map((item, index) => ({ ...item, distance: distanceOf(rows[index]) }));
-  ok(res, { items, total, page, pages: Math.max(1, Math.ceil(total / limit)), limit, radius });
-};
 
 /**
  * GET /api/properties/facets (public): filter options and headline numbers,
