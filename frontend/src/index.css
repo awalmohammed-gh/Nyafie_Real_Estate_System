@@ -48,7 +48,7 @@
 }
 
 @layer base {
-  /* Use the HomeBase violet for page and nested scrollbars. */
+  /* Use the NyaFie violet for page and nested scrollbars. */
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--color-brand-500) var(--color-brand-50);
@@ -310,7 +310,7 @@
 }
 
 /*
- * App loader (components/ui/PageLoader): the HomeBase mark breathes gently while a soft
+ * App loader (components/ui/PageLoader): the NyaFie mark breathes gently while a soft
  * brand-purple (#b45cfd) glow pulses behind it. It fades in after a short delay so quick
  * loads never flash. Reduced motion: a still mark.
  */

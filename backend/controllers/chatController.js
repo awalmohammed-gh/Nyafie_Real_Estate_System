@@ -28,7 +28,7 @@ const sideOf = (conversation, user) => {
 };
 
 /**
- * HomeBase chat is a plan feature for agents (inquiries, phone, email and WhatsApp always work).
+ * NyaFie chat is a plan feature for agents (inquiries, phone, email and WhatsApp always work).
  * Returns the ids of the given agents whose current plan includes chat. Admin listings always have chat.
  * Automatic notes about offers and rentals are records, not chat, so they are never blocked.
  */
@@ -43,8 +43,8 @@ const chatOpen = (conversation, enabled) => conversation.ownerType === "admin" |
 const presentOne = async (conversation, user) =>
   present(conversation, user, conversation.ownerType === "agent" ? await agentsWithChat([ownerId(conversation)]) : new Set());
 const CHAT_LOCKED = {
-  customer: "This agent isn't using HomeBase chat. Send an inquiry, or call, email or WhatsApp them instead.",
-  owner: "Upgrade your subscription to message customers through HomeBase.",
+  customer: "This agent isn't using NyaFie chat. Send an inquiry, or call, email or WhatsApp them instead.",
+  owner: "Upgrade your subscription to message customers through NyaFie.",
 };
 
 const PROPERTY_FIELDS = "title images location price pricePeriod listingType status availability ownerType contact";

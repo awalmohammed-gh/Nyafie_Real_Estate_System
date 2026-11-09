@@ -28,7 +28,7 @@ const Toggle = ({ checked, onChange, label, disabled }) => (
 
 const AgentSettingsShell = ({ title, description, children }) => <><PageTitle title={title} description={description} eyebrow="Your account" />{children}</>;
 const agentNotificationOptions = [
-  { key: "newListings", label: "Property updates", description: "Updates about your listings and activity on HomeBase." },
+  { key: "newListings", label: "Property updates", description: "Updates about your listings and activity on NyaFie." },
   { key: "inquiryUpdates", label: "Customer inquiries", description: "Keep up with inquiries and conversations about your properties." },
   { key: "offers", label: "Offers & platform news", description: "Offer updates, product news and occasional promotions." },
 ];

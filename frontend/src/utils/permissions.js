@@ -52,7 +52,7 @@ export const getAgentPermissions = ({ user, plans, settings, listings }) => {
         : null;
 
   return {
-    siteName: settings.general.siteName, // for messages such as "Contact HomeBase support"
+    siteName: settings.general.siteName, // for messages such as "Contact NyaFie support"
     isAgent,
     isSuspended,
     isActive,
@@ -124,7 +124,7 @@ export const lockCopy = (perms, feature) => {
     case "images":
       return { title: "Photo limit reached", description: `Your ${planName} plan supports up to ${perms.imageLimit} photos per property. Upgrade your plan to add more property photos.`, cta: "View Upgrade Options" };
     case "chat":
-      return { title: "Customer Chat", description: "Upgrade your subscription to communicate with customers directly through HomeBase messaging. Customers can still send you inquiries, call, email or WhatsApp you.", cta: "Upgrade Plan" };
+      return { title: "Customer Chat", description: "Upgrade your subscription to communicate with customers directly through NyaFie messaging. Customers can still send you inquiries, call, email or WhatsApp you.", cta: "Upgrade Plan" };
     case "inquiries":
       return { title: "Full inquiry management", description: "Tracking inquiry status is available on plans with full inquiry management.", cta: "Upgrade Plan" };
     case "inquiryStats":

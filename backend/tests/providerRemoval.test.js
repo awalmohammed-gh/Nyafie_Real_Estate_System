@@ -80,7 +80,7 @@ test("removing a provider ends access and public presence, keeps history; perman
   const inviteToken = crypto.randomBytes(24).toString("hex");
   const invites = memoryModel(t, TeamInvite, [new TeamInvite({ agency: company._id, role: "agent", tokenHash: crypto.createHash("sha256").update(inviteToken).digest("hex"), expiresAt: new Date(Date.now() + 5 * DAY) })]);
   const notifications = memoryModel(t, Notification, [new Notification({ recipient: company._id, audience: "user", type: "status", title: "Welcome" }), new Notification({ recipient: individual._id, audience: "user", type: "status", title: "Welcome" })]);
-  t.mock.method(Setting, "findOneAndUpdate", () => q({ key: "platform", general: { siteName: "HomeBase" }, agent: { requireSubscription: true }, property: { maxImages: 20, allowAgentPublishing: true, requireApproval: false }, payments: { subscriptionsEnabled: true } }));
+  t.mock.method(Setting, "findOneAndUpdate", () => q({ key: "platform", general: { siteName: "NyaFie" }, agent: { requireSubscription: true }, property: { maxImages: 20, allowAgentPublishing: true, requireApproval: false }, payments: { subscriptionsEnabled: true } }));
 
   const app = express();
   app.use(express.json());
@@ -105,7 +105,7 @@ test("removing a provider ends access and public presence, keeps history; perman
   const asAgent = (user, method, path, body) => call("agent", user, method, path, body);
   const login = (user) => call("agent", null, "POST", "/auth/agent/login", { email: user.email, password: PASSWORD });
 
-  await t.test("only HomeBase admins can remove providers", async () => {
+  await t.test("only NyaFie admins can remove providers", async () => {
     assert.equal((await asAgent(manager, "POST", `/admin/agents/${company._id}/remove`, { reason: "fraud" })).status, 403, "an agent session is refused");
     assert.equal((await call("admin", null, "POST", `/admin/agents/${company._id}/remove`, { reason: "fraud" })).status, 401, "no admin sign-in");
     assert.equal((await asAdmin("POST", `/admin/agents/${company._id}/remove`, {})).status, 400, "a reason is required");
@@ -161,7 +161,7 @@ test("removing a provider ends access and public presence, keeps history; perman
   });
 
   await t.test("former staff keep their own account but lose the organisation", async () => {
-    assert.equal((await login(manager)).status, 200, "their HomeBase account still signs in");
+    assert.equal((await login(manager)).status, 200, "their NyaFie account still signs in");
     assert.equal((await asAgent(manager, "PUT", `/properties/${inReview._id}`, { title: "Edited" })).status, 403, "can't edit the company's listing they handled");
     assert.equal((await asAgent(staffAgent, "GET", "/agents/inquiries")).status, 403);
     assert.equal((await asAgent(manager, "POST", "/properties", { title: "x", status: "draft", owner: String(company._id), organizationId: String(company._id) })).status, 403, "sending the company's id doesn't help");
@@ -225,7 +225,7 @@ test("removing a provider ends access and public presence, keeps history; perman
     assert.equal(status, 200);
     assert.ok(users.docs.includes(company), "kept as a record so nothing points at a missing account");
     assert.equal(`${company.firstName} ${company.lastName}`, "Deleted agent");
-    assert.match(company.email, /^deleted-.*@deleted\.homebase\.invalid$/);
+    assert.match(company.email, /^deleted-.*@deleted\.nyafie\.invalid$/);
     assert.equal(company.phone, "");
     assert.equal(company.agentApplication.companyName, "");
     assert.ok(company.removal.deletedAt);

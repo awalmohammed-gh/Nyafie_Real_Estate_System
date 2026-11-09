@@ -10,7 +10,7 @@ const AREA_RADIUS = 700; // metres: roughly a neighbourhood centre
  * address (approximate) gets a soft circle labelled as the area, so it never looks more precise
  * than it is. Scroll-zoom waits for a click, so scrolling the page never gets caught by the map.
  */
-const PropertyMap = ({ latitude, longitude, title, approximate = false }) => {
+const PropertyMap = ({ latitude, longitude, title, approximate = false, action = null }) => {
   const element = useRef(null);
 
   useEffect(() => {
@@ -33,7 +33,11 @@ const PropertyMap = ({ latitude, longitude, title, approximate = false }) => {
 
   return (
     <figure className="property-map">
-      <div ref={element} className="property-map-canvas" role="img" aria-label={approximate ? `Map of the area around ${title}` : `Map showing where ${title} is`} />
+      <div className="relative">
+        <div ref={element} className="property-map-canvas" role="img" aria-label={approximate ? `Map of the area around ${title}` : `Map showing where ${title} is`} />
+        {/* e.g. "Open in Maps": above Leaflet's panes and controls */}
+        {action && <div className="absolute right-3 bottom-3 z-[1000]">{action}</div>}
+      </div>
       {approximate && <figcaption className="property-map-note">The shaded circle shows the neighbourhood, not the exact house. Use the address above for the precise location.</figcaption>}
     </figure>
   );

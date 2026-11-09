@@ -2,7 +2,7 @@ import client from "./client";
 import { mapConversation, mapMessage } from "./mappers";
 
 // Inbox endpoints by audience: conversations the user started, or chats about
-// the listings they own (agents) / HomeBase listings (admins)
+// the listings they own (agents) / NyaFie listings (admins)
 const INBOX = {
   customer: "/messages",
   agent: "/agents/messages",

@@ -18,6 +18,7 @@ const CANARIES = {
   PAYSTACK_PUBLIC_KEY: "pk_test_CANARYpaystackpublic5e6f",
   CRON_SECRET: "CANARY-cron-secret-with-more-than-32-chars-0011",
   SMTP_APP_PASSWORD: "CANARY-smtp-app-password-22cc",
+  EMAIL_SMTP_PASSWORD: "CANARY-email-provider-password-66aa",
   ADMIN_PSD: "CANARY-admin-bootstrap-password-33dd",
   ADMIN_ENTRY_PATH: "hbCanaryEntry_9f8e7d6c5b4a",
   VIEW_HASH_SECRET: "CANARY-view-hash-secret-44ee",

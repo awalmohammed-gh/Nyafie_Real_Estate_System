@@ -172,7 +172,7 @@ const publicBase = (agents) => ({ status: "published", $or: [{ ownerType: "admin
  * GET /api/properties (public)
  * Without `page`: up to 48 public listings for the shared property cache.
  * With `page`: filtered, sorted and paginated -> { items, total, page, pages, limit }.
- * The default "recommended" order puts HomeBase listings first, then agents with
+ * The default "recommended" order puts NyaFie listings first, then agents with
  * priority visibility, then everyone else (newest first within each group).
  */
 export const listPublicProperties = async (req, res) => {
@@ -374,7 +374,7 @@ export const getProperty = async (req, res) => {
  * POST /api/properties/:id/view -> { counted, views }
  * Called by the property details page (never by cards or search). The browser only names the listing:
  * who is viewing comes from verified session cookies or a server-side hash, and the total from the
- * database. Each viewer counts once per listing per window (utils/propertyViews.js). HomeBase admins,
+ * database. Each viewer counts once per listing per window (utils/propertyViews.js). NyaFie admins,
  * anyone in the organisation that owns the listing, and crawlers never add views. Sold and rented
  * listings stay public, so they still count; drafts, hidden and removed listings do not.
  */

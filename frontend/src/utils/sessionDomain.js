@@ -14,7 +14,7 @@ export const sessionHome = { customer: "/", agent: "/agent/dashboard", get admin
 export const sessionLogin = { customer: "/login", agent: "/agent/login", get admin() { return adminPath("/login"); } };
 export const sessionDestination = (domain, from) => {
   if (typeof from !== "string" || !from.startsWith("/") || from.startsWith("//") || from.includes("\\")) return sessionHome[domain];
-  const url = new URL(from, "https://homebase.invalid");
+  const url = new URL(from, "https://nyafie.invalid");
   if (["/login", "/register", "/agent/login", "/agent/register", adminPath("/login")].includes(url.pathname)) return sessionHome[domain];
   return sessionDomainForPath(url.pathname, url.search) === domain ? url.pathname + url.search + url.hash : sessionHome[domain];
 };

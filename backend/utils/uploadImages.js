@@ -17,7 +17,7 @@ export const resolveImages = async (images = []) => {
       if (image.startsWith("data:image/")) {
         // base64 length * 3/4 is roughly the byte size
         if (image.length * 0.75 > MAX_BYTES) throw new HttpError(413, "Each photo must be smaller than 8MB.");
-        const result = await cloudinary.uploader.upload(image, { folder: "homebase/properties", resource_type: "image" });
+        const result = await cloudinary.uploader.upload(image, { folder: "nyafie/properties", resource_type: "image" });
         return result.secure_url;
       }
       // Already-stored images: https URLs (Cloudinary) or the site's own /paths. Never plain http,

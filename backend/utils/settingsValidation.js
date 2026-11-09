@@ -41,7 +41,7 @@ const IMAGE_TYPES = ["png", "jpeg", "webp", "svg+xml", "x-icon", "vnd.microsoft.
  * A branding image: keeps an existing URL, clears it with "", or uploads a new data URI
  * (sent by the settings page) to Cloudinary and returns the stored URL.
  */
-const image = async (value, label, maxKB, current, folder = "homebase/branding") => {
+const image = async (value, label, maxKB, current, folder = "nyafie/branding") => {
   const v = String(value ?? "").trim();
   if (!v || v === current) return v;
   const match = /^data:image\/([a-z+.-]+);base64,/.exec(v);
@@ -70,7 +70,7 @@ const heroSlide = async (b, n, current) => {
   const name = `Slide ${n}`;
   const id = HERO_ID.test(String(b.id)) ? String(b.id) : `slide-${Date.now().toString(36)}-${n}`;
   const saved = current.find((s) => s.id === id);
-  const img = BUILT_IN_HERO_IMAGES.includes(b.image) ? b.image : await image(b.image, `${name} image`, 5120, saved?.image, "homebase/hero");
+  const img = BUILT_IN_HERO_IMAGES.includes(b.image) ? b.image : await image(b.image, `${name} image`, 5120, saved?.image, "nyafie/hero");
   const slide = {
     id,
     active: bool(b.active),

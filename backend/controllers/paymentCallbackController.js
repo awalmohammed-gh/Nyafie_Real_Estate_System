@@ -7,6 +7,7 @@ import { processSubscriptionPayment, recoverableSubscriptionPayments } from "./s
 import { paymentEnvironment, paymentMode, providerScope } from "../utils/paystack.js";
 import { fail, ok } from "../utils/response.js";
 import { sendRenewalReminders } from "../utils/subscriptionReminders.js";
+import { reportError } from "../utils/monitoring.js";
 
 // The rental ledger or the agent subscription history: whichever stored record owns the reference
 const callbackRecord = async (reference) => {
@@ -90,7 +91,7 @@ export const reconcilePayments = async (req, res) => {
   // The same daily job reminds agents before their plan expires (works without Paystack too)
   let reminders = 0;
   try { reminders = await sendRenewalReminders(); }
-  catch (error) { console.error("Renewal reminders failed:", error.message); }
+  catch (error) { console.error("Renewal reminders failed:", error.message); await reportError(error, { tags: { job: "renewal-reminders" } }); }
   if (paymentMode() === "disabled") return fail(res, 503, "Online payments are not configured.");
   const counts = { ...emptyCounts(), ...Object.fromEntries(recoveryQueues.map((queue) => [queue.name, emptyCounts()])) };
   // Bounded work fits one serverless invocation. The queues take turns from one shared
@@ -109,6 +110,7 @@ export const reconcilePayments = async (req, res) => {
       } catch (error) {
         tally("errors");
         console.error(`Payment recovery failed for ${queue.reference(record)}:`, error.message);
+        await reportError(error, { tags: { job: "payment-recovery", queue: queue.name } });
       }
     }
   }

@@ -105,7 +105,7 @@ export const SeoTab = () => {
         <Row label="Keywords" description="Comma-separated. Most search engines ignore these, but some site tools still read them." htmlFor="seo-keywords">
           <input id="seo-keywords" value={seo.form.keywords} onChange={(e) => seo.set("keywords", e.target.value.slice(0, 300))} placeholder="real estate, homes for rent, Accra" className="field" />
         </Row>
-        <Row label="Website address" description="The public address of the site, used for canonical links, e.g. https://www.homebase.com.gh." htmlFor="seo-url">
+        <Row label="Website address" description="The public address of the site, used for canonical links, e.g. https://www.nyafie.com.gh." htmlFor="seo-url">
           <input id="seo-url" type="url" value={seo.form.baseUrl} onChange={(e) => seo.set("baseUrl", e.target.value.trim())} placeholder="https://" className="field" />
         </Row>
         <Row label="Social sharing image" description="Shown when a page is shared on WhatsApp, Facebook or X. 1200×630 works best. Empty uses the logo.">

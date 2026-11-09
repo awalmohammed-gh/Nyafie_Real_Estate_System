@@ -15,6 +15,7 @@
     "test:reports": "node --test tests/adminReport.test.js"
   },
   "dependencies": {
+    "@sentry/react": "11.9.0",
     "@tailwindcss/vite": "^4.2.2",
     "axios": "^1.14.0",
     "jspdf": "^4.2.1",

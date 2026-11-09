@@ -20,7 +20,7 @@ import { isOrganization, ACCOUNT_LABELS } from "./accountTypes.js";
 import { isRemoved } from "./agentApplication.js";
 
 /**
- * Taking a provider (individual agent, agency or company, or one of their staff) off HomeBase.
+ * Taking a provider (individual agent, agency or company, or one of their staff) off NyaFie.
  *
  * Remove (the normal action) ends access and public presence but keeps every record:
  *   account removed (no sign-in, existing tokens stop working) -> listings hidden -> staff memberships
@@ -55,7 +55,7 @@ const unassign = (ownerId, memberId) => Promise.all([
 ]);
 
 /**
- * Ends a live organisation membership. The member keeps their own HomeBase account; the membership
+ * Ends a live organisation membership. The member keeps their own NyaFie account; the membership
  * moves to their history and they become an individual applicant again (a new plan or invite brings
  * them back). `extra` adds to the update, e.g. removing the member's account too.
  */
@@ -131,7 +131,7 @@ export const removeProvider = async (id, admin, { reason, note } = {}) => {
   // A staff member: the organisation carries on; their assigned work goes back to its owner
   if (staffOf) {
     await unassign(staffOf, user._id);
-    await notifyUser(staffOf, { type: "user", title: "A team member was removed", message: `HomeBase removed ${providerName(user)} from your team. Their assigned listings and leads are back with you.`, link: "/agent/team" });
+    await notifyUser(staffOf, { type: "user", title: "A team member was removed", message: `NyaFie removed ${providerName(user)} from your team. Their assigned listings and leads are back with you.`, link: "/agent/team" });
     return { kind: "staff", name: providerName(user) };
   }
 
@@ -145,7 +145,7 @@ export const removeProvider = async (id, admin, { reason, note } = {}) => {
   const staff = await User.find({ "agency.owner": user._id });
   for (const member of staff) {
     await endMembership(member, "organisation-removed", now);
-    await notifyUser(member._id, { type: "status", title: "You no longer have access to this organisation", message: `${providerName(user)} is no longer on HomeBase. Your own account is still yours: choose a plan to keep listing, or join another team.`, link: "/agent/status" });
+    await notifyUser(member._id, { type: "status", title: "You no longer have access to this organisation", message: `${providerName(user)} is no longer on NyaFie. Your own account is still yours: choose a plan to keep listing, or join another team.`, link: "/agent/status" });
   }
   return {
     kind: isOrganization(accountTypeOf(user)) ? "organisation" : "individual",
@@ -267,7 +267,7 @@ export const permanentlyDeleteProvider = async (id, admin, confirm) => {
     await User.updateOne({ _id: userId, "agentApplication.status": "removed" }, {
       $set: {
         ...DELETED_NAME,
-        email: `deleted-${userId}@deleted.homebase.invalid`,
+        email: `deleted-${userId}@deleted.nyafie.invalid`,
         phone: "",
         profileImage: "",
         password: await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10), // nobody can sign in

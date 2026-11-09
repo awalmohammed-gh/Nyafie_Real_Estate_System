@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { schemaOptions } from "../utils/schemaOptions.js";
 
-// In-app notifications. "admins" notifications (about HomeBase listings) are
+// In-app notifications. "admins" notifications (about NyaFie listings) are
 // shared by every admin, the same way admin conversations are.
 const notificationSchema = new mongoose.Schema(
   {

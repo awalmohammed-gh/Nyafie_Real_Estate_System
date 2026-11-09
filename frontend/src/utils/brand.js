@@ -1,4 +1,4 @@
-// "HomeBase" -> ["Home", "Base"], "Prime Estate" -> ["Prime ", "Estate"]: the second part is shown in the brand colour
+// "NyaFie" -> ["Home", "Base"], "Prime Estate" -> ["Prime ", "Estate"]: the second part is shown in the brand colour
 export const splitBrandName = (name = "") => {
   const trimmed = name.trim();
   const space = trimmed.lastIndexOf(" ");

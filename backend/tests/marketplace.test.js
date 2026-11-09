@@ -31,7 +31,7 @@ const settings = (t, overrides = {}) => t.mock.method(Setting, "findOneAndUpdate
 test("public listings use live, allowlisted agent data rather than forged contact snapshots", async (t) => {
   t.mock.method(User, "find", () => query([agent]));
   settings(t);
-  t.mock.method(Plan, "findOne", () => query(null)); // no default plan, so no HomeBase chat
+  t.mock.method(Plan, "findOne", () => query(null)); // no default plan, so no NyaFie chat
   const [property] = await presentProperties([listing()]);
   assert.equal(property.agent.chat, false);
   assert.equal(property.agent.id, String(agent._id));

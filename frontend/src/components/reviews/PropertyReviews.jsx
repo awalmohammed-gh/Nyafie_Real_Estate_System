@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { EyeOff, MessageSquareText, Pencil, Trash2 } from "lucide-react";
+import { EyeOff, Pencil, Star, Trash2 } from "lucide-react";
 import { reviewApi } from "../../frontApi";
 import { useToast } from "../../context/useToast";
 import ConfirmDialog from "../ui/ConfirmDialog";
@@ -21,21 +21,19 @@ const ratingWord = (count) => `${count} ${count === 1 ? "rating" : "ratings"}`;
 // ---------- Average, count and how the stars are spread
 const Summary = ({ summary }) => (
   <div>
-    <div className="flex items-end gap-3">
-      <p className="text-4xl font-semibold tracking-tight text-gray-900 tabular-nums">{summary.count ? summary.average.toFixed(1) : "–"}</p>
-      <div className="pb-1">
-        <StarDisplay value={summary.average || 0} size="sm" />
-        <p className="mt-0.5 text-xs text-gray-500">{summary.count ? ratingWord(summary.count) : "No ratings yet"}</p>
-      </div>
+    <div className="flex items-center gap-2">
+      <p className="text-4xl font-bold tracking-tight text-gray-900 tabular-nums">{summary.count ? summary.average.toFixed(1) : "–"}</p>
+      <Star aria-hidden="true" className={`h-7 w-7 ${summary.count ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
     </div>
+    <p className="mt-1 text-sm text-gray-500">{summary.count ? ratingWord(summary.count) : "No ratings yet"}</p>
     <ul className="mt-4 space-y-1.5" aria-label="Rating breakdown">
       {[5, 4, 3, 2, 1].map((n) => {
         const share = summary.count ? (summary.distribution[n] / summary.count) * 100 : 0;
         return (
           <li key={n} className="flex items-center gap-2 text-xs text-gray-500">
-            <span className="w-3 text-right tabular-nums">{n}</span>
-            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
-              <span className="block h-full rounded-full bg-amber-400 transition-[width] duration-500" style={{ width: `${share}%` }} />
+            <span className="flex w-6 items-center justify-end gap-0.5 tabular-nums">{n}<Star aria-hidden="true" className="h-3 w-3 fill-amber-400 text-amber-400" /></span>
+            <span className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
+              <span className="block h-full rounded-full bg-brand-600 transition-[width] duration-500" style={{ width: `${share}%` }} />
             </span>
             <span className="w-6 text-right tabular-nums">{summary.distribution[n]}</span>
           </li>
@@ -88,9 +86,9 @@ const ReviewForm = ({ initial, saving, error, onSubmit, onCancel }) => {
 
 // ---------- One review in the list
 const ReviewItem = ({ review }) => (
-  <li className="py-5 first:pt-0">
+  <li className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm shadow-gray-900/3 sm:p-5">
     <div className="flex items-start gap-3">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600">{getInitials(review.author)}</span>
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-50 text-sm font-semibold text-brand-700">{getInitials(review.author)}</span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="text-sm font-semibold text-gray-900">{review.author}</p>
@@ -198,8 +196,16 @@ const PropertyReviews = ({ propertyId, user, onRequireSignIn, resumeRating, onRe
   };
 
   return (
-    <section ref={sectionRef} id="reviews" className="scroll-mt-24 border-t border-gray-200 py-7 sm:py-8" aria-labelledby="property-reviews-heading">
-      <h2 id="property-reviews-heading" className="text-lg font-semibold tracking-tight text-gray-900 sm:text-xl">Ratings & reviews</h2>
+    <section ref={sectionRef} id="reviews" className="scroll-mt-24 py-7 sm:py-8" aria-labelledby="property-reviews-heading">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="property-reviews-heading" className="text-xl font-bold tracking-tight text-gray-900">Reviews{summary.count ? ` (${summary.count})` : ""}</h2>
+        {!form && !mine && (
+          <button type="button" onClick={() => startReview()} className="inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-brand-600 hover:text-brand-700">
+            <Pencil aria-hidden="true" className="h-4 w-4" />
+            Write a review
+          </button>
+        )}
+      </div>
 
       <div className="mt-5 grid gap-8 sm:grid-cols-[13rem_minmax(0,1fr)] sm:gap-10">
         <Summary summary={summary} />
@@ -238,10 +244,6 @@ const PropertyReviews = ({ propertyId, user, onRequireSignIn, resumeRating, onRe
               <div className="mt-3">
                 <StarInput value={0} onChange={startReview} label="Rate this property" />
               </div>
-              <button type="button" onClick={() => startReview()} className="mt-3 inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-brand-600 hover:text-brand-700">
-                <MessageSquareText aria-hidden="true" className="h-4 w-4" />
-                Write a review
-              </button>
             </div>
           )}
         </div>
@@ -250,7 +252,7 @@ const PropertyReviews = ({ propertyId, user, onRequireSignIn, resumeRating, onRe
       {/* The reviews */}
       <div className="mt-8">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm font-semibold text-gray-900">{list.total ? `${list.total} ${list.total === 1 ? "review" : "reviews"}` : "Reviews"}</p>
+          {list.total > 0 && <p className="text-sm font-semibold text-gray-900">{list.total} {list.total === 1 ? "review" : "reviews"}</p>}
           {list.total > 1 && (
             <label className="flex items-center gap-2 text-sm text-gray-500">
               Sort by
@@ -274,7 +276,7 @@ const PropertyReviews = ({ propertyId, user, onRequireSignIn, resumeRating, onRe
           <p className="rounded-lg border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500">No reviews yet. Be the first to rate this property.</p>
         ) : (
           <>
-            <ul className={`divide-y divide-gray-100 transition-opacity ${status === "loading" ? "opacity-60" : ""}`}>
+            <ul className={`grid gap-3 transition-opacity ${status === "loading" ? "opacity-60" : ""}`}>
               {list.items.map((review) => <ReviewItem key={review.id} review={review} />)}
             </ul>
             {list.page < list.pages && (

@@ -70,7 +70,7 @@ test("customer profile photos use authenticated HTTP uploads and persist through
     assert.equal(other.profileImage, "");
     assert.equal(customer.preferences.inquiryUpdates, false);
     assert.equal(uploads[0].data, image);
-    assert.equal(uploads[0].options.folder, `homebase/profiles/${customer._id}`);
+    assert.equal(uploads[0].options.folder, `nyafie/profiles/${customer._id}`);
     assert.deepEqual(uploads[0].options.transformation[0], { width: 512, height: 512, crop: "fill", gravity: "auto" });
     const restored = await call("GET", "/api/auth/customer/me");
     assert.equal((await restored.json()).data.profileImage, uploaded.profileImage);

@@ -103,7 +103,7 @@ const revenueSummary = async (now) => {
 };
 
 // Agents waiting for an admin decision (profile complete and subscription paid)
-// Agents still on HomeBase: providers an admin removed (or deleted) aren't counted anywhere
+// Agents still on NyaFie: providers an admin removed (or deleted) aren't counted anywhere
 const CURRENT_AGENTS = {
   role: "agent",
   "agentApplication.status": { $ne: "removed" },

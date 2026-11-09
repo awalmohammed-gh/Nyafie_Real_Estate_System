@@ -17,7 +17,7 @@ const planSchema = new mongoose.Schema(
     analyticsLevel: { type: String, enum: ["basic", "standard", "advanced"], default: "basic" },
     inquiryManagement: { type: String, enum: ["basic", "full"], default: "basic" },
     internalChat: { type: Boolean, default: false },
-    teamMemberLimit: { type: Number, default: 0, min: 0 }, // agency staff accounts (besides the owner) // HomeBase customer chat (inquiries, phone, email and WhatsApp always work)
+    teamMemberLimit: { type: Number, default: 0, min: 0 }, // agency staff accounts (besides the owner) // NyaFie customer chat (inquiries, phone, email and WhatsApp always work)
     priorityVisibility: { type: Boolean, default: false },
     features: [{ type: String, trim: true }],
     popular: { type: Boolean, default: false },

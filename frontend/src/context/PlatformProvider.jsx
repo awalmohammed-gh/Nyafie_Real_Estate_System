@@ -6,7 +6,7 @@ import { defaultSettings } from "../data/defaultSettings";
 import { readStorage, writeStorage } from "../utils/storage";
 
 // The last settings this browser saw, so a renamed site never flashes the default name on load
-const SETTINGS_CACHE = "homebase:settings";
+const SETTINGS_CACHE = "nyafie:settings";
 
 // Fills any section/key missing from older cached or saved values with the defaults
 const withDefaults = (saved = {}) =>

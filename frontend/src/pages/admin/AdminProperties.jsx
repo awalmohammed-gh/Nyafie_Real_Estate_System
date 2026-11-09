@@ -157,7 +157,7 @@ const AdminProperties = () => {
   const toggleFeatured = (p) =>
     run(setFeatured(p.id, !p.meta?.isFeatured), { success: p.meta?.isFeatured ? "Removed from featured" : "Marked as featured", description: p.title });
 
-  // HomeBase listings: publish/unpublish and availability. Agent listings: review and moderation.
+  // NyaFie listings: publish/unpublish and availability. Agent listings: review and moderation.
   const setAvailability = (p, availability) =>
     run(updateListing(p.id, { listing: { availability } }), { success: `Marked ${availability.toLowerCase()}`, description: p.title });
   const soldLabel = (p) => (p.property.status === "Sale" ? "Sold" : "Rented");

@@ -186,7 +186,7 @@ export const mapProperty = (p) => ({
     companyName: p.agent?.companyName || "",
     joinedAt: p.agent?.joinedAt,
     verified: p.agent?.verified === true,
-    chat: p.ownerType !== "agent" || p.agent?.chat === true, // HomeBase chat is a plan feature for agents
+    chat: p.ownerType !== "agent" || p.agent?.chat === true, // NyaFie chat is a plan feature for agents
     agency: p.agent?.agency || null, // { id, name, logo } for agency listings
     profileId: p.agent?.agency?.id || p.agent?.id || idOf(p.owner), // staff link to their agency's profile
   },
@@ -266,7 +266,7 @@ export const mapConversation = (c) => {
   return {
     id: c.id,
     side: c.side, // "customer" | "owner": which side the signed-in account is on
-    chatEnabled: c.chatEnabled !== false, // false when the agent's plan has no HomeBase chat
+    chatEnabled: c.chatEnabled !== false, // false when the agent's plan has no NyaFie chat
     unread: c.unread || 0,
     status: c.status,
     lastMessage: c.lastMessage,

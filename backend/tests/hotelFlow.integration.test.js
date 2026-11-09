@@ -22,7 +22,7 @@ import Subscription from "../models/Subscription.js";
 test("hotel marketplace: HTTP ownership, booking, payment, inventory and concurrency", { skip: process.env.RUN_HOTEL_INTEGRATION !== "1", timeout: process.env.HOTEL_UI_PREVIEW ? 600000 : 90000 }, async (t) => {
   const probe = createServer(); await new Promise((done) => probe.listen(0, "127.0.0.1", done));
   const port = probe.address().port; await new Promise((done) => probe.close(done));
-  const directory = await mkdtemp(join(tmpdir(), "homebase-hotel-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "nyafie-hotel-test-"));
   const log = await open(join(directory, "mongod.log"), "w");
   const binary = process.env.MONGOD_TEST_BINARY || "C:/Program Files/MongoDB/Server/9.0/bin/mongod.exe";
   const mongod = spawn(binary, ["--dbpath", directory, "--bind_ip", "127.0.0.1", "--port", String(port), "--replSet", "hoteltest"], { stdio: ["ignore", log.fd, log.fd], windowsHide: true });
@@ -33,7 +33,7 @@ test("hotel marketplace: HTTP ownership, booking, payment, inventory and concurr
     mongod.kill(); await new Promise((done) => mongod.exitCode !== null ? done() : mongod.once("exit", done));
     await log.close();
     const absolute = resolve(directory);
-    assert.ok(absolute.startsWith(resolve(tmpdir())) && absolute.includes("homebase-hotel-test-"));
+    assert.ok(absolute.startsWith(resolve(tmpdir())) && absolute.includes("nyafie-hotel-test-"));
     await rm(absolute, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   });
   let connected = false;
@@ -48,7 +48,7 @@ test("hotel marketplace: HTTP ownership, booking, payment, inventory and concurr
   process.env.JWT_KEY = "isolated-hotel-test-jwt-secret-key";
   process.env.PAYSTACK_SECRET_KEY = "sk_test_isolated";
   process.env.PUBLIC_SITE_URL = "http://localhost:5173";
-  await Setting.create({ key: "platform", agent: { requireSubscription: false }, property: { requireApproval: false, allowAgentPublishing: true, maxImages: 15, propertyTypes: ["Hotel", "Apartment"], rentPeriods: ["night", "month"] } });
+  await Setting.create({ key: "platform", agent: { requireSubscription: false }, property: { requireApproval: false, allowAgentPublishing: true, maxImages: 15, propertyTypes: ["Hotel", "Apartment", "House"], rentPeriods: ["night", "month"] } });
   const owner = await User.create({ emailVerifiedAt: new Date(), firstName: "Hotel", lastName: "Owner", email: "owner@hotel.test", phone: "0241234567", password: "test-password", role: "agent", agentApplication: { status: "approved" } });
   const stranger = await User.create({ emailVerifiedAt: new Date(), firstName: "Other", lastName: "Agent", email: "stranger@hotel.test", phone: "0241234567", password: "test-password", role: "agent", agentApplication: { status: "approved" } });
   const customer = await User.create({ emailVerifiedAt: new Date(), firstName: "Test", lastName: "Guest", email: "guest@hotel.test", phone: "0241234567", password: "test-password" });
@@ -254,6 +254,13 @@ test("hotel marketplace: HTTP ownership, booking, payment, inventory and concurr
     await Property.updateOne({ _id: hotelId }, { $push: { roomTypes: { ...room, name: "Family Suite", pricePerNight: 1200, maxGuests: 4, beds: 2, bedType: "King + twin beds", size: 56, amenities: ["Kitchenette", "Private bathroom", "Balcony", "Air conditioning"], images: ["/hero/modern-living.jpg", "/hero/furnished-bedroom.jpg"] } } });
     // A rental priced per night, to preview its "pay online or on arrival" checkout
     const shortStay = await api("/properties", { user: owner, body: { title: "Test Short Stay", description: "A furnished one-bedroom apartment for short stays near the airport.", propertyType: "Apartment", listingType: "Rent", pricePeriod: "night", price: 2500, status: "published", location: { neighbourhood: "Airport", city: "Accra", address: "3 Airport Road" }, area: 60, images: ["/hero/modern-living.jpg"], stayBooking: { payOnArrival: true, payOnline: true, arrivalDeadline: "15:00", cancellationPolicy: "Free cancellation until the day before arrival." } } });
+    // A house for sale with several photos, amenities and a map pin, plus two similar homes
+    const photos = ["/hero/heritage-villa.jpg", "/hero/modern-living.jpg", "/hero/furnished-bedroom.jpg", "/hero/resort-pool.jpg", "/hero/heritage-villa-960.jpg", "/hero/modern-living-960.jpg", "/hero/furnished-bedroom-960.jpg"];
+    const house = (title, price, extra = {}) => api("/properties", { user: owner, body: { title, description: "A spacious and well-designed 4-bedroom house with a wrap-around terrace, modern finishes and ample parking. Located in the serene and sought-after East Legon area, it offers comfort, security and convenience for families or investors. The ground floor has an open-plan living and dining area that opens onto the terrace, a fitted kitchen with a pantry, and a guest washroom. Upstairs, every bedroom is en-suite.", propertyType: "House", listingType: "Sale", price, bedrooms: 4, bathrooms: 4, area: 450, status: "published", location: { neighbourhood: "East Legon", city: "Accra", region: "Greater Accra", address: "12 Lagos Avenue", digitalAddress: "GA-412-3381", latitude: 5.6355, longitude: -0.1617 }, images: photos, amenities: ["Air Conditioning", "Fitted Kitchen", "Borehole", "24/7 Security", "Solar Backup", "Staff Quarters", "Garden", "Walled Compound"], ...extra } });
+    const saleHouse = await house("The Wrap-Around Terrace", 450000);
+    await house("Four Bedroom House", 420000, { images: [photos[4], photos[1]] });
+    await house("Five Bedroom Detached", 750000, { bedrooms: 5, bathrooms: 5, area: 600, images: [photos[5], photos[0]] });
+    console.log(`Sale house ${saleHouse.data?.id || JSON.stringify(saleHouse)}`);
     console.log(`Isolated hotel preview: API ${base}, hotel ${hotelId}, short stay ${shortStay.data?.id || JSON.stringify(shortStay)}. Guest: guest@hotel.test; Agent: owner@hotel.test. Local fixture password: test-password`);
     await new Promise((done) => { const timer = setTimeout(done, 540000); process.once("SIGINT", () => { clearTimeout(timer); done(); }); });
   }

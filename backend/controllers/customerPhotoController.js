@@ -21,7 +21,7 @@ export const uploadCustomerPhoto = async (req, res) => {
   let result;
   try {
     result = await cloudinary.uploader.upload(image, {
-      folder: `homebase/profiles/${req.user._id}`,
+      folder: `nyafie/profiles/${req.user._id}`,
       resource_type: "image",
       allowed_formats: ["jpg", "jpeg", "png", "webp"],
       transformation: [{ width: 512, height: 512, crop: "fill", gravity: "auto" }, { quality: "auto", fetch_format: "webp" }],

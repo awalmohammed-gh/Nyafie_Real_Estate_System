@@ -117,7 +117,7 @@ const DashboardLayout = ({ variant, label, groups, badges = {}, headerActions, s
   const location = useLocation();
   const reducedMotion = useReducedMotion();
   const transition = reducedMotion ? { duration: 0 } : SMOOTH_TRANSITION;
-  const storageKey = `homebase:sidebar-collapsed:${variant}`;
+  const storageKey = `nyafie:sidebar-collapsed:${variant}`;
   const [collapsed, setCollapsed] = useState(() => readStorage(storageKey, false));
   const [menuOpen, setMenuOpen] = useState(false);
   useLockBodyScroll(menuOpen);

@@ -6,7 +6,7 @@ import connectDB from "../config/mongodb.js";
 test("concurrent requests reuse the MongoDB connection and failed connects can retry", async (t) => {
   const oldUri = process.env.MONGODB_URI;
   const oldDb = process.env.MONGODB_DB;
-  process.env.MONGODB_URI = 'mongodb://example.test/homebase';
+  process.env.MONGODB_URI = 'mongodb://example.test/nyafie';
   process.env.MONGODB_DB = 'preview_db';
   let connected = false;
   Object.defineProperty(mongoose.connection, 'readyState', { configurable: true, get: () => connected ? 1 : 0 });

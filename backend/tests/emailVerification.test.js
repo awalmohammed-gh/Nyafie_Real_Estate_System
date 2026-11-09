@@ -54,3 +54,35 @@ test("Google SMTP uses TLS and an app password; delivery failures never report a
   await assert.rejects(verificationMailer.send("customer@example.test", "123456"), /did not accept/);
   await assert.rejects(passwordResetMailer.send("customer@example.test", "654321"), /did not accept/);
 });
+
+test("an email provider over SMTP is used when configured: its own sender address, TLS required, Gmail as fallback", async (t) => {
+  const keys = ["EMAIL_SMTP_HOST", "EMAIL_SMTP_PORT", "EMAIL_SMTP_USER", "EMAIL_SMTP_PASSWORD", "EMAIL_FROM", "SMTP_USER", "SMTP_APP_PASSWORD"];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+  Object.assign(process.env, { EMAIL_SMTP_HOST: "smtp-relay.example.test", EMAIL_SMTP_USER: "apikey", EMAIL_SMTP_PASSWORD: "provider-secret", EMAIL_FROM: "no-reply@nyafie.example", SMTP_USER: "sender@gmail.com", SMTP_APP_PASSWORD: "gmail-app-password" });
+  delete process.env.EMAIL_SMTP_PORT;
+  let transportOptions, message;
+  t.mock.method(nodemailer, "createTransport", (options) => {
+    transportOptions = options;
+    return { sendMail: async (mail) => { message = mail; return { accepted: [mail.to] }; } };
+  });
+  await verificationMailer.send("customer@example.test", "246810");
+  assert.equal(transportOptions.host, "smtp-relay.example.test");
+  assert.equal(transportOptions.port, 587);
+  assert.equal(transportOptions.secure, false);
+  assert.equal(transportOptions.requireTLS, true, "never sends over plain text");
+  assert.equal(transportOptions.from, undefined, "the sender is not a transport option");
+  assert.equal(message.from.address, "no-reply@nyafie.example");
+  assert.match(message.html, /246810/);
+  assert.match(message.text, /246810/);
+  process.env.EMAIL_SMTP_PORT = "465";
+  await passwordResetMailer.send("customer@example.test", "135791");
+  assert.equal(transportOptions.secure, true);
+  // A half-configured provider is an error, not a silent switch to Gmail
+  delete process.env.EMAIL_FROM;
+  assert.throws(smtpOptions, /temporarily unavailable/);
+  process.env.EMAIL_FROM = "not-an-address";
+  assert.throws(smtpOptions, /temporarily unavailable/);
+  delete process.env.EMAIL_SMTP_HOST;
+  assert.equal(smtpOptions().host, "smtp.gmail.com");
+});

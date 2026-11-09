@@ -6,7 +6,7 @@ import { schemaOptions } from "../utils/schemaOptions.js";
 import { validPasswordInput } from "../utils/passwordPolicy.js";
 
 const applicationSchema = new mongoose.Schema({
-  // removed: taken off HomeBase by an admin (no sign-in, listings hidden); only an admin can restore it
+  // removed: taken off NyaFie by an admin (no sign-in, listings hidden); only an admin can restore it
   status: { type: String, enum: ["incomplete", "pending", "approved", "rejected", "suspended", "removed"], default: "incomplete", index: true },
   agentType: { type: String, enum: ACCOUNT_TYPES, default: "individual" },
   companyName: { type: String, trim: true, maxlength: 160, default: "" },
