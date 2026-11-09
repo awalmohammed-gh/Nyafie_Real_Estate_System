@@ -42,7 +42,7 @@ const userItems = [
   { label: "My Rentals", to: "/account/rentals", icon: KeyRound },
   { label: "My Purchases", to: "/account/purchases", icon: Building },
   { label: "My Inquiries", to: "/account/inquiries", icon: MessageSquare },
-  { label: "Become an Agent", to: "/agent/plans", icon: BadgeCheck, highlight: true, badge: "NEW" },
+  { label: "Become Agent", to: "/agent/plans", icon: BadgeCheck, highlight: true },
   { label: "Settings", to: "/account/settings", icon: Settings },
 ];
 
@@ -120,7 +120,14 @@ const AccountMenu = ({ onAuth, compact = false, onDark = false, label }) => {
     }
   };
 
-  const items = isAdmin ? adminItems : isAgent ? canAccessAgent(user) ? agentItems : [{ label: "Application status", to: "/agent/status", icon: ClipboardCheck }, { label: "Agent profile", to: "/agent/onboarding/profile", icon: UserRound }] : userItems;
+  // Converted customers retain a customer session on public pages. The API's
+  // agentAccess flag identifies their registered agent account without changing roles.
+  const customerItems = userItems.map((item) =>
+    item.to === "/agent/plans" && user?.agentAccess === true
+      ? { label: "Agent Dashboard", to: "/agent/dashboard", icon: LayoutDashboard, highlight: true }
+      : item,
+  );
+  const items = isAdmin ? adminItems : isAgent ? canAccessAgent(user) ? agentItems : [{ label: "Application status", to: "/agent/status", icon: ClipboardCheck }, { label: "Agent profile", to: "/agent/onboarding/profile", icon: UserRound }] : customerItems;
 
   return (
     <div ref={containerRef} className="relative">
@@ -135,21 +142,21 @@ const AccountMenu = ({ onAuth, compact = false, onDark = false, label }) => {
         } ${open ? (onDark ? "bg-white/15" : "bg-gray-100") : ""}`}
       >
         {isAuthenticated ? (
-          <span className="relative">
-            <UserAvatar user={user} className="h-10 w-10 text-sm" />
+          <span className="account-menu-avatar relative inline-flex h-10 w-10 shrink-0">
+            <UserAvatar user={user} className="h-full w-full text-sm" />
             {isAgent && (
               <span className={`absolute -right-0.5 -bottom-0.5 h-3.5 w-3.5 rounded-full ring-2 ring-white ${inactiveAgent ? "bg-amber-400" : "bg-emerald-500"}`} />
             )}
           </span>
         ) : (
-          <span className={`grid h-10 w-10 place-items-center rounded-full ring-1 transition ${onDark ? "text-white ring-white/40 hover:bg-white/10" : "text-gray-700 ring-gray-200 hover:bg-gray-100"}`}>
+          <span className={`account-menu-avatar grid h-10 w-10 shrink-0 place-items-center rounded-full ring-1 transition ${onDark ? "text-white ring-white/40 hover:bg-white/10" : "text-gray-700 ring-gray-200 hover:bg-gray-100"}`}>
             <UserRound className="h-5 w-5" />
           </span>
         )}
         {(isAuthenticated || label) && !compact && (
           <>
-            <span className={`${label ? "block" : "hidden xl:block"} max-w-32 truncate text-sm font-semibold ${onDark ? "text-white" : "text-gray-800"}`}>{label || user.firstName}</span>
-            <ChevronDown className={`${label ? "block" : "hidden xl:block"} h-4 w-4 transition-transform ${onDark ? "text-white/70" : "text-gray-500"} ${open ? "rotate-180" : ""}`} />
+            <span title={isAuthenticated ? user.name : undefined} className={`block max-w-32 truncate text-sm leading-none font-semibold ${onDark ? "text-white" : "text-gray-800"}`}>{isAuthenticated ? user.name || user.firstName : label}</span>
+            <ChevronDown className={`block h-4 w-4 shrink-0 transition-transform ${onDark ? "text-white/70" : "text-gray-500"} ${open ? "rotate-180" : ""}`} />
           </>
         )}
       </button>
