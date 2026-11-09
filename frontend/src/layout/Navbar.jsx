@@ -25,6 +25,7 @@ const buildLinks = (paths, propertyTypes) => {
     { name: "Find Property", menu: "listings", matches: [paths.listings, "/rent", "/sale"] },
     { name: "Properties", menu: "properties", matches: [paths.properties, "/house/"] },
     { name: "Agents", path: paths.agents },
+    { name: "About", path: "/about" },
     { name: "Contact", path: "/contact" },
   ];
   return { listingLinks, navLinks };

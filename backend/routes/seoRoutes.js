@@ -44,7 +44,7 @@ router.get(['/sitemap-pages.xml', '/sitemap-properties-:page.xml'], async (req, 
   const settings = await getSettings();
   if (!settings.seo.allowIndexing || process.env.VERCEL_ENV === 'preview') return res.status(404).type('text/plain').send('Indexing is disabled.');
   let entries;
-  if (!req.params.page) entries = ['/', `/${settings.slugs.properties}`, `/${settings.slugs.listings}`, '/sale', '/rent', '/contact'].map((path) => ({ url: absoluteUrl(path) }));
+  if (!req.params.page) entries = ['/', `/${settings.slugs.properties}`, `/${settings.slugs.listings}`, '/sale', '/rent', '/about', '/contact'].map((path) => ({ url: absoluteUrl(path) }));
   else {
     const page = Number(req.params.page);
     if (!Number.isSafeInteger(page) || page < 1 || page > 10000) return res.sendStatus(404);
@@ -66,7 +66,7 @@ router.get(['/', '/:slug', '/house/:id', '/agents/:id', '/agent/{*path}', '/acco
     const { query } = await publicQuery();
     property = mongoose.isValidObjectId(req.params.id) ? await Property.findOne({ _id: req.params.id, ...query }).select('title description images location').lean() : null;
     if (!property) status = 404;
-  } else if (req.params.slug && ![...Object.values(settings.slugs), 'sale', 'rent', 'contact', 'login', 'register', 'offer', 'agent', 'account'].includes(req.params.slug)) status = 404;
+  } else if (req.params.slug && ![...Object.values(settings.slugs), 'sale', 'rent', 'contact', 'about', 'login', 'register', 'offer', 'agent', 'account'].includes(req.params.slug)) status = 404;
   // The admin console (at its private address, or the old /admin) is served exactly like a missing page
   const metadata = pageMetadata(req.path, settings, property);
   if (status === 404) { metadata.title = `Page not found | ${settings.general.siteName}`; metadata.noindex = true; }

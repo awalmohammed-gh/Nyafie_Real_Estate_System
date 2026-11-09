@@ -30,10 +30,12 @@ import { allowedOrigins, limits, originCheck, rejectOperatorKeys, securityHeader
 import { authenticatePaystackWebhook, authenticatePaymentRecovery } from "./middleware/paymentCallbacks.js";
 import { paystackWebhook, reconcilePayments } from "./controllers/paymentCallbackController.js";
 import { requireAdminEntry } from "./utils/adminEntry.js";
+import { initMonitoring, reportError } from "./utils/monitoring.js";
 
 
 // Exported without a listener: Vercel imports the app; server.js starts local development.
 export const createApp = ({ initialize = initializeBackend } = {}) => {
+  initMonitoring(); // Sentry, only when SENTRY_DSN is set
   const app = express();
 
   //middleware
@@ -42,10 +44,11 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
   if (process.env.VERCEL) app.set("trust proxy", 1);
   else if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
   app.use("/api", securityHeaders);
-  const initializeRequest = async (_req, res, next) => {
+  const initializeRequest = async (req, res, next) => {
     try { await initialize(); next(); }
     catch (error) {
       console.error("Backend initialization failed:", error.message);
+      await reportError(error, { req, tags: { stage: "initialize" } });
       res.status(503).json({ success: false, message: "Service is temporarily unavailable. Please try again." });
     }
   };
@@ -69,7 +72,7 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
 
   //api endpoints
   app.use("/api", limits.api);
-  app.get("/api/health", (_req, res) => res.json({ success: true, service: "HomeBase" }));
+  app.get("/api/health", (_req, res) => res.json({ success: true, service: "NyaFie" }));
 
   // Brute-force and abuse limits on sensitive endpoints (before the routes they protect)
   app.post("/api/auth/admin/login", limits.adminLogin);
@@ -109,7 +112,7 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
 
   // Errors: users get a safe message, details stay in the server log
   // eslint-disable-next-line no-unused-vars
-  app.use((err, req, res, next) => {
+  app.use(async (err, req, res, next) => {
      if (err.status && err.status < 500) {
         return res.status(err.status).json({ success: false, message: err.message });
      }
@@ -121,6 +124,7 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
         return res.status(413).json({ success: false, message: "Upload is too large. Try fewer or smaller photos." });
      }
      console.error(err);
+     await reportError(err, { req });
      res.status(500).json({ success: false, message: "Something went wrong. Please try again." });
   });
 

@@ -3,7 +3,7 @@ import Notification from "../models/Notification.js";
 import { ok, fail } from "../utils/response.js";
 
 // The authenticated account's notifications. Identity always comes from the verified session (req.user),
-// never from the request. Admins also see the shared notifications about HomeBase listings; like the
+// never from the request. Admins also see the shared notifications about NyaFie listings; like the
 // read state, reading or deleting one of those applies to every admin.
 const mine = (user) => (user.role === "admin" ? { $or: [{ recipient: user._id }, { audience: "admins" }] } : { recipient: user._id });
 const MAX_BULK = 100;

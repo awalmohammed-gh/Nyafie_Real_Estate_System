@@ -1,6 +1,8 @@
+import { useEffect } from "react";
 import { useRouteError } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 import { isOutdatedBuildError } from "../../utils/appVersion";
+import { reportError } from "../../utils/monitoring";
 
 /**
  * Replaces React Router's developer error screen. It renders at the root, outside the app's
@@ -9,6 +11,8 @@ import { isOutdatedBuildError } from "../../utils/appVersion";
 const RouteError = () => {
   const error = useRouteError();
   const outdated = isOutdatedBuildError(error);
+  // A crashed page is reported (an outdated build is expected after a deployment, so it is not)
+  useEffect(() => { if (!outdated) reportError(error); }, [error, outdated]);
 
   return (
     <main className="grid min-h-dvh place-items-center bg-white px-6 py-16 text-center">

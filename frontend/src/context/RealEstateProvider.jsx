@@ -6,7 +6,7 @@ import { useAuth } from "./useAuth";
 import { propertyApi, agentApi, adminApi, inquiryApi, userApi } from "../frontApi";
 import { canAccessAgent } from "../utils/sessionDomain";
 
-const GUEST_FAVORITES_KEY = "homebase:favorites";
+const GUEST_FAVORITES_KEY = "nyafie:favorites";
 const EMPTY_PROPERTIES = [];
 
 // Listings, inquiries and favorites backed by the API.
@@ -113,7 +113,7 @@ export const RealEstateProvider = ({ children }) => {
 
   const addListing = useCallback(
     async (data) => {
-      // Admins create HomeBase listings; agents go through the plan-limited endpoint
+      // Admins create NyaFie listings; agents go through the plan-limited endpoint
       const result = role === "admin" ? await adminApi.createAdminProperty(data) : await propertyApi.createProperty(data);
       await refreshAfterChange();
       return result;

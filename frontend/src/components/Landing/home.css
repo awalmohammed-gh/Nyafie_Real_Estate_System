@@ -260,7 +260,7 @@
 .home-agents-locked h3 { font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
 .home-agents-locked p { margin-top: 6px; font-size: 13px; line-height: 1.7; color: var(--home-muted); }
 .home-agents-locked .home-hero-cta { flex-shrink: 0; }
-/* Why HomeBase: the heading takes the first cell of the capability grid */
+/* Why NyaFie: the heading takes the first cell of the capability grid */
 .home-why-layout { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 40px 32px; }
 .home-why-layout .home-section-title { font-size: clamp(30px, 2.8vw, 40px); }
 .home-why-grid { display: contents; }

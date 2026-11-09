@@ -15,7 +15,7 @@ const POLL_MS = 15000;
  * Conversation list + open thread, shared by the three inboxes:
  *   scope "customer" -> chats the user started (/account/messages)
  *   scope "agent"    -> chats about the agent own listings (/agent/messages)
- *   scope "admin"    -> chats about HomeBase listings (/admin/messages)
+ *   scope "admin"    -> chats about NyaFie listings (/admin/messages)
  * The open conversation lives in the URL (?c=id) so it can be linked to.
  */
 const MessagesInbox = ({ scope, emptyTitle, emptyDescription, emptyAction }) => {

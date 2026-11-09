@@ -41,7 +41,7 @@ export const notifyUser = async (userId, payload) => {
 
 /**
  * The owner side of a listing record (offer, rental, sale request, conversation):
- * the agent who posted the property, or every admin for HomeBase listings.
+ * the agent who posted the property, or every admin for NyaFie listings.
  * `path` is the dashboard page, e.g. "offers" -> /agent/offers or /admin/offers.
  */
 export const notifyOwner = (record, { path = "", ...payload }) => {

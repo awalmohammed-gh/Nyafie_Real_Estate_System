@@ -42,7 +42,7 @@ const Stepper = ({ current }) => (
   </ol>
 );
 
-const RETURN_KEY = "homebase:checkout";
+const RETURN_KEY = "nyafie:checkout";
 
 const Checkout = () => {
   const [searchParams] = useSearchParams();

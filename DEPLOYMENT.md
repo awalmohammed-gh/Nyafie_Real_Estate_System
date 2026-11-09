@@ -1,6 +1,6 @@
-# HomeBase deployment guide
+# NyaFie deployment guide
 
-HomeBase remains a Vite 8 / React 19 SPA with React Router 7, an Express 5 API, Mongoose 9 / MongoDB, Cloudinary images, and Paystack payments (test mode by default; live mode only after the go-live checklist below). No Next.js migration is required. The canonical production origin is **https://nyafie.vercel.app**.
+NyaFie remains a Vite 8 / React 19 SPA with React Router 7, an Express 5 API, Mongoose 9 / MongoDB, Cloudinary images, and Paystack payments (test mode by default; live mode only after the go-live checklist below). No Next.js migration is required. The canonical production origin is **https://nyafie.vercel.app**.
 
 The app is deployed from `main` to the Vercel project **`nyafie`** (team `awalmohammed-ghs-projects`). The production checklist below has not been signed off yet, so keep Paystack in test mode until it has. Local checks and the remaining production checks are listed below.
 
@@ -28,7 +28,7 @@ Both `.env.example` files contain empty assignments only. Actual local `.env` fi
 | Variable | Required | Configuration |
 | --- | --- | --- |
 | `NODE_ENV` | Yes | `production` |
-| `MONGODB_URI` | Yes | Production Atlas connection string for a dedicated HomeBase database user. Include the intended database in the URI or set `MONGODB_DB`. |
+| `MONGODB_URI` | Yes | Production Atlas connection string for a dedicated NyaFie database user. Include the intended database in the URI or set `MONGODB_DB`. |
 | `MONGODB_DB` | If the URI does not select the intended database | Production database name. Overrides the database in the URI when supplied. |
 | `PUBLIC_SITE_URL` | Yes | `https://nyafie.vercel.app` |
 | `JWT_KEY` | Yes | A fresh randomly generated secret of at least 32 characters; use a separate value for Preview. Production refuses shorter values. |
@@ -87,6 +87,32 @@ The backend uses Google's official authentication library to verify the signatur
 
 Run the default tests with `npm test`. For isolated database tests, set `RUN_GOOGLE_AUTH_INTEGRATION=1` and run `node --test tests/googleAuth.integration.test.js` in `backend/`. Tests mock Google's token verifier; actual popup consent, authorized origins and Google token issuance must be checked using your configured Google OAuth client.
 
+### Email provider (recommended for production)
+
+Gmail works for testing, but it limits how many emails one account can send per day, and mail sent from a Gmail address for this site often lands in spam. For production, send through an email provider from your own domain. Any provider with SMTP works (Brevo, Resend, Mailgun, SendGrid, Postmark, Amazon SES...):
+
+1. Add your domain in the provider's dashboard and add the DNS records it gives you (SPF, DKIM and usually DMARC). This is what keeps the emails out of spam.
+2. Create SMTP credentials in the provider's dashboard.
+3. Set these backend variables (Production and Preview):
+
+| Variable | Value |
+| --- | --- |
+| `EMAIL_SMTP_HOST` | The provider's SMTP host, e.g. `smtp-relay.brevo.com`, `smtp.resend.com`, `smtp.mailgun.org`, `smtp.sendgrid.net` |
+| `EMAIL_SMTP_PORT` | `587` (default, STARTTLS) or `465` (TLS) |
+| `EMAIL_SMTP_USER` / `EMAIL_SMTP_PASSWORD` | The SMTP login the provider gives you (backend only, never `VITE_`) |
+| `EMAIL_FROM` | The sender address on your verified domain, e.g. `no-reply@yourdomain.com` |
+
+When `EMAIL_SMTP_HOST` is set the provider is used for every email, and all four other values are required; a missing one shows "Email delivery is temporarily unavailable" rather than silently falling back. Without `EMAIL_SMTP_HOST`, Gmail (`SMTP_USER` / `SMTP_APP_PASSWORD`) is used as before. Emails go out as text plus a simple HTML version, with the site name from Admin Settings as the sender name. TLS is always required.
+
+### Error monitoring (Sentry)
+
+Unexpected errors are reported to [Sentry](https://sentry.io) when a DSN is set; without one nothing is sent.
+
+1. Create a Sentry project (platform: Node.js for the backend, React for the frontend; one project with both DSNs set to the same value also works).
+2. Set `SENTRY_DSN` on the backend and `VITE_SENTRY_DSN` on the frontend (the DSN is not a secret; the frontend one is built into the site). Redeploy.
+
+What is reported: server errors (HTTP 500 and failed start-up), failures of the daily payment recovery and renewal reminder jobs, crashed pages and uncaught browser errors. What is never sent: cookies, headers, request bodies, IP addresses, emails, console output, query strings (payment references), invite tokens and the admin console's private address (replaced by `:admin`). Reports carry the error, a cleaned path, the deployment environment and commit, and the signed-in account's internal id. Set up an alert rule in Sentry (e.g. email on every new issue) so failures reach you.
+
 ### Customer password recovery
 
 The customer sign-in form includes **Forgot your password?**. Google SMTP sends a separate six-digit password reset code using the same `SMTP_USER` and `SMTP_APP_PASSWORD`. Reset codes expire after ten minutes, allow five guesses, are single-use, and may be requested at most once per minute and five times per account per hour. Request and reset endpoints also share an IP limit of twenty requests per fifteen minutes. A new code invalidates the previous one. Only keyed hashes are stored; code values and SMTP credentials are never logged.
@@ -104,6 +130,9 @@ Run `npm test` in `backend/` for unit/regression checks. To exercise real MongoD
 | `VITE_API_URL` | `/api` |
 | `VITE_PUBLIC_SITE_URL` | `https://nyafie.vercel.app` |
 | `ADMIN_ENTRY_PATH` | The same private value as the backend service |
+| `VITE_MAP_TILE_URL` | Recommended for production: a map tile provider URL with your key (MapTiler, Stadia, Carto...). Without it the maps use OpenStreetMap's community tile servers, whose [usage policy](https://operations.osmfoundation.org/policies/tiles/) does not allow heavy commercial use. |
+| `VITE_MAP_TILE_ATTRIBUTION` | The attribution your tile provider requires (HTML). |
+| `VITE_SENTRY_DSN` | Optional: browser error monitoring (see "Error monitoring"). |
 
 The `VITE_` values are public build-time values. `ADMIN_ENTRY_PATH` is not public: the build only embeds its SHA-256 hash, so the app recognises the console's address without revealing it. Redeploy the frontend after changing any of them, and change both services together.
 
@@ -179,7 +208,9 @@ Do this only after every test-mode check below has passed on the production depl
 4. In the backend **Production** environment only, set `PAYSTACK_MODE=live`, `PAYSTACK_SECRET_KEY=sk_live_…` and `PAYSTACK_PUBLIC_KEY=pk_live_…`. Keep Preview and Development on test keys. Redeploy.
 5. In **Admin → Settings → Payments**, confirm the provider shows **Live: real money** with no blockers listed. If it lists blockers, payments stay off until they are fixed.
 6. Make one small real payment with your own card or mobile money, then refund it: cancel the paid booking as the owner, refund it from **Admin → Payments**, and wait for **Refunded**. Confirm the charge and the refund in the Paystack dashboard and the refund on your statement.
-7. Watch the admin notifications and the cron response for the first days. To stop taking real money at any time, set `PAYSTACK_MODE=test` (or turn rental/subscription payments off in Settings) and redeploy.
+7. Hotels that take online payments reconnect their payout account once in live mode (Agent → listing editor → How guests pay). Payout accounts are stored per Paystack mode, because test subaccounts don't exist in live mode; until a hotel reconnects, its guests can still reserve and pay at the hotel.
+8. Keep Paystack's transaction fees on the merchant account (the default) unless you have confirmed in test mode that Paystack reports `requested_amount` when customers pay the fee; otherwise those payments are held for review instead of confirmed.
+9. Watch the admin notifications and the cron response for the first days. To stop taking real money at any time, set `PAYSTACK_MODE=test` (or turn rental/subscription payments off in Settings) and redeploy.
 
 Payments are recorded with the Paystack mode they were made in. In live mode, older test-mode checkouts stay visible (tagged **Test mode** on the Payments page) but are excluded from revenue, financial inventory and recovery, and cannot be verified or refunded with the live key.
 
@@ -213,7 +244,7 @@ Public listing queries are bounded (48 maximum per page); the agent profile pagi
 2. Commit the reviewed changes to `main` and push them. The environment examples and this guide may be committed; actual `.env`, dependencies and build output must remain ignored.
 3. The Vercel project is `nyafie`, with root directory `./` and the committed `vercel.json`; `main` is the production branch. Link a fresh checkout with `vercel link --project nyafie`. To set up a new project instead, import the repository with root `./`.
 4. Keep the project framework on **Services** and verify the two service roots/frameworks against the table above. Set the project's Node.js version to **24.x** to match both `package.json` files. Add the Production and Preview environment variables to the correct environments before building. Do not use `frontend` as the project root.
-5. Deploy. Inspect both service build logs and backend runtime logs. Confirm that the backend binding was injected and MongoDB/Cloudinary initialization succeeds. Visit `/api/health` and expect HTTP 200 with `{ "success": true, "service": "HomeBase" }`.
+5. Deploy. Inspect both service build logs and backend runtime logs. Confirm that the backend binding was injected and MongoDB/Cloudinary initialization succeeds. Visit `/api/health` and expect HTTP 200 with `{ "success": true, "service": "NyaFie" }`.
 6. In project Domains, confirm this project owns `nyafie.vercel.app`. Naming the project does not guarantee that hostname is available. If Vercel assigns a different domain, update both canonical URL variables and `CLIENT_URL` to the actual chosen domain and redeploy before sharing links.
 7. Sign in through `https://nyafie.vercel.app/<ADMIN_ENTRY_PATH>/login`, review settings, property publication rules and subscription requirements, and check the payment summary says Paystack test and active. Verify the first admin account, then remove its bootstrap variables and redeploy. MongoDB retains the account.
 8. Complete the production checks below using dedicated test accounts and Paystack's test checkout. Keep the project in test operation until those checks pass. Roll back the whole deployment if a release breaks a verified flow.

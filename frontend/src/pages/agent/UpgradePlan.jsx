@@ -12,7 +12,7 @@ import { ACCOUNT_TYPES, durationLabel, planFeatureList } from "../../data/plans"
 import { formatDate } from "../../utils/date";
 
 // Paystack brings the provider back to the checkout page, which reads this to say "Plan upgraded"
-const RETURN_KEY = "homebase:checkout";
+const RETURN_KEY = "nyafie:checkout";
 const money = (value) => `₵${Number(value || 0).toLocaleString()}`;
 
 // One limit of a higher plan, next to what the provider has now
@@ -98,7 +98,7 @@ const UpgradePlan = () => {
     body = (
       <StateCard icon={Crown} title="You're on the highest available plan"
         actions={<><Link to="/agent/subscription" className="btn btn-light">Back to subscription</Link>{sub && <Link to={`/agent/subscription/checkout?plan=${sub.planId}`} className="btn btn-primary"><RefreshCw className="h-4 w-4" />Renew {sub.planName}</Link>}</>}>
-        {data.currentPlan?.name || current?.name} is the top {type.label.toLowerCase()} plan on HomeBase right now. You can renew it any time to extend your current period.
+        {data.currentPlan?.name || current?.name} is the top {type.label.toLowerCase()} plan on NyaFie right now. You can renew it any time to extend your current period.
       </StateCard>
     );
   else
@@ -151,7 +151,7 @@ const UpgradePlan = () => {
 
   return (
     <div className="space-y-6">
-      <PageTitle eyebrow="Your subscription" title={`Upgrade your ${type.label.toLowerCase()} plan`} description={`Only higher ${type.plural.toLowerCase()} are shown. Prices are worked out by HomeBase from your current plan.`}
+      <PageTitle eyebrow="Your subscription" title={`Upgrade your ${type.label.toLowerCase()} plan`} description={`Only higher ${type.plural.toLowerCase()} are shown. Prices are worked out by NyaFie from your current plan.`}
         action={<Link to="/agent/subscription" className="btn btn-light"><ArrowLeft className="h-4 w-4" />Back to subscription</Link>} />
 
       <section className="workspace-card">

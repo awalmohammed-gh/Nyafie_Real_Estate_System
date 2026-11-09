@@ -9,7 +9,7 @@ export const same = (a, b) => Boolean(a && b) && String(a._id || a) === String(b
 /**
  * Who may act on a record tied to a listing (offer, rental, sale request):
  *  - the agent who posted the property, or for an agency: its owner, managers and the assigned agent
- *  - admins for HomeBase listings
+ *  - admins for NyaFie listings
  * Admins can also manage every record on the platform.
  */
 export const ownsRecord = (record, user) =>

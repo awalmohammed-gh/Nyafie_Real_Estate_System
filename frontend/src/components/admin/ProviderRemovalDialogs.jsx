@@ -142,7 +142,7 @@ const DeleteProvider = ({ agent, onClose }) => {
       {plan.loading ? <Loading label="Checking every related record..." /> : plan.error ? <Failed error={plan.error} /> : (
         <div className="space-y-5">
           <p className="flex items-start gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            {data.mode === "erase" ? "Nothing else on HomeBase depends on this provider, so the account and the records below marked Delete are removed completely." : "Other records depend on this provider (payments, customers or team history), so their personal details are erased and the account is kept as “Deleted agent”. Records marked Keep are never deleted."}
+            {data.mode === "erase" ? "Nothing else on NyaFie depends on this provider, so the account and the records below marked Delete are removed completely." : "Other records depend on this provider (payments, customers or team history), so their personal details are erased and the account is kept as “Deleted agent”. Records marked Keep are never deleted."}
           </p>
           <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200">
             {data.rows.map((row) => {

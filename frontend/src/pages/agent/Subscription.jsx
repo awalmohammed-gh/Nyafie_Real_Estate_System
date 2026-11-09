@@ -20,7 +20,7 @@ const featureRows = (perms, companyName, renewPath) => {
     { label: "Photos per property", value: on(String(perms.imageLimit)) },
     { label: "Customer inquiries", value: on("Included") },
     { label: "Calls, email & WhatsApp", value: on("Included") },
-    { label: "HomeBase customer chat", value: perms.canUseChat ? "Included" : null },
+    { label: "NyaFie customer chat", value: perms.canUseChat ? "Included" : null },
     { label: "Inquiry status tracking", value: perms.canManageInquiries ? "Included" : null },
     { label: "Advanced analytics", value: perms.canViewAdvancedAnalytics ? "Included" : null },
     { label: "Featured listings", value: perms.isActive && perms.featuredLimit > 0 ? `Up to ${perms.featuredLimit}` : null },

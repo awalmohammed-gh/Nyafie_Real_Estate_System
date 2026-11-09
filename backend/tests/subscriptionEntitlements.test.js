@@ -114,7 +114,7 @@ test("photo limits keep existing photos after a downgrade but block new ones", (
   assert.equal(withinImageLimit([...kept, "a.jpg"], 2, kept), false, "or grow by repeating one");
 });
 
-test("HomeBase chat follows the agent's active plan", async (t) => {
+test("NyaFie chat follows the agent's active plan", async (t) => {
   t.mock.method(Setting, "findOneAndUpdate", () => settingsDoc());
   const withChat = plan({ internalChat: true });
   const withoutChat = plan({ internalChat: false });
@@ -173,7 +173,7 @@ test("the chat API refuses agents whose plan has no chat, whatever the client se
   for (const [user, session] of [[starterAgent, "agent"], [customer, "customer"]]) {
     const reply = await post(`/${conversation._id}/messages`, user, session, { message: "Hello" });
     assert.equal(reply.status, 403, `${session} cannot message in a locked conversation`);
-    assert.match((await reply.json()).message, session === "agent" ? /Upgrade your subscription/ : /isn.t using HomeBase chat/);
+    assert.match((await reply.json()).message, session === "agent" ? /Upgrade your subscription/ : /isn.t using NyaFie chat/);
   }
 });
 

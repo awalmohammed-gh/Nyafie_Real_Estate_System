@@ -97,16 +97,16 @@ test("different people on a shared IP count separately, and signed-in customers 
   assert.equal(a.views, 3);
 });
 
-test("the owner organisation's staff and HomeBase admins never add views; other agents do", async (t) => {
+test("the owner organisation's staff and NyaFie admins never add views; other agents do", async (t) => {
   const { listing } = setup(t);
   const a = listing();
   for (const sessions of [{ agent: company }, { agent: staff }, { customer: company }, { customer: staff }, { admin }, { customer, admin }]) {
     assert.deepEqual(data(await view(a, { sessions })), { counted: false, views: 0 });
   }
   assert.equal(data(await view(a, { sessions: { agent: otherAgent } })).counted, true);
-  const homebase = listing({ ownerType: "admin", owner: admin._id });
-  assert.equal(data(await view(homebase, { sessions: { admin } })).counted, false);
-  assert.equal(data(await view(homebase)).counted, true);
+  const nyafie = listing({ ownerType: "admin", owner: admin._id });
+  assert.equal(data(await view(nyafie, { sessions: { admin } })).counted, false);
+  assert.equal(data(await view(nyafie)).counted, true);
 });
 
 test("the browser cannot set the count or claim an identity", async (t) => {

@@ -71,7 +71,7 @@ const AdminAgents = () => {
     .filter((a) => !q || `${a.name} ${a.email} ${a.phone}`.toLowerCase().includes(q))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  // Every tab except Removed counts only providers still on HomeBase
+  // Every tab except Removed counts only providers still on NyaFie
   const count = (fn) => agents.filter((a) => !isGone(a) && fn(a)).length;
 
   const actionsFor = (a) => isGone(a) ? [

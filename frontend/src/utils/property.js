@@ -37,7 +37,7 @@ export const getInitials = (name) =>
 export const buildAgents = (properties) => {
   const map = new Map();
   properties.forEach((property) => {
-    // HomeBase (admin) listings are shown as the platform, not as an agent
+    // NyaFie (admin) listings are shown as the platform, not as an agent
     if (!property.agent || property.owner?.type !== "agent" || ["Sold", "Rented"].includes(property.listing?.availability)) return;
     if (!map.has(property.agent.id)) map.set(property.agent.id, { ...property.agent, properties: [] });
     map.get(property.agent.id).properties.push(property);

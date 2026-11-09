@@ -10,11 +10,12 @@ import { matchesSessionRole } from "../utils/sessionAccess.js";
 import { loginAttempts, rejectLoginAttempt } from "../utils/loginAttempts.js";
 import { startEmailVerification } from "./emailVerificationController.js";
 import { passwordProblem, validPasswordInput } from "../utils/passwordPolicy.js";
+import { siteName } from "../models/Setting.js";
 
 const isEmail = (value) => typeof value === "string" && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 const text = (value) => (typeof value === "string" ? value.trim() : "");
 // Compared against when no account matches, so a sign-in takes as long whether or not the email exists
-const DUMMY_HASH = bcrypt.hashSync("homebase-timing-equaliser", 10);
+const DUMMY_HASH = bcrypt.hashSync("nyafie-timing-equaliser", 10);
 
 // The user as the frontend needs it: current subscription included, password never.
 // Agents also get their server-computed onboarding state (next step, payment, approval).
@@ -168,7 +169,7 @@ export const loginFor = (session) => async (req, res) => {
     return fail(res, 401, "Incorrect email or password for this area.");
   // Removed providers: a plain message, never the internal reason
   if (user.agentApplication?.status === "removed")
-    return fail(res, 403, "Your provider account is no longer active. Contact HomeBase support if you believe this is an error.");
+    return fail(res, 403, `Your provider account is no longer active. Contact ${siteName()} support if you believe this is an error.`);
   const cleared = await loginAttempts.success(email);
   if (cleared.retryAfter) return rejectLoginAttempt(res, cleared);
   if (session === "customer" && !user.emailVerifiedAt) return startEmailVerification(req, res, user);

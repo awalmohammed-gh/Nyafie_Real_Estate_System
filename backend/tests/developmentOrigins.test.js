@@ -50,11 +50,11 @@ test("development login accepts both Vite loopback origins and rejects unrelated
 });
 
 test("production and production previews do not implicitly trust local development origins", (t) => {
-  environment(t, { NODE_ENV: "production", PUBLIC_SITE_URL: "https://homebase.example", CLIENT_URL: "https://homebase.example", VERCEL_ENV: "production", VERCEL_URL: "homebase-preview.vercel.app" });
+  environment(t, { NODE_ENV: "production", PUBLIC_SITE_URL: "https://nyafie.example", CLIENT_URL: "https://nyafie.example", VERCEL_ENV: "production", VERCEL_URL: "nyafie-preview.vercel.app" });
   for (const preview of [false, true]) {
     process.env.VERCEL_ENV = preview ? "preview" : "production";
     assert.equal(clientOrigins().includes("http://localhost:5173"), false);
     assert.equal(clientOrigins().includes("http://127.0.0.1:5173"), false);
-    assert.equal(paymentReturnUrl({ get: () => "http://127.0.0.1:5173" }), "https://homebase.example");
+    assert.equal(paymentReturnUrl({ get: () => "http://127.0.0.1:5173" }), "https://nyafie.example");
   }
 });

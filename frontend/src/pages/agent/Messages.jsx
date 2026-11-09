@@ -4,7 +4,7 @@ import LockedFeature from "../../components/ui/LockedFeature";
 import { useAgentPermissions } from "../../hooks/useAgentPermissions";
 import { lockCopy } from "../../utils/permissions";
 
-// Without HomeBase chat on the plan, earlier conversations (and offer/rental notes) stay readable
+// Without NyaFie chat on the plan, earlier conversations (and offer/rental notes) stay readable
 const Messages = () => {
   const perms = useAgentPermissions();
   return (

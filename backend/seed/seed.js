@@ -1,5 +1,5 @@
 // Initial data. Run intentionally with: npm run seed
-//   -> plans, settings, the admin account (from ADMIN_EMAIL / ADMIN_PSD) and the HomeBase company listings.
+//   -> plans, settings, the admin account (from ADMIN_EMAIL / ADMIN_PSD) and the NyaFie company listings.
 // Safe to re-run: plans and listings that already exist are skipped, never duplicated.
 // No customer or agent accounts are created here: real users sign up through the app.
 import "dotenv/config";
@@ -15,7 +15,7 @@ import { ensureAdmin } from "../utils/ensureAdmin.js";
 const DAY = 24 * 60 * 60 * 1000;
 const daysAgo = (n) => new Date(Date.now() - n * DAY);
 
-// Plans per account type. Starter plans have no HomeBase chat (inquiries, phone, email and WhatsApp still work).
+// Plans per account type. Starter plans have no NyaFie chat (inquiries, phone, email and WhatsApp still work).
 const plans = [
   {
     name: "Starter", accountType: "individual",
@@ -48,7 +48,7 @@ const plans = [
   // Company plans: larger organisations (developers, property managers, hotel and property operators)
   {
     name: "Company Starter", accountType: "company", sortOrder: 1,
-    tagline: "For registered property businesses getting started on HomeBase",
+    tagline: "For registered property businesses getting started on NyaFie",
     price: 2000, duration: 30, propertyLimit: 50, imageLimit: 15, featuredPropertyLimit: 5, teamMemberLimit: 5,
     analyticsLevel: "advanced", inquiryManagement: "full", internalChat: true, priorityVisibility: false,
     features: ["Company profile and logo", "Email support"], popular: false,
@@ -86,13 +86,13 @@ const seedSettings = async () => {
   }
 };
 
-// Company listings belong to the admin account and show HomeBase's public contact details
+// Company listings belong to the admin account and show NyaFie's public contact details
 const seedCompanyListings = async () => {
   // The first admin account (created by ensureAdmin from ADMIN_EMAIL / ADMIN_PSD)
   const admin = await User.findOne({ role: "admin" }).sort({ createdAt: 1 });
   if (!admin) return console.log("  ! no admin account (set ADMIN_EMAIL / ADMIN_PSD), skipping company listings");
   const { general, contact: business } = await getSettings();
-  const contact = { id: "homebase", name: general.siteName, phone: business.phone, email: business.email };
+  const contact = { id: "nyafie", name: general.siteName, phone: business.phone, email: business.email };
 
   const listings = JSON.parse(fs.readFileSync(new URL("./companyListings.json", import.meta.url)));
   let added = 0;
@@ -103,9 +103,9 @@ const seedCompanyListings = async () => {
   }
   if (added) console.log(`  + ${added} company listings`);
 
-  // Admin-owned listings always carry the HomeBase contact, never a person's
-  const fixed = await Property.updateMany({ ownerType: "admin", "contact.id": { $ne: "homebase" } }, { $set: { contact } });
-  if (fixed.modifiedCount) console.log(`  ~ ${fixed.modifiedCount} company listings now use the HomeBase contact`);
+  // Admin-owned listings always carry the NyaFie contact, never a person's
+  const fixed = await Property.updateMany({ ownerType: "admin", "contact.id": { $ne: "nyafie" } }, { $set: { contact } });
+  if (fixed.modifiedCount) console.log(`  ~ ${fixed.modifiedCount} company listings now use the NyaFie contact`);
 };
 
 try {

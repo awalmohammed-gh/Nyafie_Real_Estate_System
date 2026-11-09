@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { reviewApi } from "../frontApi";
 
 const POLL_MS = 60000;
-export const REVIEWS_SEEN_EVENT = "homebase:reviews-seen";
+export const REVIEWS_SEEN_EVENT = "nyafie:reviews-seen";
 
 // Customer reviews posted since an admin last opened the Reviews page (admin sidebar badge)
 export const useUnseenReviews = () => {

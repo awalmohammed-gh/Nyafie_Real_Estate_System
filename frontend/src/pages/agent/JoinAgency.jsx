@@ -53,7 +53,7 @@ const JoinAgency = () => {
               {invite.data.agency.logo ? <img src={invite.data.agency.logo} alt="" className="h-full w-full object-contain" /> : <Building2 className="h-7 w-7" />}
             </span>
             <p className="mt-5 text-xs font-bold tracking-wider text-brand-700 uppercase">Team invite</p>
-            <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-gray-900">Join {invite.data.agency.name} on HomeBase</h1>
+            <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-gray-900">Join {invite.data.agency.name} on NyaFie</h1>
             <p className="mt-3 text-sm leading-relaxed text-gray-600">{ROLE_COPY[invite.data.role]}</p>
             <p className="mt-2 text-xs text-gray-400">Invite expires {formatDate(invite.data.expiresAt)}</p>
 

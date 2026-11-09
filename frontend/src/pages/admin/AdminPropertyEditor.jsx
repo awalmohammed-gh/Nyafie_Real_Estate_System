@@ -8,7 +8,7 @@ import { usePlatform } from "../../context/usePlatform";
 import { adminPath } from "../../utils/adminEntry";
 import "./adminPropertyEditor.css";
 
-// Add / edit HomeBase (admin-owned) listings with the shared property form.
+// Add / edit NyaFie (admin-owned) listings with the shared property form.
 // Agent listings are moderated from the Properties page instead.
 const AdminPropertyEditor = () => {
   const { siteName } = usePlatform();

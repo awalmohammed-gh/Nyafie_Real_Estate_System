@@ -238,7 +238,7 @@ export const listProperties = async (_req, res) => {
 };
 
 // Public contact for admin-owned listings: the business details from Settings
-const platformContact = (settings) => ({ id: "homebase", name: settings.general.siteName, phone: settings.contact.phone, email: settings.contact.email });
+const platformContact = (settings) => ({ id: "nyafie", name: settings.general.siteName, phone: settings.contact.phone, email: settings.contact.email });
 
 // POST /api/admin/properties -> admin-owned listing. No plan limits and no review:
 // it is published straight away (or saved as a draft). The admin is always the owner.
@@ -258,7 +258,7 @@ export const createProperty = async (req, res) => {
     propertyType: "Apartment",
     price: 0,
     ...fields,
-    contact: { ...platformContact(settings), ...fields.contact, id: "homebase" },
+    contact: { ...platformContact(settings), ...fields.contact, id: "nyafie" },
     images: await resolveImages(images),
     owner: req.user._id, // the signed-in admin, never taken from the request
     ownerType: "admin",
@@ -288,7 +288,7 @@ export const updateProperty = async (req, res) => {
   await prepareHotelFields(fields, req.body, property, settings.property.maxImages);
   const optionProblem = checkPropertyOptions(fields, settings, property);
   if (optionProblem) return fail(res, 400, optionProblem);
-  if (fields.contact) fields.contact = { ...fields.contact, id: property.contact?.id || (property.ownerType === "admin" ? "homebase" : String(property.owner)) };
+  if (fields.contact) fields.contact = { ...fields.contact, id: property.contact?.id || (property.ownerType === "admin" ? "nyafie" : String(property.owner)) };
   const before = locationSnapshot(property.location);
   Object.assign(property, fields);
   if (Array.isArray(req.body.images)) {

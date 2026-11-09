@@ -13,7 +13,7 @@ export const isolatedMongo = async (t) => {
   await new Promise((done) => probe.listen(0, "127.0.0.1", done));
   const port = probe.address().port;
   await new Promise((done) => probe.close(done));
-  const directory = await mkdtemp(join(tmpdir(), "homebase-rental-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "nyafie-rental-test-"));
   const log = await open(join(directory, "mongod.log"), "w");
   const binary = process.env.MONGOD_TEST_BINARY || "C:/Program Files/MongoDB/Server/9.0/bin/mongod.exe";
   const mongod = spawn(binary, ["--dbpath", directory, "--bind_ip", "127.0.0.1", "--port", String(port), "--replSet", "rentaltest"], { stdio: ["ignore", log.fd, log.fd], windowsHide: true });
@@ -28,7 +28,7 @@ export const isolatedMongo = async (t) => {
     }
     await log.close();
     const absolute = resolve(directory), withinTemp = relative(resolve(tmpdir()), absolute);
-    assert.ok(withinTemp && !withinTemp.startsWith("..") && !isAbsolute(withinTemp) && basename(absolute).startsWith("homebase-rental-test-"));
+    assert.ok(withinTemp && !withinTemp.startsWith("..") && !isAbsolute(withinTemp) && basename(absolute).startsWith("nyafie-rental-test-"));
     await rm(absolute, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   });
   let connected = false;

@@ -60,7 +60,7 @@ const OffersBoard = ({ scope }) => {
 
   const open = openId && offers.find((o) => o.id === openId);
   const canRespond = open && (open.status === "Pending" || open.status === "Countered");
-  // The admin inbox only holds chats about HomeBase listings
+  // The admin inbox only holds chats about NyaFie listings
   const chatLink = open && (isAdmin ? open.ownerType === "admin" && adminPath(`/messages?c=${open.conversationId}`) : `/agent/messages?c=${open.conversationId}`);
   const whatsapp = open?.customer.phone && toWhatsAppNumber(open.customer.phone);
 

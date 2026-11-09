@@ -96,7 +96,7 @@ const legacyValues = (doc) => {
   };
 };
 
-// Latest site name, kept in memory for server messages ("... contact HomeBase support")
+// Latest site name, kept in memory for server messages ("... contact NyaFie support")
 let cachedSiteName = defaultSettings.general.siteName;
 export const siteName = () => cachedSiteName;
 

@@ -41,7 +41,7 @@ test("production configuration, metadata, uploads and marketplace security", asy
   t.mock.method(Property, 'findOne', () => query(property));
   t.mock.method(Property, 'find', () => query([property]));
   let uploadCalls = 0;
-  t.mock.method(cloudinary.uploader, 'upload', async (_image, options) => { uploadCalls++; assert.match(options.folder, /^homebase\/uploads\/[a-f\d]{24}$/); return { secure_url: 'https://res.cloudinary.com/test/image/upload/photo.jpg' }; });
+  t.mock.method(cloudinary.uploader, 'upload', async (_image, options) => { uploadCalls++; assert.match(options.folder, /^nyafie\/uploads\/[a-f\d]{24}$/); return { secure_url: 'https://res.cloudinary.com/test/image/upload/photo.jpg' }; });
   const buckets = new Map();
   t.mock.method(RateLimitBucket, 'findOneAndUpdate', async ({ _id }, update) => {
     assert.match(_id, /^[a-f\d]{64}$/);
@@ -76,10 +76,10 @@ test("production configuration, metadata, uploads and marketplace security", asy
       process.env.CLIENT_URL = 'https://real-estate-home-phi.vercel.app,https://www.example.test';
       assert.equal(paymentReturnUrl({ get: () => 'https://www.example.test' }), 'https://real-estate-home-phi.vercel.app');
       process.env.VERCEL_ENV = 'preview';
-      process.env.VERCEL_URL = 'homebase-preview.vercel.app';
-      assert.ok(clientOrigins().includes('https://homebase-preview.vercel.app'));
+      process.env.VERCEL_URL = 'nyafie-preview.vercel.app';
+      assert.ok(clientOrigins().includes('https://nyafie-preview.vercel.app'));
       assert.equal(paymentReturnUrl({ get: () => 'https://evil.example' }), 'https://real-estate-home-phi.vercel.app');
-      assert.equal(paymentReturnUrl({ get: () => 'https://homebase-preview.vercel.app' }), 'https://homebase-preview.vercel.app');
+      assert.equal(paymentReturnUrl({ get: () => 'https://nyafie-preview.vercel.app' }), 'https://nyafie-preview.vercel.app');
       delete process.env.VERCEL_ENV; delete process.env.VERCEL_URL;
       process.env.CLIENT_URL = 'https://real-estate-home-phi.vercel.app';
     });
@@ -92,7 +92,7 @@ test("production configuration, metadata, uploads and marketplace security", asy
     await t.test('app entrypoint initializes per request and serves health safely without opening a listener on import', async () => {
       const response = await call('/api/health');
       assert.equal(response.status, 200);
-      assert.equal((await response.json()).service, 'HomeBase');
+      assert.equal((await response.json()).service, 'NyaFie');
       assert.ok(initializations > 0);
     });
     await t.test('direct property URLs deliver dynamic metadata and the SPA assets before JavaScript', async () => {
@@ -112,6 +112,11 @@ test("production configuration, metadata, uploads and marketplace security", asy
         assert.equal(response.status, 200, path);
         assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow', path);
       }
+      // Public pages are real pages (status 200, their own title), not "page not found"
+      const about = await call('/about');
+      assert.equal(about.status, 200);
+      assert.ok((await about.text()).includes("<title>About us | NyaFie</title>"));
+      assert.equal(about.headers.get('x-robots-tag'), null);
       assert.equal((await call('/unknown-page')).status, 404);
       assert.equal((await call('/unknown/nested/page')).status, 404);
       assert.equal((await call('/house/invalid-id')).status, 404);
@@ -130,6 +135,7 @@ test("production configuration, metadata, uploads and marketplace security", asy
       const index = await (await call('/sitemap.xml')).text();
       assert.match(index, /sitemap-properties-1.xml/);
       const pages = await (await call('/sitemap-pages.xml')).text();
+      assert.ok(pages.includes('/about'), "the About page is listed");
       assert.equal(pages.includes('/agents'), false);
       assert.equal(pages.includes('/admin'), false);
       const properties = await (await call('/sitemap-properties-1.xml')).text();

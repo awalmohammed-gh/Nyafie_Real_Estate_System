@@ -77,7 +77,7 @@ export const getAgentAccess = async (user) => {
 };
 
 /**
- * Which agents may use HomeBase chat, for many agents at once (listing cards and conversations).
+ * Which agents may use NyaFie chat, for many agents at once (listing cards and conversations).
  * Same rule as getAgentAccess().internalChat: an active account with an active plan that includes chat.
  */
 export const chatEnabledAgents = async (users) => {

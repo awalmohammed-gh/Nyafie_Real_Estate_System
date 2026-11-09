@@ -22,7 +22,10 @@ const PropertyGallery = ({ images, title }) => {
   const dialogRef = useRef(null);
   const headingId = useId();
   const photoIndex = active < photos.length ? active : 0;
-  const tiled = photos.length >= 3;
+  // Up to three stacked thumbnails beside the main photo (photos 2-4); the last one shows how many more
+  const tiles = photos.slice(1, 4);
+  const tiled = tiles.length > 0;
+  const hidden = photos.length - 1 - tiles.length;
 
   useLockBodyScroll(open);
 
@@ -46,34 +49,42 @@ const PropertyGallery = ({ images, title }) => {
 
   return (
     <section aria-label="Property photos">
-      <div className={`grid gap-2 overflow-hidden rounded-xl ${tiled ? "sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" : ""}`}>
-        <div className="group relative min-w-0 overflow-hidden bg-gray-100">
-          <button type="button" onClick={() => showPhoto(photoIndex)} aria-label="Open property photos" className="block aspect-[4/3] max-h-[26rem] w-full sm:aspect-[3/2]">
+      <div className={`grid gap-2.5 ${tiled ? "sm:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]" : ""}`}>
+        <div className="group relative min-w-0 overflow-hidden rounded-2xl bg-gray-100">
+          <button type="button" onClick={() => showPhoto(photoIndex)} aria-label="Open property photos" className="block aspect-[4/3] max-h-[28rem] w-full sm:aspect-[16/10]">
             <PropertyImage src={photos[photoIndex]} alt={title} priority className="h-full w-full object-cover" />
           </button>
           {photos.length > 1 && (
-            <div className="pointer-events-none absolute inset-x-3 top-1/2 flex -translate-y-1/2 justify-between sm:hidden">
-              <button type="button" onClick={() => step(-1)} aria-label="Previous property photo" className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full bg-white/95 text-gray-800">
+            <div className="pointer-events-none absolute inset-x-3 top-1/2 flex -translate-y-1/2 justify-between">
+              <button type="button" onClick={() => step(-1)} aria-label="Previous property photo" className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full bg-white/95 text-gray-800 shadow-md transition hover:scale-105 hover:bg-white">
                 <ChevronLeft aria-hidden="true" className="h-5 w-5" />
               </button>
-              <button type="button" onClick={() => step(1)} aria-label="Next property photo" className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full bg-white/95 text-gray-800">
+              <button type="button" onClick={() => step(1)} aria-label="Next property photo" className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full bg-white/95 text-gray-800 shadow-md transition hover:scale-105 hover:bg-white">
                 <ChevronRight aria-hidden="true" className="h-5 w-5" />
               </button>
             </div>
           )}
-          <button type="button" onClick={() => showPhoto(photoIndex)} className="absolute right-3 bottom-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-white/95 px-3 text-xs font-semibold text-gray-800 shadow-sm hover:bg-white">
+          {photos.length > 1 && <span aria-live="polite" className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-gray-950/70 px-3 py-1 text-xs font-semibold text-white tabular-nums">{photoIndex + 1} / {photos.length}</span>}
+          <button type="button" onClick={() => showPhoto(photoIndex)} className="absolute right-3 bottom-3 inline-flex min-h-10 items-center gap-2 rounded-full bg-white/95 px-3.5 text-xs font-semibold text-gray-800 shadow-sm hover:bg-white">
             <Images aria-hidden="true" className="h-4 w-4" />
-            {photos.length > 1 ? `View all ${photos.length} photos` : "View photo"}
+            {photos.length > 1 ? "View all photos" : "View photo"}
           </button>
         </div>
         {tiled && (
-          <div className="hidden min-h-0 grid-rows-2 gap-2 sm:grid">
-            {photos.slice(1, 3).map((src, index) => (
-              <button type="button" key={`${src}:${index}`} onClick={() => showPhoto(index + 1)} aria-label={`Open property photo ${index + 2}`} className="relative min-h-0 overflow-hidden bg-gray-100">
-                <PropertyImage src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                {index === 1 && photos.length > 3 && <span className="absolute right-2 bottom-2 rounded-md bg-gray-950/70 px-2 py-1 text-xs font-semibold text-white">+{photos.length - 3} {photos.length === 4 ? "photo" : "photos"}</span>}
-              </button>
-            ))}
+          <div className="hidden min-h-0 gap-2.5 sm:grid" style={{ gridTemplateRows: `repeat(${tiles.length}, minmax(0, 1fr))` }}>
+            {tiles.map((src, index) => {
+              const last = index === tiles.length - 1 && hidden > 0;
+              return (
+                <button type="button" key={`${src}:${index}`} onClick={() => showPhoto(index + 1)} aria-label={last ? `Open all ${photos.length} property photos` : `Open property photo ${index + 2}`} className="relative min-h-0 overflow-hidden rounded-2xl bg-gray-100">
+                  <PropertyImage src={src} alt="" className="absolute inset-0 h-full w-full object-cover transition duration-500 hover:scale-105" />
+                  {last && (
+                    <span className="absolute inset-0 grid place-items-center bg-gray-950/55 text-white">
+                      <span className="flex flex-col items-center gap-1 text-sm font-semibold"><Images aria-hidden="true" className="h-5 w-5" />+{hidden} {hidden === 1 ? "Photo" : "Photos"}</span>
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

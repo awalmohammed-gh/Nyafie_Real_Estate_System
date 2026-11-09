@@ -56,7 +56,7 @@ test("empty and populated reports generate a real three-page PDF with every repo
   t.mock.method(Date, "now", () => now.getTime());
   for (const source of [{}, fixture]) {
     const report = buildAdminReport(source, now);
-    const doc = createAdminReportPdf(report, "HomeBase");
+    const doc = createAdminReportPdf(report, "NyaFie");
     assert.equal(doc.getNumberOfPages(), 3);
     const bytes = new Uint8Array(doc.output("arraybuffer"));
     assert.equal(new TextDecoder().decode(bytes.slice(0, 5)), "%PDF-");
@@ -71,7 +71,7 @@ test("empty and populated reports generate a real three-page PDF with every repo
 });
 
 test("download filenames include the date and cannot contain path separators", () => {
-  assert.equal(reportPdfFilename("HomeBase", now), "homebase-reports-2026-01-20.pdf");
+  assert.equal(reportPdfFilename("NyaFie", now), "nyafie-reports-2026-01-20.pdf");
   assert.equal(reportPdfFilename("../../Homes \\ Ghana", now), "homes-ghana-reports-2026-01-20.pdf");
   assert.equal(reportPdfFilename("", now), "marketplace-reports-2026-01-20.pdf");
 });

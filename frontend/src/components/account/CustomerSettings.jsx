@@ -133,7 +133,7 @@ const CustomerSettings = () => {
           </form>
         </section>
         <section role="tabpanel" id="settings-panel-notifications" aria-labelledby="settings-tab-notifications" hidden={active !== "notifications"}>
-          <header className="account-section-heading"><p className="account-eyebrow">Make it yours</p><h2>Notification preferences</h2><p>Choose which updates appear in your HomeBase notification bell.</p></header>
+          <header className="account-section-heading"><p className="account-eyebrow">Make it yours</p><h2>Notification preferences</h2><p>Choose which updates appear in your NyaFie notification bell.</p></header>
           <div className="account-section-body !pt-2">
             <ul>
               {options.map(({ key, label, description, icon: Icon }) => {

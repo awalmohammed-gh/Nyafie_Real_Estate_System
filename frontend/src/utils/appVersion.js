@@ -5,7 +5,7 @@ import { lazy } from "react";
  * that no longer exist. These helpers recognise that failure and reload the page once,
  * which picks up the new build. A short guard stops a reload loop if the files are really missing.
  */
-const KEY = "homebase:version-reload";
+const KEY = "nyafie:version-reload";
 const GUARD_MS = 15000;
 
 // Chrome/Edge, Safari and Firefox word the failed dynamic import differently
@@ -18,8 +18,8 @@ export const reloadForNewVersion = () => {
   try {
     last = Number(sessionStorage.getItem(KEY)) || 0;
   } catch { /* storage unavailable: reload at most once per page view below */ }
-  if (Date.now() - last < GUARD_MS || window.__homebaseReloading) return false;
-  window.__homebaseReloading = true;
+  if (Date.now() - last < GUARD_MS || window.__nyafieReloading) return false;
+  window.__nyafieReloading = true;
   try {
     sessionStorage.setItem(KEY, String(Date.now()));
   } catch { /* still reload once */ }

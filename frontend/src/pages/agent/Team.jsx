@@ -51,7 +51,7 @@ const InviteModal = ({ open, onClose, onCreated }) => {
   const copy = async () => {
     try { await navigator.clipboard.writeText(invite.url); setCopied(true); } catch { setCopied(false); }
   };
-  const message = invite ? `You're invited to join our agency on HomeBase as ${role === "manager" ? "a manager" : "an agent"}: ${invite.url}` : "";
+  const message = invite ? `You're invited to join our agency on NyaFie as ${role === "manager" ? "a manager" : "an agent"}: ${invite.url}` : "";
 
   return (
     <Modal open={open} onClose={close} title={invite ? "Share the invite link" : "Invite a team member"} size="md"

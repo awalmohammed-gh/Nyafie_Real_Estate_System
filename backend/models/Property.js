@@ -53,7 +53,7 @@ const propertySchema = new mongoose.Schema(
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // agency staff member handling it (null: the owner)
     ownerType: { type: String, enum: ["admin", "agent"], required: true },
-    // Public contact shown on the listing (the agent, or a HomeBase staff member)
+    // Public contact shown on the listing (the agent, or a NyaFie staff member)
     contact: {
       id: String,
       name: String,
