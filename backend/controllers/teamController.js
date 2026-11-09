@@ -145,6 +145,8 @@ export const acceptInvite = async (req, res) => {
   const { invite, owner, access } = found;
   const user = req.user;
   if (user.role !== "agent" || !user.isActive) return fail(res, 403, "Sign in with an agent account to join an agency.");
+  // Joining approves the account, so it must not override an admin's decision about it
+  if (["rejected", "suspended", "removed"].includes(user.agentApplication?.status)) return fail(res, 403, "This account's agent application was declined, so it can't join an agency. Contact support.");
   if (String(user._id) === String(owner._id)) return fail(res, 400, "This is your own agency.");
   if (user.agency?.owner) return fail(res, 409, "Your account is already part of an agency team.");
   const [listings, subscription] = await Promise.all([Property.exists({ owner: user._id }), user.subscription ? Subscription.findById(user.subscription) : null]);

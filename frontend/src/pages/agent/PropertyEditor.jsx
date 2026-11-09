@@ -10,6 +10,8 @@ import ImageUploader from "../../components/agent/ImageUploader";
 import RoomTypesEditor from "../../components/agent/RoomTypesEditor";
 import HotelPaymentSettings from "../../components/agent/HotelPaymentSettings";
 import { NIGHTLY_RENTAL_DEFAULTS, STAY_BOOKING_DEFAULTS } from "../../utils/hotelPayments";
+import MoveInFields from "../../components/agent/MoveInFields";
+import { MOVE_IN_DEFAULTS } from "../../utils/moveIn";
 import { roomToForm, roomsToPayload } from "../../utils/hotel";
 import LockedFeature from "../../components/ui/LockedFeature";
 import { COUNTED_STATES, lockCopy, withinImageLimit } from "../../utils/permissions";
@@ -199,6 +201,9 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
   const hotel = form.type.toLowerCase() === "hotel";
   // Hotels and rentals priced per night let guests reserve and pay on arrival (each with its own defaults)
   const nightlyRental = !hotel && form.listingType === "Rent" && form.rentPeriod === "night";
+  // Monthly rentals: advance, agent fee and deposit shown to tenants (utils/moveIn.js)
+  const monthlyRental = !hotel && form.listingType === "Rent" && form.rentPeriod === "month";
+  const [moveIn, setMoveIn] = useState(() => ({ ...MOVE_IN_DEFAULTS, ...existing?.moveIn }));
   const [bookingEdits, setBooking] = useState(() => existing?.stayBooking || {});
   const booking = { ...(hotel ? STAY_BOOKING_DEFAULTS : NIGHTLY_RENTAL_DEFAULTS), ...bookingEdits };
   // The platform's own hotels are paid into the platform account; agent hotels into their payout account
@@ -276,6 +281,8 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
     }
     if ((form.latitude === "") !== (form.longitude === "")) e.latitude = "Provide both coordinates or leave both empty.";
     if (form.title.trim().length < 3) e.title = "Give the property a title (at least 3 characters).";
+    if (monthlyRental && [moveIn.agentFeeValue, moveIn.securityDeposit].some((v) => v !== "" && !(Number(v) >= 0))) e.moveIn = "Amounts can't be negative.";
+    if (monthlyRental && moveIn.agentFeeType === "percent" && !(Number(moveIn.agentFeeValue) <= 20)) e.moveIn = "Enter an agent fee between 0% and 20%.";
     if ((hotel || nightlyRental) && !booking.payOnArrival && !booking.payOnline) e.booking = "Choose at least one way for guests to pay.";
     if (mode === "publish") {
       if (form.description.trim().length < 30) e.description = "Describe the property in at least 30 characters.";
@@ -319,6 +326,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
       },
       features: form.amenities,
       ...(hotel ? { roomTypes: roomsToPayload(rooms), stayBooking: booking } : nightlyRental ? { stayBooking: booking } : {}),
+      ...(monthlyRental ? { moveIn: { ...moveIn, agentFeeValue: Number(moveIn.agentFeeValue) || 0, securityDeposit: Number(moveIn.securityDeposit) || 0 } } : {}),
       media: { images: readyImages.map((img) => img.src) },
       agent: { id: user.id, name: form.contactName.trim() || user.name, phone: form.contactPhone.trim(), email: form.contactEmail.trim() },
       owner: { type: "agent", id: user.id },
@@ -557,6 +565,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
                 <Segmented label="Charged" value={form.rentPeriod} onChange={(v) => set("rentPeriod", v)} options={periodOptions.map((p) => ({ value: p, label: RENT_PERIOD_LABELS[p] }))} />
               )}
             </div>
+            {monthlyRental && <MoveInFields value={moveIn} onChange={setMoveIn} rent={Number(form.price) || 0} error={errors.moveIn} />}
             <div className="mt-5">
               <Segmented label="Availability" value={form.availability} onChange={(v) => set("availability", v)} options={availabilityOptions.map((a) => ({ value: a, label: a }))} />
             </div>

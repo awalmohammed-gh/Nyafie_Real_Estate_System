@@ -43,15 +43,30 @@ export const visibleAgentIds = async () => {
 
 // The publicQuery() rule for a single listing, without loading the whole agent directory
 export const isPubliclyVisible = async (property) => {
-  if (property.status !== "published") return false;
+  if (property.status !== "published" || property.staleSince) return false; // stale: hidden until the owner confirms it
   if (property.ownerType === "admin") return true;
   const [settings, owner] = await Promise.all([getSettings(), User.findOne({ _id: property.owner, ...LISTED_AGENT }).select("subscription").populate("subscription")]);
   return Boolean(owner) && inGoodStanding(settings, owner);
 };
 
+/**
+ * The WhatsApp number a guest may use for one listing they are viewing: just the number, with no
+ * name, email or profile (those still need an account). The staff member assigned to an agency
+ * listing, otherwise the listing agent, as for signed-in customers. Null for platform listings.
+ */
+export const guestWhatsApp = async (property) => {
+  if (property.ownerType !== "agent") return null;
+  const ids = [property.owner, property.assignedTo].filter(Boolean);
+  const users = await User.find({ _id: { $in: ids } }).select("phone agentApplication.whatsapp agency").lean();
+  const owner = users.find((user) => String(user._id) === String(property.owner));
+  const assignee = property.assignedTo && users.find((user) => String(user._id) === String(property.assignedTo));
+  const contact = assignee && String(assignee.agency?.owner) === String(property.owner) ? assignee : owner;
+  return contact?.agentApplication?.whatsapp || contact?.phone || null;
+};
+
 export const publicQuery = async () => {
   const agents = await visibleAgentIds();
-  return { agents, query: { status: "published", $or: [{ ownerType: "admin" }, { ownerType: "agent", owner: { $in: agents.map((agent) => agent.id) } }] } };
+  return { agents, query: { status: "published", staleSince: null, $or: [{ ownerType: "admin" }, { ownerType: "agent", owner: { $in: agents.map((agent) => agent.id) } }] } };
 };
 
 // A single batch lookup supplies live profile data for every card, including aggregated results.

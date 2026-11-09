@@ -46,6 +46,7 @@ export const setPropertyStatus = async (id, status, rejectionReason) =>
   mapProperty((await client.patch(`/admin/properties/${id}/status`, { status, rejectionReason })).data);
 export const setPropertyFeatured = async (id, isFeatured) => mapProperty((await client.patch(`/admin/properties/${id}/feature`, { isFeatured })).data);
 export const featureProperty = (id) => setPropertyFeatured(id, true);
+export const confirmPropertyAvailability = async (id) => mapProperty((await client.patch(`/admin/properties/${id}/confirm-availability`)).data);
 export const unfeatureProperty = (id) => setPropertyFeatured(id, false);
 export const deleteProperty = (id) => client.delete(`/admin/properties/${id}`);
 

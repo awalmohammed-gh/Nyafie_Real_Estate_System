@@ -9,7 +9,7 @@ import {
   myProperties,
   createProperty,
   updateProperty,
-  setFeatured,
+  setFeatured, confirmAvailability,
   deleteProperty,
   assignProperty,
 } from "../controllers/propertyController.js";
@@ -40,6 +40,7 @@ router.get("/:id/payout", protectAgent, agentOnly, getHotelPayout);
 router.put("/:id/payout", protectAgent, agentOnly, connectHotelPayout);
 router.delete("/:id/payout", protectAgent, agentOnly, disconnectHotelPayout);
 router.patch("/:id/feature", protectAgent, agentOnly, activeSubscription, setFeatured);
+router.patch("/:id/confirm-availability", protectAgent, agentOnly, confirmAvailability); // listing freshness
 router.patch("/:id/assign", protectAgent, agentOnly, assignProperty); // agency owner or manager
 router.delete("/:id", protectAgent, deleteProperty);
 

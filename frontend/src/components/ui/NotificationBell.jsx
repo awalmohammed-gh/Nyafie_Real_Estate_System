@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { Bell, BellOff, Building, CheckCheck, ClipboardCheck, CreditCard, HandCoins, KeyRound, Loader2, MessageCircle, RefreshCw, Star, Trash2, UserPlus, X } from "lucide-react";
+import { Bell, BellOff, BellRing, Building, CheckCheck, ClipboardCheck, CreditCard, HandCoins, KeyRound, Loader2, MessageCircle, RefreshCw, Star, Trash2, UserPlus, X } from "lucide-react";
 import { useNotifications } from "../../hooks/useNotifications";
 import { useScrim } from "../../hooks/useScrim";
 import { useToast } from "../../context/useToast";
@@ -11,7 +11,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import PageLoader from "./PageLoader";
 import { resolveAdminLink } from "../../utils/adminEntry";
 
-const ICONS = { message: MessageCircle, offer: HandCoins, rental: KeyRound, sale: Building, payment: CreditCard, status: RefreshCw, user: UserPlus, review: ClipboardCheck, customer_review: Star };
+const ICONS = { message: MessageCircle, offer: HandCoins, rental: KeyRound, sale: Building, payment: CreditCard, status: RefreshCw, user: UserPlus, review: ClipboardCheck, customer_review: Star, search_alert: BellRing };
 const plural = (count) => `${count} ${count === 1 ? "notification" : "notifications"}`;
 
 // A real checkbox inside a 44px tap target

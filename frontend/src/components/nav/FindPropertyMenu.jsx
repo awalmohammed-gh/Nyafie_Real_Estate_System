@@ -1,10 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ArrowRight, ArrowUpRight, Building2, Home, Hotel, KeyRound } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, BedDouble, Building, Building2, Home, Hotel, KeyRound, LayoutGrid } from 'lucide-react';
 import { usePlatform } from '../../context/usePlatform';
 import { isFindPropertyLinkActive } from '../../utils/findPropertyNavigation';
-import { FeaturedProperties } from './PropertyPreviews';
+import { CategoryPreviews, FeaturedProperties } from './PropertyPreviews';
 
-const LINK_ICONS = { all: Building2, sale: Home, rent: KeyRound, hotels: Hotel };
+// Every menu entry gets an icon; an entry without its own uses the default, so a new menu item can never break the page
+const LINK_ICONS = { all: Building2, sale: Home, rent: KeyRound, hotels: Hotel, "all-stays": BedDouble, "hotel-apartments": Building, apartments: Building2, "all-listings": LayoutGrid };
+const DEFAULT_ICON = Building2;
 
 export const FindPropertyLinks = ({ links, onNavigate, compact = false }) => {
   const { pathname, search } = useLocation();
@@ -13,7 +15,7 @@ export const FindPropertyLinks = ({ links, onNavigate, compact = false }) => {
     <ul className={compact ? 'space-y-0.5' : 'mt-4 space-y-1'} aria-label="Explore properties">
       {links.map((link) => {
         const active = isFindPropertyLinkActive(link, pathname, search, paths.listings);
-        const Icon = LINK_ICONS[link.key];
+        const Icon = LINK_ICONS[link.key] || DEFAULT_ICON;
         return (
           <li key={link.key}>
             <Link
@@ -49,3 +51,22 @@ export const FindPropertyMegaMenu = ({ links, previews, onNavigate }) => {
     </div>
   );
 };
+
+/**
+ * A homepage navbar menu (Buy, Rent, Short Stays): its links on the left and three homes from
+ * that category on the right. `previews` is useCategoryPreviews().get(menu).
+ */
+export const HomeCategoryMenu = ({ heading, links, previews, viewAll, onNavigate }) => (
+  <div className="grid grid-cols-[16.5rem_minmax(0,1fr)]">
+    <section className="p-2" aria-label={`${heading} links`}>
+      <FindPropertyLinks links={links} onNavigate={onNavigate} />
+    </section>
+    <section className="min-w-0 border-l border-gray-100 bg-gray-50/60 p-5" aria-labelledby={`nav-home-${heading.replace(/\W+/g, '-').toLowerCase()}`}>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <h2 id={`nav-home-${heading.replace(/\W+/g, '-').toLowerCase()}`} className="text-sm font-semibold tracking-tight text-gray-900">{heading}</h2>
+        <Link to={viewAll} onClick={onNavigate} className="inline-flex min-h-9 items-center gap-1.5 rounded text-xs font-semibold text-brand-600 outline-offset-4 hover:text-brand-700 focus-visible:outline-2 focus-visible:outline-brand-500">View all <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" /></Link>
+      </div>
+      <CategoryPreviews previews={previews} onNavigate={onNavigate} />
+    </section>
+  </div>
+);

@@ -1,38 +1,29 @@
 import { Link } from "react-router-dom";
-import { ArrowUpRight } from "lucide-react";
+import { Building2, Hotel, House, KeyRound, Layers3 } from "lucide-react";
 import { usePlatform } from "../../context/usePlatform";
-import { RevealGroup, RevealItem, SectionHeader } from "./LandingMotion";
 
 const DiscoverCategories = () => {
   const { paths } = usePlatform();
   const href = (params) => `${paths.listings}?${new URLSearchParams(params)}`;
   const categories = [
-    { label: "Homes for Sale", note: "Browse homes to buy", image: "/hero/heritage-villa-960.jpg", to: href({ status: "Sale" }) },
-    { label: "Homes for Rent", note: "Browse available rentals", image: "/hero/furnished-bedroom-960.jpg", to: href({ status: "Rent" }) },
-    { label: "Apartments", note: "Explore apartments", image: "/hero/modern-living-960.jpg", to: href({ type: "Apartment" }) },
-    { label: "Short Stays", note: "Hotels and hotel apartments", image: "/banners/properties-resort-960.jpg", to: href({ type: "Hotel,Hotel-Apartment" }) },
+    { label: "Homes for Sale", note: "Buy your next home", Icon: House, image: "/banners/listings-suburb-960.jpg", to: href({ status: "Sale" }) },
+    { label: "Homes for Rent", note: "Find a place to live", Icon: KeyRound, image: "/hero/furnished-bedroom-960.jpg", to: href({ status: "Rent" }) },
+    { label: "Apartments", note: "Modern and convenient", Icon: Building2, image: "/hero/modern-living-960.jpg", to: href({ type: "Apartment" }) },
+    { label: "Short Stays", note: "Perfect for travel or business", Icon: Hotel, image: "/banners/properties-resort-960.jpg", to: href({ type: "Hotel,Hotel-Apartment" }) },
+    { label: "Land & Plots", note: "Explore available land", Icon: Layers3, image: "/banners/nyafie-land.jpg", to: href({ type: "Land,Plot,Land-and-Plots" }) },
   ];
   return (
     <section className="home-section home-discover" aria-labelledby="discover-heading">
       <div className="container-page">
-        <SectionHeader>
-          <div><p className="home-eyebrow">BROWSE BY CATEGORY</p><h2 id="discover-heading" className="home-section-title">What are you looking for?</h2></div>
-          <div className="home-section-aside"><p>Choose a category to explore the full catalogue.</p></div>
-        </SectionHeader>
-        <RevealGroup as="ul" className="home-categories" gap={0.06}>
-          {categories.map(({ label, note, image, to }) => (
-            <RevealItem as="li" variant="fade" key={label}>
-              <Link to={to} className="home-category">
-                <img src={image} alt="" loading="lazy" decoding="async" width="480" height="360" />
-                <span className="home-category-body"><span className="home-category-label">{label}</span><span className="home-category-note">{note}</span></span>
-                <span className="home-category-open" aria-hidden="true"><ArrowUpRight size={18} /></span>
-              </Link>
-            </RevealItem>
-          ))}
-        </RevealGroup>
+        <header className="home-section-header"><div><p className="home-eyebrow">BROWSE BY CATEGORY</p><h2 id="discover-heading" className="home-section-title">What are you looking for?</h2><p className="home-section-description">Find properties that match your plans &mdash; buy, rent, stay or invest.</p></div></header>
+        <ul className="home-categories">{categories.map(({ label, note, Icon, image, to }) => (
+          <li key={label}><Link to={to} className="home-category">
+            <span className="home-category-image"><img src={image} alt="" loading="lazy" decoding="async" width="480" height="300" /><span className="home-category-icon"><Icon size={24} strokeWidth={1.7} aria-hidden="true" /></span></span>
+            <span className="home-category-body"><span className="home-category-label">{label}</span><span className="home-category-note">{note}</span></span>
+          </Link></li>
+        ))}</ul>
       </div>
     </section>
   );
 };
-
 export default DiscoverCategories;

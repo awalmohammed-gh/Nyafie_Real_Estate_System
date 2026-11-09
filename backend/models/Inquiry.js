@@ -8,9 +8,9 @@ const inquirySchema = new mongoose.Schema(
     agent: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // owner when an agent
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // agency staff member handling it (null: the owner)
     ownerType: { type: String, enum: ["admin", "agent"], required: true },
-    name: { type: String, required: true, trim: true },
+    name: { type: String, required: true, trim: true, maxlength: 120 },
     email: { type: String, required: true, lowercase: true, trim: true },
-    phone: { type: String, default: "", trim: true },
+    phone: { type: String, default: "", trim: true, maxlength: 30 },
     message: { type: String, required: true, maxlength: 2000 },
     conversation: { type: mongoose.Schema.Types.ObjectId, ref: "Conversation", default: null },
     status: { type: String, enum: ["new", "contacted", "inProgress", "closed"], default: "new" },

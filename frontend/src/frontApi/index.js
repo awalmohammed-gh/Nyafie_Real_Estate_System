@@ -20,3 +20,4 @@ export * as contactApi from "./contactApi";
 export * as hotelApi from "./hotelApi";
 export * as teamApi from "./teamApi";
 export * as geoApi from "./geoApi";
+export * as savedSearchApi from "./savedSearchApi";

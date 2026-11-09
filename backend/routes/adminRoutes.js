@@ -54,6 +54,7 @@ router.post("/properties", admin.createProperty);
 router.put("/properties/:id", admin.updateProperty);
 router.patch("/properties/:id/status", admin.setPropertyStatus);
 router.patch("/properties/:id/feature", admin.setPropertyFeatured);
+router.patch("/properties/:id/confirm-availability", admin.confirmPropertyAvailability); // listing freshness
 router.delete("/properties/:id", deleteProperty);
 
 router.get("/reviews", adminListReviews); // ?search (property title), rating, status, page

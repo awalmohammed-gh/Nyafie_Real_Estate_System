@@ -15,6 +15,8 @@ export const updateProperty = async (id, changes) => {
   return { property: mapProperty(res.data), message: res.message };
 };
 
+// Listing freshness: the owner confirms the home is still available
+export const confirmAvailability = async (id) => mapProperty((await client.patch(`/properties/${id}/confirm-availability`)).data);
 export const featureProperty = async (id, isFeatured) => mapProperty((await client.patch(`/properties/${id}/feature`, { isFeatured })).data);
 export const deleteProperty = (id) => client.delete(`/properties/${id}`);
 // Agency owner or manager: memberId of a team member, or null to hand the listing back to the owner

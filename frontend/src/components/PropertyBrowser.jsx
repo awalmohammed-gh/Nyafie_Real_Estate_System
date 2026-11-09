@@ -15,6 +15,8 @@ import { usePropertyFacets } from "../hooks/usePropertyFacets";
 import { usePlatform } from "../context/usePlatform";
 import { propertyApi } from "../frontApi";
 import { formatType } from "../utils/property";
+import SaveSearchButton from "./property/SaveSearchButton";
+import { hasSearchCriteria, toSavedFilters } from "../utils/savedSearch";
 import "./property/catalogue.css";
 import "./property/catalogueSearch.css";
 
@@ -114,6 +116,9 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner }) => {
     query.trim() && { key: "search", kind: "search", value: query.trim(), label: `“${query.trim()}”`, clear: () => update({ query: "" }, { replace: true }) },
   ].filter(Boolean);
   const hasFilters = activeFilters.length > 0 || Boolean(!fixedListingType && filters.listingType);
+  // "Save search": the current filters, so new matching homes can be announced
+  const savedFilters = toSavedFilters({ filters, search, near: nearbyActive ? near : null });
+  const canSaveSearch = hasSearchCriteria(savedFilters);
   // The banner also names Buy/Rent when it is a filter here (not on the fixed /sale and /rent pages)
   const bannerFilters = [
     !fixedListingType && filters.listingType && { key: "intent", kind: "intent", value: filters.listingType, label: filters.listingType === "Rent" ? "For rent" : "For sale", clear: () => update({ listingType: "" }) },
@@ -195,7 +200,10 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner }) => {
               <h2>{firstLoad ? "Finding homes…" : results.error ? "Your search" : <><strong>{total}</strong> {total === 1 ? "home" : "homes"}{filters.listingType === "Sale" ? " for sale" : filters.listingType === "Rent" ? " to rent" : nearbyActive ? "" : " to explore"}{nearbyActive && ` ${describeSearchArea(near)}`}</>}</h2>
               <p>{pending && !firstLoad ? "Updating your results…" : showMap ? (total > MAP_MARKER_LIMIT ? `The ${MAP_MARKER_LIMIT} nearest are on the map. Narrow the radius or filters to see the rest.` : "Select a price on the map to preview the home.") : total ? `Showing ${first}–${last} · ${nearbyActive ? "Nearest first unless you sort otherwise." : "Find the one that fits."}` : "Your next chapter starts here."}</p>
             </div>
-            <div className="catalogue-sort"><label htmlFor="catalogue-sort">Sort by</label><div className="catalogue-select-wrap"><select id="catalogue-sort" aria-label="Sort properties" value={sort} onChange={(event) => update({ sort: event.target.value })}>{(nearbyActive ? NEARBY_SORTS : SORTS).map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div></div>
+            <div className="catalogue-results-actions">
+              {canSaveSearch && <SaveSearchButton key={JSON.stringify(savedFilters)} saved={savedFilters} />}
+              <div className="catalogue-sort"><label htmlFor="catalogue-sort">Sort by</label><div className="catalogue-select-wrap"><select id="catalogue-sort" aria-label="Sort properties" value={sort} onChange={(event) => update({ sort: event.target.value })}>{(nearbyActive ? NEARBY_SORTS : SORTS).map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div></div>
+            </div>
           </div>
 
           {activeFilters.length > 0 && <div className="catalogue-active-filters" aria-label="Selected filters">{activeFilters.map((filter) => <button key={filter.key} type="button" onClick={filter.clear} aria-label={`Remove ${filter.label} filter`}>{filter.label}<X size={12} aria-hidden="true" /></button>)}<button type="button" onClick={clear} className="catalogue-clear-all">Clear all</button></div>}

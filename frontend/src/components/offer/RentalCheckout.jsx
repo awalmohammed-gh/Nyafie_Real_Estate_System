@@ -47,12 +47,15 @@ const RentalCheckout = ({ property, ownerName }) => {
   const { value: price, period } = getPriceParts(property);
   const pricePeriod = property.pricing.perNight != null ? "night" : property.pricing.perMonth != null ? "month" : "total";
   const firstDay = shift(toDay(new Date()), { days: 1 });
+  // Monthly rentals: the owner's requested advance is the suggested length (the customer can change it)
+  const advanceMonths = pricePeriod === "month" ? Number(property.moveIn?.advanceMonths) || 0 : 0;
+  const lengths = [...new Set([1, 2, 3, 6, 12, 18, 24, 36, ...(advanceMonths ? [advanceMonths] : [])])].sort((a, b) => a - b);
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
     start: firstDay,
     end: shift(firstDay, pricePeriod === "night" ? { days: 2 } : { months: 1 }),
-    months: 12,
+    months: advanceMonths || 12,
     occupants: 1,
     notes: "",
     fullName: user?.name || "",
@@ -168,10 +171,11 @@ const RentalCheckout = ({ property, ownerName }) => {
               <label className="block text-sm">
                 <span className="mb-1.5 block font-medium text-gray-700">Rental length</span>
                 <select value={form.months} onChange={set("months")} className="field">
-                  {[1, 2, 3, 6, 12, 18, 24, 36].map((m) => (
+                  {lengths.map((m) => (
                     <option key={m} value={m}>{m} {m === 1 ? "month" : "months"}</option>
                   ))}
                 </select>
+                {advanceMonths > 0 && <span className="mt-1.5 block text-xs text-gray-500">The owner asks for {advanceMonths} {advanceMonths === 1 ? "month" : "months"} of rent in advance.</span>}
               </label>
             ) : (
               <label className="block text-sm">

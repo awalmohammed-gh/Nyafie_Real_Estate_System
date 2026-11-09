@@ -104,6 +104,7 @@
 .catalogue-result-count strong { font-weight: 600; }
 .catalogue-result-count p { margin-top: 3px; font-size: 10px; color: var(--catalogue-muted); }
 .catalogue-sort { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.catalogue-results-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; min-width: 0; }
 .catalogue-sort > label { font-size: 10px; color: var(--catalogue-muted); }
 .catalogue-sort .catalogue-select-wrap { width: 180px; }
 .catalogue-sort select { border-color: transparent; padding-top: 11px; padding-bottom: 11px; font-weight: 500; background: #f7f6f8; }
@@ -200,7 +201,8 @@
   .catalogue-result-count { min-width: 0; padding-top: 3px; }
   .catalogue-result-count h2 { font-size: 13px; }
   .catalogue-result-count p { font-size: 9px; line-height: 1.7; }
-  .catalogue-sort { max-width: 52%; }
+  .catalogue-results-actions { flex-direction: column; align-items: flex-end; gap: 8px; max-width: 52%; }
+  .catalogue-sort { max-width: 100%; }
   .catalogue-sort > label { display: none; }
   .catalogue-sort .catalogue-select-wrap { width: 166px; max-width: 100%; }
   .catalogue-sort select { font-size: 11px; padding: 11px 26px 11px 9px; }

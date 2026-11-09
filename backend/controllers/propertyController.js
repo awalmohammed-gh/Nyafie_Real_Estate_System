@@ -6,12 +6,13 @@ import { getSettings, siteName } from "../models/Setting.js";
 import { stayPaymentOptions, takesStayBookings, payoutAccountFor } from "../utils/hotelPayout.js";
 import { notifyAdmins } from "../utils/notify.js";
 import { COUNTED_STATES, withinImageLimit } from "../utils/permissions.js";
-import { PUBLIC_AGENT_FIELDS, publicAgent, presentProperties, publicQuery, visibleAgentIds, isPubliclyVisible } from "../utils/marketplace.js";
+import { PUBLIC_AGENT_FIELDS, publicAgent, presentProperties, publicQuery, visibleAgentIds, isPubliclyVisible, guestWhatsApp } from "../utils/marketplace.js";
 import { claimView, isCrawler, viewerHash } from "../utils/propertyViews.js";
 export { publicQuery, visibleAgentIds } from "../utils/marketplace.js";
 import { resolveImages } from "../utils/uploadImages.js";
 import { ok, fail } from "../utils/response.js";
 import Rental from "../models/Rental.js";
+import Payment from "../models/Payment.js";
 import Inquiry from "../models/Inquiry.js";
 import Conversation from "../models/Conversation.js";
 import Offer from "../models/Offer.js";
@@ -21,6 +22,9 @@ import { agencyAssignee } from "./agentController.js";
 import { isHotel, prepareHotelFields, saveHotelProperty, validateHotelPublishing } from "../utils/hotel.js";
 import { locationSnapshot, settleLocation } from "../utils/autoLocate.js";
 import { SEARCH_RADII_KM, parseCenter, parseRadius, withinRadius } from "../utils/geo.js";
+import { alertSavedSearches } from "../utils/savedSearches.js";
+import { markConfirmed } from "../utils/listingFreshness.js";
+import { parseMoveIn } from "../utils/moveIn.js";
 
 const TYPES_OF_PRICE = ["total", "month", "night"];
 
@@ -48,6 +52,8 @@ export const pickPropertyFields = (body) => {
       out.location[key] = raw !== "" && raw != null && Number.isFinite(value) && value >= min && value <= max ? value : null;
     }
   }
+  // Monthly rentals: advance, agent fee and deposit (validated; ignored on other listings when shown)
+  if (body.moveIn !== undefined) out.moveIn = body.moveIn === null ? undefined : parseMoveIn(body.moveIn);
   if (Array.isArray(body.amenities)) out.amenities = body.amenities.map((a) => String(a).trim()).filter(Boolean).slice(0, 40);
   if (body.availability !== undefined && ["Available", "Under Offer", "Sold", "Rented"].includes(body.availability)) {
     out.availability = body.availability;
@@ -104,7 +110,7 @@ export const listPublicAgents = async (_req, res) => {
   const [agents, statistics] = await Promise.all([
     User.find({ _id: { $in: ids } }).select(PUBLIC_AGENT_FIELDS).sort({ createdAt: 1 }),
     Property.aggregate([
-      { $match: { ownerType: "agent", owner: { $in: ids }, status: "published", availability: { $in: ["Available", "Under Offer"] } } },
+      { $match: { ownerType: "agent", owner: { $in: ids }, status: "published", staleSince: null, availability: { $in: ["Available", "Under Offer"] } } },
       { $sort: { createdAt: -1 } },
       { $group: { _id: "$owner", propertyCount: { $sum: 1 }, saleCount: { $sum: { $cond: [{ $eq: ["$listingType", "Sale"] }, 1, 0] } }, rentCount: { $sum: { $cond: [{ $eq: ["$listingType", "Rent"] }, 1, 0] } }, locations: { $addToSet: "$location.neighbourhood" }, rating: { $avg: { $cond: [{ $gt: ["$ratingCount", 0] }, "$ratingAverage", null] } }, coverImage: { $first: { $arrayElemAt: ["$images", 0] } } } },
     ]),
@@ -166,7 +172,7 @@ export const buildPublicFilter = (q, base) => {
 };
 
 // Mongo filter for "published and publicly visible" with ObjectIds cast for aggregations
-const publicBase = (agents) => ({ status: "published", $or: [{ ownerType: "admin" }, { ownerType: "agent", owner: { $in: agents.map((a) => new ObjectId(String(a.id))) } }] });
+const publicBase = (agents) => ({ status: "published", staleSince: null, $or: [{ ownerType: "admin" }, { ownerType: "agent", owner: { $in: agents.map((a) => new ObjectId(String(a.id))) } }] });
 
 /**
  * GET /api/properties (public)
@@ -367,7 +373,13 @@ export const getProperty = async (req, res) => {
   const { query } = await publicQuery();
   const visible = await Property.exists({ _id: property._id, ...query });
   if (!visible) return fail(res, 404, "Property not found.");
-  ok(res, await withPaymentOptions(property, (await presentProperties([property], { includeAgentDetails: Boolean(req.user) }))[0]));
+  const data = (await presentProperties([property], { includeAgentDetails: Boolean(req.user) }))[0];
+  // Guests may message the agent on WhatsApp from this page (number only; never in lists or search)
+  if (!req.user) {
+    const whatsapp = await guestWhatsApp(property);
+    if (whatsapp) data.guestContact = { whatsapp };
+  }
+  ok(res, await withPaymentOptions(property, data));
 };
 
 /**
@@ -448,6 +460,7 @@ export const createProperty = async (req, res) => {
     owner: teamOf(req.user).ownerId, // the signed-in agent, or their agency's owner; never taken from the request
     assignedTo: isTeamMember(req.user) ? req.user._id : null, // staff listings start assigned to them
     ownerType: "agent",
+    availabilityConfirmedAt: new Date(), // a new listing is fresh (utils/listingFreshness.js)
   };
   if (intent === "submit") {
     const problem = validateForPublishing(draft);
@@ -459,6 +472,7 @@ export const createProperty = async (req, res) => {
   if (draft.location) Object.assign(draft.location, await settleLocation(draft.location));
   const property = await Property.create(draft);
   if (property.status === "pending") notifyReview(property, req.user);
+  if (property.status === "published") await alertSavedSearches(property); // customers whose saved searches match
   const message = property.status === "pending" ? "Submitted for review" : property.status === "published" ? "Property published" : "Draft saved";
   ok(res, property, message, 201);
 };
@@ -511,7 +525,9 @@ export const updateProperty = async (req, res) => {
   }
 
   const before = locationSnapshot(property.location);
+  const wasPublished = property.status === "published";
   Object.assign(property, fields);
+  markConfirmed(property); // editing a listing confirms it is current
   if (fields.contact) property.contact = { ...fields.contact, id: String(req.user._id) };
   if (images) property.images = await resolveImages(images);
   if (COUNTED_STATES.includes(status)) {
@@ -529,7 +545,20 @@ export const updateProperty = async (req, res) => {
     property.set({ "location.latitude": settled.latitude, "location.longitude": settled.longitude, "location.pinSource": settled.pinSource });
   }
   await saveHotelProperty(property);
+  if (!wasPublished && property.status === "published") await alertSavedSearches(property);
   ok(res, property, status === "pending" ? "Submitted for review" : "Property updated");
+};
+
+// PATCH /api/properties/:id/confirm-availability -> the owner confirms the home is still available
+// (listing freshness); a listing hidden for not being confirmed is shown again
+export const confirmAvailability = async (req, res) => {
+  const property = await loadOwned(req, res);
+  if (!property) return;
+  const wasHidden = Boolean(property.staleSince);
+  markConfirmed(property);
+  await property.save();
+  if (wasHidden) await alertSavedSearches(property);
+  ok(res, property, wasHidden ? "Listing confirmed and shown again" : "Listing confirmed as still available");
 };
 
 // PATCH /api/properties/:id/feature (owning agent, within the plan's featured allowance)
@@ -558,6 +587,16 @@ export const deleteProperty = async (req, res) => {
     return fail(res, 403, "You can only delete your own properties.");
   }
   if (isHotel(property) && (property.roomTypes.length || await Rental.exists({ property: property._id }))) return fail(res, 409, "Archive this hotel by saving it as a draft. Its room types and booking history must be preserved.");
+  // Bookings, payments and sales refer to the listing: deleting it would break customers' bookings,
+  // the payment history and the financial reports. Unanswered requests don't count.
+  const id = property._id;
+  const [booked, paid, sold, accepted] = await Promise.all([
+    Rental.exists({ property: id, $or: [{ paymentStatus: { $in: ["paid", "due", "refunded"] } }, { status: { $in: ["payment_pending", "paid", "confirmed", "active", "completed"] } }] }),
+    Payment.exists({ property: id }),
+    SaleRequest.exists({ property: id, status: { $nin: ["cancelled", "rejected"] } }),
+    Offer.exists({ property: id, status: "accepted" }),
+  ]);
+  if (booked || paid || sold || accepted) return fail(res, 409, "This listing has bookings, payments or a sale on record, so it can't be deleted. Mark it as rented or sold, or unpublish it, to take it off the site and keep its history.");
   await property.deleteOne();
   await Promise.all([
     User.updateMany({ savedProperties: property._id }, { $pull: { savedProperties: property._id } }),

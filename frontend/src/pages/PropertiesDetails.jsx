@@ -59,9 +59,10 @@ import {
   buildWhatsAppLink,
   ownerWhatsAppNumber,
 } from "../utils/whatsapp";
-import { formatDate } from "../utils/date";
+import { formatDate, formatRelative } from "../utils/date";
 import { listedAgo } from "../utils/listedAgo";
 import { amenityIcon } from "../utils/amenityIcons";
+import { moveInCosts } from "../utils/moveIn";
 import { propertyUrl } from "../utils/siteUrl";
 import PageMetadata from "../components/brand/PageMetadata";
 import {
@@ -179,12 +180,11 @@ const PropertiesDetails = () => {
   const ownerName = isAdminListing ? settings.general.siteName : agent.name;
   const ownerPhone = isAdminListing ? settings.contact.phone : agent.phone;
   const ownerEmail = isAdminListing ? settings.contact.email : agent.email;
-  // Guests see an agent's contact details after signing in; the platform's own listings show them to everyone
+  // Guests see an agent's name, phone and email after signing in (the platform's own listings show
+  // them to everyone), but can always message the agent on WhatsApp from this page
   const showContacts = isAdminListing || Boolean(user);
   const whatsappNumber = ownerWhatsAppNumber(property, settings);
-  const whatsappLink = showContacts
-    ? buildWhatsAppLink(whatsappNumber, property, propertyUrl(id, settings))
-    : null;
+  const whatsappLink = buildWhatsAppLink(whatsappNumber, property, propertyUrl(id, settings));
   const listingCount = agentListings.data?.total;
   const emailLink = buildPropertyEmailLink(
     ownerEmail,
@@ -262,6 +262,10 @@ const PropertiesDetails = () => {
   const views = liveViews?.id === id ? liveViews.views : meta?.views || 0;
   const reference = id.slice(-8).toUpperCase();
   const listed = property.listing.createdAt ? listedAgo(property.listing.createdAt) : "";
+  // Listing freshness: when the owner last confirmed it is still available (not repeated on the day it was listed)
+  const confirmedAt = !hotel && property.listing.confirmedAt;
+  const confirmedLater = confirmedAt && new Date(confirmedAt) - new Date(property.listing.createdAt) > 24 * 60 * 60 * 1000;
+  const confirmedText = confirmedLater ? (() => { const when = formatRelative(confirmedAt); return /ago|Today|Yesterday/.test(when) ? when.toLowerCase() : `on ${when}`; })() : "";
 
   const closeDialog = () => {
     setDialog(null);
@@ -292,6 +296,10 @@ const PropertiesDetails = () => {
     { icon: Tag, label: "Listing", value: statusLabel(details.status) },
   ].filter(Boolean);
 
+  // Monthly rentals: what it takes to move in (advance, agent fee, deposit), when the owner set it
+  const moveIn = !hotel && !isForSale && property.pricing.perMonth != null ? moveInCosts(property.pricing.perMonth, property.moveIn) : null;
+  const cedis = (amount) => `₵${Number(amount).toLocaleString()}`;
+
   // Only facts the listing actually has: nothing is filled in for display
   const detailRows = [
     ["Property type", formatType(details.type)],
@@ -301,6 +309,7 @@ const PropertiesDetails = () => {
     !hotel && details.bathrooms != null && ["Bathrooms", details.bathrooms],
     ["Availability", availability],
     details.size?.value > 0 && ["Size", `${details.size.value} ${details.size.unit}`],
+    moveIn?.advanceMonths > 0 && ["Rent advance", `${moveIn.advanceMonths} ${moveIn.advanceMonths === 1 ? "month" : "months"}`],
     place.digitalAddress && ["Digital address", place.digitalAddress],
   ].filter(Boolean);
 
@@ -393,6 +402,15 @@ const PropertiesDetails = () => {
                   <span className="flex items-center gap-1.5 whitespace-nowrap">
                     <CalendarDays aria-hidden="true" className="h-4 w-4" />
                     {listed}
+                  </span>
+                </>
+              )}
+              {confirmedText && (
+                <>
+                  <span aria-hidden="true" className="h-1 w-1 rounded-full bg-gray-300" />
+                  <span className="flex items-center gap-1.5 whitespace-nowrap text-emerald-700">
+                    <BadgeCheck aria-hidden="true" className="h-4 w-4" />
+                    Availability confirmed {confirmedText}
                   </span>
                 </>
               )}
@@ -590,6 +608,18 @@ const PropertiesDetails = () => {
                 {value}
                 {period && <span className="ml-1 text-base font-medium tracking-normal text-gray-500">{period}</span>}
               </p>
+              {moveIn && (
+                <div className="mt-4 rounded-xl bg-brand-50/60 p-4 text-sm ring-1 ring-brand-100">
+                  <p className="font-semibold text-gray-900">To move in</p>
+                  <dl className="mt-2 space-y-1.5 text-gray-600">
+                    {moveIn.advanceMonths > 0 && <div className="flex justify-between gap-3"><dt>{moveIn.advanceMonths} {moveIn.advanceMonths === 1 ? "month" : "months"} of rent in advance</dt><dd className="font-medium text-gray-900">{cedis(moveIn.advance)}</dd></div>}
+                    {moveIn.fee > 0 && <div className="flex justify-between gap-3"><dt>{moveIn.feeLabel}</dt><dd className="font-medium text-gray-900">{cedis(moveIn.fee)}</dd></div>}
+                    {moveIn.deposit > 0 && <div className="flex justify-between gap-3"><dt>Security deposit</dt><dd className="font-medium text-gray-900">{cedis(moveIn.deposit)}</dd></div>}
+                    <div className="flex justify-between gap-3 border-t border-brand-100 pt-2 text-base"><dt className="font-semibold text-gray-900">Total to move in</dt><dd className="font-bold text-gray-900">{cedis(moveIn.total)}</dd></div>
+                  </dl>
+                  <p className="mt-2 text-xs leading-5 text-gray-500">As stated by the owner. Confirm the amounts with them before paying.</p>
+                </div>
+              )}
 
               {isOwnListing ? (
                 <p className="mt-5 rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-600">

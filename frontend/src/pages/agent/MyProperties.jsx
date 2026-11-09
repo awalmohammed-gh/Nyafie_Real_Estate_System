@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Building2, ExternalLink, Eye, Inbox, Lock, Pencil, PlusSquare, Search, Settings2, Star, Trash2 } from "lucide-react";
+import { Building2, CheckCircle2, ExternalLink, Eye, Inbox, Lock, Pencil, PlusSquare, Search, Settings2, Star, Trash2 } from "lucide-react";
 import { useAgent } from "../../hooks/useAgent";
 import { useRealEstate } from "../../context/useRealEstate";
 import { useTransactions } from "../../context/useTransactions";
@@ -23,6 +23,7 @@ import PropertyTile from "../../components/dashboard/PropertyTile";
 import ViewToggle from "../../components/dashboard/ViewToggle";
 import PropertyQuickView from "../../components/agent/PropertyQuickView";
 import WorkspaceStats from "../../components/agent/WorkspaceStats";
+import FreshnessNotice, { FreshnessBadge } from "../../components/dashboard/FreshnessNotice";
 
 const tabs = [
   { id: "all", label: "All" },
@@ -34,7 +35,7 @@ const tabs = [
 
 const MyProperties = () => {
   const { myProperties, myInquiries, permissions: perms } = useAgent();
-  const { deleteListing, isPubliclyVisible } = useRealEstate();
+  const { deleteListing, isPubliclyVisible, confirmAvailability } = useRealEstate();
   const { offers, rentals, sales } = useTransactions();
   const run = useAsyncAction();
   const navigate = useNavigate();
@@ -92,6 +93,7 @@ const MyProperties = () => {
     { label: "Full details", icon: Settings2, onClick: () => manage(p) },
     { label: perms.canEditProperty ? "Edit details" : "Editing is paused", icon: Pencil, disabled: !perms.canEditProperty, onClick: () => navigate(`/agent/properties/${p.id}/edit`) },
     { label: "Inquiries", icon: Inbox, onClick: () => navigate(`/agent/inquiries?property=${p.id}`) },
+    { label: "Still available", icon: CheckCircle2, hidden: p.listing.freshness === "fresh", onClick: () => run(confirmAvailability(p.id), { success: "Listing confirmed as still available", description: p.title }) },
     { label: "View public page", icon: ExternalLink, hidden: !isPubliclyVisible(p), onClick: () => navigate(`/house/${p.id}`) },
     { label: "Delete", icon: Trash2, danger: true, disabled: !perms.canDeleteProperty, onClick: () => setDeleting(p) },
   ];
@@ -99,6 +101,7 @@ const MyProperties = () => {
   const statusCell = (p) => (
     <div className="flex flex-wrap items-center gap-1.5">
       <StatusBadge status={statusOf(p)} />
+      <FreshnessBadge property={p} />
       {p.listing.state === "published" && !["Available", statusOf(p)].includes(p.listing.availability) && <StatusBadge status={p.listing.availability} dot={false} />}
       {!hasMapPin(p) && <span title="Add a map pin in the editor so this listing appears in “near me” search"><StatusBadge status="No map pin" tone="gray" dot={false} /></span>}
       {hasMapPin(p) && p.location.approximate && <span title="Placed automatically from the address. Drag the pin onto the exact building in the editor."><StatusBadge status="Area pin" tone="gray" dot={false} /></span>}
@@ -169,6 +172,8 @@ const MyProperties = () => {
         { label: "In review", value: count("pending"), note: "Waiting for approval" },
         { label: "Drafts", value: count("draft"), note: "Ready for your next update" },
       ]} />
+
+      <FreshnessNotice listings={myProperties} onConfirm={confirmAvailability} className="mb-6" />
 
       {perms.isActive && perms.limitReached && (
         <div className="mb-6">

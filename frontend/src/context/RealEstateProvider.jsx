@@ -156,6 +156,15 @@ export const RealEstateProvider = ({ children }) => {
     [role, refreshAfterChange]
   );
 
+  // Listing freshness: confirms the home is still available (shows it again if it was hidden)
+  const confirmAvailability = useCallback(
+    async (id) => {
+      await (role === "admin" ? adminApi.confirmPropertyAvailability(id) : propertyApi.confirmAvailability(id));
+      await refreshAfterChange();
+    },
+    [role, refreshAfterChange]
+  );
+
   // Resolves to { counted, views }, or null when the request failed (the page carries on regardless)
   const recordView = useCallback((id) => propertyApi.recordPropertyView(id).catch(() => null), []);
 
@@ -216,6 +225,7 @@ export const RealEstateProvider = ({ children }) => {
       deleteListing,
       setListingState,
       setFeatured,
+      confirmAvailability,
       recordView,
       addInquiry,
       updateInquiryStatus,
@@ -245,6 +255,7 @@ export const RealEstateProvider = ({ children }) => {
       deleteListing,
       setListingState,
       setFeatured,
+      confirmAvailability,
       recordView,
       addInquiry,
       updateInquiryStatus,

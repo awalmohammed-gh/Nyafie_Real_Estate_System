@@ -22,7 +22,6 @@ const HeroLink = ({ link, className, children }) => {
  * Focus or hovering the controls holds the current slide. `children` (the search) sits below.
  */
 const HeroSlider = ({ slides, children, marketplace = false }) => {
-  const { siteName } = usePlatform();
   const reducedMotion = useReducedMotion();
   // previous: the slide sliding out; direction: 1 = next (moves left), -1 = previous (moves right)
   const [{ index, previous, direction }, setPosition] = useState({ index: 0, previous: null, direction: 1 });
@@ -33,11 +32,12 @@ const HeroSlider = ({ slides, children, marketplace = false }) => {
   const swipeStart = useRef(null);
   const count = slides.length;
   const slide = slides[index];
-  // The opening image introduces the platform; later images use their own saved copy.
+  const { siteName } = usePlatform();
+  // The opening slide says what the platform is; later images use their own saved copy.
   const content = marketplace && index === 0 ? {
-    label: `WELCOME TO ${siteName.toUpperCase()}`,
-    title: "Find your next home *in Ghana.*",
-    description: `${siteName} is a Ghanaian property marketplace. Find homes to buy or rent, explore short stays, and connect with property agents across Ghana.`,
+    label: `${siteName.toUpperCase()} · GHANA'S PROPERTY MARKETPLACE`,
+    title: "Buy, rent or book a stay, *all in one place.*",
+    description: `${siteName} brings homes for sale, rentals and short stays across Ghana together, with approved agents and secure payments.`,
   } : slide;
   const Heading = marketplace ? "h1" : "h2";
   const paused = hovered || focused;
@@ -125,7 +125,7 @@ const HeroSlider = ({ slides, children, marketplace = false }) => {
             {/* Keyed by slide: label, title, text and buttons always change together with the photo */}
             <div key={slide.id} className={`home-hero-content ${marketplace || previous === null ? "" : direction > 0 ? "from-next" : "from-prev"}`} role={sliding ? "group" : undefined} aria-roledescription={sliding ? "slide" : undefined} aria-label={sliding ? `${index + 1} of ${count}` : undefined}>
               {content.label && <p className="home-eyebrow home-hero-label"><span className="home-live-dot" aria-hidden="true" />{content.label}</p>}
-              <Heading id={marketplace ? "home-heading" : undefined} className="home-hero-title">
+              <Heading id={marketplace ? "home-heading" : undefined} className={`home-hero-title ${marketplace && index === 0 ? "is-introduction" : ""}`}>
                 {splitAccent(content.title).map((part, i) => (part.accent ? <span key={i} className="home-serif">{part.text}</span> : part.text))}
               </Heading>
               {content.description && <p className="home-hero-description">{content.description}</p>}
