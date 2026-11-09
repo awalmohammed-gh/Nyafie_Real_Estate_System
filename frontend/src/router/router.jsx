@@ -1,6 +1,7 @@
 import { UpgradePlan, Team, JoinAgency, AdminLogin, AgentLayout, OnboardingLayout, Onboarding, ApplicationStatus, AdminAgentApplications, Home, Contact, PropertiesDetails, SlugPage, PropertyAction, AgentDetailsPage, NotFound, AuthPage, Profile, AgentProfile, SavedProperties, MyInquiries, Settings, AccountMessages, MyOffers, MyRentals, MyPurchases, AgentSaleRequests, AdminSaleRequests, AgentOffers, AgentRentals, AdminOffers, AdminRentals, AdminPayments, PaymentResult, AgentMessages, AdminMessages, Plans, Checkout, Dashboard, MyProperties, PropertyEditor, Inquiries, PropertyManage, Subscription, AdminLayout, AdminDashboard, AdminUsers, AdminAgents, AdminProperties, AdminInquiries, AdminContactMessages, AdminReviews, AdminSubscriptions, AdminPlans, AdminFinancialInventory, AdminReports, AdminSettings, AdminPropertyEditor } from './routePages';
 import {createBrowserRouter, createRoutesFromElements, Navigate, Route} from 'react-router-dom'
 import SessionLayout from '../layout/SessionLayout'
+import { About } from './routePages'
 import SystemLayout from '../layout/SystemLayout'
 import RouteError from '../components/ui/RouteError'
 import RequireAuth from '../components/auth/RequireAuth'
@@ -19,6 +20,7 @@ const router = createBrowserRouter(
         <Route element={<SessionLayout />} errorElement={<RouteError />}>
          <Route path='/' element={<SystemLayout />}>
             <Route index element={<Home />} />
+            <Route path='about' element={<About />} />
             <Route path='house/:id' element={<PropertiesDetails />} />
             <Route path='offer' element={<Navigate to='/account/offers' replace />} />
             {/* Rent Now, Buy Now and Make Offer: signed-out visitors see a sign-in prompt and come back after signing in */}

@@ -26,6 +26,11 @@ const subscriptionSchema = new mongoose.Schema(
     paymentStatus: { type: String, enum: ["pending", "paid", "failed", "waived", "refund_required", "refunded"], default: "pending" },
     environment: { type: String, enum: ["test", "live", null], default: null }, // Paystack mode at checkout; null = before modes were stored (test)
     note: { type: String, default: "" }, // why a payment needs review
+    // From Paystack's Verify Transaction API once confirmed (audit and reconciliation)
+    providerTransactionId: { type: String, default: undefined },
+    channel: { type: String, default: undefined }, // card, mobile_money, bank, ...
+    paidAmount: { type: Number, default: undefined }, // GHS Paystack charged, recorded when it differs from the expected amount
+    renewalReminderAt: { type: Date, default: null }, // the "expires soon" notice was sent
     paidAt: { type: Date },
     activationProcessedAt: { type: Date }, // committed once with the account/plan changes
     cancelledAt: { type: Date },
@@ -37,5 +42,8 @@ const subscriptionSchema = new mongoose.Schema(
 );
 
 subscriptionSchema.index({ paymentMethod: 1, paymentStatus: 1, nextReconcileAt: 1, createdAt: 1 });
+// A Paystack transaction can be recorded against one subscription payment only
+subscriptionSchema.index({ providerTransactionId: 1 }, { unique: true, partialFilterExpression: { providerTransactionId: { $type: "string" } } });
+subscriptionSchema.index({ status: 1, expiresAt: 1, renewalReminderAt: 1 });
 
 export default mongoose.models.Subscription || mongoose.model("Subscription", subscriptionSchema);

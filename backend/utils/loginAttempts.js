@@ -73,7 +73,7 @@ export const createLoginAttempts = ({ persistent = () => process.env.NODE_ENV ==
     memory.delete(id);
     return state(null, time);
   };
-  // Only call after the customer has proved mailbox ownership and changed their password.
+  // Only call after mailbox recovery or an explicit, authorized operator recovery.
   const resetAfterRecovery = async (email) => {
     const id = identifier(email);
     if (persistent()) await LoginAttempt.collection.deleteOne({ _id: id });
@@ -85,15 +85,12 @@ export const createLoginAttempts = ({ persistent = () => process.env.NODE_ENV ==
 export const loginAttempts = createLoginAttempts();
 
 export const rejectLoginAttempt = (res, attempt) => {
-  const remaining = Math.max(0, LOGIN_ATTEMPTS - attempt.failures);
-  res.set("RateLimit-Limit", String(LOGIN_ATTEMPTS));
-  res.set("RateLimit-Remaining", String(remaining));
   if (attempt.retryAfter) {
     res.set("Retry-After", String(attempt.retryAfter));
     const minutes = Math.ceil(attempt.retryAfter / 60);
-    return res.status(429).json({ success: false, code: "LOGIN_LOCKED", attemptsRemaining: 0, retryAfter: attempt.retryAfter,
-      message: `Too many incorrect passwords. Please wait ${minutes} ${minutes === 1 ? "minute" : "minutes"} before trying again.` });
+    return res.status(429).json({ success: false, code: "LOGIN_LOCKED", retryAfter: attempt.retryAfter,
+      message: `Too many unsuccessful sign-in attempts. Please wait ${minutes} ${minutes === 1 ? "minute" : "minutes"} before trying again.` });
   }
-  return res.status(401).json({ success: false, code: "INVALID_CREDENTIALS", attemptsRemaining: remaining,
-    message: `Incorrect email or password. ${remaining} ${remaining === 1 ? "attempt" : "attempts"} remaining.` });
+  return res.status(401).json({ success: false, code: "INVALID_CREDENTIALS",
+    message: "Incorrect email or password." });
 };

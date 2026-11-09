@@ -8,11 +8,12 @@ import { loadUser } from "./authController.js";
 import { subscriptionState } from "../utils/permissions.js";
 import { quotePlan, presentQuote, upgradeOptions } from "../utils/planChange.js";
 import { ok, fail, HttpError } from "../utils/response.js";
-import { paymentMode as paystackMode, paystack, newReference, paystackPaymentStatus, paymentEnvironment, inCurrentEnvironment, providerScope } from "../utils/paystack.js";
+import { paymentMode as paystackMode, paystack, newReference, checkPaystackTransaction, paymentEnvironment, inCurrentEnvironment, providerScope, toSubunit } from "../utils/paystack.js";
 import { getSettings, siteName } from "../models/Setting.js";
 import { notifyAdmins, notifyUser } from "../utils/notify.js";
 import { formatGHS } from "../utils/ownership.js";
 import { submitReadyApplication } from "./agentApplicationController.js";
+import { mismatchFields, recordProviderDetails } from "../utils/paymentAudit.js";
 
 // Subscription payments need Paystack and the admin's "subscription payments" switch
 const paymentMode = async () => (paystackMode() === "paystack" && (await getSettings()).payments.subscriptionsEnabled ? "paystack" : "disabled");
@@ -154,16 +155,42 @@ export const processSubscriptionPayment = async (subscription, { successExpected
   if (paystackMode() === "disabled") throw new HttpError(503, "Payments are not configured yet.");
   // A key only sees its own mode: a test-mode checkout cannot be checked with the live key
   if (!inCurrentEnvironment(subscription)) throw new HttpError(409, "This payment was started in a different Paystack mode and can no longer be confirmed. Start a new checkout.");
-  const status = await paystackPaymentStatus(subscription.paymentReference, subscription.amount);
+  const check = await checkPaystackTransaction(subscription.paymentReference, subscription.amount);
+  const { status } = check;
   if (status === "paid") {
     const { user, record } = await settleSubscription(subscription);
+    if (record.paymentStatus === "paid") await recordProviderDetails(Subscription, record._id, check, record.paymentReference);
     return { state: settledState(record), subscription: record, user };
   }
+  if (status === "mismatch") return holdMismatchedSubscription(subscription, check);
   // A webhook may arrive before the verification API reflects the final result: let it retry
   if (successExpected) return { state: "pending", subscription };
   const settled = status !== subscription.paymentStatus && await saveUnconfirmedStatus(subscription, status);
   if (settled) return { state: settledState(settled), subscription: settled, repeated: true };
   return { state: status, subscription };
+};
+
+/**
+ * Paystack charged a different amount or currency than this checkout expected: nothing is
+ * activated, and the money is held for an administrator to refund. Atomic and versioned, so a
+ * concurrent verifier either settles first (and this returns its result) or sees this outcome.
+ */
+const holdMismatchedSubscription = async (subscription, check) => {
+  const now = new Date();
+  const held = await Subscription.findOneAndUpdate(
+    { _id: subscription._id, paymentStatus: { $in: ["pending", "failed"] }, activationProcessedAt: null },
+    { $set: { paymentStatus: "refund_required", status: "cancelled", cancelledAt: now, activationProcessedAt: now, ...mismatchFields(check, now) }, $inc: { __v: 1 } },
+    { returnDocument: "after" },
+  );
+  if (!held) {
+    const latest = await Subscription.findById(subscription._id);
+    return { state: isSettled(latest) ? settledState(latest) : latest.paymentStatus, subscription: latest, repeated: true };
+  }
+  await Promise.all([
+    notifyAdmins({ critical: true, type: "payment", title: "Subscription payment needs review", message: `Payment ${held.paymentReference} for ${held.planName} requires a refund. ${held.note}`, link: "/admin/payments" }),
+    notifyUser(held.user, { type: "payment", title: "Subscription payment will be refunded", message: `The payment we received for ${held.planName} didn't match the plan price, so nothing was activated. ${siteName()} will refund it; please don't pay again.`, link: "/agent/subscription" }),
+  ]);
+  return { state: "review", subscription: held };
 };
 
 // How many of an agent's unsettled checkouts one onboarding visit re-checks
@@ -254,21 +281,26 @@ const startCheckout = async (req, res, { upgradeOnly = false } = {}) => {
   const reference = newReference("HB");
   const subscription = await Subscription.create({ ...record, paymentReference: reference, paymentMethod: "Paystack", environment: paymentEnvironment(), paymentStatus: "pending" });
 
-  const result = await paystack("/transaction/initialize", {
-    method: "POST",
-    body: JSON.stringify({
-      email: req.user.email,
-      amount: Math.round(quote.amount * 100), // pesewas
-      currency: "GHS",
-      reference,
-      callback_url: `${paymentReturnUrl(req)}${req.user.agentApplication?.status === "approved" ? "/agent/subscription/checkout" : "/agent/checkout"}?reference=${reference}`,
-      metadata: { userId: String(req.user._id), planId: String(plan._id) },
-    }),
-  });
-  if (!result.status) {
-    subscription.paymentStatus = "failed";
-    await subscription.save();
-    console.error("Paystack initialize failed:", result.message);
+  let result;
+  try {
+    result = await paystack("/transaction/initialize", {
+      method: "POST",
+      body: JSON.stringify({
+        email: req.user.email,
+        amount: toSubunit(subscription.amount), // pesewas, from the stored server-side quote
+        currency: "GHS",
+        reference,
+        callback_url: `${paymentReturnUrl(req)}${req.user.agentApplication?.status === "approved" ? "/agent/subscription/checkout" : "/agent/checkout"}?reference=${reference}`,
+        metadata: { userId: String(req.user._id), planId: String(plan._id) },
+      }),
+    });
+  } catch (error) {
+    result = { status: false, message: error.message };
+  }
+  if (!result.status || !result.data?.authorization_url) {
+    // Only if nothing settled it meanwhile; scheduled recovery still re-checks it with Paystack
+    await Subscription.updateOne({ _id: subscription._id, paymentStatus: "pending" }, { $set: { paymentStatus: "failed" } });
+    console.error("Paystack initialize failed:", result.message || "missing checkout URL");
     return fail(res, 502, "Could not start the payment. Please try again.");
   }
   ok(res, { mode: "paystack", reference, authorizationUrl: result.data.authorization_url }, "Payment started");
@@ -290,7 +322,8 @@ export const verifyPayment = async (req, res) => {
 
   const outcome = await processSubscriptionPayment(subscription);
   if (outcome.state === "review") {
-    return fail(res, 409, `Your payment was received, but a newer plan was already active, so your current plan was kept. Contact ${siteName()} for your refund; do not pay again.`);
+    const why = /^Paystack reported/.test(outcome.subscription?.note || "") ? "the amount didn't match the plan price, so nothing was activated" : "a newer plan was already active, so your current plan was kept";
+    return fail(res, 409, `Your payment was received, but ${why}. Contact ${siteName()} for your refund; do not pay again.`);
   }
   if (outcome.state === "refunded") return fail(res, 409, "This payment has been refunded. Choose a plan again if you still need one.");
   // Idempotent: verifying twice (e.g. a page refresh, or after a webhook) returns the same result

@@ -11,6 +11,8 @@ import { recordFailedRentalPayment } from "../utils/confirmRentalPayment.js";
 import { processRentalPayment } from "../utils/rentalPaymentProcessing.js";
 import { prepareRentalCheckout } from "../utils/prepareRentalCheckout.js";
 import { REFUND_SUMMARY } from "./refundController.js";
+import Property from "../models/Property.js";
+import { stayBookingSettings, takesStayBookings } from "../utils/hotelPayout.js";
 
 const rentalResult = async (rentalId, user) => presentRental(await populateRental(Rental.findById(rentalId)), user);
 
@@ -26,6 +28,10 @@ export const initializeRentalPayment = async (req, res) => {
   if (initial.paymentStatus === "paid") return fail(res, 400, "This rental is already paid.");
   if (!["pending", "payment_pending"].includes(initial.status)) return fail(res, 400, `This rental is ${initial.status.replace("_", " ")}.`);
   if (initial.hotelId) return initializeHotelPayment(req, res, initial);
+  const listing = await Property.findById(initial.property);
+  if (takesStayBookings(listing) && !stayBookingSettings(listing).payOnline) {
+    return fail(res, 409, `This listing takes payment on arrival.${stayBookingSettings(listing).payOnArrival ? " Reserve now and pay when you arrive." : ""}`);
+  }
 
   const { rental, payment, resume } = await prepareRentalCheckout(initial, req.user);
   const { reference } = payment;

@@ -32,9 +32,9 @@ const SiteHead = () => {
 
   useEffect(() => {
     const current = metadata?.pathname === pathname ? metadata : null;
-    const labels = { [`/${settings.slugs.listings}`]: "All property listings", [`/${settings.slugs.properties}`]: "Explore properties", "/sale": "Properties for sale", "/rent": "Properties to rent", "/contact": "Contact our team" };
-    const title = current?.title || (labels[pathname] ? `${labels[pathname]} | ${general.siteName}` : seo.title || [general.siteName, general.tagline].filter(Boolean).join(" | "));
-    const description = current?.description || seo.metaDescription || general.description;
+    const labels = { [`/${settings.slugs.listings}`]: "All property listings", [`/${settings.slugs.properties}`]: "Explore properties", "/about": `About ${general.siteName}`, "/sale": "Properties for sale", "/rent": "Properties to rent", "/contact": "Contact our team" };
+    const title = current?.title || (labels[pathname] ? `${labels[pathname]} | ${general.siteName}` : seo.title || (pathname === "/" ? `${general.siteName} | Find Houses for Sale, Rent & Short Stays in Ghana` : [general.siteName, general.tagline].filter(Boolean).join(" | ")));
+    const description = current?.description || seo.metaDescription || (pathname === "/" ? `Discover houses for sale, apartments for rent, and short-stay properties across Ghana. Explore listings and connect with property agents on ${general.siteName}.` : general.description);
     const image = new URL(current?.image || seo.ogImage || branding.logo || "/favicon.png", publicSiteUrl(settings)).href;
     const privatePage = /^\/(admin|account|agent|agents|checkout|make-offer|login|register|offer|payment)(\/|$)/.test(pathname) || pathname === `/${settings.slugs.agents}`;
     document.title = title;

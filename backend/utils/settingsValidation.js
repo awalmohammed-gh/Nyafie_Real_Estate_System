@@ -6,7 +6,7 @@ import { HttpError } from "./response.js";
 
 // First path segments already used by the app; a public slug can never take one of these
 export const RESERVED_SLUGS = [
-  "admin", "agent", "account", "api", "assets", "checkout", "contact", "house", "login", "logout", "make-offer",
+  "admin", "agent", "account", "api", "assets", "about", "checkout", "contact", "house", "login", "logout", "make-offer",
   "offer", "payment", "register", "rent", "sale", "favicon.svg", "icons.svg",
 ];
 

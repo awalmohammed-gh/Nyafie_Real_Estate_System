@@ -13,6 +13,8 @@ import Notification from "../models/Notification.js";
 import Plan from "../models/Plan.js";
 import Subscription from "../models/Subscription.js";
 import { reconcileOpenPayments } from "../controllers/subscriptionController.js";
+import { requestRefund } from "../utils/refunds.js";
+import Refund from "../models/Refund.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
 
 test("rental payments recover without a browser callback using signed webhooks and scheduled checks", { skip: process.env.RUN_PAYMENT_INTEGRATION !== "1", timeout: 90000 }, async (t) => {
@@ -28,7 +30,7 @@ test("rental payments recover without a browser callback using signed webhooks a
   await new Promise((done) => server.once("listening", done));
   t.after(() => new Promise((done) => server.close(done)));
   const base = `http://127.0.0.1:${server.address().port}/api`;
-  const token = jwt.sign({ id: customer.id, role: "user", session: "customer", ...customerTabClaims("customer") }, process.env.JWT_KEY);
+  const token = jwt.sign({ id: customer.id, role: "user", session: "customer", ...customerTabClaims("customer") }, process.env.JWT_KEY, { expiresIn: "1h" });
   const realFetch = globalThis.fetch;
   const provider = new Map();
   t.mock.method(globalThis, "fetch", async (url, options) => {
@@ -56,7 +58,7 @@ test("rental payments recover without a browser callback using signed webhooks a
     return { code: response.status, ...(await response.json()) };
   };
   const start = async ({ hotel = false } = {}) => {
-    const listing = await Property.create({ title: "Callback test rental", propertyType: hotel ? "Hotel" : "Apartment", listingType: "Rent", price: 100, pricePeriod: hotel ? "night" : "month", owner: owner._id, ownerType: "admin", status: "published", availability: "Available", ...(hotel ? { roomTypes: [{ name: "Deluxe", bedType: "King", description: "Test room", pricePerNight: 100, quantity: 2, maxGuests: 2, beds: 1, images: ["/room.jpg"] }] } : {}) });
+    const listing = await Property.create({ title: "Callback test rental", propertyType: hotel ? "Hotel" : "Apartment", listingType: "Rent", price: 100, pricePeriod: hotel ? "night" : "month", owner: owner._id, ownerType: "admin", status: "published", availability: "Available", ...(hotel ? { stayBooking: { payOnline: true }, roomTypes: [{ name: "Deluxe", bedType: "King", description: "Test room", pricePerNight: 100, quantity: 2, maxGuests: 2, beds: 1, images: ["/room.jpg"] }] } : {}) });
     const booking = await api("/rentals", { propertyId: listing.id, startDate: "2030-01-01", endDate: hotel ? "2030-01-04" : "2030-02-01", fullName: "Test Guest", email: customer.email, phone: customer.phone, currentAddress: "12 Test Road", ...(hotel ? { roomTypeId: listing.roomTypes[0].id, checkIn: "2030-01-01", checkOut: "2030-01-04", guests: 2, numberOfRooms: 1 } : {}) });
     assert.equal(booking.code, 201, JSON.stringify(booking));
     const checkout = await api("/payments/initialize", { rentalId: booking.data.id });
@@ -125,15 +127,32 @@ test("rental payments recover without a browser callback using signed webhooks a
     assert.equal((await webhook(f.reference)).code, 200);
   });
 
-  await t.test("a signed callback alone cannot override a mismatched provider amount, currency or reference", async () => {
+  await t.test("a signed callback alone cannot override a mismatched provider reference", async () => {
     const f = await start();
-    for (const change of [{ amount: 1 }, { currency: "USD" }, { reference: "different-payment" }]) {
-      provider.set(f.reference, change);
-      assert.equal((await webhook(f.reference)).code, 503);
-      assert.equal((await Rental.findById(f.booking.id)).paymentStatus, "pending");
-    }
+    provider.set(f.reference, { reference: "different-payment" });
+    assert.equal((await webhook(f.reference)).code, 503);
+    assert.equal((await Rental.findById(f.booking.id)).paymentStatus, "pending");
     provider.delete(f.reference);
     assert.equal((await webhook(f.reference)).code, 200);
+  });
+
+  await t.test("a charge Paystack reports with a different amount or currency is held for a refund, never booked", async () => {
+    for (const change of [{ amount: 1 }, { amount: 99999999 }, { currency: "USD" }]) {
+      const f = await start();
+      provider.set(f.reference, change);
+      assert.equal((await webhook(f.reference)).code, 200, "definitive: acknowledged, not retried");
+      const payment = await Payment.findOne({ reference: f.reference });
+      assert.equal(payment.status, "refund_required", JSON.stringify(change));
+      assert.match(payment.note, /was expected\. Nothing was granted\./);
+      const rental = await Rental.findById(f.booking.id);
+      assert.notEqual(rental.paymentStatus, "paid");
+      assert.notEqual(rental.status, "payment_pending", "the hold is released");
+      // Redelivery, and a later "correct" answer, cannot turn it into a booking
+      provider.delete(f.reference);
+      assert.equal((await webhook(f.reference)).code, 200);
+      assert.equal((await Payment.findOne({ reference: f.reference })).status, "refund_required");
+      assert.notEqual((await Rental.findById(f.booking.id)).paymentStatus, "paid");
+    }
   });
 
   await t.test("provider errors return non-200 so Paystack can redeliver the webhook", async (st) => {
@@ -182,13 +201,24 @@ test("rental payments recover without a browser callback using signed webhooks a
     assert.equal(+(await Subscription.findById(record.id)).expiresAt, expiry, "replays do not extend the plan again");
   });
 
+  await t.test("a subscription charged a different amount activates nothing and is held for a refund", async () => {
+    const user = await agent(), record = await checkout(user);
+    provider.set(record.paymentReference, { amount: 1 });
+    assert.equal((await webhook(record.paymentReference)).code, 200);
+    const held = await Subscription.findById(record.id);
+    assert.equal(held.paymentStatus, "refund_required");
+    assert.equal(held.status, "cancelled");
+    assert.equal(String((await User.findById(user._id)).subscription || ""), "", "no plan was granted");
+    provider.delete(record.paymentReference);
+    assert.equal((await webhook(record.paymentReference)).code, 200);
+    assert.equal((await Subscription.findById(record.id)).paymentStatus, "refund_required", "a redelivery cannot activate it");
+  });
+
   await t.test("a subscription webhook ahead of provider confirmation is retried without changing the record", async () => {
     const user = await agent(), record = await checkout(user);
-    for (const change of [{ status: "pending" }, { amount: 1 }]) {
-      provider.set(record.paymentReference, change);
-      assert.equal((await webhook(record.paymentReference)).code, 503);
-      assert.equal((await Subscription.findById(record.id)).paymentStatus, "pending");
-    }
+    provider.set(record.paymentReference, { status: "pending" });
+    assert.equal((await webhook(record.paymentReference)).code, 503);
+    assert.equal((await Subscription.findById(record.id)).paymentStatus, "pending");
     provider.delete(record.paymentReference);
     assert.equal((await webhook(record.paymentReference)).code, 200);
     assert.equal((await Subscription.findById(record.id)).paymentStatus, "paid");
@@ -225,5 +255,60 @@ test("rental payments recover without a browser callback using signed webhooks a
     assert.equal((await Subscription.findById(latest.id)).paymentStatus, "failed");
     assert.equal(String((await User.findById(user.id)).subscription), earlier.id);
     provider.delete(latest.paymentReference);
+  });
+
+  // ---- Audit trail, refunds of mismatched charges, renewal reminders ----
+  await t.test("confirmed payments keep Paystack's transaction ID and channel; one transaction can't be recorded on two payments", async () => {
+    const a = await start(), b = await start();
+    provider.set(a.reference, { id: 777000111, channel: "mobile_money" });
+    assert.equal((await webhook(a.reference)).code, 200);
+    const first = await Payment.findOne({ reference: a.reference });
+    assert.equal(first.status, "paid");
+    assert.equal(first.providerTransactionId, "777000111");
+    assert.equal(first.channel, "mobile_money");
+    // A second record claiming the same Paystack transaction is never linked to it, and an admin is alerted
+    provider.set(b.reference, { id: 777000111, channel: "card" });
+    assert.equal((await webhook(b.reference)).code, 200);
+    assert.equal((await Payment.findOne({ reference: b.reference })).providerTransactionId, undefined);
+    assert.equal(await Payment.countDocuments({ providerTransactionId: "777000111" }), 1);
+    assert.ok(await Notification.exists({ audience: "admins", title: "Paystack transaction recorded twice" }));
+    const user = await agent(), record = await checkout(user);
+    provider.set(record.paymentReference, { id: 888000222, channel: "card" });
+    assert.equal((await webhook(record.paymentReference)).code, 200);
+    const sub = await Subscription.findById(record.id);
+    assert.equal(sub.paymentStatus, "paid");
+    assert.equal(sub.providerTransactionId, "888000222");
+    for (const reference of [a.reference, b.reference, record.paymentReference]) provider.delete(reference);
+  });
+
+  await t.test("a mismatched charge is refunded for what Paystack actually charged", async () => {
+    const f = await start();
+    provider.set(f.reference, { amount: 15000 }); // GHS 150 charged for a GHS 100 booking
+    assert.equal((await webhook(f.reference)).code, 200);
+    const held = await Payment.findOne({ reference: f.reference });
+    assert.equal(held.status, "refund_required");
+    assert.equal(held.paidAmount, 150);
+    const { refund } = await requestRefund(owner, { source: "payment", id: held.id, method: "manual", reason: "Returned by MoMo", externalReference: "MOMO-1" });
+    assert.equal((await Refund.findById(refund._id)).amount, 150);
+    provider.delete(f.reference);
+  });
+
+  await t.test("agents are reminded once, a week before their current plan expires", async () => {
+    const day = 24 * 60 * 60 * 1000;
+    const soon = await agent(), later = await agent(), replaced = await agent();
+    const active = (user, days) => checkout(user, { status: "active", paymentStatus: "paid", startDate: new Date(), expiresAt: new Date(Date.now() + days * day) });
+    const soonSub = await active(soon, 3), laterSub = await active(later, 20), oldSub = await active(replaced, 2);
+    await User.updateOne({ _id: soon._id }, { subscription: soonSub._id });
+    await User.updateOne({ _id: later._id }, { subscription: laterSub._id });
+    await User.updateOne({ _id: replaced._id }, { subscription: (await active(replaced, 60))._id }); // oldSub is no longer the account's plan
+    const first = await recover();
+    assert.equal(first.data.reminders, 1, JSON.stringify(first));
+    const notice = await Notification.findOne({ recipient: soon._id, title: "Your plan expires soon" });
+    assert.ok(notice);
+    assert.match(notice.message, /\(in 3 days\)\. Renew it from Subscription.*You won't be charged automatically\./);
+    assert.equal(await Notification.countDocuments({ recipient: { $in: [later._id, replaced._id] }, title: "Your plan expires soon" }), 0);
+    assert.ok((await Subscription.findById(oldSub.id)).renewalReminderAt, "checked once, not again");
+    assert.equal((await recover()).data.reminders, 0, "never twice");
+    assert.equal(await Notification.countDocuments({ recipient: soon._id, title: "Your plan expires soon" }), 1);
   });
 });

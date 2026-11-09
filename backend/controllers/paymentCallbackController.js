@@ -6,6 +6,7 @@ import { processRentalPayment } from "../utils/rentalPaymentProcessing.js";
 import { processSubscriptionPayment, recoverableSubscriptionPayments } from "./subscriptionController.js";
 import { paymentEnvironment, paymentMode, providerScope } from "../utils/paystack.js";
 import { fail, ok } from "../utils/response.js";
+import { sendRenewalReminders } from "../utils/subscriptionReminders.js";
 
 // The rental ledger or the agent subscription history: whichever stored record owns the reference
 const callbackRecord = async (reference) => {
@@ -86,6 +87,10 @@ const emptyCounts = () => ({ checked: 0, paid: 0, review: 0, pending: 0, failed:
 
 export const reconcilePayments = async (req, res) => {
   res.set("Cache-Control", "no-store");
+  // The same daily job reminds agents before their plan expires (works without Paystack too)
+  let reminders = 0;
+  try { reminders = await sendRenewalReminders(); }
+  catch (error) { console.error("Renewal reminders failed:", error.message); }
   if (paymentMode() === "disabled") return fail(res, 503, "Online payments are not configured.");
   const counts = { ...emptyCounts(), ...Object.fromEntries(recoveryQueues.map((queue) => [queue.name, emptyCounts()])) };
   // Bounded work fits one serverless invocation. The queues take turns from one shared
@@ -107,5 +112,5 @@ export const reconcilePayments = async (req, res) => {
       }
     }
   }
-  return res.status(counts.errors ? 503 : 200).json({ success: counts.errors === 0, data: counts, message: counts.errors ? "Some payments could not be checked. Retry after the recovery lease expires." : "Payment recovery completed" });
+  return res.status(counts.errors ? 503 : 200).json({ success: counts.errors === 0, data: { ...counts, reminders }, message: counts.errors ? "Some payments could not be checked. Retry after the recovery lease expires." : "Payment recovery completed" });
 };

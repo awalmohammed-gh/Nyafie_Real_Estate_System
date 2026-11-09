@@ -148,6 +148,9 @@ test("role session isolation", async (t) => {
         for (const token of [
           jwt.sign({ id }, process.env.JWT_KEY),
           jwt.sign({ id, session, role: "wrong" }, process.env.JWT_KEY),
+          jwt.sign({ id, session, role: SESSION_ROLES[session] }, process.env.JWT_KEY),
+          jwt.sign({ id, session, role: SESSION_ROLES[session] }, process.env.JWT_KEY, { expiresIn: 3600, noTimestamp: true }),
+          jwt.sign({ id, session, role: SESSION_ROLES[session], iat: Math.floor(Date.now() / 1000) + 3600 }, process.env.JWT_KEY, { expiresIn: 3600 }),
           jwt.sign({ id, session, role: SESSION_ROLES[session] }, process.env.JWT_KEY, { expiresIn: -1 }),
           `${cookies[`${session}_token`]}tampered`,
         ]) assert.equal((await call(`/api/auth/${session}/me`, { domain: session, jar: { [`${session}_token`]: token } })).status, 401);
@@ -194,6 +197,17 @@ test("role session isolation", async (t) => {
       account.role = "agent";
       assert.equal((await call("/api/auth/customer/me", { domain: "customer" })).status, 401);
       account.role = "user";
+    });
+    await t.test("password-change guesses share an account limit across customer aliases", async () => {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const response = await call(attempt % 2 ? "/api/auth/me/password" : "/api/auth/customer/me/password", { domain: "customer", method: "PUT", data: { currentPassword: "WrongPassword123", newPassword: "NewLongPassphrase123" } });
+        assert.equal(response.status, 400);
+      }
+      const blocked = await call("/api/auth/customer/me/password", { domain: "customer", method: "PUT", data: { currentPassword: "TestPassword123", newPassword: "NewLongPassphrase123" } });
+      assert.equal(blocked.status, 429);
+      assert.ok(Number(blocked.headers.get("retry-after")) > 0);
+      const otherAccount = await call("/api/auth/agent/me/password", { domain: "agent", method: "PUT", data: { currentPassword: "WrongPassword123", newPassword: "NewLongPassphrase123" } });
+      assert.equal(otherAccount.status, 400);
     });
     await t.test("database errors propagate without clearing a valid cookie", async () => {
       User.findById = () => { throw new Error("Database unavailable"); };

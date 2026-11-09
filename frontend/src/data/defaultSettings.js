@@ -9,7 +9,7 @@ export const defaultSettings = {
   },
   branding: { logo: "", logoDark: "", favicon: "" },
   seo: { title: "", metaDescription: "", keywords: "", ogImage: "", baseUrl: "", allowIndexing: true },
-  contact: { phone: "", email: "", whatsapp: "", address: "", city: "", region: "", country: "Ghana", mapUrl: "", hours: "" },
+  contact: { phone: "", email: "", whatsapp: "", address: "Spintex, Flower pot", city: "Accra", region: "", country: "Ghana", mapUrl: "", hours: "" },
   social: { facebook: "", instagram: "", x: "", linkedin: "", youtube: "", tiktok: "" },
   slugs: { properties: "properties", listings: "listings", agents: "agents" },
   property: {

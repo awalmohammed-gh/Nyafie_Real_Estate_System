@@ -74,7 +74,7 @@ test("anonymous contact submission reaches an admin-only inbox and survives stat
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const token = jwt.sign({ id: String(admin._id), role: "admin", session: "admin" }, process.env.JWT_KEY);
+  const token = jwt.sign({ id: String(admin._id), role: "admin", session: "admin" }, process.env.JWT_KEY, { expiresIn: "1h" });
   const call = (path, { data, method = data ? "POST" : "GET", authenticated = false, headers = {} } = {}) => fetch(base + path, { method, headers: { "Content-Type": "application/json", ...(authenticated ? { Cookie: `admin_token=${token}`, "X-Session-Domain": "admin", ...adminEntryHeaders() } : {}), ...headers }, ...(data ? { body: JSON.stringify(data) } : {}) });
   try {
     await t.test("public submission saves normalized, allowlisted fields and notifies admins", async () => {

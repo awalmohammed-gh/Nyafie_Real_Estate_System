@@ -47,7 +47,9 @@ test("production failed-password lockouts persist across instances and protect e
       const third = await signIn(session, email);
       assert.equal(third.status, 429);
       assert.equal(third.headers.get("retry-after"), "1800");
-      assert.equal((await third.json()).attemptsRemaining, 0);
+      const locked = await third.json();
+      assert.equal(locked.code, "LOGIN_LOCKED");
+      assert.equal(locked.attemptsRemaining, undefined);
       assert.equal(third.headers.getSetCookie().length, 0);
       // Re-instantiating the limiter simulates a fresh server/function instance.
       const freshInstance = createLoginAttempts({ persistent: () => true });

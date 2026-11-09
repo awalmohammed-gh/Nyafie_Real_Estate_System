@@ -9,6 +9,8 @@ import { requestPasswordReset, resetCustomerPassword } from "../controllers/pass
 import { createGoogleChallenge, googleCustomerLogin } from "../controllers/googleAuthController.js";
 
 const router = Router();
+// A stolen session or distributed IPs must not provide unlimited current-password guesses.
+const passwordChangeLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, key: (req) => String(req.user._id), message: "Too many password-change requests. Please wait 15 minutes and try again." });
 router.use((_req, res, next) => { res.set("Cache-Control", "private, no-store"); next(); });
 for (const [session, guard] of [["customer", protectCustomer], ["agent", protectAgentSession], ["admin", protectAdmin]]) {
   router.use('/' + session, (req, res, next) => {
@@ -20,7 +22,7 @@ for (const [session, guard] of [["customer", protectCustomer], ["agent", protect
   router.post('/' + session + '/logout', logoutFor(session));
   router.get('/' + session + '/me', guard, me);
   router.put('/' + session + '/me', guard, updateMe);
-  router.put('/' + session + '/me/password', guard, changePassword);
+  router.put('/' + session + '/me/password', guard, passwordChangeLimit, changePassword);
 }
 router.post("/customer/register", register);
 const googleLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
@@ -47,5 +49,5 @@ router.post("/login", login);
 router.post("/logout", logout);
 router.get("/me", protectCustomer, me);
 router.put("/me", protectCustomer, updateMe);
-router.put("/me/password", protectCustomer, changePassword);
+router.put("/me/password", protectCustomer, passwordChangeLimit, changePassword);
 export default router;

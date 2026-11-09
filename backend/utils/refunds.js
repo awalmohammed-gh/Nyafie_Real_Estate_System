@@ -127,7 +127,7 @@ export const requestRefund = async (admin, body = {}) => {
     if (!claimed) throw new HttpError(409, "A refund for this payment is already in progress or done.");
     const [created] = await Refund.create([{
       _id: refundId, source: body.source, [body.source]: record._id, reference: config.reference(record), customer: record[config.customerField],
-      amount: record.amount, environment, method, status, open: true, reason, externalReference, requestedBy: admin._id,
+      amount: record.paidAmount ?? record.amount, environment, method, status, open: true, reason, externalReference, requestedBy: admin._id,
       ...(method === "Manual" ? { processedAt: new Date() } : {}),
       history: [{ status, note: method === "Manual" ? `Recorded as refunded outside Paystack (${externalReference})` : "Refund requested", by: admin._id }],
     }], { session });

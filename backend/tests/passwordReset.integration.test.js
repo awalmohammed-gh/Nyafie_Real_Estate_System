@@ -34,7 +34,7 @@ test("customer password recovery proves mailbox ownership, expires and revokes s
   });
   const person = (email, fields = {}) => User.create({ firstName: "Reset", lastName: "Customer", email, password: "OriginalPassword123", emailVerifiedAt: new Date(), ...fields });
   const forgot = (email) => request("/auth/customer/forgot-password", { email });
-  const reset = (email, code, newPassword = "NewPassword123") => request("/auth/customer/reset-password", { email, code, newPassword });
+  const reset = (email, code, newPassword = "StrongNewPassword123") => request("/auth/customer/reset-password", { email, code, newPassword });
   const user = await person("customer@reset.test");
   let code;
 
@@ -59,7 +59,7 @@ test("customer password recovery proves mailbox ownership, expires and revokes s
 
   await t.test("valid code changes the password once, unlocks login and revokes every old customer session", async () => {
     client = 2;
-    const oldCookie = "customer_token=" + jwt.sign({ id: user.id, role: "user", session: "customer", ...customerTabClaims("customer") }, process.env.JWT_KEY);
+    const oldCookie = "customer_token=" + jwt.sign({ id: user.id, role: "user", session: "customer", ...customerTabClaims("customer") }, process.env.JWT_KEY, { expiresIn: "1h" });
     assert.equal((await request("/auth/customer/me", undefined, oldCookie)).status, 200);
     for (let index = 0; index < 3; index++) await loginAttempts.failure(user.email);
     assert.ok((await loginAttempts.check(user.email)).retryAfter > 0);
@@ -69,12 +69,12 @@ test("customer password recovery proves mailbox ownership, expires and revokes s
     assert.equal(response.status, 200);
     assert.ok(response.headers.getSetCookie().every((cookie) => !cookie.includes("customer_token=ey")), "recovery must not automatically sign in");
     const changed = await User.findById(user.id).select("+password +sessionVersion");
-    assert.equal(await changed.matchPassword("NewPassword123"), true);
+    assert.equal(await changed.matchPassword("StrongNewPassword123"), true);
     assert.equal(await changed.matchPassword("OriginalPassword123"), false);
     assert.ok(changed.sessionVersion);
     assert.equal((await loginAttempts.check(user.email)).retryAfter, 0);
     assert.equal((await request("/auth/customer/me", undefined, oldCookie)).status, 401);
-    assert.equal((await request("/auth/customer/login", { email: user.email, password: "NewPassword123" })).status, 200);
+    assert.equal((await request("/auth/customer/login", { email: user.email, password: "StrongNewPassword123" })).status, 200);
     assert.equal((await reset(user.email, code)).status, 400, "used code cannot be replayed");
   });
 
@@ -126,7 +126,7 @@ test("customer password recovery proves mailbox ownership, expires and revokes s
   await t.test("customers who became agents recover the same account and lose old agent sessions too", async () => {
     client = 6;
     const account = await person("dual@reset.test", { role: "agent", customerAccess: true, agentApplication: { status: "approved" } });
-    const cookie = "agent_token=" + jwt.sign({ id: account.id, role: "agent", session: "agent" }, process.env.JWT_KEY);
+    const cookie = "agent_token=" + jwt.sign({ id: account.id, role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" });
     const agentMe = () => fetch(base + "/auth/agent/me", { headers: { "X-Session-Domain": "agent", Cookie: cookie } });
     assert.equal((await agentMe()).status, 200);
     await forgot(account.email);

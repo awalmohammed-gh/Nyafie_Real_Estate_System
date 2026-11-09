@@ -21,14 +21,19 @@ import { rentalApi } from "../../frontApi";
 import { formatDate, isWithinDays } from "../../utils/date";
 import { toWhatsAppNumber } from "../../utils/whatsapp";
 import { adminPath } from "../../utils/adminEntry";
+import { arrivalText, pastArrivalDeadline, payPlace } from "../../utils/hotelPayments";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
+// Short stays (hotels and rentals priced per night) use check-in words
+const isStay = (r) => Boolean(r.hotelId) || r.pricePeriod === "night";
+// A pay-on-arrival reservation whose payment hasn't been recorded yet
+const dueOnArrival = (r) => r.paymentOption === "on_arrival" && r.paymentDue;
 const FILTERS = [
   { id: "All", label: "All", match: () => true },
   { id: "Action", label: "Needs action", match: (r) => ["Paid", "Confirmed"].includes(r.status) },
   { id: "Payment", label: "Awaiting payment", match: (r) => ["Pending", "Payment Pending"].includes(r.status) },
   { id: "Active", label: "Active", match: (r) => r.status === "Active" },
-  { id: "CheckIns", label: "Upcoming check-ins", match: (r) => r.hotelId && ["Paid", "Confirmed"].includes(r.status) && r.startDate.slice(0, 10) >= new Date().toISOString().slice(0, 10) },
+  { id: "CheckIns", label: "Upcoming check-ins", match: (r) => isStay(r) && ["Paid", "Confirmed"].includes(r.status) && r.startDate.slice(0, 10) >= new Date().toISOString().slice(0, 10) },
   { id: "Closed", label: "Closed", match: (r) => ["Completed", "Cancelled"].includes(r.status) },
 ];
 
@@ -46,6 +51,20 @@ const ACTIONS = {
   ],
   active: [{ status: "completed", label: "Mark completed" }],
 };
+
+// Stays use check-in words, and pay-on-arrival reservations add "payment received" and "no-show"
+const PAID_ON_ARRIVAL = { kind: "paid-on-arrival", label: "Payment received" };
+const NO_SHOW = { status: "cancelled", label: "Mark no-show", danger: true, note: "Guest did not arrive by the arrival deadline (no-show)." };
+const actionsFor = (r) => {
+  const base = (ACTIONS[r.statusKey] || []).map((action) => (isStay(r) && action.status === "active" ? { ...action, label: "Mark checked in" } : r.hotelId && action.status === "confirmed" ? { ...action, label: "Confirm booking" } : action));
+  if (!dueOnArrival(r)) return base;
+  const received = { ...PAID_ON_ARRIVAL, label: r.hotelId ? "Payment received at hotel" : "Payment received on arrival" };
+  if (r.statusKey === "confirmed") return [base[0], received, ...(pastArrivalDeadline(r) ? [NO_SHOW] : []), ...base.slice(1)];
+  // A stay can only be completed once its payment is recorded
+  if (r.statusKey === "active") return [received];
+  return base;
+};
+const paymentChoice = (r) => (r.paymentOption !== "on_arrival" ? "Online" : r.hotelId ? "Pay at the hotel" : "Pay on arrival");
 
 // Rental bookings. scope "agent": own listings only (enforced by the API); "admin": every rental.
 const RentalsBoard = ({ scope }) => {
@@ -90,8 +109,9 @@ const RentalsBoard = ({ scope }) => {
   const apply = async () => {
     setBusy(true);
     const { rental, action } = confirm;
-    const { ok, result } = await run(rentalApi.updateRentalStatus(rental.id, action.status, note.trim()), {
-      success: `Rental ${action.status === "active" ? "marked active" : action.status}`,
+    const request = action.kind === "paid-on-arrival" ? rentalApi.recordArrivalPayment(rental.id, note.trim()) : rentalApi.updateRentalStatus(rental.id, action.status, note.trim() || action.note || "");
+    const { ok, result } = await run(request, {
+      success: action.kind === "paid-on-arrival" ? "Payment recorded" : action === NO_SHOW ? "Marked as no-show" : `${rental.hotelId ? "Booking" : "Rental"} ${action.status === "active" ? (isStay(rental) ? "checked in" : "marked active") : action.status}`,
       description: `${rental.contactName} has been notified.`,
     });
     if (ok) {
@@ -104,9 +124,9 @@ const RentalsBoard = ({ scope }) => {
   };
 
   const actionButtons = (r, size = "text-xs") =>
-    (ACTIONS[r.statusKey] || []).map((action) => (
+    actionsFor(r).map((action) => (
       <button
-        key={action.status}
+        key={action.kind || action.label}
         onClick={() => setConfirm({ rental: r, action })}
         className={`btn btn-light px-3 py-1.5 ${size} ${action.danger ? "text-red-600" : "text-brand-700"}`}
       >
@@ -230,7 +250,7 @@ const RentalsBoard = ({ scope }) => {
       >
         {open && (
           <div className="space-y-5">
-            <StatusSteps kind="rental" status={open.statusKey} />
+            <StatusSteps kind={open.paymentOption === "on_arrival" && open.paymentMethod !== "Paystack" ? "stayReservation" : "rental"} status={open.statusKey} />
             <div className="rounded-xl bg-brand-50 p-4"><p className="workspace-eyebrow">Rental summary</p><p className="mt-2 text-2xl font-semibold text-gray-900">{ghs(open.amount)}</p><p className="mt-2 text-sm text-gray-600">Move-in {formatDate(open.startDate)} · Until {formatDate(open.endDate)}</p><div className="mt-3 flex gap-2"><StatusBadge status={open.paymentStatus} /><StatusBadge status={open.status} /></div></div>
             <Link to={`/house/${open.property.id}`} className="flex items-center gap-3 rounded-lg p-2 ring-1 ring-gray-200 transition hover:ring-brand-200">
               {open.property.image && <img src={open.property.image} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />}
@@ -243,6 +263,7 @@ const RentalsBoard = ({ scope }) => {
               {[
                 ["Customer", open.contactName],
                 ...(open.hotelId ? [["Room type", open.roomName], ["Rooms", open.numberOfRooms], ["Nightly price", ghs(open.unitPrice)], ["Nights", open.units]] : []),
+                ...(isStay(open) && open.paymentOption ? [["Payment choice", paymentChoice(open)]] : []),
                 ["Phone", open.contactPhone],
                 ["Email", open.contactEmail],
                 ["Current address", open.currentAddress || "—"],
@@ -268,7 +289,8 @@ const RentalsBoard = ({ scope }) => {
               </div>
             </dl>
             {open.notes && <p className="rounded-lg bg-brand-50/60 p-4 text-sm whitespace-pre-line text-gray-700">“{open.notes}”</p>}
-            {(ACTIONS[open.statusKey] || []).length > 0 && <div className="flex flex-wrap gap-2">{actionButtons(open, "text-sm")}</div>}
+            {dueOnArrival(open) && ["confirmed", "active"].includes(open.statusKey) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{ghs(open.amount)} is due {payPlace(open)}. The guest should {open.hotelId ? "check in" : "arrive"} {arrivalText(open)}.{open.cancellationPolicy && <span className="mt-1 block text-xs whitespace-pre-line">Policy shown to the guest: {open.cancellationPolicy}</span>}</p>}
+            {actionsFor(open).length > 0 && <div className="flex flex-wrap gap-2">{actionButtons(open, "text-sm")}</div>}
             <div>
               <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
                 <BadgeCheck className="h-4 w-4 text-brand-500" />
@@ -289,7 +311,11 @@ const RentalsBoard = ({ scope }) => {
         title={confirm ? `${confirm.action.label}?` : ""}
         description={
           confirm &&
-          (confirm.action.status === "cancelled" && confirm.rental.paymentStatus === "Paid"
+          (confirm.action.kind === "paid-on-arrival"
+            ? `Record that ${confirm.rental.contactName} paid ${ghs(confirm.rental.amount)} ${payPlace(confirm.rental)}. They'll get a confirmation.`
+            : confirm.action === NO_SHOW
+            ? `${confirm.rental.contactName} didn't arrive by the deadline. Their reservation is cancelled, the ${confirm.rental.hotelId ? "rooms are" : "dates are"} released and they're notified.`
+            : confirm.action.status === "cancelled" && confirm.rental.paymentStatus === "Paid"
             ? `This rental is already paid. Cancelling notifies ${confirm.rental.contactName}; arrange their refund separately.`
             : `${confirm.rental.contactName}'s rental of "${confirm.rental.property.title}" will be updated and they'll be notified.`)
         }

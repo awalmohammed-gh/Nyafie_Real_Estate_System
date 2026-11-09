@@ -8,6 +8,8 @@ import { usePlatform } from "../../context/usePlatform";
 import { useToast } from "../../context/useToast";
 import ImageUploader from "../../components/agent/ImageUploader";
 import RoomTypesEditor from "../../components/agent/RoomTypesEditor";
+import HotelPaymentSettings from "../../components/agent/HotelPaymentSettings";
+import { NIGHTLY_RENTAL_DEFAULTS, STAY_BOOKING_DEFAULTS } from "../../utils/hotelPayments";
 import { roomToForm, roomsToPayload } from "../../utils/hotel";
 import LockedFeature from "../../components/ui/LockedFeature";
 import { COUNTED_STATES, lockCopy, withinImageLimit } from "../../utils/permissions";
@@ -195,6 +197,12 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
   const [customAmenity, setCustomAmenity] = useState("");
   const [rooms, setRooms] = useState(() => (existing?.roomTypes || []).map(roomToForm));
   const hotel = form.type.toLowerCase() === "hotel";
+  // Hotels and rentals priced per night let guests reserve and pay on arrival (each with its own defaults)
+  const nightlyRental = !hotel && form.listingType === "Rent" && form.rentPeriod === "night";
+  const [bookingEdits, setBooking] = useState(() => existing?.stayBooking || {});
+  const booking = { ...(hotel ? STAY_BOOKING_DEFAULTS : NIGHTLY_RENTAL_DEFAULTS), ...bookingEdits };
+  // The platform's own hotels are paid into the platform account; agent hotels into their payout account
+  const platformHotel = existing ? existing.owner.type === "admin" : isAdminEditor;
   const activeRooms = rooms.filter((room) => room.active);
   const hotelPrice = activeRooms.length ? Math.min(...activeRooms.map((room) => Number(room.pricePerNight) || 0)) : 0;
   const [errors, setErrors] = useState({});
@@ -268,6 +276,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
     }
     if ((form.latitude === "") !== (form.longitude === "")) e.latitude = "Provide both coordinates or leave both empty.";
     if (form.title.trim().length < 3) e.title = "Give the property a title (at least 3 characters).";
+    if ((hotel || nightlyRental) && !booking.payOnArrival && !booking.payOnline) e.booking = "Choose at least one way for guests to pay.";
     if (mode === "publish") {
       if (form.description.trim().length < 30) e.description = "Describe the property in at least 30 characters.";
       if (!form.type) e.type = "Choose a property type.";
@@ -309,7 +318,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
         size: { value: Number(form.area) || 0, unit: "sqm" },
       },
       features: form.amenities,
-      ...(hotel ? { roomTypes: roomsToPayload(rooms) } : {}),
+      ...(hotel ? { roomTypes: roomsToPayload(rooms), stayBooking: booking } : nightlyRental ? { stayBooking: booking } : {}),
       media: { images: readyImages.map((img) => img.src) },
       agent: { id: user.id, name: form.contactName.trim() || user.name, phone: form.contactPhone.trim(), email: form.contactEmail.trim() },
       owner: { type: "agent", id: user.id },
@@ -523,7 +532,8 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
           {hotel ? <Chapter id="chapter-rooms" number={next()} title="Room Types" description="Set a price and inventory for each room type. The hotel's starting price is taken from your active rooms.">
             <RoomTypesEditor rooms={rooms} setRooms={setRooms} imageLimit={perms.imageLimit} />
             {(errors.rooms || errors.price) && <FieldError>{errors.rooms || errors.price}</FieldError>}
-          </Chapter> : <Chapter id="chapter-price" number={next()} title={form.listingType === "Sale" ? "Asking price" : "Rent"} description={form.listingType === "Sale" ? "Buyers can make offers below or above this." : "Tenants pay this online when their rental is confirmed."}>
+          </Chapter> : null}
+          {!hotel && <Chapter id="chapter-price" number={next()} title={form.listingType === "Sale" ? "Asking price" : "Rent"} description={form.listingType === "Sale" ? "Buyers can make offers below or above this." : nightlyRental ? "Guests pay this per night, online or on arrival (see How guests pay)." : "Tenants pay this online when their rental is confirmed."}>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
               <div className="flex-1">
                 <label htmlFor="price-input" className="text-sm font-medium text-gray-700">{form.listingType === "Sale" ? "Asking price" : "Rental amount"} in Ghana cedi (GHS)</label>
@@ -550,6 +560,14 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
             <div className="mt-5">
               <Segmented label="Availability" value={form.availability} onChange={(v) => set("availability", v)} options={availabilityOptions.map((a) => ({ value: a, label: a }))} />
             </div>
+          </Chapter>}
+          {hotel && <Chapter id="chapter-payments" number={next()} title="How guests pay" description="Offer one or both. Rooms are only confirmed once they're secured for the guest's dates.">
+            {isAdminEditor && !platformHotel
+              ? <HotelPaymentSettings value={booking} onChange={setBooking} error={errors.booking} platform={false} propertyId={null} ownerConnects />
+              : <HotelPaymentSettings value={booking} onChange={setBooking} error={errors.booking} platform={platformHotel} propertyId={existing?.id || null} />}
+          </Chapter>}
+          {nightlyRental && <Chapter id="chapter-payments" number={next()} title="How guests pay" description="Offer one or both. A reservation is only confirmed once the dates are free.">
+            <HotelPaymentSettings stay="rental" value={booking} onChange={setBooking} error={errors.booking} platform={platformHotel} propertyId={null} />
           </Chapter>}
 
           {isAdminEditor && (

@@ -1,9 +1,11 @@
+import mongoose from "mongoose";
 import Rental from "../models/Rental.js";
 import Property from "../models/Property.js";
 import User from "../models/User.js";
 import { isHotel, hotelTransaction } from "./hotel.js";
 import Payment from "../models/Payment.js";
-import { inCurrentEnvironment, paymentMode, paystackPaymentStatus } from "./paystack.js";
+import { checkPaystackTransaction, inCurrentEnvironment, paymentMode } from "./paystack.js";
+import { mismatchFields, recordProviderDetails } from "./paymentAudit.js";
 import { confirmRentalPayment, recordFailedRentalPayment, rentalPaymentMatchesBooking, rentalPaymentNeedsReview } from "./confirmRentalPayment.js";
 import { confirmHotelPayment } from "./confirmHotelPayment.js";
 import { HttpError } from "./response.js";
@@ -18,8 +20,9 @@ const notifyOutcome = async ({ rental, payment, review, hotel }, user) => {
     return;
   }
   if (hotel) {
-    await notifyOwner(rental, { type: "payment", title: "Hotel booking paid", message: `${rental.contactName} paid for ${rental.roomTypeId ? `${rental.numberOfRooms} ${rental.roomName} room(s)` : "an earlier whole-hotel booking"}. Confirm the booking.`, path: "rentals" });
-    await notifyUser(user._id, { type: "payment", title: "Hotel payment verified", message: `Your ${rental.roomName || "hotel"} payment is verified. The hotel will confirm your booking.`, link: "/account/rentals" });
+    const reserved = rental.status === "confirmed"; // a pay-at-hotel reservation that was then paid online
+    await notifyOwner(rental, { type: "payment", title: "Hotel booking paid", message: `${rental.contactName} paid for ${rental.roomTypeId ? `${rental.numberOfRooms} ${rental.roomName} room(s)` : "an earlier whole-hotel booking"}.${reserved ? " Nothing is due at the hotel." : " Confirm the booking."}`, path: "rentals" });
+    await notifyUser(user._id, { type: "payment", title: "Hotel payment verified", message: `Your ${rental.roomName || "hotel"} payment is verified.${reserved ? " Nothing is due at the hotel." : ""}`, link: "/account/rentals" });
     return;
   }
   const populated = await populateRental(Rental.findById(rental._id));
@@ -31,9 +34,10 @@ const notifyOutcome = async ({ rental, payment, review, hotel }, user) => {
     } catch (error) { console.error("Rental payment chat note failed:", error.message); }
   }
   const title = populated.property?.title || "the property";
+  const reserved = ["confirmed", "active"].includes(rental.status); // a pay-on-arrival reservation that was then paid online
   await Promise.all([
-    notifyUser(user._id, { type: "payment", title: "Rental payment successful", message: `${formatGHS(payment.amount)} paid for "${title}". The owner will confirm your rental.`, link: "/account/rentals" }),
-    notifyOwner(rental, { type: "payment", title: "Rental payment received", message: `${rental.contactName} paid ${formatGHS(payment.amount)} for "${title}". Confirm the rental.`, path: "rentals" }),
+    notifyUser(user._id, { type: "payment", title: "Rental payment successful", message: `${formatGHS(payment.amount)} paid for "${title}".${reserved ? " Nothing is due on arrival." : " The owner will confirm your rental."}`, link: "/account/rentals" }),
+    notifyOwner(rental, { type: "payment", title: "Rental payment received", message: `${rental.contactName} paid ${formatGHS(payment.amount)} for "${title}".${reserved ? " Nothing is due on arrival." : " Confirm the rental."}`, path: "rentals" }),
   ]);
 };
 
@@ -47,11 +51,13 @@ export const processRentalPayment = async (payment, user, { successExpected = fa
   if (payment.status !== "paid" && paymentMode() === "disabled") throw new HttpError(503, "Online payments are not available right now. Please try again later.");
   // A key only sees its own mode: a test-mode checkout cannot be checked with the live key
   if (payment.status !== "paid" && !inCurrentEnvironment(payment)) throw new HttpError(409, "This payment was started in a different Paystack mode and can no longer be confirmed. Start a new checkout.");
-  const status = payment.status === "paid" ? "paid" : await paystackPaymentStatus(payment.reference, payment.amount);
+  const check = payment.status === "paid" ? { status: "paid" } : await checkPaystackTransaction(payment.reference, payment.amount);
+  const { status } = check;
   // A webhook may arrive before the verification API reflects the final result.
   // Keep the booking hold intact and let the caller retry.
-  if (status === "pending" || (successExpected && status !== "paid")) return { state: "pending", rental, payment };
+  if (status === "pending" || (successExpected && !["paid", "mismatch"].includes(status))) return { state: "pending", rental, payment };
   const actor = user || await User.findById(payment.customer) || { _id: payment.customer, firstName: rental.contactName, role: "user" };
+  if (status === "mismatch") return holdMismatchedPayment(payment, rental, check, actor);
   const hotel = Boolean(rental.hotelId) || isHotel(await Property.findById(rental.property));
   if (status !== "paid") {
     if (hotel) {
@@ -64,6 +70,38 @@ export const processRentalPayment = async (payment, user, { successExpected = fa
   }
   const outcome = hotel ? await confirmHotelPayment(payment, actor, rental) : await confirmRentalPayment(payment._id, actor);
   outcome.hotel = hotel;
+  if (!outcome.review) await recordProviderDetails(Payment, payment._id, check, payment.reference);
   if (!outcome.repeated) await notifyOutcome(outcome, actor);
   return { ...outcome, state: outcome.review ? "review" : "paid" };
+};
+
+/**
+ * Paystack charged a different amount or currency than this checkout expected. The money arrived,
+ * so the payment is held for an administrator to refund (Payments), the booking is not confirmed
+ * and its hold is released so the guest can book again. Exactly once, even if the webhook and the
+ * browser's verification race: only the call that moves the payment out of pending/failed acts.
+ */
+const holdMismatchedPayment = async (payment, rental, check, actor) => {
+  const held = await mongoose.connection.transaction(async (session) => {
+    const claimed = await Payment.findOneAndUpdate(
+      { _id: payment._id, status: { $in: ["pending", "failed"] } },
+      { $set: { status: "refund_required", ...mismatchFields(check) } },
+      { session, returnDocument: "after" },
+    );
+    if (!claimed) return null;
+    await Rental.updateOne(
+      { _id: rental._id, paymentReference: payment.reference, status: "payment_pending", paymentStatus: { $ne: "paid" } },
+      { $set: { status: "pending", paymentStatus: "failed" }, $push: { history: { status: "pending", paymentStatus: "failed", note: "Payment amount did not match the booking; held for a refund", by: actor._id } } },
+      { session },
+    );
+    return claimed;
+  });
+  if (!held) {
+    const latest = await Payment.findById(payment._id);
+    const state = latest.status === "paid" ? "paid" : latest.status === "refunded" ? "refunded" : rentalPaymentNeedsReview(latest) ? "review" : latest.status;
+    return { state, rental, payment: latest, review: rentalPaymentNeedsReview(latest) ? latest.status : undefined, repeated: true };
+  }
+  await notifyOutcome({ rental, payment: held, review: "refund_required" }, actor);
+  await notifyUser(payment.customer, { type: "payment", title: "Payment needs review", message: `We received a payment for ${payment.reference} that didn't match your booking total, so the booking wasn't confirmed. It will be refunded; please don't pay again.`, link: "/account/rentals" });
+  return { state: "review", rental, payment: held, review: "refund_required" };
 };

@@ -59,7 +59,7 @@ test("password changes revoke older sessions while renewing only the requesting 
       const change = (cookie, currentPassword, newPassword) => request(session, `/api/auth/${session}/me/password`, { method: "PUT", cookie, body: { currentPassword, newPassword } });
       assert.equal((await me(legacy)).status, session === "customer" ? 401 : 200, "customers must reauthenticate into a tab-bound session; other roles retain legacy compatibility until password change");
 
-      for (const [current, next] of [["WrongPassword123", "NewPassword123"], ["OriginalPassword123", "short"]]) {
+      for (const [current, next] of [["WrongPassword123", "StrongNewPassword123"], ["OriginalPassword123", "short"]]) {
         const rejected = await change(first, current, next);
         assert.equal(rejected.status, 400);
         assert.equal(rejected.headers.getSetCookie().length, 0);
@@ -70,7 +70,7 @@ test("password changes revoke older sessions while renewing only the requesting 
       assert.equal(profile.status, 200);
       assert.equal((await me(second)).status, 200, "profile edits do not revoke sessions");
 
-      const changed = await change(first, "OriginalPassword123", "NewPassword123");
+      const changed = await change(first, "OriginalPassword123", "StrongNewPassword123");
       assert.equal(changed.status, 200);
       const renewed = cookieFrom(changed);
       assert.ok(renewed?.startsWith(`${session}_token=`));
@@ -80,7 +80,7 @@ test("password changes revoke older sessions while renewing only the requesting 
       assert.equal(payload.sessionVersion, stored.sessionVersion);
       assert.equal(stored.toJSON().sessionVersion, undefined);
       assert.equal(stored.toJSON().password, undefined);
-      assert.ok(await stored.matchPassword("NewPassword123"));
+      assert.ok(await stored.matchPassword("StrongNewPassword123"));
       for (const old of [first, second, legacy]) {
         const rejected = await me(old);
         assert.equal(rejected.status, 401);
@@ -89,12 +89,12 @@ test("password changes revoke older sessions while renewing only the requesting 
       assert.equal((await me(renewed)).status, 200, "requesting browser receives a working replacement cookie");
       assert.equal((await (await request(session, "/optional", { cookie: second })).json()).authenticated, false);
       assert.equal((await (await request(session, "/viewers", { cookie: second })).json())[session], false);
-      const fresh = await login(session, "NewPassword123");
+      const fresh = await login(session, "StrongNewPassword123");
       assert.equal((await me(fresh)).status, 200);
       const oldLogin = await request(session, `/api/auth/${session}/login`, { method: "POST", body: { email: account.email, password: "OriginalPassword123" } });
       assert.equal(oldLogin.status, 401);
 
-      const again = await change(renewed, "NewPassword123", "NewestPassword123");
+      const again = await change(renewed, "StrongNewPassword123", "NewestPassword123");
       assert.equal(again.status, 200);
       const latest = cookieFrom(again);
       assert.notEqual((await User.findById(account.id).select("+sessionVersion")).sessionVersion, payload.sessionVersion);

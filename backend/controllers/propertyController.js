@@ -2,7 +2,8 @@ import mongoose from "mongoose";
 import Property from "../models/Property.js";
 import Review from "../models/Review.js";
 import User from "../models/User.js";
-import { siteName } from "../models/Setting.js";
+import { getSettings, siteName } from "../models/Setting.js";
+import { stayPaymentOptions, takesStayBookings, payoutAccountFor } from "../utils/hotelPayout.js";
 import { notifyAdmins } from "../utils/notify.js";
 import { COUNTED_STATES, withinImageLimit } from "../utils/permissions.js";
 import { PUBLIC_AGENT_FIELDS, publicAgent, presentProperties, publicQuery, visibleAgentIds, isPubliclyVisible } from "../utils/marketplace.js";
@@ -353,14 +354,20 @@ export const relatedProperties = async (req, res) => {
 const isOwner = (property, user) => Boolean(user) && property.ownerType === "agent" && canHandleTeamRecord(property, user);
 
 // GET /api/properties/:id (public when visible; owners and admins can always see it)
+// Hotels also say how guests can pay right now (pay at the hotel / online, arrival deadline, policy)
+const withPaymentOptions = async (property, data) => {
+  if (!takesStayBookings(property)) return data;
+  return { ...data, paymentOptions: stayPaymentOptions(property, await payoutAccountFor(property), await getSettings()) };
+};
+
 export const getProperty = async (req, res) => {
   const property = await Property.findById(req.params.id).catch(() => null);
   if (!property) return fail(res, 404, "Property not found.");
-  if (req.user?.role === "admin" || isOwner(property, req.user)) return ok(res, (await presentProperties([property]))[0]);
+  if (req.user?.role === "admin" || isOwner(property, req.user)) return ok(res, await withPaymentOptions(property, (await presentProperties([property]))[0]));
   const { query } = await publicQuery();
   const visible = await Property.exists({ _id: property._id, ...query });
   if (!visible) return fail(res, 404, "Property not found.");
-  ok(res, (await presentProperties([property], { includeAgentDetails: Boolean(req.user) }))[0]);
+  ok(res, await withPaymentOptions(property, (await presentProperties([property], { includeAgentDetails: Boolean(req.user) }))[0]));
 };
 
 /**

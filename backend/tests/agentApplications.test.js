@@ -57,8 +57,8 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
     users.push(user);
     return user;
   };
-  const customer = await create({ emailVerifiedAt: new Date(), firstName: "Customer", lastName: "Test", email: "customer@example.test", password: "password123", role: "user" });
-  const admin = await create({ firstName: "Admin", lastName: "Test", email: "admin@example.test", password: "password123", role: "admin" });
+  const customer = await create({ emailVerifiedAt: new Date(), firstName: "Customer", lastName: "Test", email: "customer@example.test", password: "StrongFixturePassword123", role: "user" });
+  const admin = await create({ firstName: "Admin", lastName: "Test", email: "admin@example.test", password: "StrongFixturePassword123", role: "admin" });
   const plan = new Plan({ name: "Test plan", price: 100, duration: 30, propertyLimit: 10, imageLimit: 10 });
   replace(User, "exists", async (filter) => users.some((user) => matches(user, filter)));
   replace(User, "create", create);
@@ -97,12 +97,12 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
     for (const cookie of response.headers.getSetCookie()) { const [name, token] = cookie.split(";")[0].split("="); jar[name] = token; }
     return response;
   };
-  const signup = { fullName: "Akua Mensah", email: "agent@example.test", phone: "+233 24 123 4567", password: "password123", confirmPassword: "password123" };
+  const signup = { fullName: "Akua Mensah", email: "agent@example.test", phone: "+233 24 123 4567", password: "StrongFixturePassword123", confirmPassword: "StrongFixturePassword123" };
   const profile = { firstName: "Akua", lastName: "Mensah", phone: signup.phone, agentType: "individual", region: "Greater Accra", city: "East Legon", yearsExperience: 4, bio: "Helping buyers and renters find their next home." };
   let agent;
   try {
-    await call("/api/auth/admin/login", "admin", { email: admin.email, password: "password123" });
-    await call("/api/auth/customer/login", "customer", { email: customer.email, password: "password123" });
+    await call("/api/auth/admin/login", "admin", { email: admin.email, password: "StrongFixturePassword123" });
+    await call("/api/auth/customer/login", "customer", { email: customer.email, password: "StrongFixturePassword123" });
     await t.test("registration hashes passwords, isolates cookies and ignores forged privileges", async () => {
       const response = await call("/api/auth/agent/register", "agent", { ...signup, role: "admin", isActive: false, agentId: id(admin), approvalStatus: "approved", agentApplication: { status: "approved", approvedBy: id(admin) } });
       assert.equal(response.status, 201);
@@ -232,7 +232,7 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
       assert.equal((await call("/api/agents/application", "agent", profile, "PUT")).status, 200);
     });
     await t.test("customer registration remains customer-only even with forged agent fields", async () => {
-      const response = await call("/api/auth/customer/register", "customer", { firstName: "New", lastName: "Customer", email: "new-customer@example.test", password: "password123", role: "agent", isActive: false, agentApplication: { status: "approved" } });
+      const response = await call("/api/auth/customer/register", "customer", { firstName: "New", lastName: "Customer", email: "new-customer@example.test", password: "StrongFixturePassword123", role: "agent", isActive: false, agentApplication: { status: "approved" } });
       assert.equal(response.status, 202);
       assert.equal((await response.json()).data.verificationRequired, true);
       const account = users.find((user) => user.email === "new-customer@example.test");

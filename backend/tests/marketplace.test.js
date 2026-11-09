@@ -15,7 +15,7 @@ import { subscriptionState } from "../utils/permissions.js";
 import { createProperty, updateProperty, deleteProperty, buildPublicFilter } from "../controllers/propertyController.js";
 import { createInquiry, myInquiries } from "../controllers/inquiryController.js";
 import { quoteRental, rentalMonths } from "../controllers/rentalController.js";
-import { isPaystackPaid } from "../utils/paystack.js";
+import { checkPaystackTransaction, toSubunit } from "../utils/paystack.js";
 
 const query = (value) => ({
   then: (resolve, reject) => Promise.resolve(value).then(resolve, reject),
@@ -162,12 +162,26 @@ test("rental quotes use database prices and calendar months; terminal availabili
   }
 });
 
-test("payment success requires the provider's reference, GHS currency, and verified amount", async (t) => {
-  let transaction = { status: "success", reference: "HB-test", amount: 200000, currency: "GHS" };
+test("payment success requires the provider's reference, GHS currency, and exactly the expected amount", async (t) => {
+  let transaction = { id: 4099260516, status: "success", reference: "HB-test", amount: 200000, currency: "GHS", channel: "mobile_money" };
   t.mock.method(globalThis, "fetch", async () => ({ json: async () => ({ status: true, data: transaction }) }));
-  assert.equal(await isPaystackPaid("HB-test", 2000), true);
-  for (const change of [{ status: "pending" }, { reference: "forged" }, { amount: 1 }, { currency: "USD" }]) {
-    transaction = { status: "success", reference: "HB-test", amount: 200000, currency: "GHS", ...change };
-    assert.equal(await isPaystackPaid("HB-test", 2000), false);
-  }
+  assert.deepEqual(await checkPaystackTransaction("HB-test", 2000), { status: "paid", transactionId: "4099260516", channel: "mobile_money", paidAmount: 2000, currency: "GHS" });
+  const statusFor = async (change, amount = 2000) => { transaction = { status: "success", reference: "HB-test", amount: 200000, currency: "GHS", ...change }; return (await checkPaystackTransaction("HB-test", amount)).status; };
+  assert.equal(await statusFor({ status: "ongoing" }), "pending", "mobile money prompt not answered yet");
+  assert.equal(await statusFor({ status: "abandoned" }), "failed");
+  assert.equal(await statusFor({ reference: "forged" }), "failed", "another transaction never pays for this one");
+  assert.equal(await statusFor({ domain: "live" }), "failed", "the other Paystack environment never pays for this one");
+  // Money arrived but not what was expected: held for review, never granted
+  assert.equal(await statusFor({ amount: 100 }), "mismatch", "underpaid");
+  assert.equal(await statusFor({ amount: 250000 }), "mismatch", "overpaid");
+  assert.equal(await statusFor({ currency: "USD" }), "mismatch");
+  assert.match((await checkPaystackTransaction("HB-test", 2000)).problem, /GHS 2000 was expected/);
+  // The customer bore Paystack's fee: the requested amount is exact
+  assert.equal(await statusFor({ amount: 203900, requested_amount: 200000 }), "paid");
+  assert.equal(await statusFor({ amount: 203900, requested_amount: 1 }), "mismatch");
+  // Pesewas are exact for two-decimal amounts despite floating point (1.15 * 100 = 114.999...)
+  assert.equal(await statusFor({ amount: 115 }, 1.15), "paid");
+  assert.equal(toSubunit(250), 25000);
+  assert.equal(toSubunit(0.1 + 0.2), 30);
+  for (const bad of [NaN, -1, Infinity, "abc"]) assert.throws(() => toSubunit(bad), /Invalid payment amount/);
 });

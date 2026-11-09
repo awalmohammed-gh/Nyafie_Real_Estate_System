@@ -63,8 +63,8 @@ export default function PasswordResetForm({ initialEmail = "", onBack }) {
       <fieldset className="auth-fields" disabled={busy}>
         {step === "request" ? <AuthField label="Email address" icon={Mail} name="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required maxLength={254} autoFocus /> : <>
           <AuthField label="Reset code" icon={Mail} name="resetCode" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} required autoFocus />
-          <AuthPasswordField label="New password" name="newPassword" autoComplete="new-password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} required hint="Use at least 8 characters." />
-          <AuthPasswordField label="Confirm new password" name="confirmPassword" autoComplete="new-password" minLength={8} value={confirm} onChange={(event) => setConfirm(event.target.value)} required />
+          <AuthPasswordField label="New password" name="newPassword" autoComplete="new-password" minLength={15} value={password} onChange={(event) => setPassword(event.target.value)} required hint="Use at least 15 characters." />
+          <AuthPasswordField label="Confirm new password" name="confirmPassword" autoComplete="new-password" minLength={15} value={confirm} onChange={(event) => setConfirm(event.target.value)} required />
         </>}
       </fieldset>
       {error && <p id={errorId} role="alert" className="auth-error"><AlertCircle size={18} aria-hidden="true" />{error}</p>}

@@ -28,12 +28,17 @@ const backendPort = () => {
   return 4000
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, __dirname, "")
+  // Local development uses the same private address as its proxied backend. A stale
+  // frontend .env must not silently disable the console. Remote APIs keep their own setting.
+  const localEntry = command === "serve" && !env.API_PROXY_TARGET
+    ? loadEnv(mode, path.resolve(__dirname, "../backend"), "").ADMIN_ENTRY_PATH
+    : undefined
   return {
     plugins: [react(), tailwindcss()],
     define: {
-      __ADMIN_ENTRY_HASH__: JSON.stringify(adminEntryHash(env)),
+      __ADMIN_ENTRY_HASH__: JSON.stringify(adminEntryHash({ ...env, ADMIN_ENTRY_PATH: localEntry || env.ADMIN_ENTRY_PATH })),
     },
     server: {
       host: '127.0.0.1',

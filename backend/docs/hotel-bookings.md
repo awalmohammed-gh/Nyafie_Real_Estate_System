@@ -34,3 +34,32 @@ npm test
 ```
 
 The integration test uses a temporary database directory and random loopback port, then removes its own data. It does not use the configured application database or make real Paystack calls. It verifies room ownership, forged inputs, price snapshots, capacity, back-to-back dates, payment retries, peak inventory, simultaneous last-room checkouts, late payments and refund handling.
+
+## How guests pay (per hotel)
+
+Each hotel chooses, in the listing editor under **How guests pay**, one or both of:
+
+- **Reserve now, pay at the hotel** (default for every hotel, including hotels saved before this option existed). `POST /api/rentals/:id/reserve` runs the same transaction and inventory check as a checkout, then confirms the reservation: `status: confirmed`, `paymentStatus: due`, `paymentOption: on_arrival`. The reservation stores the arrival deadline (check-in day + the hotel's time, Ghana/GMT) and a copy of the hotel's cancellation and no-show policy. No money passes through NyaFie, so this works when online payments are off. Not allowed while an online checkout for the same booking is still inside its 30-minute hold.
+  - The hotel records the payment with `PATCH /api/rentals/:id/paid-on-arrival`. A stay with payment still due cannot be marked completed.
+  - After the arrival deadline the hotel can mark a no-show (a cancellation with a note).
+  - The guest can cancel (`PATCH /api/rentals/:id/cancel`) until the check-in day; unpaid requests can be cancelled any time.
+  - If an earlier online attempt for the same booking still succeeds later, it pays the reservation (no double booking, nothing due at the hotel). A payment after the hotel already recorded one is flagged as a duplicate for refund.
+- **Pay online** (Paystack). The money goes to the hotel: the owner connects a bank account or mobile money wallet (`GET/PUT/DELETE /api/properties/:id/payout`, banks from `GET /api/properties/payout-banks?type=bank|mobile_money`). The server creates a Paystack subaccount with `percentage_charge: 0`, and checkouts pass `subaccount` with `bearer: "subaccount"`, so the hotel receives the full amount minus Paystack's fee. NyaFie's own hotels settle to the main account.
+  - Only the account owner (the agent, or the agency owner) can change it, and only with their password. Every change is notified to them.
+  - Only the bank name, the account name Paystack returns and the last 4 digits are stored (`PayoutAccount`, one per hotel per Paystack mode). The full number lives at Paystack; the subaccount code is never sent to browsers.
+  - Online payment is offered only when the hotel switched it on, its payout account is connected for the current Paystack mode, and platform rental payments are enabled. `GET /api/properties/:id` returns `paymentOptions` for hotels with the reason when online payment is unavailable.
+
+Guests see "Booking confirmed — Paid" or "Reservation confirmed — Payment due at hotel".
+
+### Rentals priced per night
+
+Regular rental listings priced **per night** (short stays) offer the same choice, with the owner deciding under **How guests pay** in the editor (`stayBooking` on the property, same fields as hotels):
+
+- Defaults: both options on (these listings already took online payments). Monthly and fixed-price rentals keep the online checkout only.
+- **Reserve now, pay on arrival**: `POST /api/rentals/:id/reserve` re-checks the listing and that the dates are free inside the same property lock as an online checkout, then confirms the rental straight away (`confirmed`, `due`, `on_arrival`, method "On arrival"). The dates are blocked like a paid rental. The owner records the payment, marks a no-show after the deadline, or the guest cancels before check-in day, with the same endpoints as hotels.
+- **Pay online**: the existing rental checkout (paid into the main NyaFie account; the owner then confirms). An owner who switches it off gets a 409 from `/api/payments/initialize` for that listing.
+- A late online payment for a rental that was then reserved pays the reservation and keeps it confirmed.
+
+Guests see "Reservation confirmed — Payment due on arrival".
+
+**Check with Paystack before going live:** refunds of split (subaccount) payments. Refunds still go through the admin refund process. Confirm in the Paystack dashboard/support whose balance a refund is taken from, and agree with each hotel how refunds are recovered.

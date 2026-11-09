@@ -1,26 +1,48 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Map as MapIcon } from "lucide-react";
 import PropertyRail from "./PropertyRail";
 import { usePlatform } from "../../context/usePlatform";
+import { useHomeListings } from "../../hooks/useHomeListings";
+import { useVisitorLocation } from "../../hooks/useVisitorLocation";
+import { DEFAULT_RADIUS_KM, nearToParams } from "../../utils/geo";
 import { SectionHeader } from "./LandingMotion";
 
-const FeatureListings = ({ query, items }) => {
+const categories = [{ value: "", label: "All" }, { value: "Sale", label: "Buy" }, { value: "Rent", label: "Rent" }, { value: "stay", label: "Short Stay" }];
+
+const FeatureListings = () => {
   const { paths } = usePlatform();
+  const visitor = useVisitorLocation();
+  const [category, setCategory] = useState("");
+  const [nearby, setNearby] = useState(false);
+  const place = visitor.choice === "device" && visitor.position ? { ...visitor.position, source: "device" } : visitor.choice === "manual" ? visitor.place : null;
+  const center = nearby && place ? { latitude: place.latitude, longitude: place.longitude, radius: DEFAULT_RADIUS_KM } : null;
+  const query = useHomeListings(category, center);
+  const params = new URLSearchParams({ ...(category === "stay" ? { type: "Hotel,Hotel-Apartment" } : category ? { status: category } : {}), ...(center ? { ...nearToParams(place), radius: String(DEFAULT_RADIUS_KM) } : {}) });
+  const browseLink = `${paths.listings}${params.size ? `?${params}` : ""}`;
 
   return (
     <section id="home-listings" className="home-section home-featured" aria-labelledby="featured-heading">
       <div className="container-page">
         <SectionHeader>
-          <div><p className="home-eyebrow">02 / FEATURED PROPERTIES</p><h2 id="featured-heading" className="home-section-title">Handpicked places <span className="home-serif">worth exploring.</span></h2></div>
-          <div className="home-section-aside"><p>Featured listings and visitor favourites.<br />Save the ones you like to your wishlist.</p><Link to={paths.listings} className="home-text-link">View all properties <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
+          <div><p className="home-eyebrow">EXPLORE LISTINGS</p><h2 id="featured-heading" className="home-section-title">Featured properties</h2></div>
+          <div className="home-section-aside"><Link to={browseLink} className="home-text-link">See all {category === "Sale" ? "homes for sale" : category === "Rent" ? "rentals" : category === "stay" ? "short stays" : "properties"} <ArrowUpRight size={17} aria-hidden="true" /></Link></div>
         </SectionHeader>
-        {query.error ? (
-          <div role="alert" className="home-listings-message"><h3>We couldn’t load the properties.</h3><p>Please try again in a moment.</p><button type="button" onClick={query.reload} className="btn btn-primary mt-4">Try again</button></div>
-        ) : !query.loading && items.length === 0 ? (
-          <div className="home-listings-message"><h3>New listings are on their way.</h3><p>Agents are adding properties — check the listings page for what’s available now.</p><Link to={paths.listings} className="home-text-link mt-4">Browse listings <ArrowUpRight size={18} aria-hidden="true" /></Link></div>
-        ) : (
-          <PropertyRail items={items} loading={query.loading} count={4} columns={4} label="Featured properties" />
-        )}
+        <div className="home-feature-controls">
+          <fieldset className="home-filter-tabs">
+            <legend className="sr-only">Featured property category</legend>
+            {categories.map(({ value, label }) => <label key={label} className={category === value ? "is-active" : ""}><input className="sr-only" type="radio" name="featured-category" checked={category === value} onChange={() => setCategory(value)} />{label}</label>)}
+          </fieldset>
+          {place && <label className="home-nearby-toggle"><input type="checkbox" checked={nearby} onChange={(event) => setNearby(event.target.checked)} />Within {DEFAULT_RADIUS_KM} km of {visitor.choice === "device" ? "you" : place.label?.split(",")[0]}</label>}
+          {center && <Link to={`${browseLink}&view=map`} className="home-text-link"><MapIcon size={17} aria-hidden="true" />View on map</Link>}
+        </div>
+        <div aria-live="polite" aria-busy={query.loading}>
+          {query.error ? (
+            <div role="alert" className="home-listings-message"><h3>Properties could not load.</h3><p>Please try again to see available listings.</p><button type="button" onClick={query.reload} className="home-hero-cta mt-4">Try again</button></div>
+          ) : !query.loading && !query.data?.items.length ? (
+            <div className="home-listings-message"><h3>No properties in this selection yet.</h3><p>{center ? "Try turning off the nearby filter or explore the full catalogue." : "Try another category or explore the full catalogue."}</p></div>
+          ) : <PropertyRail items={query.data?.items || []} loading={query.loading} count={4} columns={4} label="Featured properties" />}
+        </div>
       </div>
     </section>
   );

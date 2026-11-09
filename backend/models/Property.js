@@ -8,6 +8,15 @@ const pointSchema = new mongoose.Schema({
   coordinates: { type: [Number], required: true },
 }, { _id: false });
 
+// Hotels and per-night rentals: how guests may pay. Read through stayBookingSettings()
+// (utils/hotelPayout.js), which fills in each kind's defaults for listings saved before these existed.
+const stayBookingSchema = new mongoose.Schema({
+  payOnArrival: { type: Boolean }, // reserve now, pay on arrival
+  payOnline: { type: Boolean }, // pay through Paystack (agent hotels: needs the hotel's payout account)
+  arrivalDeadline: { type: String, default: "18:00", match: /^([01]\d|2[0-3]):[0-5]\d$/ }, // check-in day, Ghana time (GMT)
+  cancellationPolicy: { type: String, default: "", trim: true, maxlength: 800 }, // includes the no-show policy
+}, { _id: false });
+
 const propertySchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true, maxlength: 120 },
@@ -40,6 +49,7 @@ const propertySchema = new mongoose.Schema(
     amenities: [{ type: String, trim: true }],
     images: [{ type: String }], // Cloudinary (or static) URLs, never raw files
     roomTypes: [roomTypeSchema],
+    stayBooking: { type: stayBookingSchema, default: undefined },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // agency staff member handling it (null: the owner)
     ownerType: { type: String, enum: ["admin", "agent"], required: true },

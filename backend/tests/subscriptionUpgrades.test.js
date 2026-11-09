@@ -8,6 +8,7 @@ import User from "../models/User.js";
 import Plan from "../models/Plan.js";
 import Setting from "../models/Setting.js";
 import Subscription from "../models/Subscription.js";
+import Notification from "../models/Notification.js";
 import subscriptionRoutes from "../routes/subscriptionRoutes.js";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -60,6 +61,7 @@ test("plan upgrades: only higher plans of the provider's own type, priced and co
   const companySub = subscribe(company, coGrowth);
   subscribe(topCompany, coPro);
 
+  t.mock.method(Notification, "create", async (doc) => doc); // no database in this test
   t.mock.method(Setting, "findOneAndUpdate", () => q({ key: "platform", agent: { requireSubscription: true }, payments: { subscriptionsEnabled: true } }));
   t.mock.method(User, "findById", (id) => {
     const user = byId(users, id);
@@ -74,6 +76,13 @@ test("plan upgrades: only higher plans of the provider's own type, priced and co
   t.mock.method(Subscription, "findById", (id) => q(byId(subs, id)));
   let verifying = null;
   t.mock.method(Subscription, "findOne", (filter) => q(filter?.paymentReference ? subs.find((s) => s.paymentReference === filter.paymentReference && idOf(s.user) === idOf(filter.user)) || null : verifying));
+  // Atomic claims (a mismatched charge held for a refund): applied to the in-memory record when it still matches
+  t.mock.method(Subscription, "findOneAndUpdate", (filter, update) => {
+    const sub = byId(subs, filter._id);
+    const matches = sub && (!filter.paymentStatus?.$in || filter.paymentStatus.$in.includes(sub.paymentStatus)) && (filter.activationProcessedAt !== null || !sub.activationProcessedAt);
+    if (matches) sub.set(update.$set);
+    return q(matches ? sub : null);
+  });
   const created = [];
   t.mock.method(Subscription, "create", async (doc) => {
     const sub = new Subscription(doc);
@@ -185,8 +194,14 @@ test("plan upgrades: only higher plans of the provider's own type, priced and co
     assert.equal(result.status, 402);
     paystackSays = () => ({ status: "success", amount: 100 }); // ₵1 paid for a ₵2,000 upgrade
     result = await as(company)("POST", "/verify", { reference: pending.paymentReference });
-    assert.equal(result.status, 402);
-    assert.equal(pending.status, "pending");
+    assert.equal(result.status, 409, "money arrived but not the price: held for a refund");
+    assert.match(result.body.message, /didn't match the plan price, so nothing was activated/);
+    assert.equal(pending.paymentStatus, "refund_required");
+    assert.equal(pending.status, "cancelled");
+    assert.equal(pending.paidAmount, 1, "the refund is for what was actually charged");
+    // Paying the right amount later can't revive the held checkout
+    paystackSays = () => ({ status: "success", amount: 200000 });
+    assert.equal((await as(company)("POST", "/verify", { reference: pending.paymentReference })).status, 409);
     assert.equal(idOf(company.subscription), String(companySub._id), "still on Company Growth");
     assert.equal(companySub.status, "active");
     // Another provider can't confirm this payment either
@@ -194,8 +209,9 @@ test("plan upgrades: only higher plans of the provider's own type, priced and co
   });
 
   await t.test("a confirmed payment upgrades the plan and keeps the old one in the history", async () => {
+    assert.equal((await upgrade(company, coPro)).status, 200, "a fresh checkout");
     const pending = created.at(-1);
-    paystackSays = () => ({ status: "success", amount: 200000 });
+    paystackSays = () => ({ status: "success", amount: charges.at(-1).amount }); // exactly what this checkout charged
     const result = await as(company)("POST", "/verify", { reference: pending.paymentReference });
     assert.equal(result.status, 200);
     assert.equal(pending.status, "active");

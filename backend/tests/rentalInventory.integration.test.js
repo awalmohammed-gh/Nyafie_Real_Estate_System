@@ -44,7 +44,7 @@ test("regular rental inventory: real HTTP, MongoDB transactions and competing pa
   });
   const api = async (path, { user = customers[0], body, method = body ? "POST" : "GET" } = {}) => {
     const session = user.role === "admin" ? "admin" : "customer";
-    const token = jwt.sign({ id: user.id, role: user.role, session, ...customerTabClaims(session) }, process.env.JWT_KEY);
+    const token = jwt.sign({ id: user.id, role: user.role, session, ...customerTabClaims(session) }, process.env.JWT_KEY, { expiresIn: "1h" });
     const response = await fetch(`${base}${path}`, { method, headers: { ...customerTabHeaders(session), "Content-Type": "application/json", "X-Session-Domain": session, Cookie: `${session}_token=${token}` }, ...(body ? { body: JSON.stringify(body) } : {}) });
     return { code: response.status, ...(await response.json()) };
   };
@@ -203,5 +203,99 @@ test("regular rental inventory: real HTTP, MongoDB transactions and competing pa
     assert.equal((await verify(started.data.reference)).code, 409);
     assert.equal((await Rental.findById(booking.id)).status, "cancelled");
     assert.equal((await Payment.findOne({ reference: started.data.reference })).status, "refund_required");
+  });
+
+  // ---- Per-night rentals: the guest chooses to pay online or to reserve and pay on arrival ----
+  const nightly = (stayBooking) => Property.create({ title: "Test short stay", propertyType: "Apartment", listingType: "Rent", price: 250, pricePeriod: "night", owner: owner._id, ownerType: "admin", status: "published", availability: "Available", ...(stayBooking ? { stayBooking } : {}) });
+  const stay = { startDate: "2030-05-01", endDate: "2030-05-03" };
+  const reserve = (booking, user = customers[0]) => api(`/rentals/${booking.id}/reserve`, { user, body: {} });
+  const ownerSets = (booking, path, body) => api(`/rentals/${booking.id}/${path}`, { user: owner, method: "PATCH", body });
+
+  await t.test("per-night rental: reserve now, pay on arrival holds the dates without taking money", async () => {
+    const listing = await nightly({ payOnArrival: true, payOnline: true, arrivalDeadline: "15:00", cancellationPolicy: "Free until the day before." });
+    const booking = await request(listing, customers[0], stay);
+    const before = providerInitializations;
+    const reserved = await reserve(booking);
+    assert.equal(reserved.code, 200, JSON.stringify(reserved));
+    const saved = await Rental.findById(booking.id);
+    assert.equal(saved.status, "confirmed");
+    assert.equal(saved.paymentStatus, "due");
+    assert.equal(saved.paymentOption, "on_arrival");
+    assert.equal(saved.paymentMethod, "On arrival");
+    assert.equal(saved.amount, 500);
+    assert.equal(saved.arrivalDeadline.toISOString(), "2030-05-01T15:00:00.000Z");
+    assert.equal(saved.cancellationPolicy, "Free until the day before.");
+    assert.equal(providerInitializations, before, "no Paystack checkout");
+    assert.equal(await Payment.countDocuments({ rental: booking.id }), 0);
+    assert.equal((await reserve(booking)).message, "Reservation already confirmed");
+
+    const taken = await api("/rentals", { user: customers[1], body: { propertyId: listing.id, ...stay, fullName: "Other Guest", email: customers[1].email, phone: customers[1].phone, currentAddress: "12 Test Road" } });
+    assert.equal(taken.code, 409, "the reserved dates are no longer free");
+    assert.equal((await checkout(booking)).code, 400, "a confirmed reservation does not start a checkout");
+
+    assert.equal((await ownerSets(booking, "status", { status: "active" })).code, 200);
+    const early = await ownerSets(booking, "status", { status: "completed" });
+    assert.equal(early.code, 409);
+    assert.match(early.message, /payment on arrival/);
+    const paid = await ownerSets(booking, "paid-on-arrival", { note: "Paid by MoMo at the door" });
+    assert.equal(paid.code, 200, JSON.stringify(paid));
+    const settled = await Rental.findById(booking.id);
+    assert.equal(settled.paymentStatus, "paid");
+    assert.equal(settled.paymentMethod, "On arrival");
+    assert.equal((await ownerSets(booking, "paid-on-arrival", {})).code, 409, "only once");
+    assert.equal((await ownerSets(booking, "status", { status: "completed" })).code, 200);
+  });
+
+  await t.test("per-night rental: the guest may cancel a reservation before check-in day, freeing the dates", async () => {
+    const listing = await nightly();
+    const booking = await request(listing, customers[0], stay);
+    assert.equal((await api(`/rentals/${booking.id}/cancel`, { method: "PATCH", body: {} })).code, 409, "a regular request is not cancelled online");
+    assert.equal((await reserve(booking)).code, 200, "per-night rentals offer pay on arrival by default");
+    assert.equal((await api(`/rentals/${booking.id}/cancel`, { user: customers[1], method: "PATCH", body: {} })).code, 404, "only the guest's own booking");
+    const cancelled = await api(`/rentals/${booking.id}/cancel`, { method: "PATCH", body: {} });
+    assert.equal(cancelled.code, 200, JSON.stringify(cancelled));
+    assert.equal((await Rental.findById(booking.id)).status, "cancelled");
+    await request(listing, customers[1], stay);
+  });
+
+  await t.test("per-night rental: the owner's choice decides what the guest may do", async () => {
+    const onlineOnly = await nightly({ payOnArrival: false, payOnline: true });
+    const a = await request(onlineOnly, customers[0], stay);
+    const refused = await reserve(a);
+    assert.equal(refused.code, 409);
+    assert.match(refused.message, /doesn't take payment on arrival/);
+    assert.equal((await checkout(a)).code, 200);
+
+    const arrivalOnly = await nightly({ payOnArrival: true, payOnline: false });
+    const b = await request(arrivalOnly, customers[0], stay);
+    const noCheckout = await checkout(b);
+    assert.equal(noCheckout.code, 409);
+    assert.match(noCheckout.message, /Reserve now and pay when you arrive/);
+    assert.equal((await reserve(b)).code, 200);
+
+    const monthly = await property();
+    const c = await request(monthly);
+    assert.equal((await reserve(c)).code, 409, "monthly rentals keep the online checkout");
+  });
+
+  await t.test("per-night rental: an online payment still in progress blocks the reservation; a late one settles it", async () => {
+    const listing = await nightly();
+    const booking = await request(listing, customers[0], stay);
+    const started = await checkout(booking);
+    assert.equal(started.code, 200);
+    const busy = await reserve(booking);
+    assert.equal(busy.code, 409);
+    assert.match(busy.message, /still in progress/);
+    await expire(booking);
+    assert.equal((await reserve(booking)).code, 200);
+    const late = await verify(started.data.reference);
+    assert.equal(late.code, 200, JSON.stringify(late));
+    const saved = await Rental.findById(booking.id);
+    assert.equal(saved.status, "confirmed", "stays reserved; not sent back for owner confirmation");
+    assert.equal(saved.paymentStatus, "paid");
+    assert.equal(saved.paymentOption, "online");
+    assert.equal(saved.paymentReference, started.data.reference);
+    assert.equal((await Payment.findOne({ reference: started.data.reference })).status, "paid");
+    assert.equal((await ownerSets(booking, "paid-on-arrival", {})).code, 409, "nothing is due on arrival");
   });
 });
