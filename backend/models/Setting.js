@@ -15,15 +15,15 @@ export const defaultSettings = {
   branding: { logo: "", logoDark: "", favicon: "" },
   seo: { title: "", metaDescription: "", keywords: "", ogImage: "", baseUrl: "", allowIndexing: true },
   contact: {
-    phone: "+233 24 152 9904",
-    email: "info@homebase.com",
+    phone: "",
+    email: "",
     whatsapp: "", // public WhatsApp number for admin-owned listings
-    address: "123 Independence Avenue, Airport City",
+    address: "Spintex, Flower pot",
     city: "Accra",
-    region: "Greater Accra",
+    region: "",
     country: "Ghana",
     mapUrl: "",
-    hours: "Mon - Fri: 9:00 AM - 6:00 PM\nSat: 10:00 AM - 4:00 PM",
+    hours: "",
   },
   social: { facebook: "", instagram: "", x: "", linkedin: "", youtube: "", tiktok: "" },
   // First path segment of the public list pages, e.g. /properties

@@ -61,11 +61,14 @@ test("sign-in aliases share three failed passwords and a 30-minute lock, with Re
   for (let i = 0; i < 3; i++) {
     const response = await request(i % 2 ? "/api/auth/login" : "/api/auth/customer/login", { method: "POST", body: { email: i % 2 ? "  LIMIT@example.test " : "limit@example.test", password: "WrongPassword123" } });
     assert.equal(response.status, i === 2 ? 429 : 401);
-    assert.equal((await response.json()).attemptsRemaining, 2 - i);
+    const result = await response.json();
+    assert.equal(result.attemptsRemaining, undefined);
+    assert.equal(result.code, i === 2 ? "LOGIN_LOCKED" : "INVALID_CREDENTIALS");
+    if (i < 2) assert.equal(result.message, "Incorrect email or password.");
     if (i === 2) assert.equal(response.headers.get("retry-after"), "1800");
   }
   const limited = await request("/api/auth/customer/login", { method: "POST", body: { email: "limit@example.test", password: "WrongPassword123" } });
   assert.equal(limited.status, 429);
   assert.ok(Number(limited.headers.get("retry-after")) > 0);
-  assert.equal(limited.headers.get("ratelimit-remaining"), "0");
+  assert.equal((await limited.json()).attemptsRemaining, undefined);
 });

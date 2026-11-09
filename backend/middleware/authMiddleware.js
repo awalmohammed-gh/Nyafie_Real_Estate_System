@@ -9,13 +9,15 @@ import { hasAdminEntry, hideAdmin } from "../utils/adminEntry.js";
 
 const userFromCookie = async (req, session) => {
   const token = req.cookies?.[cookieName(session)];
-  if (!token) return null;
+  if (typeof token !== "string" || token.length > 4096) return null;
   let payload;
   try {
     payload = jwt.verify(token, process.env.JWT_KEY, { algorithms: ["HS256"] });
   } catch {
     return null;
   }
+  // A valid signature alone is insufficient: sessions must have an issued-at time and expiry.
+  if (!Number.isSafeInteger(payload.iat) || !Number.isSafeInteger(payload.exp) || payload.exp <= payload.iat || payload.iat > Math.floor(Date.now() / 1000) + 60) return null;
   if (payload.session !== session || payload.role !== SESSION_ROLES[session] || !/^[a-f\d]{24}$/i.test(payload.id || "")) return null;
   if (session === "customer" && !validTabSecret(payload.tabHash)) return null;
   if (session === "customer" && !matchesCustomerTab(payload, req.get(CUSTOMER_TAB_HEADER))) {

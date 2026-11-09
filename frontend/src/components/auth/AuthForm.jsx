@@ -38,8 +38,8 @@ const AuthForm = ({ initialMode = "login", onSuccess, onModeChange }) => {
     event.preventDefault();
     if (submitting) return;
     setError("");
-    if (isSignup && formData.password.length < 8) {
-      setError("Use at least 8 characters for your password.");
+    if (isSignup && formData.password.length < 15) {
+      setError("Use at least 15 characters for your password.");
       return;
     }
     if (isSignup && isAgent && formData.password !== formData.confirmPassword) {
@@ -103,7 +103,7 @@ const AuthForm = ({ initialMode = "login", onSuccess, onModeChange }) => {
             </>
           )}
           <AuthField label="Email address" icon={Mail} type="email" name="email" placeholder="you@example.com" autoComplete={isSignup ? "email" : "username"} value={formData.email} onChange={handleChange} required />
-          <AuthPasswordField label="Password" name="password" placeholder={isSignup ? "Create a password" : "Enter your password"} autoComplete={isSignup ? "new-password" : "current-password"} value={formData.password} onChange={handleChange} required minLength={isSignup ? 8 : undefined} hint={isSignup ? "Use at least 8 characters." : undefined} />
+          <AuthPasswordField label="Password" name="password" placeholder={isSignup ? "Create a password" : "Enter your password"} autoComplete={isSignup ? "new-password" : "current-password"} value={formData.password} onChange={handleChange} required minLength={isSignup ? 15 : undefined} hint={isSignup ? "Use at least 15 characters." : undefined} />
           {isSignup && isAgent && <AuthPasswordField label="Confirm password" name="confirmPassword" placeholder="Enter your password again" autoComplete="new-password" value={formData.confirmPassword} onChange={handleChange} required />}
           {isSignup && (
             <label className="auth-terms"><input type="checkbox" name="termsAgree" checked={formData.termsAgree} onChange={handleChange} required /><span>I agree to the Terms of Service and Privacy Policy.</span></label>

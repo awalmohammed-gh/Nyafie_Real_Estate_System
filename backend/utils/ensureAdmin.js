@@ -1,10 +1,11 @@
 import User from "../models/User.js";
+import { passwordProblem } from "./passwordPolicy.js";
 
 /**
  * Creates the first admin account from ADMIN_EMAIL / ADMIN_PSD when the database has none.
  * After that the account lives in MongoDB: the admin edits their name, email and password
  * from Admin Settings > Admin Account, and restarts never overwrite those changes.
- * Forgotten password: run `npm run admin:reset` (sets the password back to ADMIN_PSD).
+ * Explicit recovery: `npm run admin:reset` aligns the sole admin's email and password with .env.
  */
 export const ensureAdmin = async () => {
   if (await User.exists({ role: "admin" })) return;
@@ -15,8 +16,8 @@ export const ensureAdmin = async () => {
     console.warn("ADMIN_EMAIL / ADMIN_PSD are not set: no admin account was created.");
     return;
   }
-  if (password.length < 8) {
-    console.warn("ADMIN_PSD must be at least 8 characters: admin account not created.");
+  if (passwordProblem(password)) {
+    console.warn(`ADMIN_PSD: ${passwordProblem(password)} Admin account not created.`);
     return;
   }
 

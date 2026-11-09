@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useReducedMotion } from "motion/react";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { usePlatform } from "../../context/usePlatform";
@@ -17,11 +18,12 @@ const HeroLink = ({ link, className, children }) => {
 /**
  * Full-bleed hero slider: photos slide sideways on a timer (SLIDE_MS). Each slide is one object
  * (image + label, title, description, buttons), so the text over the photo always belongs to
- * that photo. The active progress bar's CSS
- * animation is the timer (animationend moves on), so pausing it in CSS pauses the slider
- * exactly where it stopped. `children` (the search) sits below.
+ * that photo. The timer runs independently of the visible controls, including on mobile.
+ * Focus or hovering the controls holds the current slide. `children` (the search) sits below.
  */
-const HeroSlider = ({ slides, children }) => {
+const HeroSlider = ({ slides, children, marketplace = false }) => {
+  const { siteName } = usePlatform();
+  const reducedMotion = useReducedMotion();
   // previous: the slide sliding out; direction: 1 = next (moves left), -1 = previous (moves right)
   const [{ index, previous, direction }, setPosition] = useState({ index: 0, previous: null, direction: 1 });
   // Only the slides about to be seen are downloaded: the first, then the neighbours of each one shown
@@ -31,9 +33,26 @@ const HeroSlider = ({ slides, children }) => {
   const swipeStart = useRef(null);
   const count = slides.length;
   const slide = slides[index];
+  // The opening image introduces the platform; later images use their own saved copy.
+  const content = marketplace && index === 0 ? {
+    label: `WELCOME TO ${siteName.toUpperCase()}`,
+    title: "Find your next home *in Ghana.*",
+    description: `${siteName} is a Ghanaian property marketplace. Find homes to buy or rent, explore short stays, and connect with property agents across Ghana.`,
+  } : slide;
+  const Heading = marketplace ? "h1" : "h2";
   const paused = hovered || focused;
   const sliding = count > 1;
   const wrap = (i) => (i + count) % count;
+
+  useEffect(() => {
+    if (!sliding || paused || reducedMotion) return undefined;
+    const timer = setTimeout(() => {
+      const next = (index + 1) % count;
+      setPosition({ index: next, previous: index, direction: 1 });
+      setLoaded((current) => new Set([...current, next, (next + 1) % count, (next + count - 1) % count]));
+    }, SLIDE_MS);
+    return () => clearTimeout(timer);
+  }, [index, count, sliding, paused, reducedMotion]);
 
   const load = (...indexes) => setLoaded((prev) => (indexes.every((i) => prev.has(i)) ? prev : new Set([...prev, ...indexes])));
   const go = (next, step = next > index ? 1 : -1) => {
@@ -67,7 +86,7 @@ const HeroSlider = ({ slides, children }) => {
 
   return (
     <div
-      className={`home-hero-stage ${paused ? "is-paused" : ""}`}
+      className={`home-hero-stage ${slide.image ? "has-image" : ""} ${paused ? "is-paused" : ""}`}
       role={sliding ? "region" : undefined}
       aria-roledescription={sliding ? "carousel" : undefined}
       aria-label={sliding ? "Featured on the homepage" : undefined}
@@ -102,15 +121,15 @@ const HeroSlider = ({ slides, children }) => {
 
       <div className="container-page home-hero-body">
         <div className="home-hero-main">
-          <div className="home-hero-copy" aria-live={sliding && !paused ? "off" : "polite"}>
+          <div className="home-hero-copy" aria-live={sliding && !paused && !reducedMotion ? "off" : "polite"}>
             {/* Keyed by slide: label, title, text and buttons always change together with the photo */}
-            <div key={slide.id} className={`home-hero-content ${previous === null ? "" : direction > 0 ? "from-next" : "from-prev"}`} role={sliding ? "group" : undefined} aria-roledescription={sliding ? "slide" : undefined} aria-label={sliding ? `${index + 1} of ${count}` : undefined}>
-              {slide.label && <p className="home-eyebrow home-hero-label"><span className="home-live-dot" />{slide.label}</p>}
-              <h2 className="home-hero-title">
-                {splitAccent(slide.title).map((part, i) => (part.accent ? <span key={i} className="home-serif">{part.text}</span> : part.text))}
-              </h2>
-              {slide.description && <p className="home-hero-description">{slide.description}</p>}
-              {(slide.primaryText || slide.secondaryText) && (
+            <div key={slide.id} className={`home-hero-content ${marketplace || previous === null ? "" : direction > 0 ? "from-next" : "from-prev"}`} role={sliding ? "group" : undefined} aria-roledescription={sliding ? "slide" : undefined} aria-label={sliding ? `${index + 1} of ${count}` : undefined}>
+              {content.label && <p className="home-eyebrow home-hero-label"><span className="home-live-dot" aria-hidden="true" />{content.label}</p>}
+              <Heading id={marketplace ? "home-heading" : undefined} className="home-hero-title">
+                {splitAccent(content.title).map((part, i) => (part.accent ? <span key={i} className="home-serif">{part.text}</span> : part.text))}
+              </Heading>
+              {content.description && <p className="home-hero-description">{content.description}</p>}
+              {!marketplace && (slide.primaryText || slide.secondaryText) && (
                 <div className="home-hero-actions">
                   {slide.primaryText && <HeroLink link={slide.primaryLink} className="home-hero-cta">{slide.primaryText} <ArrowUpRight size={18} aria-hidden="true" /></HeroLink>}
                   {slide.secondaryText && <HeroLink link={slide.secondaryLink} className="home-hero-cta is-ghost">{slide.secondaryText}</HeroLink>}
@@ -140,8 +159,7 @@ const HeroSlider = ({ slides, children }) => {
                   >
                     <span
                       className="home-progress-fill"
-                      style={i === index ? { animationDuration: `${SLIDE_MS}ms` } : undefined}
-                      onAnimationEnd={i === index ? goNext : undefined}
+                      style={marketplace || reducedMotion ? { animation: "none", transform: "scaleX(1)" } : i === index ? { animationDuration: `${SLIDE_MS}ms` } : undefined}
                     />
                   </button>
                 ))}

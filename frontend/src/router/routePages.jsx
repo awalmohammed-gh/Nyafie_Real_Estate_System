@@ -6,6 +6,7 @@ export const Onboarding = lazyPage(() => import('../pages/agent/Onboarding'));
 export const ApplicationStatus = lazyPage(() => import('../pages/agent/ApplicationStatus'));
 export const AdminAgentApplications = lazyPage(() => import('../pages/admin/AdminAgentApplications'));
 export const Home = lazyPage(() => import('../pages/Home'));
+export const About = lazyPage(() => import('../pages/About'));
 export const Contact = lazyPage(() => import('../pages/Contact'));
 export const PropertiesDetails = lazyPage(() => import('../pages/PropertiesDetails'));
 export const SlugPage = lazyPage(() => import('../pages/SlugPage'));

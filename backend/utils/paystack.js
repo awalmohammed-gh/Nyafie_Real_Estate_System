@@ -99,8 +99,13 @@ export const validPaystackSignature = (body, signature) => {
 export const newReference = (prefix = "HB") =>
   `${prefix}-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
 
-// GHS -> pesewas: Paystack amounts are always in the currency's subunit
-export const toSubunit = (amount) => Math.round(amount * 100);
+// GHS -> pesewas: Paystack amounts are always whole subunits. Amounts are stored in GHS with at most
+// two decimals; rounding the scaled value removes binary floating-point error (1.15 * 100 = 114.999...).
+export const toSubunit = (amount) => {
+  const subunits = Math.round(Number(amount) * 100);
+  if (!Number.isSafeInteger(subunits) || subunits < 0) throw new Error("Invalid payment amount.");
+  return subunits;
+};
 
 const STILL_PROCESSING = ["ongoing", "pending", "processing", "queued"];
 
@@ -108,25 +113,38 @@ const STILL_PROCESSING = ["ongoing", "pending", "processing", "queued"];
 const sameDomain = (tx) => !tx.domain || tx.domain === paymentEnvironment();
 
 /**
- * "paid" | "pending" | "failed" for one transaction, as Paystack itself reports it.
- * "paid" also requires the exact reference and at least the expected amount in GHS.
- * Abandoned checkouts count as failed (retryable); they are re-checked later in case
- * the customer still completes them.
+ * One transaction, as Paystack's Verify Transaction API reports it, checked against the stored
+ * record's reference and amount (never against anything the browser or a webhook sent).
+ *   status "paid"     success, same reference and environment, GHS, exactly the expected amount
+ *   status "mismatch" success, but a different amount or currency: money arrived, nothing may be
+ *                     granted, and an administrator must review and refund it
+ *   status "pending"  still processing (e.g. a mobile money prompt): retry later
+ *   status "failed"   failed or abandoned (re-checked later in case the customer still pays)
+ * Plus audit details: transactionId, channel, paidAmount (GHS charged), currency.
+ * Paystack's `requested_amount` is the amount the checkout was started with; `amount` can be
+ * higher only when the customer bears Paystack's fee, so that case still counts as exact.
  */
-export const paystackPaymentStatus = async (reference, amount) => {
+export const checkPaystackTransaction = async (reference, amount) => {
   const result = await paystack(`/transaction/verify/${encodeURIComponent(reference)}`);
   const tx = result.data;
-  if (!result.status || !tx) return "failed";
-  if (tx.status === "success") return tx.reference === reference && tx.amount >= toSubunit(amount) && tx.currency === "GHS" && sameDomain(tx) ? "paid" : "failed";
-  return STILL_PROCESSING.includes(tx.status) ? "pending" : "failed";
+  if (!result.status || !tx || typeof tx !== "object") return { status: "failed" };
+  const details = {
+    transactionId: tx.id != null && /^\d{1,20}$/.test(String(tx.id)) ? String(tx.id) : null,
+    channel: typeof tx.channel === "string" ? tx.channel.slice(0, 40) : null,
+    paidAmount: Number.isSafeInteger(tx.amount) ? tx.amount / 100 : null,
+    currency: typeof tx.currency === "string" ? tx.currency.slice(0, 3) : null,
+  };
+  if (tx.status !== "success") return { status: STILL_PROCESSING.includes(tx.status) ? "pending" : "failed", ...details };
+  // Another record's or another environment's transaction can never pay for this one
+  if (tx.reference !== reference || !sameDomain(tx)) return { status: "failed", ...details };
+  const expected = toSubunit(amount);
+  const exact = tx.currency === "GHS" && (tx.amount === expected || (tx.requested_amount === expected && Number.isSafeInteger(tx.amount) && tx.amount > expected));
+  if (exact) return { status: "paid", ...details };
+  return { status: "mismatch", ...details, problem: `Paystack reported ${details.currency || "?"} ${details.paidAmount ?? "?"} for this payment; GHS ${expected / 100} was expected. Nothing was granted.` };
 };
 
-// Asks Paystack whether this exact transaction succeeded for at least the expected amount (GHS)
-export const isPaystackPaid = async (reference, amount) => {
-  const result = await paystack(`/transaction/verify/${encodeURIComponent(reference)}`);
-  const tx = result.data;
-  return Boolean(result.status && tx?.status === "success" && tx.reference === reference && tx.amount >= toSubunit(amount) && tx.currency === "GHS" && sameDomain(tx));
-};
+// "paid" | "mismatch" | "pending" | "failed" (see checkPaystackTransaction)
+export const paystackPaymentStatus = async (reference, amount) => (await checkPaystackTransaction(reference, amount)).status;
 
 // Paystack refund statuses (docs: pending, processing, processed, failed; needs-attention when
 // Paystack needs the customer's account details). Anything unrecognised is treated as unknown.

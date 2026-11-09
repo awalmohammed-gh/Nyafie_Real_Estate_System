@@ -39,8 +39,14 @@ const rentalSchema = new mongoose.Schema(
     // Latest checkout attempt (every attempt is also kept in the Payment collection)
     paymentReference: { type: String, unique: true, sparse: true },
     paymentStartedAt: { type: Date },
-    paymentMethod: { type: String, default: "Paystack" },
-    paymentStatus: { type: String, enum: ["pending", "paid", "failed", "refunded"], default: "pending" },
+    paymentMethod: { type: String, default: "Paystack" }, // "Paystack", "At hotel" or "On arrival"
+    // due: a hotel reservation the guest pays on arrival
+    paymentStatus: { type: String, enum: ["pending", "paid", "failed", "refunded", "due"], default: "pending" },
+    // Hotels: how the guest chose to pay. "on_arrival" reservations are confirmed without a payment;
+    // the hotel records the payment when the guest arrives.
+    paymentOption: { type: String, enum: ["online", "on_arrival"], default: undefined },
+    arrivalDeadline: { type: Date }, // pay-at-hotel: arrive by then or the hotel may treat it as a no-show
+    cancellationPolicy: { type: String, maxlength: 800 }, // the hotel's policy when the guest reserved
     paidAt: { type: Date },
     conversation: { type: mongoose.Schema.Types.ObjectId, ref: "Conversation" },
     history: [historySchema],

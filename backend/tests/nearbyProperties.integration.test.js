@@ -170,7 +170,7 @@ test("nearby search uses real coordinates, public visibility rules and every fil
       ? { ok: true, json: async () => ({ features: new URL(url).searchParams.get("q").startsWith("Spintex") ? [spintex] : [] }) }
       : realFetch(url, options));
     const { default: jwt } = await import("jsonwebtoken");
-    const headers = { "Content-Type": "application/json", "X-Session-Domain": "admin", "X-Admin-Entry": entry, Cookie: `admin_token=${jwt.sign({ id: String(admin._id), role: "admin", session: "admin" }, process.env.JWT_KEY)}` };
+    const headers = { "Content-Type": "application/json", "X-Session-Domain": "admin", "X-Admin-Entry": entry, Cookie: `admin_token=${jwt.sign({ id: String(admin._id), role: "admin", session: "admin" }, process.env.JWT_KEY, { expiresIn: "1h" })}` };
     const call = async (method, path, body) => (await fetch(`http://127.0.0.1:${server.address().port}${path}`, { method, headers, body: JSON.stringify(body) })).json();
 
     const created = await call("POST", "/api/admin/properties", { title: "Spintex draft", listingType: "Rent", pricePeriod: "month", propertyType: "Apartment", price: 2500, status: "draft", location: { address: "Spintex Road", neighbourhood: "Spintex", city: "Accra" } });

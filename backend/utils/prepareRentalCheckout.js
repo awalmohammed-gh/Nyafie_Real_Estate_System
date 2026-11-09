@@ -26,7 +26,7 @@ export const prepareRentalCheckout = (initial, user) => rentalInventoryTransacti
 
   const payment = new Payment({ kind: "rental", rental: rental._id, customer: user._id, property: rental.property, owner: rental.owner, ownerType: rental.ownerType, amount: quote.amount, method: "Paystack", environment: paymentEnvironment(), reference: newReference("HBR") });
   await payment.save({ session });
-  rental.set({ amount: quote.amount, units: quote.units, unitPrice: quote.property.price, status: "payment_pending", paymentReference: payment.reference, paymentStartedAt: new Date(), paymentStatus: "pending", paymentMethod: payment.method });
+  rental.set({ amount: quote.amount, units: quote.units, unitPrice: quote.property.price, status: "payment_pending", paymentReference: payment.reference, paymentStartedAt: new Date(), paymentStatus: "pending", paymentOption: "online", paymentMethod: payment.method });
   addHistory(rental, user, `Checkout started (${formatGHS(quote.amount)})`);
   await rental.save({ session });
   return { rental, payment, resume: false };

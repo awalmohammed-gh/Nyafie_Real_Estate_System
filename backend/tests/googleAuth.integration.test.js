@@ -104,7 +104,7 @@ test("Google creates or links a customer only after a verified, single-use, tab-
 
   await t.test("unverified pre-registrations lose their old password and sessions after Google proves ownership", async () => {
     const existing = await person("unverified@gmail.com", { emailVerifiedAt: null });
-    const oldCookie = "customer_token=" + jwt.sign({ id: existing.id, role: "user", session: "customer", ...customerTabClaims("customer") }, process.env.JWT_KEY);
+    const oldCookie = "customer_token=" + jwt.sign({ id: existing.id, role: "user", session: "customer", ...customerTabClaims("customer") }, process.env.JWT_KEY, { expiresIn: "1h" });
     assert.equal((await signIn({ sub: "google-unverified", email: existing.email })).status, 200);
     const linked = await User.findById(existing.id).select("+password +sessionVersion");
     assert.equal(await linked.matchPassword("OriginalPassword123"), false);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowUpRight, ArrowUp, Clock, Mail, MapPin, Phone } from 'lucide-react';
 import { usePlatform } from '../context/usePlatform';
 import BrandLogo from '../components/brand/BrandLogo';
@@ -11,13 +11,14 @@ const exploreLinks = [
   { name: "Home", path: "/" },
   { name: "All Listings", page: "listings" },
   { name: "Our Agents", page: "agents" },
+  { name: "About NyaFie", path: "/about" },
   { name: "Contact Us", path: "/contact" },
 ];
 
 const serviceLinks = [
   { name: "Buy a Home", path: "/sale" },
   { name: "Rent a Home", path: "/rent" },
-  { name: "Sell a Home", path: "/contact" },
+  { name: "List Your Property", path: "/agent/register" },
   { name: "My Offers", path: "/account/offers" },
 ];
 
@@ -39,6 +40,7 @@ const LinkColumn = ({ title, links }) => (
 const CONTACT_ICONS = { address: MapPin, phone: Phone, email: Mail, hours: Clock };
 
 const Footer = () => {
+  const reducedMotion = useReducedMotion();
   const { settings, siteName, paths } = usePlatform();
   const contactItems = businessContactItems(settings.contact);
   const explore = exploreLinks.map((link) => ({ ...link, path: link.page ? paths[link.page] : link.path }));
@@ -122,7 +124,7 @@ const Footer = () => {
             initial={{ opacity: 0, scale: 0.6 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.6 }}
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            onClick={() => window.scrollTo({ top: 0, behavior: reducedMotion ? 'instant' : 'smooth' })}
             aria-label="Scroll to top"
             className="fixed right-4 bottom-24 z-40 grid h-12 w-12 place-items-center rounded-full bg-brand-500 text-white shadow-lg shadow-brand-500/30 transition-colors hover:bg-brand-700 sm:right-8 lg:bottom-8"
           >

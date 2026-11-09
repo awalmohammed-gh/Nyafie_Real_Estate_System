@@ -1,6 +1,24 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createLoginAttempts, LOGIN_LOCK_MS } from "../utils/loginAttempts.js";
+import { createLoginAttempts, LOGIN_LOCK_MS, rejectLoginAttempt } from "../utils/loginAttempts.js";
+
+test("login failures hide the credential budget and only report the lock once reached", () => {
+  const respond = (attempt) => {
+    const response = { headers: {}, set(name, value) { this.headers[name] = value; return this; }, status(value) { this.statusCode = value; return this; }, json(value) { this.body = value; return this; } };
+    return rejectLoginAttempt(response, attempt);
+  };
+  for (const failures of [1, 2]) {
+    const response = respond({ failures, retryAfter: 0 });
+    assert.equal(response.statusCode, 401);
+    assert.deepEqual(response.body, { success: false, code: "INVALID_CREDENTIALS", message: "Incorrect email or password." });
+    assert.deepEqual(response.headers, {});
+  }
+  const locked = respond({ failures: 3, retryAfter: 1800 });
+  assert.equal(locked.statusCode, 429);
+  assert.equal(locked.body.code, "LOGIN_LOCKED");
+  assert.equal(locked.body.attemptsRemaining, undefined);
+  assert.deepEqual(locked.headers, { "Retry-After": "1800" });
+});
 
 test("three failures lock for a full 30 minutes starting at the third failure", async () => {
   let time = 1000000;

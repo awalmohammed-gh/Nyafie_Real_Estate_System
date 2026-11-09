@@ -3,6 +3,7 @@ import { ACCOUNT_TYPES } from "../utils/accountTypes.js";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import { schemaOptions } from "../utils/schemaOptions.js";
+import { validPasswordInput } from "../utils/passwordPolicy.js";
 
 const applicationSchema = new mongoose.Schema({
   // removed: taken off HomeBase by an admin (no sign-in, listings hidden); only an admin can restore it
@@ -93,6 +94,7 @@ userSchema.pre("save", async function hashPassword() {
 });
 
 userSchema.methods.matchPassword = function matchPassword(plain) {
+  if (!validPasswordInput(plain)) return Promise.resolve(false);
   return bcrypt.compare(plain, this.password);
 };
 

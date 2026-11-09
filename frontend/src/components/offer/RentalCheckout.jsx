@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { ArrowLeft, CalendarDays, CreditCard, Loader2, ShieldCheck, UserRound } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowLeft, Banknote, CalendarCheck, CalendarDays, CircleCheck, CreditCard, Loader2, ShieldCheck, UserRound } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { paymentApi, rentalApi } from "../../frontApi";
 import { formatDate } from "../../utils/date";
 import { getPriceParts } from "../../utils/property";
 import { usePlatform } from "../../context/usePlatform";
+import { arrivalText, bookingHeadline } from "../../utils/hotelPayments";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
@@ -35,8 +37,9 @@ const Row = ({ label, children, strong }) => (
 
 const ErrorNote = ({ children }) => children && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{children}</p>;
 
-// Rent flow: rental information -> customer details -> review (amount from the
-// backend) -> Pay Online with Paystack. Nothing here decides the amount charged.
+// Rent flow: rental information -> customer details -> review (amount from the backend) -> Pay
+// Online with Paystack, or (rentals priced per night, when the owner offers it) reserve now and pay
+// on arrival. Nothing here decides the amount charged.
 const RentalCheckout = ({ property, ownerName }) => {
   const { siteName, settings } = usePlatform();
   const paymentsOff = !settings.payments.rentalsAvailable || property.pricing.currency !== "GHS";
@@ -98,6 +101,19 @@ const RentalCheckout = ({ property, ownerName }) => {
     }
   };
 
+  // "Reserve now, pay on arrival": the server confirms only once the dates are secured
+  const reserve = async () => {
+    setError("");
+    setBusy("reserve");
+    try {
+      setRental(await rentalApi.reserveOnArrival(rental.id));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy("");
+    }
+  };
+
   const pay = async () => {
     setError("");
     setBusy("pay");
@@ -111,6 +127,10 @@ const RentalCheckout = ({ property, ownerName }) => {
   };
 
   const unitLabel = rental && UNIT[rental.pricePeriod]?.[rental.units === 1 ? 0 : 1];
+  // Per-night rentals: what the owner offers (from the server). Other rentals: online only.
+  const options = property.paymentOptions;
+  const choosing = Boolean(options) && rental?.pricePeriod === "night";
+  const headline = choosing && bookingHeadline(rental);
 
   return (
     <div>
@@ -238,8 +258,12 @@ const RentalCheckout = ({ property, ownerName }) => {
             <Row label="Customer">{rental.contactName} · {rental.contactPhone}</Row>
             <Row label="Current address">{rental.currentAddress}</Row>
             <Row label="Owner">{ownerName}</Row>
-            <Row label="Total to pay" strong>{ghs(rental.amount)}</Row>
+            <Row label={choosing ? "Total" : "Total to pay"} strong>{ghs(rental.amount)}</Row>
           </dl>
+          {choosing ? (
+            <StayPayment rental={rental} options={options} headline={headline} ownerName={ownerName} busy={busy} error={error} onPay={pay} onReserve={reserve} onBack={() => setStep(1)} />
+          ) : (
+          <>
           <p className="flex items-start gap-2 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
             You'll pay securely on Paystack. {siteName} verifies the payment with Paystack, then {ownerName} confirms your rental.
@@ -258,8 +282,64 @@ const RentalCheckout = ({ property, ownerName }) => {
             <ArrowLeft className="h-4 w-4" />
             Edit details
           </button>
+          </>
+          )}
         </div>
       )}
+    </div>
+  );
+};
+
+/**
+ * Payment for a rental priced per night: "Pay online" and/or "Reserve now, pay on arrival",
+ * as the owner chose. After reserving, shows "Reservation confirmed — Payment due on arrival".
+ */
+const StayPayment = ({ rental, options, headline, ownerName, busy, error, onPay, onReserve, onBack }) => {
+  if (headline) {
+    return (
+      <div className="space-y-3 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900" role="status">
+        <p className="flex items-center gap-2 text-base font-semibold"><CircleCheck className="h-5 w-5" aria-hidden="true" />{headline}</p>
+        {rental.paymentDue && <>
+          <p className="flex items-start gap-2"><CalendarCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />Pay {ownerName} {ghs(rental.amount)} when you arrive. Please arrive {arrivalText(rental)}.</p>
+          {rental.cancellationPolicy && <p className="whitespace-pre-line text-emerald-800"><span className="font-semibold">Owner's policy:</span> {rental.cancellationPolicy}</p>}
+        </>}
+        <Link to="/account/rentals" className="btn btn-primary w-full">View your booking</Link>
+      </div>
+    );
+  }
+  if (!["pending", "payment_pending"].includes(rental.statusKey)) return <p className="text-sm text-gray-600">This rental is {rental.status.toLowerCase()}.</p>;
+  const noOption = !options.online && !options.onArrival;
+  return (
+    <div className="space-y-4">
+      <p className="text-sm font-semibold text-gray-900">How would you like to pay?</p>
+      <ErrorNote>{error}</ErrorNote>
+      {noOption && <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">{options.onlineProblem || "Online booking is unavailable."} Your details are saved: chat with {ownerName} to arrange your stay.</p>}
+      {options.online && (
+        <div className="rounded-2xl border border-gray-200 p-4">
+          <p className="flex items-center gap-2 font-semibold text-gray-900"><CreditCard className="h-4 w-4 text-brand-600" aria-hidden="true" />Pay online now</p>
+          <p className="mt-1 flex items-start gap-2 text-sm leading-6 text-gray-500"><ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-brand-600" aria-hidden="true" />Card or mobile money through Paystack. Your dates are held for 30 minutes while you pay, then {ownerName} confirms your stay.</p>
+          <button type="button" onClick={onPay} disabled={Boolean(busy)} className="btn btn-primary mt-3 w-full py-3.5">
+            {busy === "pay" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+            {busy === "pay" ? "Starting secure payment..." : `Pay Online · ${ghs(rental.amount)}`}
+          </button>
+        </div>
+      )}
+      {options.onArrival && (
+        <div className="rounded-2xl border border-gray-200 p-4">
+          <p className="flex items-center gap-2 font-semibold text-gray-900"><Banknote className="h-4 w-4 text-brand-600" aria-hidden="true" />Reserve now, pay on arrival</p>
+          <p className="mt-1 text-sm leading-6 text-gray-500">Nothing to pay today. We secure your dates, then you pay {ownerName} {ghs(rental.amount)} when you arrive. Please arrive by {options.arrivalDeadline} on your check-in day.</p>
+          {options.cancellationPolicy && <p className="mt-2 whitespace-pre-line rounded-lg bg-gray-50 p-3 text-xs leading-5 text-gray-600"><span className="font-semibold text-gray-800">Cancellation and no-show policy:</span> {options.cancellationPolicy}</p>}
+          <button type="button" onClick={onReserve} disabled={Boolean(busy)} className={`btn mt-3 w-full py-3.5 ${options.online ? "btn-light" : "btn-primary"}`}>
+            {busy === "reserve" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarCheck className="h-4 w-4" />}
+            {busy === "reserve" ? "Securing your dates..." : "Reserve, pay on arrival"}
+          </button>
+        </div>
+      )}
+      {!options.online && options.onArrival && options.onlineProblem && <p className="text-xs text-gray-500">{options.onlineProblem}</p>}
+      <button onClick={onBack} disabled={Boolean(busy)} className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-gray-900">
+        <ArrowLeft className="h-4 w-4" />
+        Edit details
+      </button>
     </div>
   );
 };

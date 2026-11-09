@@ -58,15 +58,18 @@ test("hotel marketplace: HTTP ownership, booking, payment, inventory and concurr
     const subscription = await Subscription.create({ user: agent._id, plan: plan._id, planName: plan.name, amount: 0, paymentReference: `test-${agent.id}`, status: "active", paymentStatus: "waived", expiresAt: new Date("2035-01-01") });
     agent.subscription = subscription._id; await agent.save();
   }
-  const tokens = (user) => { const session = user.role === "agent" ? "agent" : "customer"; return { ...customerTabHeaders(session), "X-Session-Domain": session, Cookie: `${session}_token=${jwt.sign({ id: user.id, role: user.role, session, ...customerTabClaims(session) }, process.env.JWT_KEY)}` }; };
+  const tokens = (user) => { const session = user.role === "agent" ? "agent" : "customer"; return { ...customerTabHeaders(session), "X-Session-Domain": session, Cookie: `${session}_token=${jwt.sign({ id: user.id, role: user.role, session, ...customerTabClaims(session) }, process.env.JWT_KEY, { expiresIn: "1h" })}` }; };
   server = createApp({ initialize: async () => {} }).listen(process.env.HOTEL_UI_PREVIEW ? Number(process.env.HOTEL_UI_PORT || 4011) : 0, "127.0.0.1");
   await new Promise((done) => server.once("listening", done));
   const base = `http://127.0.0.1:${server.address().port}`;
   const realFetch = globalThis.fetch;
   let providerStatus = "success";
+  const initialized = [], subaccounts = [];
   t.mock.method(globalThis, "fetch", async (url, options) => {
     if (!String(url).startsWith("https://api.paystack.co/")) return realFetch(url, options);
-    if (String(url).includes("/initialize")) return { json: async () => ({ status: true, data: { authorization_url: "https://checkout.paystack.com/isolated-test" } }) };
+    if (String(url).includes("/bank?")) return { json: async () => ({ status: true, data: String(url).includes("mobile_money") ? [{ name: "MTN Mobile Money", code: "MTN", active: true }] : [{ name: "Test Bank Ghana", code: "TBG", active: true }] }) };
+    if (String(url).includes("/subaccount")) { subaccounts.push({ method: options.method, body: JSON.parse(options.body) }); return { json: async () => ({ status: true, data: { subaccount_code: "ACCT_isolated", account_name: "TEST HOTEL LTD" } }) }; }
+    if (String(url).includes("/initialize")) { initialized.push(JSON.parse(options.body)); return { json: async () => ({ status: true, data: { authorization_url: "https://checkout.paystack.com/isolated-test" } }) }; }
     const reference = decodeURIComponent(String(url).split("/").at(-1));
     const payment = await Payment.findOne({ reference });
     return { json: async () => ({ status: true, data: { reference, currency: "GHS", amount: Math.round(payment.amount * 100), status: providerStatus } }) };
@@ -78,7 +81,7 @@ test("hotel marketplace: HTTP ownership, booking, payment, inventory and concurr
     return { ...payload, code: response.status, body: payload };
   };
   const room = { name: "Deluxe Room", description: "A spacious room with a balcony and king bed.", pricePerNight: 650, quantity: 10, maxGuests: 2, beds: 1, bedType: "King bed", size: 32, sizeUnit: "sqm", images: ["/hero/furnished-bedroom.jpg"], amenities: ["Private bathroom", "Air conditioning"], active: true };
-  const created = await api("/properties", { user: owner, body: { title: "Test Hotel", description: "A welcoming hotel in Accra with a pool and restaurant.", propertyType: "Hotel", listingType: "Sale", price: 1, status: "published", location: { neighbourhood: "Airport", city: "Accra", address: "1 Airport Road" }, area: 500, images: ["/hero/resort-pool.jpg"], amenities: ["Swimming pool", "Restaurant"], roomTypes: [room], owner: stranger.id } });
+  const created = await api("/properties", { user: owner, body: { title: "Test Hotel", description: "A welcoming hotel in Accra with a pool and restaurant.", propertyType: "Hotel", listingType: "Sale", price: 1, status: "published", location: { neighbourhood: "Airport", city: "Accra", address: "1 Airport Road" }, area: 500, images: ["/hero/resort-pool.jpg"], amenities: ["Swimming pool", "Restaurant"], roomTypes: [room], owner: stranger.id, stayBooking: { payOnArrival: true, payOnline: true, arrivalDeadline: "14:00", cancellationPolicy: "Free cancellation until the day before arrival. No-shows are charged one night." } } });
   assert.equal(created.code, 201, JSON.stringify(created));
   const hotelId = created.data.id, roomId = created.data.roomTypes[0].id;
   const selection = { propertyId: hotelId, roomTypeId: roomId, checkIn: "2030-01-01", checkOut: "2030-01-04", guests: 4, numberOfRooms: 2, fullName: "Test Guest", email: customer.email, phone: customer.phone, amount: 1, pricePerNight: 1, customerId: customer2.id, paymentStatus: "paid" };
@@ -104,9 +107,30 @@ test("hotel marketplace: HTTP ownership, booking, payment, inventory and concurr
     assert.equal(booking.customerId, customer.id); assert.equal(booking.paymentStatus, "pending");
     assert.equal((await api(`/rentals/${booking.id}`, { user: customer2 })).code, 404);
   });
+  await t.test("online payment waits for the hotel's own payout account; only the owner can connect it", async () => {
+    const before = await api(`/properties/${hotelId}`);
+    assert.equal(before.data.paymentOptions.online, false); assert.equal(before.data.paymentOptions.onArrival, true);
+    assert.equal(before.data.paymentOptions.arrivalDeadline, "14:00");
+    const blocked = await api("/payments/initialize", { user: customer, body: { rentalId: booking.id } });
+    assert.equal(blocked.code, 409); assert.match(blocked.message, /pay at the hotel/);
+    assert.equal((await api(`/properties/${hotelId}/payout`, { user: stranger })).code, 403);
+    const details = { type: "bank", bankCode: "TBG", accountNumber: "0012345678901", password: "test-password" };
+    assert.equal((await api(`/properties/${hotelId}/payout`, { user: owner, method: "PUT", body: { ...details, password: "wrong-password" } })).code, 400);
+    assert.equal((await api(`/properties/${hotelId}/payout`, { user: owner, method: "PUT", body: { ...details, bankCode: "NOPE" } })).code, 400);
+    assert.equal(subaccounts.length, 0, "nothing reaches Paystack before the password and bank are checked");
+    const connected = await api(`/properties/${hotelId}/payout`, { user: owner, method: "PUT", body: details });
+    assert.equal(connected.code, 200, JSON.stringify(connected));
+    assert.equal(connected.data.accountLast4, "8901"); assert.equal(connected.data.bankName, "Test Bank Ghana");
+    assert.ok(!JSON.stringify(connected).includes("0012345678901") && !JSON.stringify(connected).includes("ACCT_"), "no full account number or subaccount code in responses");
+    assert.deepEqual(subaccounts[0], { method: "POST", body: { business_name: "Test Hotel", settlement_bank: "TBG", account_number: "0012345678901", percentage_charge: 0, description: `NyaFie hotel ${hotelId}` } });
+    assert.equal((await api(`/properties/${hotelId}`)).data.paymentOptions.online, true);
+    assert.equal(JSON.stringify((await api(`/properties/${hotelId}`)).data).includes("ACCT_"), false);
+  });
   await t.test("checkout reserves rooms, reuses payment and rejects another customer's payment ID", async () => {
     checkout = await api("/payments/initialize", { user: customer, body: { rentalId: booking.id, amount: 1 } });
     assert.equal(checkout.code, 200, JSON.stringify(checkout)); assert.equal(checkout.data.amount, 3900);
+    assert.equal(initialized.at(-1).subaccount, "ACCT_isolated", "the hotel receives the money"); assert.equal(initialized.at(-1).bearer, "subaccount");
+    assert.equal((await Payment.findOne({ reference: checkout.data.reference })).subaccount, "ACCT_isolated");
     assert.equal((await api("/payments/initialize", { user: customer, body: { rentalId: booking.id } })).data.reference, checkout.data.reference);
     assert.equal((await api("/payments/initialize", { user: customer2, body: { rentalId: booking.id } })).code, 404);
     const rooms = await api(`/properties/${hotelId}/rooms?checkIn=2030-01-01&checkOut=2030-01-04`);
@@ -174,9 +198,63 @@ test("hotel marketplace: HTTP ownership, booking, payment, inventory and concurr
     assert.equal((await api(`/payments/verify/${legacy.paymentReference}`, { user: customer2 })).code, 409);
     assert.equal((await Payment.findOne({ reference: legacy.paymentReference })).status, "refund_required");
   });
+  await t.test("reserve now, pay at the hotel: rooms are secured first, then the hotel records the payment", async () => {
+    const stay = { checkIn: "2030-08-01", checkOut: "2030-08-03", numberOfRooms: 4, guests: 2 };
+    const request = (await book(customer, stay)).data;
+    const reserved = await api(`/rentals/${request.id}/reserve`, { user: customer, body: {} });
+    assert.equal(reserved.code, 200, JSON.stringify(reserved));
+    assert.equal(reserved.data.status, "confirmed"); assert.equal(reserved.data.paymentStatus, "due"); assert.equal(reserved.data.paymentOption, "on_arrival");
+    assert.equal(reserved.data.arrivalDeadline, "2030-08-01T14:00:00.000Z"); assert.match(reserved.data.cancellationPolicy, /No-shows/);
+    assert.equal((await api(`/rentals/${request.id}/reserve`, { user: customer, body: {} })).code, 200, "repeating is harmless");
+    assert.equal((await api(`/rentals/${request.id}/reserve`, { user: customer2, body: {} })).code, 404);
+    assert.equal((await api(`/properties/${hotelId}/rooms?checkIn=2030-08-01&checkOut=2030-08-03`)).data.rooms[0].availableRooms, 6, "the reservation holds its rooms");
+    assert.equal((await book(customer2, { ...stay, numberOfRooms: 7 })).code, 409);
+    assert.equal((await api("/payments/initialize", { user: customer, body: { rentalId: request.id } })).code, 400, "a reservation can't start a second payment");
+    // The hotel's side: check in, payment must be recorded before the stay can complete
+    assert.equal((await api(`/rentals/${request.id}/paid-on-arrival`, { user: stranger, method: "PATCH", body: {} })).code, 404);
+    assert.equal((await api(`/rentals/${request.id}/status`, { user: owner, method: "PATCH", body: { status: "active" } })).code, 200);
+    assert.equal((await api(`/rentals/${request.id}/status`, { user: owner, method: "PATCH", body: { status: "completed" } })).code, 409);
+    const paid = await api(`/rentals/${request.id}/paid-on-arrival`, { user: owner, method: "PATCH", body: {} });
+    assert.equal(paid.code, 200, JSON.stringify(paid)); assert.equal(paid.data.paymentStatus, "paid"); assert.equal(paid.data.paymentMethod, "At hotel");
+    assert.equal((await api(`/rentals/${request.id}/paid-on-arrival`, { user: owner, method: "PATCH", body: {} })).code, 409);
+    assert.equal((await api(`/rentals/${request.id}/status`, { user: owner, method: "PATCH", body: { status: "completed" } })).code, 200);
+  });
+  await t.test("guests cancel a pay-at-hotel reservation before check-in day, releasing the rooms", async () => {
+    const request = (await book(customer2, { checkIn: "2030-09-01", checkOut: "2030-09-02", numberOfRooms: 10, guests: 2 })).data;
+    assert.equal((await api(`/rentals/${request.id}/reserve`, { user: customer2, body: {} })).code, 200);
+    assert.equal((await book(customer, { checkIn: "2030-09-01", checkOut: "2030-09-02", numberOfRooms: 1, guests: 1 })).code, 409);
+    assert.equal((await api(`/rentals/${request.id}/cancel`, { user: customer, method: "PATCH", body: {} })).code, 404);
+    const cancelled = await api(`/rentals/${request.id}/cancel`, { user: customer2, method: "PATCH", body: {} });
+    assert.equal(cancelled.code, 200); assert.equal(cancelled.data.status, "cancelled");
+    assert.equal((await book(customer, { checkIn: "2030-09-01", checkOut: "2030-09-02", numberOfRooms: 10, guests: 1 })).code, 201);
+  });
+  await t.test("an online payment that lands after the guest switched to pay at the hotel settles the reservation once", async () => {
+    const request = (await book(customer, { checkIn: "2030-10-01", checkOut: "2030-10-02", numberOfRooms: 1, guests: 1 })).data;
+    const started = (await api("/payments/initialize", { user: customer, body: { rentalId: request.id } })).data;
+    assert.equal((await api(`/rentals/${request.id}/reserve`, { user: customer, body: {} })).code, 409, "not while the online checkout is open");
+    await Rental.updateOne({ _id: request.id }, { paymentStartedAt: new Date(Date.now() - 31 * 60000) });
+    assert.equal((await api(`/rentals/${request.id}/reserve`, { user: customer, body: {} })).code, 200);
+    const late = await api(`/payments/verify/${started.reference}`, { user: customer });
+    assert.equal(late.code, 200, JSON.stringify(late)); assert.equal(late.data.paymentStatus, "paid"); assert.equal(late.data.status, "confirmed");
+    assert.equal((await Payment.findOne({ reference: started.reference })).status, "paid");
+    assert.equal((await api(`/payments/verify/${started.reference}`, { user: customer })).code, 200, "verifying again changes nothing");
+  });
+  await t.test("each hotel chooses its options: pay-at-hotel can be switched off, and one option must stay on", async () => {
+    const edit = (stayBooking) => api(`/properties/${hotelId}`, { user: owner, method: "PUT", body: { stayBooking } });
+    assert.equal((await edit({ payOnArrival: false, payOnline: false })).code, 400);
+    assert.equal((await edit({ arrivalDeadline: "25:00" })).code, 400);
+    assert.equal((await edit({ payOnArrival: false })).code, 200);
+    const request = (await book(customer, { checkIn: "2030-11-01", checkOut: "2030-11-02", numberOfRooms: 1, guests: 1 })).data;
+    assert.equal((await api(`/rentals/${request.id}/reserve`, { user: customer, body: {} })).code, 409);
+    assert.equal((await api(`/properties/${hotelId}/payout`, { user: owner, method: "DELETE" })).code, 200);
+    assert.equal((await api("/payments/initialize", { user: customer, body: { rentalId: request.id } })).code, 409, "no payout account: no online payment");
+    assert.equal((await edit({ payOnArrival: true })).code, 200);
+  });
   if (process.env.HOTEL_UI_PREVIEW) {
     await Property.updateOne({ _id: hotelId }, { $push: { roomTypes: { ...room, name: "Family Suite", pricePerNight: 1200, maxGuests: 4, beds: 2, bedType: "King + twin beds", size: 56, amenities: ["Kitchenette", "Private bathroom", "Balcony", "Air conditioning"], images: ["/hero/modern-living.jpg", "/hero/furnished-bedroom.jpg"] } } });
-    console.log(`Isolated hotel preview: API ${base}, hotel ${hotelId}. Guest: guest@hotel.test; Agent: owner@hotel.test. Local fixture password: test-password`);
+    // A rental priced per night, to preview its "pay online or on arrival" checkout
+    const shortStay = await api("/properties", { user: owner, body: { title: "Test Short Stay", description: "A furnished one-bedroom apartment for short stays near the airport.", propertyType: "Apartment", listingType: "Rent", pricePeriod: "night", price: 2500, status: "published", location: { neighbourhood: "Airport", city: "Accra", address: "3 Airport Road" }, area: 60, images: ["/hero/modern-living.jpg"], stayBooking: { payOnArrival: true, payOnline: true, arrivalDeadline: "15:00", cancellationPolicy: "Free cancellation until the day before arrival." } } });
+    console.log(`Isolated hotel preview: API ${base}, hotel ${hotelId}, short stay ${shortStay.data?.id || JSON.stringify(shortStay)}. Guest: guest@hotel.test; Agent: owner@hotel.test. Local fixture password: test-password`);
     await new Promise((done) => { const timer = setTimeout(done, 540000); process.once("SIGINT", () => { clearTimeout(timer); done(); }); });
   }
 });

@@ -43,6 +43,8 @@ const statusTone = {
   "Payment Requested": "amber",
   "Payment Confirmed": "green",
   "Paid at Office": "green",
+  "Due at hotel": "amber",
+  "Due on arrival": "amber",
   "Offer Received": "brand",
   Negotiating: "sky",
   Duplicate: "red",

@@ -56,7 +56,9 @@ export const confirmRentalPayment = (paymentId, user) => mongoose.connection.tra
 
   payment.paidAt ||= new Date();
   let review = paymentReviewForRental(payment, rental);
-  if (!review && rental.paymentStatus !== "paid") {
+  // The guest later reserved to pay on arrival: the dates are already theirs, so the payment settles it
+  const reservation = rental.paymentOption === "on_arrival" && rental.paymentStatus === "due" && ["confirmed", "active"].includes(rental.status);
+  if (!review && rental.paymentStatus !== "paid" && !reservation) {
     if (!property || property.listingType !== "Rent" || property.availability !== "Available") {
       review = { status: "refund_required", note: "Payment arrived after this property became unavailable" };
     } else if (await hasRentalConflict(rental, { session })) {
@@ -74,8 +76,8 @@ export const confirmRentalPayment = (paymentId, user) => mongoose.connection.tra
     payment.status = "paid";
     // Also repairs an earlier interrupted confirmation whose payment was already paid.
     if (rental.paymentStatus !== "paid") {
-      rental.set({ status: "paid", paymentStatus: "paid", paidAt: payment.paidAt, paymentReference: payment.reference, paymentMethod: payment.method });
-      addHistory(rental, user, `Paid ${formatGHS(payment.amount)} online (${payment.reference})`);
+      rental.set({ ...(reservation ? {} : { status: "paid" }), paymentStatus: "paid", paymentOption: "online", paidAt: payment.paidAt, paymentReference: payment.reference, paymentMethod: payment.method });
+      addHistory(rental, user, `Paid ${formatGHS(payment.amount)} online (${payment.reference})${reservation ? "; nothing is due on arrival" : ""}`);
       await rental.save({ session });
     }
   }

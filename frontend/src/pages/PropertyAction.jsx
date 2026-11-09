@@ -110,7 +110,7 @@ const PropertyAction = ({ mode }) => {
           Back to property
         </Link>
         <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">{hotel ? "Book your hotel stay" : COPY[mode].title}</h1>
-        <p className="mt-2 text-gray-600">{hotel ? "Choose your room, review what's included, and confirm your dates and guests before paying securely." : COPY[mode].intro}</p>
+        <p className="mt-2 text-gray-600">{hotel ? "Choose your room, review what's included, and confirm your dates and guests, then choose how you'd like to pay." : mode === "rent" && property.paymentOptions ? "Confirm your dates and details, review the total, then choose to pay online or reserve and pay on arrival." : COPY[mode].intro}</p>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-5 lg:gap-8">
           {/* Property summary */}

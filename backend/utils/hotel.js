@@ -4,6 +4,7 @@ import Rental from "../models/Rental.js";
 import { HttpError } from "./response.js";
 import { resolveImages } from "./uploadImages.js";
 import { withinImageLimit } from "./permissions.js";
+import { parseStayBooking, takesStayBookings } from "./hotelPayout.js";
 
 export const DAY = 86400000;
 export const HOTEL_HOLD = 30 * 60 * 1000;
@@ -94,6 +95,9 @@ export const hotelTransaction = (hotelId, work) => mongoose.connection.transacti
 
 export const prepareHotelFields = async (fields, body, existing = null, imageLimit = 8) => {
   const hotel = isHotel({ propertyType: fields.propertyType ?? existing?.propertyType });
+  // Hotels and per-night rentals: how guests may pay (anything else ignores these options)
+  const stay = { propertyType: fields.propertyType ?? existing?.propertyType, listingType: hotel ? "Rent" : fields.listingType ?? existing?.listingType, pricePeriod: hotel ? "night" : fields.pricePeriod ?? existing?.pricePeriod, stayBooking: existing?.stayBooking };
+  if (body.stayBooking !== undefined && takesStayBookings(stay)) fields.stayBooking = parseStayBooking(body.stayBooking, stay);
   if (existing?.roomTypes?.length && !hotel) throw new HttpError(400, "A hotel with room types must remain a hotel. Archive its room types instead.");
   if (!hotel) {
     if (body.roomTypes?.length) throw new HttpError(400, "Room types can only belong to a hotel.");

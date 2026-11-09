@@ -15,6 +15,16 @@ export const confirmHotelPayment = async (payment, user, initial) => {
     if (rentalPaymentMatchesBooking(currentPayment, rental)) return { rental, payment: currentPayment, repeated: true };
     if (rentalPaymentNeedsReview(currentPayment)) return { rental, payment: currentPayment, review: currentPayment.status, repeated: true };
     currentPayment.paidAt ||= new Date();
+    // The guest started paying online, then reserved to pay at the hotel, and the online payment
+    // went through after all. The rooms are already held by the reservation: it is now paid.
+    if (rental.paymentOption === "on_arrival" && rental.status === "confirmed" && rental.paymentStatus === "due" && currentPayment.amount === rental.amount) {
+      currentPayment.status = "paid";
+      await currentPayment.save({ session });
+      rental.set({ paymentStatus: "paid", paymentOption: "online", paymentMethod: "Paystack", paidAt: currentPayment.paidAt, paymentReference: currentPayment.reference });
+      addHistory(rental, user, `Online payment received (${currentPayment.reference}); nothing is due at the hotel`);
+      await rental.save({ session });
+      return { rental, payment: currentPayment };
+    }
     let problem = "";
     if (rental.paymentStatus === "paid" && rental.paymentReference !== currentPayment.reference) problem = "Duplicate successful payment for an already paid booking.";
     else if (!["pending", "payment_pending"].includes(rental.status)) problem = "Payment arrived after this booking was cancelled.";

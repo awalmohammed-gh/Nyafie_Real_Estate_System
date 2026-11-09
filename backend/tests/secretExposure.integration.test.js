@@ -171,11 +171,11 @@ test(
     const sessions = {
       guest: {},
       agent: {
-        Cookie: `agent_token=${jwt.sign({ id: String(agent._id), role: "agent", session: "agent" }, CANARIES.JWT_KEY)}`,
+        Cookie: `agent_token=${jwt.sign({ id: String(agent._id), role: "agent", session: "agent" }, CANARIES.JWT_KEY, { expiresIn: "1h" })}`,
         "X-Session-Domain": "agent",
       },
       admin: {
-        Cookie: `admin_token=${jwt.sign({ id: String(admin._id), role: "admin", session: "admin" }, CANARIES.JWT_KEY)}`,
+        Cookie: `admin_token=${jwt.sign({ id: String(admin._id), role: "admin", session: "admin" }, CANARIES.JWT_KEY, { expiresIn: "1h" })}`,
         "X-Session-Domain": "admin",
         "X-Admin-Entry": CANARIES.ADMIN_ENTRY_PATH,
       },

@@ -130,7 +130,7 @@ const PasswordForm = () => {
   const save = () => {
     let problem = "";
     if (!s.form.current) problem = "Enter your current password.";
-    else if (s.form.next.length < 8) problem = "Your new password needs at least 8 characters.";
+    else if (s.form.next.length < 15) problem = "Your new password needs at least 15 characters.";
     else if (s.form.next !== s.form.confirm) problem = "The new passwords don't match.";
     else if (s.form.next === s.form.current) problem = "Choose a password different from your current one.";
     if (problem) {
@@ -150,7 +150,7 @@ const PasswordForm = () => {
       <Row label="Current password" htmlFor="pw-current">
         <PasswordInput id="pw-current" value={s.form.current} onChange={(v) => s.set("current", v)} autoComplete="current-password" />
       </Row>
-      <Row label="New password" description="At least 8 characters." htmlFor="pw-new">
+      <Row label="New password" description="At least 15 characters." htmlFor="pw-new">
         <PasswordInput id="pw-new" value={s.form.next} onChange={(v) => s.set("next", v)} autoComplete="new-password" />
       </Row>
       <Row label="Confirm new password" htmlFor="pw-confirm">

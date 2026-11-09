@@ -172,6 +172,9 @@ export const mapProperty = (p) => ({
   },
   features: p.amenities || [],
   roomTypes: p.roomTypes || [],
+  // Hotels: the owner's saved payment options, and what a guest can choose right now (details page only)
+  stayBooking: p.stayBooking || null,
+  paymentOptions: p.paymentOptions || null,
   media: { images: p.images || [] },
   agent: {
     id: p.agent?.id || idOf(p.owner),
@@ -226,6 +229,7 @@ export const toApiProperty = (p) => {
   }
   if (p.features) out.amenities = p.features;
   if (p.roomTypes !== undefined) out.roomTypes = p.roomTypes;
+  if (p.stayBooking) out.stayBooking = p.stayBooking;
   if (p.media) out.images = p.media.images;
   if (p.agent) out.contact = { name: p.agent.name, phone: p.agent.phone, email: p.agent.email };
   if (p.listing?.state !== undefined) out.status = p.listing.state;
@@ -359,8 +363,12 @@ export const mapRental = (r) => ({
   amount: r.amount,
   statusKey: r.status,
   status: RENTAL_STATUS[r.status] || r.status,
-  paymentStatus: PAYMENT_STATUS[r.paymentStatus] || r.paymentStatus,
+  paymentStatus: r.paymentStatus === "due" ? (r.hotelId ? "Due at hotel" : "Due on arrival") : PAYMENT_STATUS[r.paymentStatus] || r.paymentStatus,
+  paymentDue: r.paymentStatus === "due", // reserved; the guest pays the hotel or owner on arrival
   paymentMethod: r.paymentMethod,
+  paymentOption: r.paymentOption || null, // stays: "online" | "on_arrival"
+  arrivalDeadline: r.arrivalDeadline || null,
+  cancellationPolicy: r.cancellationPolicy || "",
   contactName: r.contactName,
   contactPhone: r.contactPhone,
   contactEmail: r.contactEmail,

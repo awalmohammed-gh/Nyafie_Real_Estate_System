@@ -15,6 +15,13 @@ const STEPS = {
     { key: "active", label: "Active" },
     { key: "completed", label: "Completed" },
   ],
+  // "Reserve now, pay on arrival" (hotels and per-night rentals): reserved without paying; paid on arrival
+  stayReservation: [
+    { key: "pending", label: "Requested" },
+    { key: "confirmed", label: "Reserved" },
+    { key: "active", label: "Checked in" },
+    { key: "completed", label: "Completed" },
+  ],
   sale: [
     { key: "pending", label: "Pending" },
     { key: "contacted", label: "Contacted" },
@@ -36,7 +43,7 @@ const StatusSteps = ({ kind, status }) => {
     return (
       <p className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600">
         <XCircle className="h-4 w-4 text-gray-400" />
-        This {kind === "sale" ? "purchase request" : kind} was {ENDED[status].toLowerCase()}.
+        This {{ sale: "purchase request", stayReservation: "reservation" }[kind] || kind} was {ENDED[status].toLowerCase()}.
       </p>
     );
   }

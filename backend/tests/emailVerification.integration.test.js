@@ -40,7 +40,7 @@ test("customer email verification requires inbox ownership before every customer
   let user = await User.findOne({ email: "customer@example.test" }).select("+sessionVersion");
   assert.equal(user.emailVerifiedAt, null);
   assert.equal(user.role, "user");
-  const oldCookie = "customer_token=" + jwt.sign({ id: user.id, role: "user", session: "customer", ...customerTabClaims("customer") }, process.env.JWT_KEY);
+  const oldCookie = "customer_token=" + jwt.sign({ id: user.id, role: "user", session: "customer", ...customerTabClaims("customer") }, process.env.JWT_KEY, { expiresIn: "1h" });
   assert.equal((await request("/auth/customer/me", undefined, oldCookie)).status, 401);
   assert.equal((await request("/users/saved", undefined, oldCookie)).status, 401);
   assert.equal((await request("/auth/customer/verify-email", { challenge: pending.challenge, code: deliveries[0].code }, undefined, false)).status, 400);
@@ -115,7 +115,7 @@ test("customer email verification requires inbox ownership before every customer
 
   await t.test("an admin email change clears verification and revokes the old session", async () => {
     const admin = await User.findOne({ role: "admin" });
-    const adminCookie = "admin_token=" + jwt.sign({ id: admin.id, role: "admin", session: "admin" }, process.env.JWT_KEY);
+    const adminCookie = "admin_token=" + jwt.sign({ id: admin.id, role: "admin", session: "admin" }, process.env.JWT_KEY, { expiresIn: "1h" });
     const response = await fetch(base + `/api/admin/users/${user.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json", "X-Session-Domain": "admin", ...adminEntryHeaders(), Cookie: adminCookie },
       body: JSON.stringify({ email: "new-address@example.test", emailVerifiedAt: new Date() }),

@@ -7,6 +7,7 @@ import { matchesSessionRole } from "../utils/sessionAccess.js";
 import { clearAuthCookie } from "../utils/generateToken.js";
 import { loginAttempts } from "../utils/loginAttempts.js";
 import { ok, fail } from "../utils/response.js";
+import { passwordProblem } from "../utils/passwordPolicy.js";
 
 const emailFrom = (value) => typeof value === "string" ? value.trim().toLowerCase() : "";
 const validEmail = (email) => email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -45,8 +46,8 @@ export const resetCustomerPassword = async (req, res) => {
   const email = emailFrom(req.body?.email);
   const { code, newPassword } = req.body || {};
   if (!validEmail(email) || typeof code !== "string" || !/^\d{6}$/.test(code)) return fail(res, 400, invalidMessage);
-  if (typeof newPassword !== "string" || newPassword.length < 8 || Buffer.byteLength(newPassword, "utf8") > 72)
-    return fail(res, 400, "Use a password with at least 8 characters and no more than 72 bytes.");
+  const problem = passwordProblem(newPassword);
+  if (problem) return fail(res, 400, problem);
   const user = await User.findOne({ email }).select("+sessionVersion");
   if (!eligible(user)) return fail(res, 400, invalidMessage);
   const now = new Date();

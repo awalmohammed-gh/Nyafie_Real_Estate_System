@@ -57,7 +57,7 @@ export const AccountSettings = ({ activeSection = null, showAccountSummary = tru
   const handlePassword = async (e) => {
     e.preventDefault();
     setPwError("");
-    if (passwords.next.length < 8) return setPwError("Your new password needs at least 8 characters.");
+    if (passwords.next.length < 15) return setPwError("Your new password needs at least 15 characters.");
     if (passwords.next !== passwords.confirm) return setPwError("The new passwords don't match.");
     setPwSaving(true);
     try {
@@ -99,7 +99,7 @@ export const AccountSettings = ({ activeSection = null, showAccountSummary = tru
             </div>
           ))}
           <button type="button" onClick={() => setShowPasswords((v) => !v)} aria-pressed={showPasswords} className="inline-flex min-h-11 items-center gap-2 text-xs font-medium text-gray-500">{showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}{showPasswords ? "Hide passwords" : "Show passwords"}</button>
-          <p className="text-xs leading-relaxed text-gray-500">Use at least 8 characters for your new password.</p>
+          <p className="text-xs leading-relaxed text-gray-500">Use at least 15 characters for your new password.</p>
           </fieldset>
           {pwError && (
             <p role="alert" className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">

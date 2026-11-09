@@ -9,12 +9,10 @@ import { CUSTOMER_TAB_HEADER, validTabSecret } from "../utils/customerTabSession
 import { matchesSessionRole } from "../utils/sessionAccess.js";
 import { loginAttempts, rejectLoginAttempt } from "../utils/loginAttempts.js";
 import { startEmailVerification } from "./emailVerificationController.js";
+import { passwordProblem, validPasswordInput } from "../utils/passwordPolicy.js";
 
 const isEmail = (value) => typeof value === "string" && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 const text = (value) => (typeof value === "string" ? value.trim() : "");
-// bcrypt only uses the first 72 bytes, so longer passwords are refused rather than silently cut
-const passwordProblem = (value) =>
-  typeof value !== "string" || value.length < 8 ? "Use at least 8 characters for your password." : Buffer.byteLength(value, "utf8") > 72 ? "Use a password of at most 72 bytes." : null;
 // Compared against when no account matches, so a sign-in takes as long whether or not the email exists
 const DUMMY_HASH = bcrypt.hashSync("homebase-timing-equaliser", 10);
 
@@ -89,16 +87,8 @@ export const registerAgent = async (req, res) => {
   if (!isEmail(normalizedEmail) || normalizedEmail.length > 254)
     return fail(res, 400, "Enter a valid email address.");
   if (!validPhone(phone)) return fail(res, 400, "Enter a valid phone number.");
-  if (
-    typeof password !== "string" ||
-    password.length < 8 ||
-    Buffer.byteLength(password, "utf8") > 72
-  )
-    return fail(
-      res,
-      400,
-      "Use a password with at least 8 characters and no more than 72 bytes.",
-    );
+  const problem = passwordProblem(password);
+  if (problem) return fail(res, 400, problem);
   if (password !== confirmPassword)
     return fail(res, 400, "Passwords do not match.");
   if (await User.exists({ email: normalizedEmail }))
@@ -224,7 +214,7 @@ export const updateMe = async (req, res) => {
 export const changePassword = async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   const user = await User.findById(req.user._id).select("+password +sessionVersion");
-  if (!user || typeof currentPassword !== "string" || !(await user.matchPassword(currentPassword)))
+  if (!user || !validPasswordInput(currentPassword) || !(await user.matchPassword(currentPassword)))
     return fail(res, 400, "Your current password is incorrect.");
   const problem = passwordProblem(newPassword);
   if (problem) return fail(res, 400, problem.replace("your password", "your new password"));

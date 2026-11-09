@@ -12,3 +12,9 @@ export const getAdminRentals = async () => (await client.get("/admin/rentals")).
 
 // Owner side: status is an API key such as "confirmed", "active", "completed" or "cancelled"
 export const updateRentalStatus = async (id, status, note = "") => mapRental((await client.patch(`/rentals/${id}/status`, { status, note })).data);
+
+// Stays (hotels and per-night rentals): "reserve now, pay on arrival" (rooms or dates are secured first), and cancelling it before check-in day
+export const reserveOnArrival = async (id) => mapRental((await client.post(`/rentals/${id}/reserve`, {})).data);
+export const cancelReservation = async (id) => mapRental((await client.patch(`/rentals/${id}/cancel`, {})).data);
+// Owner side: the guest paid on arrival
+export const recordArrivalPayment = async (id, note = "") => mapRental((await client.patch(`/rentals/${id}/paid-on-arrival`, { note })).data);

@@ -1,4 +1,5 @@
 import User from "../models/User.js";
+import { timingSafeEqual } from "node:crypto";
 import EmailVerification from "../models/EmailVerification.js";
 import { loadUser } from "./authController.js";
 import { verificationChallenge, readVerificationChallenge, sendVerificationCode, verificationHash } from "../utils/emailVerification.js";
@@ -52,7 +53,7 @@ export const verifyCustomerEmail = async (req, res) => {
   }, { $inc: { attempts: 1 } }, { returnDocument: "after" }).select("+codeHash");
   if (!attempt) return fail(res, 400, "This code expired or has too many attempts. Request a new code.");
   const hash = verificationHash(user._id, user.email, req.body.code);
-  if (attempt.codeHash !== hash) return fail(res, 400, "Incorrect verification code. Please check your email.");
+  if (typeof attempt.codeHash !== "string" || !/^[a-f0-9]{64}$/.test(attempt.codeHash) || !timingSafeEqual(Buffer.from(attempt.codeHash, "hex"), Buffer.from(hash, "hex"))) return fail(res, 400, "Incorrect verification code. Please check your email.");
   // Consume exactly this code once, even if verification or resend races this request.
   const consumed = await EmailVerification.findOneAndUpdate({ _id: user._id, codeHash: hash, expiresAt: { $gt: now }, attempts: { $lte: 5 } }, { $unset: { codeHash: 1, expiresAt: 1 } });
   if (!consumed) return fail(res, 400, "This code is no longer valid. Request a new code.");

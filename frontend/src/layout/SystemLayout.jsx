@@ -4,6 +4,8 @@ import { motion } from 'motion/react'
 import Navbar from './Navbar'
 import Footer from './Footer'
 import PageLoader from '../components/ui/PageLoader'
+import AgentPromo from '../components/ui/AgentPromo'
+import SmoothScroll from '../components/ui/SmoothScroll'
 import { NavOverlayContext } from '../context/navOverlay'
 
 const SystemLayout = () => {
@@ -23,6 +25,7 @@ const SystemLayout = () => {
   return (
     <NavOverlayContext.Provider value={registerHero}>
       <div className="flex min-h-dvh flex-col">
+        <SmoothScroll />
         <ScrollRestoration />
         <Navbar onAuth={openAuth} overHero={heroes > 0} />
         <motion.main
@@ -36,6 +39,8 @@ const SystemLayout = () => {
           <Suspense fallback={<PageLoader label="Loading page..." />}><Outlet /></Suspense>
         </motion.main>
         <Footer />
+        {/* "Want to become an agent?" pop-up for visitors and customers (timing rules: utils/agentPromo.js) */}
+        <AgentPromo />
       </div>
     </NavOverlayContext.Provider>
   )

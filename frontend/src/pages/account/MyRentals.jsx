@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarDays, ChevronDown, CreditCard, KeyRound, MessageCircle } from "lucide-react";
+import { CalendarDays, ChevronDown, CircleCheck, CreditCard, KeyRound, Loader2, MessageCircle, XCircle } from "lucide-react";
 import AccountShell from "../../components/account/AccountShell";
 import EmptyState from "../../components/ui/EmptyState";
 import PageLoader from "../../components/ui/PageLoader";
@@ -9,6 +9,9 @@ import HistoryTimeline from "../../components/offers/HistoryTimeline";
 import { rentalApi } from "../../frontApi";
 import { formatDate } from "../../utils/date";
 import { bookingPath } from "../../utils/hotel";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import { useAsyncAction } from "../../hooks/useAsyncAction";
+import { arrivalText, bookingHeadline, guestCanCancel, payPlace } from "../../utils/hotelPayments";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
@@ -27,6 +30,16 @@ const MyRentals = () => {
   const [rentals, setRentals] = useState(null);
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState(null);
+  const [cancelling, setCancelling] = useState(null); // the reservation being cancelled
+  const [busy, setBusy] = useState(false);
+  const run = useAsyncAction();
+  const cancel = async () => {
+    setBusy(true);
+    const { ok, result } = await run(rentalApi.cancelReservation(cancelling.id), { success: "Reservation cancelled", description: cancelling.hotelId ? "The hotel has been told." : "The owner has been told." });
+    if (ok) setRentals((list) => list.map((r) => (r.id === result.id ? result : r)));
+    setBusy(false);
+    setCancelling(null);
+  };
 
   useEffect(() => {
     rentalApi.getMyRentals().then(setRentals).catch((err) => setError(err.message));
@@ -49,6 +62,8 @@ const MyRentals = () => {
         <ul className="space-y-4">
           {rentals.map((rental) => {
             const unpaid = ["Pending", "Payment Pending"].includes(rental.status) && rental.paymentStatus !== "Paid";
+            const headline = bookingHeadline(rental);
+            const dueOnArrival = rental.paymentOption === "on_arrival" && rental.paymentDue;
             const checkPayment = unpaid && rental.status === "Payment Pending" && Boolean(rental.reference);
             const checkoutPath = rental.hotelId ? `${bookingPath(rental.property.id, rental.roomTypeId)}&booking=${rental.id}` : `/checkout/rent/${rental.property.id}`;
             const paymentPath = checkPayment ? `/payment/success?reference=${encodeURIComponent(rental.reference)}` : checkoutPath;
@@ -95,7 +110,10 @@ const MyRentals = () => {
                         <dd className="mt-0.5"><StatusBadge status={rental.paymentStatus} /></dd>
                       </div>
                     </dl>
-                    <p className="mt-3 text-sm text-gray-600">{rental.hotelId ? ({ Pending: "Complete payment to reserve your rooms.", "Payment Pending": "Your secure checkout is in progress. Room holds last 30 minutes.", Paid: "Payment verified. The hotel will confirm your stay.", Confirmed: "Your hotel stay is confirmed.", Active: "You have checked in. Enjoy your stay!", Completed: "Your hotel stay has ended.", Cancelled: "This hotel booking was cancelled." })[rental.status] : statusHelp[rental.status]}</p>
+                    {headline && <p className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-700"><CircleCheck className="h-4 w-4" aria-hidden="true" />{headline}</p>}
+                    {dueOnArrival && rental.statusKey === "confirmed" && <p className="mt-1 text-sm text-gray-600">Pay {ghs(rental.amount)} {payPlace(rental)}. Please {rental.hotelId ? "check in" : "arrive"} {arrivalText(rental)}.</p>}
+                    {dueOnArrival && rental.cancellationPolicy && ["confirmed", "active"].includes(rental.statusKey) && <p className="mt-1 text-xs whitespace-pre-line text-gray-500">{rental.hotelId ? "Hotel" : "Owner’s"} policy: {rental.cancellationPolicy}</p>}
+                    {!headline && !(dueOnArrival && rental.statusKey === "confirmed") && <p className="mt-3 text-sm text-gray-600">{rental.hotelId ? ({ Pending: "Choose how to pay to reserve your rooms.", "Payment Pending": "Your secure checkout is in progress. Room holds last 30 minutes.", Paid: "Payment verified. The hotel will confirm your stay.", Confirmed: "Your hotel stay is confirmed.", Active: "You have checked in. Enjoy your stay!", Completed: "Your hotel stay has ended.", Cancelled: "This hotel booking was cancelled." })[rental.status] : rental.pricePeriod === "night" && rental.status === "Pending" ? "Choose how to pay to book this stay." : statusHelp[rental.status]}</p>}
                     {rental.hotelId && <p className="mt-1 text-xs text-gray-500">{ghs(rental.unitPrice)} / night × {rental.units} nights × {rental.numberOfRooms} rooms</p>}
                     {rental.reference && (
                       <p className="mt-1 text-xs text-gray-400">
@@ -107,8 +125,14 @@ const MyRentals = () => {
                       {unpaid && (
                         <Link to={paymentPath} className="btn btn-primary px-4 py-2 text-xs">
                           <CreditCard className="h-3.5 w-3.5" />
-                          {checkPayment ? "Check payment status" : "Complete payment"}
+                          {checkPayment ? "Check payment status" : rental.hotelId || rental.pricePeriod === "night" ? "Complete booking" : "Complete payment"}
                         </Link>
+                      )}
+                      {guestCanCancel(rental) && (
+                        <button type="button" onClick={() => setCancelling(rental)} className="btn btn-light px-4 py-2 text-xs text-red-600">
+                          <XCircle className="h-3.5 w-3.5" />
+                          Cancel reservation
+                        </button>
                       )}
                       {rental.conversationId && (
                         <Link to={`/account/messages?c=${rental.conversationId}`} className="btn btn-light px-4 py-2 text-xs">
@@ -129,6 +153,16 @@ const MyRentals = () => {
           })}
         </ul>
       )}
+      <ConfirmDialog
+        open={Boolean(cancelling)}
+        onClose={() => setCancelling(null)}
+        onConfirm={cancel}
+        disabled={busy}
+        tone="danger"
+        title="Cancel this reservation?"
+        description={cancelling && `Your ${cancelling.roomName} reservation at "${cancelling.property.title}" will be cancelled and the rooms released.${cancelling.cancellationPolicy ? ` Hotel policy: ${cancelling.cancellationPolicy}` : ""}`}
+        confirmLabel={busy ? <><Loader2 className="h-4 w-4 animate-spin" />Cancelling…</> : "Cancel reservation"}
+      />
     </AccountShell>
   );
 };

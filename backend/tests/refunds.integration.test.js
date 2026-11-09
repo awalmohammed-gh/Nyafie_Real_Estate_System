@@ -59,8 +59,8 @@ test("refunds of flagged payments are sent once, tracked to completion and recor
     throw new Error(`Unexpected Paystack call ${href}`);
   });
 
-  const adminCookie = `admin_token=${jwt.sign({ id: admin.id, role: "admin", session: "admin" }, process.env.JWT_KEY)}`;
-  const customerCookie = `customer_token=${jwt.sign({ id: customer.id, role: "user", session: "customer", ...customerTabClaims("customer") }, process.env.JWT_KEY)}`;
+  const adminCookie = `admin_token=${jwt.sign({ id: admin.id, role: "admin", session: "admin" }, process.env.JWT_KEY, { expiresIn: "1h" })}`;
+  const customerCookie = `customer_token=${jwt.sign({ id: customer.id, role: "user", session: "customer", ...customerTabClaims("customer") }, process.env.JWT_KEY, { expiresIn: "1h" })}`;
   const call = async (path, { method = "GET", body, as = "admin" } = {}) => {
     const headers = as === "admin" ? { "X-Session-Domain": "admin", ...adminEntryHeaders(), Cookie: adminCookie } : { ...customerTabHeaders(), "X-Session-Domain": "customer", Cookie: customerCookie };
     const response = await fetch(`${base}${path}`, { method, headers: { "Content-Type": "application/json", ...headers }, ...(body ? { body: JSON.stringify(body) } : {}) });
