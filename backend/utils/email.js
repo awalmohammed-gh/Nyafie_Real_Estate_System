@@ -80,3 +80,26 @@ export const passwordResetMailer = {
     });
   },
 };
+
+// A new listing matched one of a customer's saved searches
+export const searchAlertMailer = {
+  async send(email, { searchName, title, price, place, url, manageUrl }) {
+    const name = siteName();
+    const details = [price, place].filter(Boolean).join(" · ");
+    await send({
+      to: email,
+      subject: `New match for your saved search: ${title}`.slice(0, 150),
+      text: `A new home matches your saved search "${searchName}" on ${name}:\n\n${title}\n${details}\n\nView it: ${url}\n\nManage your saved searches and alerts: ${manageUrl}`,
+      html: `<!doctype html><html><body style="margin:0;background:#f6f5f9;font-family:Arial,Helvetica,sans-serif;color:#1f2937">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:12px;padding:32px">
+<tr><td style="font-size:20px;font-weight:bold;color:#5b21b6">${escapeHtml(name)}</td></tr>
+<tr><td style="padding-top:20px;font-size:15px;line-height:22px">A new home matches your saved search <strong>${escapeHtml(searchName)}</strong>:</td></tr>
+<tr><td style="padding-top:16px;font-size:18px;font-weight:bold">${escapeHtml(title)}</td></tr>
+<tr><td style="padding-top:4px;font-size:15px;color:#4b5563">${escapeHtml(details)}</td></tr>
+<tr><td style="padding:24px 0"><a href="${escapeHtml(url)}" style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 20px;border-radius:8px">View the home</a></td></tr>
+<tr><td style="font-size:13px;line-height:20px;color:#6b7280">You get this email because you saved this search. <a href="${escapeHtml(manageUrl)}" style="color:#6b7280">Manage your saved searches and alerts</a>.</td></tr>
+</table></td></tr></table></body></html>`,
+    });
+  },
+};

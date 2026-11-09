@@ -1,6 +1,7 @@
 import { fail } from "../utils/response.js";
 import { clientOrigins } from "../config/runtime.js";
 import crypto from "node:crypto";
+import jwt from "jsonwebtoken";
 import RateLimitBucket from "../models/RateLimitBucket.js";
 
 const isProduction = () => process.env.NODE_ENV === "production";
@@ -117,6 +118,16 @@ export const rateLimit = ({ windowMs, max, key = (req) => req.ip, message = "Too
 const MINUTE = 60 * 1000;
 const loginMessage = "Too many sign-in requests from this network. Please wait 15 minutes and try again.";
 
+// The account sending the request (read from its session cookie, so signing in again doesn't reset the
+// count), or the network when there is none. A forged cookie can't store anything: the request still
+// has to pass the real session check afterwards.
+const accountKey = (req) => {
+  const domain = req.get("X-Session-Domain");
+  const token = ["customer", "agent", "admin"].includes(domain) ? req.cookies?.[`${domain}_token`] : null;
+  const id = typeof token === "string" ? jwt.decode(token)?.id : null;
+  return typeof id === "string" && /^[a-f\d]{24}$/i.test(id) ? `account:${id}` : `ip:${req.ip}`;
+};
+
 export const limits = {
   // Every API call: generous, only stops floods
   api: rateLimit({ windowMs: MINUTE, max: 300 }),
@@ -128,6 +139,9 @@ export const limits = {
   // Payment starts and checks, and things customers send to owners
   payments: rateLimit({ windowMs: 15 * MINUTE, max: 30 }),
   contact: rateLimit({ windowMs: 15 * MINUTE, max: 30, message: "You're sending a lot of requests. Please wait a few minutes and try again." }),
+  // Chat messages: about 8 a minute on average, plenty for a real conversation, but no flooding
+  // Counted per account (staff sharing an office connection each get their own allowance)
+  messages: rateLimit({ windowMs: 15 * MINUTE, max: 120, key: accountKey, message: "You're sending messages very quickly. Please wait a few minutes and try again." }),
   // Property views: plenty for real browsing, stops scripts inflating counts with fresh visitor ids
   views: rateLimit({ windowMs: 15 * MINUTE, max: 120 }),
   // Place search is typed a letter at a time (debounced in the browser) and proxies a shared free service

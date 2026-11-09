@@ -260,6 +260,10 @@ test("hotel marketplace: HTTP ownership, booking, payment, inventory and concurr
     const saleHouse = await house("The Wrap-Around Terrace", 450000);
     await house("Four Bedroom House", 420000, { images: [photos[4], photos[1]] });
     await house("Five Bedroom Detached", 750000, { bedrooms: 5, bathrooms: 5, area: 600, images: [photos[5], photos[0]] });
+    // A monthly rental with move-in costs, waiting for its availability confirmation
+    const flat = await api("/properties", { user: owner, body: { title: "City Apartment", description: "A bright two bedroom apartment in East Legon with parking, security and a borehole.", propertyType: "Apartment", listingType: "Rent", pricePeriod: "month", price: 2500, bedrooms: 2, bathrooms: 2, area: 95, status: "published", location: { neighbourhood: "East Legon", city: "Accra", address: "9 Boundary Road", latitude: 5.638, longitude: -0.165 }, images: photos.slice(1, 5), amenities: ["Parking", "24/7 Security", "Borehole"], moveIn: { advanceMonths: 12, agentFeeType: "percent", agentFeeValue: 10, securityDeposit: 2500 } } });
+    await Property.updateOne({ _id: flat.data?.id }, { $set: { freshnessReminderAt: new Date(), availabilityConfirmedAt: new Date(Date.now() - 35 * 864e5) } }, { timestamps: false });
+    console.log(`City apartment ${flat.data?.id || JSON.stringify(flat)}`);
     console.log(`Sale house ${saleHouse.data?.id || JSON.stringify(saleHouse)}`);
     console.log(`Isolated hotel preview: API ${base}, hotel ${hotelId}, short stay ${shortStay.data?.id || JSON.stringify(shortStay)}. Guest: guest@hotel.test; Agent: owner@hotel.test. Local fixture password: test-password`);
     await new Promise((done) => { const timer = setTimeout(done, 540000); process.once("SIGINT", () => { clearTimeout(timer); done(); }); });

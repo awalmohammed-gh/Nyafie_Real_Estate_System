@@ -75,6 +75,9 @@ test("agent directory and listing identities require a valid selected session", 
             assert.equal(item.contact.email, agent.email, path);
           } else {
             for (const field of ["agent", "contact", "owner"]) assert.equal(Object.hasOwn(item, field), false, `${path}: ${field}`);
+            // The details page alone lets a guest WhatsApp the agent: the number only, never in lists
+            if (path === `/api/properties/${listing._id}`) assert.deepEqual(item.guestContact, { whatsapp: agent.phone }, path);
+            else assert.equal(Object.hasOwn(item, "guestContact"), false, path);
           }
         }
       }

@@ -14,7 +14,7 @@ const ARTWORK = {
   compact: { viewBox: "184 200 490 470", width: 490, height: 470 },
 };
 
-const BrandLogo = ({ tone = "light", size = "md", compact = false, subtitle, className = "" }) => {
+const BrandLogo = ({ tone = "light", size = "md", compact = false, subtitle, className = "", variant }) => {
   const { settings, siteName } = usePlatform();
   const { logo, logoDark } = settings.branding;
   const inverse = tone === "dark" || tone === "violet";
@@ -23,6 +23,10 @@ const BrandLogo = ({ tone = "light", size = "md", compact = false, subtitle, cla
   const dimensions = SIZES[size] || SIZES.md;
   const artwork = compact ? ARTWORK.compact : ARTWORK.full;
   const imageClass = compact ? dimensions.compact : `${dimensions.full} w-auto max-w-48`;
+
+  if (variant === "reference" && builtIn && !compact) return <span className={`home-wordmark ${inverse ? "is-inverse" : ""} ${className}`}>
+    <svg viewBox="0 0 44 32" width="36" height="28" aria-hidden="true"><path d="M3 17 18 5l15 12M12 8l7-5 21 16M8 21l10-8 11 8" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /><path d="M13 22h9v8h-9zM29 22h7v8h-7z" fill="currentColor" /></svg><span>{siteName}</span>
+  </span>;
 
   return (
     <span className={`flex min-w-0 items-center gap-2.5 ${className}`}>

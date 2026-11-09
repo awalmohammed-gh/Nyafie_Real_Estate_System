@@ -22,11 +22,13 @@ import { checkPropertyOptions, pickPropertyFields, validateForPublishing } from 
 import { locationSnapshot, settleLocation } from "../utils/autoLocate.js";
 import { resolveImages } from "../utils/uploadImages.js";
 import { updateInquiryStatus } from "./inquiryController.js";
-import { activateSubscription } from "./subscriptionController.js";
+import { activateSubscription, processSubscriptionPayment } from "./subscriptionController.js";
 import { removalImpact, removeProvider, restoreProvider, deletionPlan, permanentlyDeleteProvider } from "../utils/providerRemoval.js";
 import { ok, fail } from "../utils/response.js";
 import { prepareHotelFields, saveHotelProperty } from "../utils/hotel.js";
 import { REFUND_SUMMARY } from "./refundController.js";
+import { alertSavedSearches } from "../utils/savedSearches.js";
+import { markConfirmed } from "../utils/listingFreshness.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -34,16 +36,20 @@ const DAY = 24 * 60 * 60 * 1000;
 
 // GET /api/admin/users -> every account with its current subscription and activity counts
 export const listUsers = async (_req, res) => {
-  const [users, inquiries, properties] = await Promise.all([
+  // Counted by the database (grouped), instead of loading every inquiry and listing into memory
+  const [users, byCustomer, byEmail, listings] = await Promise.all([
     User.find().populate("subscription").sort({ createdAt: -1 }),
-    Inquiry.find().select("customer email"),
-    Property.find({ ownerType: "agent" }).select("owner status"),
+    Inquiry.aggregate([{ $match: { customer: { $ne: null } } }, { $group: { _id: "$customer", count: { $sum: 1 } } }]),
+    Inquiry.aggregate([{ $match: { customer: null } }, { $group: { _id: "$email", count: { $sum: 1 } } }]),
+    Property.aggregate([{ $match: { ownerType: "agent", status: { $in: COUNTED_STATES } } }, { $group: { _id: "$owner", count: { $sum: 1 } } }]),
   ]);
+  const counts = (rows) => new Map(rows.map((row) => [String(row._id), row.count]));
+  const [customerCounts, emailCounts, listingCounts] = [counts(byCustomer), counts(byEmail), counts(listings)];
   const data = users.map((u) => ({
     ...u.toJSON(),
     savedCount: u.savedProperties.length,
-    inquiriesCount: inquiries.filter((i) => String(i.customer) === String(u._id) || i.email === u.email).length,
-    activeProperties: properties.filter((p) => String(p.owner) === String(u._id) && COUNTED_STATES.includes(p.status)).length,
+    inquiriesCount: (customerCounts.get(String(u._id)) || 0) + (emailCounts.get(u.email) || 0),
+    activeProperties: listingCounts.get(String(u._id)) || 0,
   }));
   ok(res, data);
 };
@@ -61,10 +67,13 @@ export const getUser = async (req, res) => {
   ok(res, user);
 };
 
-// PUT /api/admin/users/:id -> name, email, phone
+// PUT /api/admin/users/:id -> name, email, phone of a customer or agent. Admin accounts are changed
+// only by their owner on the Account page (an email change there needs the current password), so a
+// signed-in admin session can't take over another admin's sign-in email, or skip that check for its own.
 export const updateUser = async (req, res) => {
   const user = await User.findById(req.params.id).catch(() => null);
   if (!user) return fail(res, 404, "User not found.");
+  if (user.role === "admin") return fail(res, 403, "Admin accounts are changed by their owner on the Account page.");
   const { firstName, lastName, email, phone } = req.body;
   const invalidText = (value, max) => value !== undefined && (typeof value !== "string" || value.trim().length > max);
   if (invalidText(firstName, 80) || invalidText(lastName, 80) || invalidText(phone, 30)) return fail(res, 400, "Check the name and phone fields.");
@@ -193,7 +202,7 @@ export const manageSubscription = async (req, res) => {
 
   if (action === "extend") {
     const extra = Number(days);
-    if (!(extra > 0)) return fail(res, 400, "Enter a number of days to extend by.");
+    if (!Number.isInteger(extra) || extra < 1 || extra > 3650) return fail(res, 400, "Enter a whole number of days from 1 to 3650.");
     const base = subscriptionState(current).isActive ? new Date(current.expiresAt) : new Date();
     current.expiresAt = new Date(base.getTime() + extra * DAY);
     if (current.status !== "pending") current.status = "active";
@@ -209,8 +218,23 @@ export const manageSubscription = async (req, res) => {
   }
 
   if (action === "activate") {
+    if (current.paymentMethod === "Paystack" && current.paymentStatus === "pending") {
+      // Ask Paystack first: a completed payment is activated and recorded as paid, as usual
+      const outcome = await processSubscriptionPayment(current).catch(() => null);
+      if (outcome?.state === "paid") return ok(res, null, "Payment confirmed with Paystack. Subscription activated.");
+      // No verified payment: grant the plan as complimentary, as its own record, so the unpaid
+      // checkout is never counted as revenue (if it is paid later, it is processed normally)
+      const plan = await Plan.findById(current.plan);
+      if (!plan) return fail(res, 404, "This checkout's plan no longer exists. Assign a plan instead.");
+      const grant = await Subscription.create({
+        user: user._id, plan: plan._id, planName: plan.name, accountType: plan.accountType, planPrice: plan.price, durationDays: current.durationDays ?? plan.duration,
+        amount: 0, paymentReference: newReference(), paymentMethod: "Admin", note: `Complimentary: activated by an admin; checkout ${current.paymentReference} had no verified payment`,
+      });
+      await activateSubscription(grant, { paymentStatus: "waived" });
+      return ok(res, null, "Activated as complimentary: Paystack has no completed payment for this checkout.");
+    }
     if (current.status === "pending" || current.paymentStatus === "pending") {
-      await activateSubscription(current); // admin confirms a pending payment
+      await activateSubscription(current, { paymentStatus: "waived" }); // no money was verified: complimentary
     } else {
       const plan = await Plan.findById(current.plan);
       const now = new Date();
@@ -264,6 +288,7 @@ export const createProperty = async (req, res) => {
     ownerType: "admin",
     status: draft ? "draft" : "published",
     reviewedAt: draft ? undefined : new Date(),
+    availabilityConfirmedAt: new Date(), // a new listing is fresh (utils/listingFreshness.js)
   });
   if (!draft) {
     const problem = validateForPublishing(property);
@@ -276,6 +301,7 @@ export const createProperty = async (req, res) => {
     property.set({ "location.latitude": settled.latitude, "location.longitude": settled.longitude, "location.pinSource": settled.pinSource });
   }
   await property.save();
+  if (!draft) await alertSavedSearches(property); // customers whose saved searches match
   ok(res, property, draft ? "Draft saved" : "Property published", 201);
 };
 
@@ -289,8 +315,10 @@ export const updateProperty = async (req, res) => {
   const optionProblem = checkPropertyOptions(fields, settings, property);
   if (optionProblem) return fail(res, 400, optionProblem);
   if (fields.contact) fields.contact = { ...fields.contact, id: property.contact?.id || (property.ownerType === "admin" ? "nyafie" : String(property.owner)) };
+  const wasPublished = property.status === "published";
   const before = locationSnapshot(property.location);
   Object.assign(property, fields);
+  markConfirmed(property); // editing a listing confirms it is current
   if (Array.isArray(req.body.images)) {
     if (req.body.images.length > settings.property.maxImages) return fail(res, 400, `Up to ${settings.property.maxImages} photos per property.`);
     property.images = await resolveImages(req.body.images);
@@ -316,6 +344,7 @@ export const updateProperty = async (req, res) => {
     property.set({ "location.latitude": settled.latitude, "location.longitude": settled.longitude, "location.pinSource": settled.pinSource });
   }
   await saveHotelProperty(property);
+  if (!wasPublished && property.status === "published") await alertSavedSearches(property);
   ok(res, property, "Property updated");
 };
 
@@ -331,12 +360,25 @@ export const setPropertyStatus = async (req, res) => {
     const problem = validateForPublishing(property);
     if (problem) return fail(res, 400, problem);
   }
+  const wasPublished = property.status === "published";
   property.status = status;
   property.rejectionReason = status === "rejected" ? rejectionReason.trim() : "";
   property.reviewedAt = new Date();
   if (status !== "published") property.isFeatured = false;
   await property.save();
+  if (!wasPublished && status === "published") await alertSavedSearches(property); // e.g. an approved agent listing
   ok(res, property, "Property updated");
+};
+
+// PATCH /api/admin/properties/:id/confirm-availability -> any listing: confirmed as still available
+export const confirmPropertyAvailability = async (req, res) => {
+  const property = await Property.findById(req.params.id).catch(() => null);
+  if (!property) return fail(res, 404, "Property not found.");
+  const wasHidden = Boolean(property.staleSince);
+  markConfirmed(property);
+  await property.save();
+  if (wasHidden) await alertSavedSearches(property);
+  ok(res, property, wasHidden ? "Listing confirmed and shown again" : "Listing confirmed as still available");
 };
 
 // PATCH /api/admin/properties/:id/feature { isFeatured }

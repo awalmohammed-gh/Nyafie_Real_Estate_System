@@ -14,7 +14,8 @@ import NotificationBell from '../components/ui/NotificationBell';
 import { PropertyCategoryMenu } from '../components/nav/PropertyCategoryMenu';
 import { usePropertyCategories } from '../hooks/usePropertyCategories';
 import { useNavPropertyPreviews } from '../hooks/useNavPropertyPreviews';
-import { FindPropertyLinks, FindPropertyMegaMenu } from '../components/nav/FindPropertyMenu';
+import { FindPropertyLinks, FindPropertyMegaMenu, HomeCategoryMenu } from '../components/nav/FindPropertyMenu';
+import { useCategoryPreviews } from '../hooks/useCategoryPreviews';
 import { buildFindPropertyLinks } from '../utils/findPropertyNavigation';
 
 // Find Property links share the unified catalogue and its existing query schema.
@@ -41,9 +42,9 @@ const panelMotion = {
   transition: { duration: 0.22, ease: "easeOut" },
 };
 
-const Logo = ({ onDark = false }) => (
+const Logo = ({ onDark = false, reference = false }) => (
   <Link to="/" className="min-w-0">
-    <BrandLogo tone={onDark ? "dark" : "light"} />
+    <BrandLogo tone={onDark ? "dark" : "light"} variant={reference ? "reference" : undefined} />
   </Link>
 );
 
@@ -108,9 +109,33 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
   const { isAuthenticated } = useAuth();
   const { favorites } = useRealEstate();
   const { paths, settings } = usePlatform();
-  const { listingLinks, navLinks } = buildLinks(paths, settings.property.propertyTypes);
   const { pathname, search } = useLocation();
+  const referenceHome = pathname === "/";
+  const standardLinks = buildLinks(paths, settings.property.propertyTypes);
+  const listingLinks = standardLinks.listingLinks;
+  const navLinks = referenceHome ? [
+    { name: "Buy", menu: "buy", matches: ["/sale"] },
+    { name: "Rent", menu: "rent", matches: ["/rent"] },
+    { name: "Short Stays", menu: "stays", matches: [] },
+    { name: "Agents", path: paths.agents }, { name: "About", path: "/about" }, { name: "Contact", path: "/contact" },
+  ] : standardLinks.navLinks;
+  const homeMenuLinks = (menu) => {
+    const href = (params) => `${paths.listings}?${new URLSearchParams(params)}`;
+    const status = menu === "buy" ? "Sale" : "Rent";
+    return menu === "stays" ? [
+      { key: "all-stays", name: "All short stays", path: href({ type: "Hotel,Hotel-Apartment" }), description: "Hotels and serviced apartments" },
+      { key: "hotels", name: "Hotels", path: href({ type: "Hotel" }), description: "Find a room for your next stay" },
+      { key: "hotel-apartments", name: "Hotel apartments", path: href({ type: "Hotel-Apartment" }), description: "Furnished stays with room to settle in" },
+    ] : [
+      { key: "all", name: menu === "buy" ? "All properties for sale" : "All properties for rent", path: href({ status }), description: "Browse every available property" },
+      { key: "apartments", name: "Apartments", path: href({ status, type: "Apartment" }), description: "Explore apartments across Ghana" },
+      { key: "all-listings", name: "View all properties", path: paths.listings, description: "Explore the full catalogue" },
+    ];
+  };
   const previews = useNavPropertyPreviews();
+  // Homepage menus show three homes from their category (loaded when the menu first opens)
+  const categoryPreviews = useCategoryPreviews();
+  const HOME_MENU_HEADINGS = { buy: "Homes for sale", rent: "Homes to rent", stays: "Short stays" };
   const categories = usePropertyCategories();
   const navRef = useRef(null);
   const drawerRef = useRef(null);
@@ -234,6 +259,7 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
     clearTimeout(closeTimer.current);
     clearTimeout(openTimer.current);
     if (menu === 'listings') previews.ensureLoaded();
+    if (referenceHome) categoryPreviews.ensure(menu);
     setOpenMenu(menu);
   };
   const hideMenu = () => {
@@ -281,12 +307,12 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
 
   return (
     <header
-      className={`${overHero ? "fixed inset-x-0" : "sticky"} top-0 z-50 w-full border-b transition-[background-color,border-color,box-shadow] duration-300 ease-out ${
+      className={`${referenceHome ? "reference-header " : ""}${onDark ? "is-over-hero " : ""}${overHero ? "fixed inset-x-0" : "sticky"} top-0 z-50 w-full border-b transition-[background-color,border-color,box-shadow] duration-300 ease-out ${
         onDark ? "border-transparent bg-transparent" : isOpen ? "border-gray-100 bg-white" : scrolled ? "border-gray-200/80 bg-white shadow-sm shadow-gray-900/5" : "border-transparent bg-white"
       }`}
     >
       <nav ref={navRef} className="container-page relative flex h-16 items-center justify-between gap-4 lg:h-20">
-        <Logo onDark={onDark} />
+        <Logo onDark={onDark} reference={referenceHome} />
 
         {/* Desktop links */}
         <ul className="hidden h-full items-center gap-1 lg:flex">
@@ -330,10 +356,10 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
                       role="region"
                       aria-label={link.name}
                       {...(reduceMotion ? { ...panelMotion, initial: { opacity: 0 }, exit: { opacity: 0 }, transition: { duration: 0.12 } } : panelMotion)}
-                      className={`absolute top-full left-1/2 z-40 -translate-x-1/2 ${link.menu === 'listings' ? 'w-[min(56rem,calc(100%_-_4rem))]' : 'w-[min(48rem,calc(100%_-_4rem))]'}`}
+                      className={referenceHome ? "absolute top-full left-1/2 z-40 w-[min(56rem,calc(100%_-_2rem))] -translate-x-1/2 pt-1" : `absolute top-full left-1/2 z-40 -translate-x-1/2 ${link.menu === 'listings' ? 'w-[min(56rem,calc(100%_-_4rem))]' : 'w-[min(48rem,calc(100%_-_4rem))]'}`}
                     >
                       <div className="glass-panel max-h-[calc(100dvh-6rem)] overflow-y-auto overscroll-contain rounded-xl border border-gray-200/70 shadow-xl shadow-gray-900/8">
-                        {link.menu === 'properties' ? (
+                        {referenceHome ? <HomeCategoryMenu heading={HOME_MENU_HEADINGS[link.menu] || link.name} links={homeMenuLinks(link.menu)} previews={categoryPreviews.get(link.menu)} viewAll={homeMenuLinks(link.menu)[0].path} onNavigate={closeAll} /> : link.menu === 'properties' ? (
                           <PropertyCategoryMenu categories={categories} onNavigate={closeAll} />
                         ) : (
                           <FindPropertyMegaMenu links={listingLinks} previews={previews} onNavigate={closeAll} />
@@ -352,7 +378,7 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
           {isAuthenticated && <NotificationBell onDark={onDark} />}
           <WishlistLink count={favorites.length} className="grid h-10 w-10" onDark={onDark} />
           <span className={`mx-2 h-6 w-px transition-colors duration-300 ${onDark ? "bg-white/25" : "bg-gray-200"}`} aria-hidden="true" />
-          <AccountMenu onAuth={onAuth} onDark={onDark} />
+          <AccountMenu onAuth={onAuth} onDark={onDark} label={referenceHome ? "My Account" : undefined} />
         </div>
 
         {/* Mobile actions */}
@@ -432,7 +458,7 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
                           {open && (
                             <motion.div id={`mobile-nav-menu-${link.menu}`} {...accordionMotion(reduceMotion)} className="overflow-hidden">
                               <div className="ml-3 border-l border-gray-100 pt-1 pb-2 pl-2">
-                                {link.menu === "properties" ? (
+                                {referenceHome ? <FindPropertyLinks links={homeMenuLinks(link.menu)} onNavigate={closeAll} compact /> : link.menu === "properties" ? (
                                   <PropertyCategoryMenu categories={categories} onNavigate={closeAll} compact />
                                 ) : (
                                   <FindPropertyLinks links={listingLinks} onNavigate={closeAll} compact />

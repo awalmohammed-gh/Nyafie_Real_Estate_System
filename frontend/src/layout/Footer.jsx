@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowUpRight, ArrowUp, Clock, Mail, MapPin, Phone } from 'lucide-react';
 import { usePlatform } from '../context/usePlatform';
 import BrandLogo from '../components/brand/BrandLogo';
 import SocialLinks from '../components/brand/SocialLinks';
 import { businessContactItems } from '../utils/contact';
+import HomeFooter from '../components/Landing/HomeFooter';
 
 const exploreLinks = [
   { name: "Home", path: "/" },
@@ -40,6 +41,7 @@ const LinkColumn = ({ title, links }) => (
 const CONTACT_ICONS = { address: MapPin, phone: Phone, email: Mail, hours: Clock };
 
 const Footer = () => {
+  const { pathname } = useLocation();
   const reducedMotion = useReducedMotion();
   const { settings, siteName, paths } = usePlatform();
   const contactItems = businessContactItems(settings.contact);
@@ -51,6 +53,8 @@ const Footer = () => {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  if (pathname === '/') return <HomeFooter />;
 
   return (
     <footer className="bg-gray-950 text-white">

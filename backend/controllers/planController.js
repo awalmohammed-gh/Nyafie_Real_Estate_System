@@ -73,8 +73,9 @@ export const updatePlan = async (req, res) => {
 
 // DELETE /api/plans/:id (admin) - only when nobody is actively subscribed
 export const deletePlan = async (req, res) => {
-  const active = await Subscription.countDocuments({ plan: req.params.id, status: "active", expiresAt: { $gt: new Date() } });
-  if (active > 0) return fail(res, 409, "Plans with active subscribers can't be deleted. Deactivate it instead.");
+  // Any subscription (active, past, or a checkout still being paid) needs its plan: an unpaid checkout
+  // that is paid later is activated from it, and history and renewals refer to it
+  if (await Subscription.exists({ plan: req.params.id })) return fail(res, 409, "This plan has subscriptions (current, past or being paid), so it can't be deleted. Deactivate it instead: it stops being offered.");
   const plan = await Plan.findByIdAndDelete(req.params.id).catch(() => null);
   if (!plan) return fail(res, 404, "Plan not found.");
   ok(res, null, "Plan deleted");

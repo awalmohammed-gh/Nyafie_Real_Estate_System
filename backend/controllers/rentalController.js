@@ -8,6 +8,7 @@ import { HttpError, ok, fail } from "../utils/response.js";
 import { isHotel, quoteHotelRoom, hotelTransaction } from "../utils/hotel.js";
 import { hasRentalConflict, rentalInventoryTransaction } from "../utils/rentalAvailability.js";
 import { announceCancelledBookingRefund, flagCancelledBookingPayment } from "../utils/refunds.js";
+import { openRequestLimitProblem } from "../utils/openRequestLimits.js";
 
 // What the customer is told about their money when a paid booking is cancelled
 const refundNotice = (flagged, cancelledPaid, fallback) => {
@@ -131,6 +132,8 @@ export const createRental = async (req, res) => {
   const quote = await quoteRental(req.body, req.user, { ignoreHoldCustomer: req.user._id });
   if (quote.error) return fail(res, quote.status, quote.error);
   const { property } = quote;
+  const tooMany = await openRequestLimitProblem("rentals", req.user._id, property._id);
+  if (tooMany) return fail(res, 429, tooMany);
   if (quote.room) return createHotelRental(req, res, quote, contact);
   const addressProblem = validateContact({ ...req.body, email: req.user.email }, { requireAddress: true });
   if (addressProblem.error) return fail(res, 400, addressProblem.error);

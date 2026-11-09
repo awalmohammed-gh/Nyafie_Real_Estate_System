@@ -53,12 +53,12 @@ const removalSchema = new mongoose.Schema({
 
 const userSchema = new mongoose.Schema(
   {
-    firstName: { type: String, required: true, trim: true },
-    lastName: { type: String, required: true, trim: true },
+    firstName: { type: String, required: true, trim: true, maxlength: 80 },
+    lastName: { type: String, required: true, trim: true, maxlength: 80 },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     emailVerifiedAt: { type: Date, default: null },
     googleId: { type: String, unique: true, sparse: true, select: false },
-    phone: { type: String, default: "", trim: true },
+    phone: { type: String, default: "", trim: true, maxlength: 30 },
     password: { type: String, required: true, minlength: 8, select: false },
     // Empty only for accounts whose password has never changed. Older cookies
     // remain compatible until the first change; every later change revokes them.

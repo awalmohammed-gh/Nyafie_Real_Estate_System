@@ -22,6 +22,7 @@ import PropertyTile from "../../components/dashboard/PropertyTile";
 import ViewToggle from "../../components/dashboard/ViewToggle";
 import { propertyCardImageSources } from "../../utils/propertyImages";
 import { adminPath } from "../../utils/adminEntry";
+import FreshnessNotice, { FreshnessBadge } from "../../components/dashboard/FreshnessNotice";
 import "./adminProperties.css";
 
 const priceOf = (property) => {
@@ -93,7 +94,7 @@ const EditPropertyModal = ({ property, onClose }) => {
 
 const AdminProperties = () => {
   const { siteName, paths } = usePlatform();
-  const { listings, ownerOf, isPubliclyVisible, setListingState, setFeatured, deleteListing, updateListing, users } = useAdminData();
+  const { listings, ownerOf, isPubliclyVisible, setListingState, setFeatured, deleteListing, updateListing, users, confirmAvailability } = useAdminData();
   const run = useAsyncAction();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -172,6 +173,7 @@ const AdminProperties = () => {
     { label: "Unpublish", icon: EyeOff, onClick: () => run(setListingState(p.id, "draft"), { success: "Moved to drafts", description: p.title }), hidden: !own || state !== "published" },
     { label: `Mark as ${soldLabel(p).toLowerCase()}`, icon: Tag, onClick: () => setAvailability(p, soldLabel(p)), hidden: !own || p.listing.availability === soldLabel(p) },
     { label: "Mark as available", icon: Tag, onClick: () => setAvailability(p, "Available"), hidden: !own || p.listing.availability === "Available" },
+    { label: "Still available", icon: CheckCircle2, onClick: () => run(confirmAvailability(p.id), { success: "Listing confirmed as still available", description: p.title }), hidden: p.listing.freshness === "fresh" },
     { label: "Approve", icon: CheckCircle2, onClick: () => approve(p), hidden: own || !["pending", "rejected"].includes(state) },
     { label: "Reject", icon: XCircle, onClick: () => { setRejecting(p); setReason(""); }, hidden: own || state !== "pending" },
     { label: p.meta?.isFeatured ? "Unfeature" : "Feature", icon: p.meta?.isFeatured ? StarOff : Star, onClick: () => toggleFeatured(p), hidden: p.listing.state !== "published" },
@@ -199,6 +201,7 @@ const AdminProperties = () => {
         <StatusBadge status={getListingStatus(p, visible)} />
         {p.listing.state === "published" && !["Available", getListingStatus(p, visible)].includes(p.listing.availability) && <StatusBadge status={p.listing.availability} dot={false} />}
         {p.meta?.isFeatured && <StatusBadge status="Featured" dot={false} />}
+        <FreshnessBadge property={p} />
         {!hasMapPin(p) && <span title="No map pin: this listing doesn't appear in “near me” search until one is added"><StatusBadge status="No map pin" tone="gray" dot={false} /></span>}
         {hasMapPin(p) && p.location.approximate && <span title="Placed automatically from the address. Drag the pin onto the exact building in the editor."><StatusBadge status="Area pin" tone="gray" dot={false} /></span>}
       </div>
@@ -241,6 +244,9 @@ const AdminProperties = () => {
       ))}</section>
 
       {count("pending") > 0 && <div className="ap-review-notice"><span className="ap-review-icon"><ClipboardCheck size={21} aria-hidden="true" /></span><div><h2>{count("pending")} {count("pending") === 1 ? "listing needs" : "listings need"} your review</h2><p>Check the photos, price, and property details before they go live.</p></div><button type="button" onClick={reviewQueue}>Review listings<ArrowRight size={16} aria-hidden="true" /></button></div>}
+
+      {/* The platform's own listings: the admin team confirms they are still available */}
+      <FreshnessNotice listings={listings.filter((p) => p.owner.type === "admin")} onConfirm={confirmAvailability} className="mb-6" />
 
       <section className="ap-collection" aria-label="Manage properties">
       <div className="ap-collection-heading"><div><h2>Property collection</h2><p>Listings from {siteName} and your agent community.</p></div><div className="ap-view-control"><span>View</span><ViewToggle value={view} onChange={setView} /></div></div>

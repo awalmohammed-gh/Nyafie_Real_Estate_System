@@ -6,6 +6,7 @@ import { postSystemNote } from "./chatController.js";
 import { canManageRecord, formatGHS, isOwnListing, loadPublishedProperty, ownerFilter, ownerName, same } from "../utils/ownership.js";
 import { notifyOwner, notifyUser } from "../utils/notify.js";
 import { ok, fail } from "../utils/response.js";
+import { openRequestLimitProblem } from "../utils/openRequestLimits.js";
 
 const PROPERTY_FIELDS = "title images location price pricePeriod listingType status availability owner ownerType contact";
 const OPEN = ["pending", "countered"];
@@ -58,6 +59,8 @@ export const createOffer = async (req, res) => {
 
   const existing = await Offer.findOne({ customer: req.user._id, property: property._id, status: "pending" });
   if (existing) return fail(res, 409, "You already have a pending offer on this property. Withdraw it first to make a new one.");
+  const tooMany = await openRequestLimitProblem("offers", req.user._id, property._id);
+  if (tooMany) return fail(res, 429, tooMany);
 
   const offer = new Offer({
     customer: req.user._id,

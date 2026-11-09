@@ -174,6 +174,7 @@ export const mapProperty = (p) => ({
   roomTypes: p.roomTypes || [],
   // Hotels: the owner's saved payment options, and what a guest can choose right now (details page only)
   stayBooking: p.stayBooking || null,
+  moveIn: p.moveIn || null, // monthly rentals: advance, agent fee, deposit (utils/moveIn.js)
   paymentOptions: p.paymentOptions || null,
   media: { images: p.images || [] },
   agent: {
@@ -181,7 +182,8 @@ export const mapProperty = (p) => ({
     name: p.agent?.name || p.contact?.name || "Agent",
     phone: p.agent?.phone ?? p.contact?.phone ?? "",
     email: p.agent?.email ?? p.contact?.email ?? "",
-    whatsapp: p.agent?.whatsapp || p.agent?.phone || p.contact?.phone || "",
+    // Guests get only this, on a listing's details page (guestContact), to message the agent on WhatsApp
+    whatsapp: p.agent?.whatsapp || p.agent?.phone || p.contact?.phone || p.guestContact?.whatsapp || "",
     profileImage: p.agent?.profileImage || "",
     companyName: p.agent?.companyName || "",
     joinedAt: p.agent?.joinedAt,
@@ -204,6 +206,9 @@ export const mapProperty = (p) => ({
     reviewedAt: p.reviewedAt,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
+    // Listing freshness: when the owner last confirmed it is available; "hidden" | "confirm" | "fresh"
+    confirmedAt: p.availabilityConfirmedAt || null,
+    freshness: p.staleSince ? "hidden" : p.freshnessReminderAt ? "confirm" : "fresh",
   },
 });
 
@@ -230,6 +235,7 @@ export const toApiProperty = (p) => {
   if (p.features) out.amenities = p.features;
   if (p.roomTypes !== undefined) out.roomTypes = p.roomTypes;
   if (p.stayBooking) out.stayBooking = p.stayBooking;
+  if (p.moveIn !== undefined) out.moveIn = p.moveIn;
   if (p.media) out.images = p.media.images;
   if (p.agent) out.contact = { name: p.agent.name, phone: p.agent.phone, email: p.agent.email };
   if (p.listing?.state !== undefined) out.status = p.listing.state;

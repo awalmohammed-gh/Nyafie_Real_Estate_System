@@ -1,4 +1,4 @@
-import { UpgradePlan, Team, JoinAgency, AdminLogin, AgentLayout, OnboardingLayout, Onboarding, ApplicationStatus, AdminAgentApplications, Home, Contact, PropertiesDetails, SlugPage, PropertyAction, AgentDetailsPage, NotFound, AuthPage, Profile, AgentProfile, SavedProperties, MyInquiries, Settings, AccountMessages, MyOffers, MyRentals, MyPurchases, AgentSaleRequests, AdminSaleRequests, AgentOffers, AgentRentals, AdminOffers, AdminRentals, AdminPayments, PaymentResult, AgentMessages, AdminMessages, Plans, Checkout, Dashboard, MyProperties, PropertyEditor, Inquiries, PropertyManage, Subscription, AdminLayout, AdminDashboard, AdminUsers, AdminAgents, AdminProperties, AdminInquiries, AdminContactMessages, AdminReviews, AdminSubscriptions, AdminPlans, AdminFinancialInventory, AdminReports, AdminSettings, AdminPropertyEditor } from './routePages';
+import { UpgradePlan, Team, JoinAgency, AdminLogin, AgentLayout, OnboardingLayout, Onboarding, ApplicationStatus, AdminAgentApplications, Home, Contact, PropertiesDetails, SlugPage, PropertyAction, AgentDetailsPage, NotFound, AuthPage, Profile, AgentProfile, SavedProperties, SavedSearches, MyInquiries, Settings, AccountMessages, MyOffers, MyRentals, MyPurchases, AgentSaleRequests, AdminSaleRequests, AgentOffers, AgentRentals, AdminOffers, AdminRentals, AdminPayments, PaymentResult, AgentMessages, AdminMessages, Plans, Checkout, Dashboard, MyProperties, PropertyEditor, Inquiries, PropertyManage, Subscription, AdminLayout, AdminDashboard, AdminUsers, AdminAgents, AdminProperties, AdminInquiries, AdminContactMessages, AdminReviews, AdminSubscriptions, AdminPlans, AdminFinancialInventory, AdminReports, AdminSettings, AdminPropertyEditor } from './routePages';
 import {createBrowserRouter, createRoutesFromElements, Navigate, Route} from 'react-router-dom'
 import SessionLayout from '../layout/SessionLayout'
 import { About } from './routePages'
@@ -40,6 +40,7 @@ const router = createBrowserRouter(
                <Route path='agents/:id' element={<AgentDetailsPage />} />
                <Route path='account/profile' element={<Profile />} />
                <Route path='account/saved' element={<SavedProperties />} />
+               <Route path='account/searches' element={<SavedSearches />} />
                <Route path='account/inquiries' element={<MyInquiries />} />
                <Route path='account/settings' element={<Settings />} />
                <Route path='account/messages' element={<AccountMessages />} />

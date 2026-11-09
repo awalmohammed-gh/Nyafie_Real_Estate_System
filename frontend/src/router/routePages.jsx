@@ -17,6 +17,7 @@ export const AuthPage = lazyPage(() => import('../pages/auth/AuthPage'));
 export const Profile = lazyPage(() => import('../pages/account/Profile'));
 export const AgentProfile = lazyPage(() => import('../pages/agent/Profile'));
 export const SavedProperties = lazyPage(() => import('../pages/account/SavedProperties'));
+export const SavedSearches = lazyPage(() => import('../pages/account/SavedSearches'));
 export const MyInquiries = lazyPage(() => import('../pages/account/MyInquiries'));
 export const Settings = lazyPage(() => import('../pages/account/Settings'));
 export const AccountMessages = lazyPage(() => import('../pages/account/Messages'));

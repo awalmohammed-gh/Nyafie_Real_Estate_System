@@ -4,7 +4,7 @@ import { getSettings } from "../models/Setting.js";
 
 // Notification type -> the Admin Settings switch that controls it for the admin team
 const ADMIN_SWITCH = { user: "newUsers", review: "propertyReviews", customer_review: "customerReviews", offer: "offers", rental: "rentals", sale: "sales", payment: "payments", message: "messages" };
-const CUSTOMER_SWITCH = { message: "inquiryUpdates", offer: "offerUpdates" };
+const CUSTOMER_SWITCH = { message: "inquiryUpdates", offer: "offerUpdates", search_alert: "searchAlerts" };
 
 /**
  * Creates an in-app notification. With a `key`, an existing unread notification

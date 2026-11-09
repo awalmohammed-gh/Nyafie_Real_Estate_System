@@ -8,6 +8,8 @@ import { paymentEnvironment, paymentMode, providerScope } from "../utils/paystac
 import { fail, ok } from "../utils/response.js";
 import { sendRenewalReminders } from "../utils/subscriptionReminders.js";
 import { reportError } from "../utils/monitoring.js";
+import { checkListingFreshness } from "../utils/listingFreshness.js";
+import { cleanUpOldRecords } from "../utils/housekeeping.js";
 
 // The rental ledger or the agent subscription history: whichever stored record owns the reference
 const callbackRecord = async (reference) => {
@@ -92,6 +94,14 @@ export const reconcilePayments = async (req, res) => {
   let reminders = 0;
   try { reminders = await sendRenewalReminders(); }
   catch (error) { console.error("Renewal reminders failed:", error.message); await reportError(error, { tags: { job: "renewal-reminders" } }); }
+  // ...and keeps listings fresh: reminds owners, hides listings nobody confirmed (no Paystack needed)
+  let freshness = { reminded: 0, hidden: 0 };
+  try { freshness = await checkListingFreshness(); }
+  catch (error) { console.error("Listing freshness check failed:", error.message); await reportError(error, { tags: { job: "listing-freshness" } }); }
+  // ...and tidies records that would otherwise grow forever (old notifications, expired invites)
+  let cleanup = null;
+  try { cleanup = await cleanUpOldRecords(); }
+  catch (error) { console.error("Housekeeping failed:", error.message); await reportError(error, { tags: { job: "housekeeping" } }); }
   if (paymentMode() === "disabled") return fail(res, 503, "Online payments are not configured.");
   const counts = { ...emptyCounts(), ...Object.fromEntries(recoveryQueues.map((queue) => [queue.name, emptyCounts()])) };
   // Bounded work fits one serverless invocation. The queues take turns from one shared
@@ -114,5 +124,5 @@ export const reconcilePayments = async (req, res) => {
       }
     }
   }
-  return res.status(counts.errors ? 503 : 200).json({ success: counts.errors === 0, data: { ...counts, reminders }, message: counts.errors ? "Some payments could not be checked. Retry after the recovery lease expires." : "Payment recovery completed" });
+  return res.status(counts.errors ? 503 : 200).json({ success: counts.errors === 0, data: { ...counts, reminders, freshness, cleanup }, message: counts.errors ? "Some payments could not be checked. Retry after the recovery lease expires." : "Payment recovery completed" });
 };

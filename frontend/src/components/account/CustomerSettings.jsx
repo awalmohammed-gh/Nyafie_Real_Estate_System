@@ -1,5 +1,5 @@
 ﻿import { useRef, useState } from "react";
-import { AlertCircle, Bell, Check, Eye, EyeOff, HandCoins, Loader2, LockKeyhole, MessageCircle, ShieldCheck, UserRound } from "lucide-react";
+import { AlertCircle, Bell, BellRing, Check, Eye, EyeOff, HandCoins, Loader2, LockKeyhole, MessageCircle, ShieldCheck, UserRound } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import CustomerProfileForm from "./CustomerProfileForm";
 import ProfilePhotoEditor from "./ProfilePhotoEditor";
@@ -12,6 +12,7 @@ const sections = [
 const options = [
   { key: "inquiryUpdates", label: "Conversation replies", description: "When an agent replies to your conversation.", icon: MessageCircle },
   { key: "offerUpdates", label: "Offer updates", description: "When you submit an offer or its status changes.", icon: HandCoins },
+  { key: "searchAlerts", label: "Saved search alerts", description: "When a new home matches one of your saved searches.", icon: BellRing },
 ];
 const passwordFields = [
   { key: "current", label: "Current password", name: "currentPassword", autoComplete: "current-password" },
@@ -34,7 +35,7 @@ const CustomerSettings = () => {
   const [preferenceRequest, setPreferenceRequest] = useState(null);
   const [preferenceError, setPreferenceError] = useState("");
   const [preferenceSaved, setPreferenceSaved] = useState("");
-  const preferences = { inquiryUpdates: true, offerUpdates: true, ...user.preferences };
+  const preferences = { inquiryUpdates: true, offerUpdates: true, searchAlerts: true, ...user.preferences };
 
   const navigateTabs = (event, key) => {
     const index = sections.findIndex((section) => section.key === key);

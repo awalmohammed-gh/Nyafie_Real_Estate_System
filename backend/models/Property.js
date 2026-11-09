@@ -17,20 +17,29 @@ const stayBookingSchema = new mongoose.Schema({
   cancellationPolicy: { type: String, default: "", trim: true, maxlength: 800 }, // includes the no-show policy
 }, { _id: false });
 
+// Monthly rentals: what a tenant pays to move in besides the first rent (utils/moveIn.js). Shown
+// to customers as information; online rental payments still cover the booked rent only.
+const moveInSchema = new mongoose.Schema({
+  advanceMonths: { type: Number, default: 0, min: 0, max: 36 }, // months of rent paid upfront
+  agentFeeType: { type: String, enum: ["none", "percent", "fixed"], default: "none" },
+  agentFeeValue: { type: Number, default: 0, min: 0 }, // % of the advance, or GHS
+  securityDeposit: { type: Number, default: 0, min: 0 }, // GHS
+}, { _id: false });
+
 const propertySchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true, maxlength: 120 },
     description: { type: String, default: "", maxlength: 3000 },
     price: { type: Number, required: true, min: 0 },
     pricePeriod: { type: String, enum: ["total", "month", "night"], default: "total" },
-    currency: { type: String, default: "GHS" },
+    currency: { type: String, default: "GHS", maxlength: 10 },
     propertyType: { type: String, required: true, index: true },
     listingType: { type: String, enum: ["Sale", "Rent"], required: true },
     location: {
-      address: { type: String, default: "" },
-      neighbourhood: { type: String, default: "" },
-      city: { type: String, default: "", index: true },
-      region: { type: String, default: "" },
+      address: { type: String, default: "", maxlength: 200 },
+      neighbourhood: { type: String, default: "", maxlength: 100 },
+      city: { type: String, default: "", index: true, maxlength: 100 },
+      region: { type: String, default: "", maxlength: 100 },
       country: { type: String, default: "Ghana", trim: true },
       digitalAddress: { type: String, default: "", trim: true, maxlength: 30 },
       latitude: { type: Number, default: null, min: -90, max: 90 },
@@ -45,11 +54,12 @@ const propertySchema = new mongoose.Schema(
     bedrooms: { type: Number, default: 0, min: 0 },
     bathrooms: { type: Number, default: 0, min: 0 },
     area: { type: Number, default: 0, min: 0 },
-    areaUnit: { type: String, default: "sqm" },
+    areaUnit: { type: String, default: "sqm", maxlength: 20 },
     amenities: [{ type: String, trim: true }],
     images: [{ type: String }], // Cloudinary (or static) URLs, never raw files
     roomTypes: [roomTypeSchema],
     stayBooking: { type: stayBookingSchema, default: undefined },
+    moveIn: { type: moveInSchema, default: undefined },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // agency staff member handling it (null: the owner)
     ownerType: { type: String, enum: ["admin", "agent"], required: true },
@@ -63,6 +73,11 @@ const propertySchema = new mongoose.Schema(
     // draft -> pending (review) -> published | rejected; suspended = hidden by admin
     status: { type: String, enum: ["draft", "pending", "published", "rejected", "suspended"], default: "draft", index: true },
     availability: { type: String, enum: ["Available", "Under Offer", "Sold", "Rented"], default: "Available" },
+    // Listing freshness (utils/listingFreshness.js): when the owner last confirmed it is still
+    // available, when they were asked again, and since when it is hidden for not answering
+    availabilityConfirmedAt: { type: Date, default: null },
+    freshnessReminderAt: { type: Date, default: null },
+    staleSince: { type: Date, default: null },
     rejectionReason: { type: String, default: "" },
     // Set when the listing was hidden because its provider was removed; restore can bring it back
     providerRemoval: { type: new mongoose.Schema({ hiddenAt: Date, statusBefore: String }, { _id: false }), default: undefined },

@@ -18,6 +18,7 @@ import { newReference } from "../utils/paystack.js";
 import { cleanText, validateContact } from "../utils/validation.js";
 import { ok, fail } from "../utils/response.js";
 import { siteName } from "../models/Setting.js";
+import { openRequestLimitProblem } from "../utils/openRequestLimits.js";
 
 const PROPERTY_FIELDS =
   "title images location price pricePeriod listingType status availability owner ownerType contact";
@@ -178,6 +179,8 @@ export const createSaleRequest = async (req, res) => {
   if (isOwnListing(property, req.user))
     return fail(res, 400, "This is your own listing.");
 
+  const tooMany = await openRequestLimitProblem("sales", req.user._id, property._id);
+  if (tooMany) return fail(res, 429, tooMany);
   const open = await SaleRequest.exists({
     customer: req.user._id,
     property: property._id,
@@ -345,7 +348,16 @@ export const confirmOfficePayment = async (req, res) => {
   const reason = cleanText(req.body.note, 300);
 
   const now = new Date();
-  await Payment.create({
+  // Claim the confirmation atomically first: only one request can move it to "confirmed", so a double
+  // click or two staff members confirming together record exactly one payment
+  const claimed = await SaleRequest.findOneAndUpdate(
+    { _id: request._id, paymentStatus: { $ne: "confirmed" }, status: { $nin: CLOSED_SALE_STATUSES } },
+    { $set: { paymentStatus: "confirmed", paymentConfirmedAt: now, paymentConfirmedBy: req.user._id } },
+    { returnDocument: "after" },
+  );
+  if (!claimed) return fail(res, 409, "This payment was just confirmed, or the request changed. Refresh it.");
+  try {
+    await Payment.create({
     kind: "sale",
     saleRequest: request._id,
     customer: request.customer._id,
@@ -360,6 +372,11 @@ export const confirmOfficePayment = async (req, res) => {
     confirmedBy: req.user._id,
     note: reason,
   });
+  } catch (error) {
+    // Nothing was recorded: release the claim so the payment can be confirmed again
+    await SaleRequest.updateOne({ _id: request._id, paymentConfirmedAt: now }, { $set: { paymentStatus: request.paymentStatus }, $unset: { paymentConfirmedAt: "", paymentConfirmedBy: "" } });
+    throw error;
+  }
 
   request.set({
     status: "paid_at_office",

@@ -21,8 +21,9 @@ import { usePlatform } from "../../context/usePlatform";
 import { useAuth } from "../../context/useAuth";
 import { propertyCardImageSources } from "../../utils/propertyImages";
 import { formatDistance } from "../../utils/geo";
+import { advanceLabel } from "../../utils/moveIn";
 
-const HouseCard = ({ house }) => {
+const HouseCard = ({ house, variant }) => {
   const { isFavorite, toggleFavorite } = useRealEstate();
   const { siteName } = usePlatform();
   const { isAuthenticated } = useAuth();
@@ -37,6 +38,8 @@ const HouseCard = ({ house }) => {
       : "Agent"
     : siteName;
   const unavailable = ["Sold", "Rented"].includes(house.listing?.availability);
+  // Monthly rentals: how many months of rent the owner asks for upfront
+  const advanceMonths = house.pricing?.perMonth != null ? Number(house.moveIn?.advanceMonths) || 0 : 0;
   const identity =
     isAgent && !isAuthenticated ? (
       <span className="text-xs font-medium text-brand-600">
@@ -60,9 +63,9 @@ const HouseCard = ({ house }) => {
           <span className="block text-[10px] text-gray-500">Listed by</span>
           <span className="flex items-center gap-1 truncate text-xs font-semibold text-gray-700">
             {agentName}
-            {isAgent && house.agent?.verified && (
+            {((isAgent && house.agent?.verified) || (variant === "home" && !isAgent)) && (
               <BadgeCheck
-                aria-label="Approved agent"
+                aria-label={isAgent ? "Approved agent" : "Platform listing"}
                 className="h-3.5 w-3.5 shrink-0 text-brand-600"
               />
             )}
@@ -79,9 +82,9 @@ const HouseCard = ({ house }) => {
     );
 
   return (
-    <article className="@container group relative flex h-full flex-col overflow-hidden rounded-3xl bg-white ring-1 ring-gray-200/80 glass-hover [--glass-lift:3px]">
+    <article className={`${variant === "home" ? "house-card-home " : ""}@container group relative flex h-full flex-col overflow-hidden rounded-3xl bg-white ring-1 ring-gray-200/80 glass-hover [--glass-lift:3px]`}>
       {/* Image */}
-      <div className="relative aspect-4/3 overflow-hidden bg-gray-100">
+      <div className="property-card-image relative aspect-4/3 overflow-hidden bg-gray-100">
         <img
           {...propertyCardImageSources(media.images[0])}
           alt={title}
@@ -97,7 +100,7 @@ const HouseCard = ({ house }) => {
           />
           {unavailable
             ? house.listing.availability
-            : statusLabel(property.status)}
+            : variant === "home" && (house.pricing?.perNight != null || property.type === "Hotel") ? "Short Stay" : statusLabel(property.status)}
         </span>
 
         <button
@@ -114,17 +117,18 @@ const HouseCard = ({ house }) => {
 
         <p className="absolute bottom-4 left-4 text-white">
           <span className="text-2xl font-extrabold tracking-tight">
-            {value}
+            {variant === "home" ? value.replace(/^₵/, "GHS ") : value}
           </span>
           {period && (
             <span className="text-sm font-medium text-white/80">{period}</span>
           )}
+          {advanceMonths > 0 && <span className="block text-xs font-semibold text-white/85">{advanceLabel(advanceMonths)}</span>}
         </p>
       </div>
 
       {/* Body */}
-      <div className="flex flex-1 flex-col p-5">
-        <div className="mb-2 flex items-center justify-between gap-3">
+      <div className="property-card-body flex flex-1 flex-col p-5">
+        <div className="property-card-type mb-2 flex items-center justify-between gap-3">
           <span className="text-xs font-semibold tracking-wider text-brand-600 uppercase">
             {formatType(property.type)}
           </span>

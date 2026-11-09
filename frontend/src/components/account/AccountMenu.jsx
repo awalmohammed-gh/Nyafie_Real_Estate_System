@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
+  BellRing,
   AlertTriangle,
   BadgeCheck,
   Building,
@@ -35,6 +36,7 @@ import { adminPath } from "../../utils/adminEntry";
 const userItems = [
   { label: "My Profile", to: "/account/profile", icon: UserRound },
   { label: "Saved Properties", to: "/account/saved", icon: Heart },
+  { label: "Saved Searches", to: "/account/searches", icon: BellRing },
   { label: "My Conversations", to: "/account/messages", icon: MessageCircle },
   { label: "My Offers", to: "/account/offers", icon: HandCoins },
   { label: "My Rentals", to: "/account/rentals", icon: KeyRound },
@@ -79,7 +81,7 @@ export const AdminBadge = ({ className = "" }) => (
 );
 
 // onDark: light trigger for the transparent navbar over a hero (the dropdown itself stays white)
-const AccountMenu = ({ onAuth, compact = false, onDark = false }) => {
+const AccountMenu = ({ onAuth, compact = false, onDark = false, label }) => {
   const { user, isAuthenticated, isAgent, isAdmin, isActive, statusLabel, logout } = useAuth();
   const inactiveAgent = isAgent && !isActive;
   const { toast } = useToast();
@@ -144,10 +146,10 @@ const AccountMenu = ({ onAuth, compact = false, onDark = false }) => {
             <UserRound className="h-5 w-5" />
           </span>
         )}
-        {isAuthenticated && !compact && (
+        {(isAuthenticated || label) && !compact && (
           <>
-            <span className={`hidden max-w-32 truncate text-sm font-semibold xl:block ${onDark ? "text-white" : "text-gray-800"}`}>{user.firstName}</span>
-            <ChevronDown className={`hidden h-4 w-4 transition-transform xl:block ${onDark ? "text-white/70" : "text-gray-500"} ${open ? "rotate-180" : ""}`} />
+            <span className={`${label ? "block" : "hidden xl:block"} max-w-32 truncate text-sm font-semibold ${onDark ? "text-white" : "text-gray-800"}`}>{label || user.firstName}</span>
+            <ChevronDown className={`${label ? "block" : "hidden xl:block"} h-4 w-4 transition-transform ${onDark ? "text-white/70" : "text-gray-500"} ${open ? "rotate-180" : ""}`} />
           </>
         )}
       </button>
