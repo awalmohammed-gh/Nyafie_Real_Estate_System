@@ -29,8 +29,8 @@
 .reference-header > nav > ul { gap: 2px; }
 .reference-header > nav > ul > li > :is(a, button) { padding-inline: 10px; color: #101526; font-size: 14px; font-weight: 500; }
 .reference-header > nav > ul > li > button > svg { width: 13px; height: 13px; }
-.reference-header button[aria-haspopup="menu"] > span:first-child { width: 30px; height: 30px; background: #f3eafa; color: #6b2088; border-radius: 50%; box-shadow: none; }
-.reference-header button[aria-haspopup="menu"] { gap: 7px; }
+.reference-header .account-menu-avatar { width: 32px; height: 32px; background: #f3eafa; color: #6b2088; border-radius: 50%; box-shadow: none; }
+.reference-header button[aria-haspopup="menu"] { gap: 10px; }
 .home-wordmark { display: inline-flex; align-items: center; gap: 2px; color: #651581; font-size: 28px; font-weight: 800; letter-spacing: -.07em; line-height: 1; }
 .home-wordmark > span { letter-spacing: -.06em; }
 .home-wordmark.is-inverse { color: #fff; }
