@@ -10,6 +10,7 @@ import { formatPrice } from "../../utils/property";
 import { usePlatform } from "../../context/usePlatform";
 import { propertyApi } from "../../frontApi";
 import { useApiQuery } from "../../hooks/useApiQuery";
+import { cloudImage } from "../../utils/cloudImage";
 
 const statusHelp = {
   New: "Waiting for the agent to respond",
@@ -45,7 +46,7 @@ const MyInquiries = () => {
               <li key={inquiry.id} className="flex flex-col gap-4 rounded-3xl bg-white p-4 ring-1 ring-gray-200 sm:flex-row sm:p-5">
                 {property ? (
                   <Link to={`/house/${property.id}`} className="shrink-0">
-                    <img src={property.media.images[0]} alt="" className="aspect-16/9 w-full rounded-2xl object-cover sm:h-24 sm:w-36" />
+                    <img src={cloudImage(property.media.images[0], 400)} alt="" className="aspect-16/9 w-full rounded-2xl object-cover sm:h-24 sm:w-36" />
                   </Link>
                 ) : (
                   <div className="grid h-24 w-36 shrink-0 place-items-center rounded-2xl bg-gray-100 text-xs text-gray-400">{referenced.loading ? 'Loading...' : referenced.error ? 'Unavailable' : 'Removed'}</div>

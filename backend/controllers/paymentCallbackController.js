@@ -9,6 +9,7 @@ import { fail, ok } from "../utils/response.js";
 import { sendRenewalReminders } from "../utils/subscriptionReminders.js";
 import { reportError } from "../utils/monitoring.js";
 import { checkListingFreshness } from "../utils/listingFreshness.js";
+import { releasePastViewings, sendViewingReminders } from "../utils/viewings.js";
 import { cleanUpOldRecords } from "../utils/housekeeping.js";
 
 // The rental ledger or the agent subscription history: whichever stored record owns the reference
@@ -102,6 +103,10 @@ export const reconcilePayments = async (req, res) => {
   let cleanup = null;
   try { cleanup = await cleanUpOldRecords(); }
   catch (error) { console.error("Housekeeping failed:", error.message); await reportError(error, { tags: { job: "housekeeping" } }); }
+  // ...and reminds both sides of viewings today or tomorrow, expiring requests nobody answered in time
+  let viewings = { reminded: 0, expired: 0 };
+  try { viewings = { expired: await releasePastViewings(), reminded: await sendViewingReminders() }; }
+  catch (error) { console.error("Viewing reminders failed:", error.message); await reportError(error, { tags: { job: "viewing-reminders" } }); }
   if (paymentMode() === "disabled") return fail(res, 503, "Online payments are not configured.");
   const counts = { ...emptyCounts(), ...Object.fromEntries(recoveryQueues.map((queue) => [queue.name, emptyCounts()])) };
   // Bounded work fits one serverless invocation. The queues take turns from one shared
@@ -124,5 +129,5 @@ export const reconcilePayments = async (req, res) => {
       }
     }
   }
-  return res.status(counts.errors ? 503 : 200).json({ success: counts.errors === 0, data: { ...counts, reminders, freshness, cleanup }, message: counts.errors ? "Some payments could not be checked. Retry after the recovery lease expires." : "Payment recovery completed" });
+  return res.status(counts.errors ? 503 : 200).json({ success: counts.errors === 0, data: { ...counts, reminders, freshness, cleanup, viewings }, message: counts.errors ? "Some payments could not be checked. Retry after the recovery lease expires." : "Payment recovery completed" });
 };

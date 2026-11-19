@@ -4,7 +4,7 @@ import Review from "../models/Review.js";
 import User from "../models/User.js";
 import { getSettings, siteName } from "../models/Setting.js";
 import { stayPaymentOptions, takesStayBookings, payoutAccountFor } from "../utils/hotelPayout.js";
-import { notifyAdmins } from "../utils/notify.js";
+import { notifyAdmins, notifyUser } from "../utils/notify.js";
 import { COUNTED_STATES, withinImageLimit } from "../utils/permissions.js";
 import { PUBLIC_AGENT_FIELDS, publicAgent, presentProperties, publicQuery, visibleAgentIds, isPubliclyVisible, guestWhatsApp } from "../utils/marketplace.js";
 import { claimView, isCrawler, viewerHash } from "../utils/propertyViews.js";
@@ -17,6 +17,10 @@ import Inquiry from "../models/Inquiry.js";
 import Conversation from "../models/Conversation.js";
 import Offer from "../models/Offer.js";
 import SaleRequest from "../models/SaleRequest.js";
+import Viewing from "../models/Viewing.js";
+import { formatViewingTime } from "../utils/viewings.js";
+import DocumentCheck from "../models/DocumentCheck.js";
+import { deleteDocumentChecks } from "../utils/propertyDocuments.js";
 import { canHandleTeamRecord, canSeeAllAgencyWork, isTeamMember, teamFilter, teamOf } from "../utils/team.js";
 import { agencyAssignee } from "./agentController.js";
 import { isHotel, prepareHotelFields, saveHotelProperty, validateHotelPublishing } from "../utils/hotel.js";
@@ -25,6 +29,8 @@ import { SEARCH_RADII_KM, parseCenter, parseRadius, withinRadius } from "../util
 import { alertSavedSearches } from "../utils/savedSearches.js";
 import { markConfirmed } from "../utils/listingFreshness.js";
 import { parseMoveIn } from "../utils/moveIn.js";
+import { parseListingMedia } from "../utils/mediaLinks.js";
+import { countViewToday } from "../models/PropertyViewDay.js";
 
 const TYPES_OF_PRICE = ["total", "month", "night"];
 
@@ -55,6 +61,9 @@ export const pickPropertyFields = (body) => {
   // Monthly rentals: advance, agent fee and deposit (validated; ignored on other listings when shown)
   if (body.moveIn !== undefined) out.moveIn = body.moveIn === null ? undefined : parseMoveIn(body.moveIn);
   if (Array.isArray(body.amenities)) out.amenities = body.amenities.map((a) => String(a).trim()).filter(Boolean).slice(0, 40);
+  // Pasted links: "" or null removes them; links to other sites are refused (utils/mediaLinks.js)
+  if (body.videoUrl !== undefined) out.video = parseListingMedia(body.videoUrl, "video");
+  if (body.virtualTourUrl !== undefined) out.virtualTour = parseListingMedia(body.virtualTourUrl, "tour");
   if (body.availability !== undefined && ["Available", "Under Offer", "Sold", "Rented"].includes(body.availability)) {
     out.availability = body.availability;
   }
@@ -363,23 +372,24 @@ const isOwner = (property, user) => Boolean(user) && property.ownerType === "age
 // Hotels also say how guests can pay right now (pay at the hotel / online, arrival deadline, policy)
 const withPaymentOptions = async (property, data) => {
   if (!takesStayBookings(property)) return data;
-  return { ...data, paymentOptions: stayPaymentOptions(property, await payoutAccountFor(property), await getSettings()) };
+  const [payout, settings] = await Promise.all([payoutAccountFor(property), getSettings()]);
+  return { ...data, paymentOptions: stayPaymentOptions(property, payout, settings) };
 };
 
 export const getProperty = async (req, res) => {
   const property = await Property.findById(req.params.id).catch(() => null);
   if (!property) return fail(res, 404, "Property not found.");
   if (req.user?.role === "admin" || isOwner(property, req.user)) return ok(res, await withPaymentOptions(property, (await presentProperties([property]))[0]));
-  const { query } = await publicQuery();
-  const visible = await Property.exists({ _id: property._id, ...query });
-  if (!visible) return fail(res, 404, "Property not found.");
-  const data = (await presentProperties([property], { includeAgentDetails: Boolean(req.user) }))[0];
+  // The same rule as publicQuery(), checked for this listing's owner only (not the whole agent
+  // directory). The details are prepared at the same time and only sent if it is visible.
   // Guests may message the agent on WhatsApp from this page (number only; never in lists or search)
-  if (!req.user) {
-    const whatsapp = await guestWhatsApp(property);
-    if (whatsapp) data.guestContact = { whatsapp };
-  }
-  ok(res, await withPaymentOptions(property, data));
+  const [visible, data, whatsapp] = await Promise.all([
+    isPubliclyVisible(property),
+    presentProperties([property], { includeAgentDetails: Boolean(req.user) }).then(([item]) => withPaymentOptions(property, item)),
+    req.user ? null : guestWhatsApp(property),
+  ]);
+  if (!visible) return fail(res, 404, "Property not found.");
+  ok(res, whatsapp ? { ...data, guestContact: { whatsapp } } : data);
 };
 
 /**
@@ -406,6 +416,8 @@ export const recordView = async (req, res) => {
     if (!await claimView(property._id, viewerHash(req, customer || agent))) return result(false);
     // Atomic increment; a view is not an edit, so updatedAt stays as it was
     const updated = await Property.findByIdAndUpdate(property._id, { $inc: { views: 1 } }, { returnDocument: "after", projection: { views: 1 }, timestamps: false });
+    // The owner's day-by-day chart; never holds up or breaks the page
+    countViewToday(property._id).catch((error) => console.error(`[views] daily count failed for ${property._id}: ${error.message}`));
     return result(true, updated?.views ?? (property.views || 0) + 1);
   } catch (error) {
     console.error(`[views] could not record a view for ${property._id}: ${error.message}`);
@@ -481,6 +493,9 @@ export const createProperty = async (req, res) => {
 const notifyReview = (property, agent) =>
   notifyAdmins({ type: "review", title: "Listing submitted for review", message: `${agent.firstName} ${agent.lastName} submitted "${property.title}".`, link: "/admin/properties?status=pending" });
 
+// The parts of an address the ownership documents are checked against
+const addressOf = (location = {}) => ["address", "neighbourhood", "city", "region"].map((key) => String(location?.[key] || "").trim().toLowerCase()).join("|");
+
 // Loads a property and checks the signed-in agent owns it
 const loadOwned = async (req, res) => {
   const property = await Property.findById(req.params.id).catch(() => null);
@@ -525,6 +540,7 @@ export const updateProperty = async (req, res) => {
   }
 
   const before = locationSnapshot(property.location);
+  const addressBefore = addressOf(property.location);
   const wasPublished = property.status === "published";
   Object.assign(property, fields);
   markConfirmed(property); // editing a listing confirms it is current
@@ -544,7 +560,14 @@ export const updateProperty = async (req, res) => {
     const settled = await settleLocation(property.location, before);
     property.set({ "location.latitude": settled.latitude, "location.longitude": settled.longitude, "location.pinSource": settled.pinSource });
   }
+  // Verified documents were checked against the old address: the badge waits for a new check
+  const recheck = property.documentsVerifiedAt && fields.location && addressOf(property.location) !== addressBefore;
+  if (recheck) property.documentsVerifiedAt = null;
   await saveHotelProperty(property);
+  if (recheck) {
+    await DocumentCheck.updateOne({ property: property._id, status: "verified" }, { $set: { status: "pending", submittedAt: new Date(), note: "" } });
+    await notifyAdmins({ type: "documents", title: "Documents to check again", message: `The address of "${property.title}" changed after its documents were verified.`, link: "/admin/document-checks" });
+  }
   if (!wasPublished && property.status === "published") await alertSavedSearches(property);
   ok(res, property, status === "pending" ? "Submitted for review" : "Property updated");
 };
@@ -597,10 +620,15 @@ export const deleteProperty = async (req, res) => {
     Offer.exists({ property: id, status: "accepted" }),
   ]);
   if (booked || paid || sold || accepted) return fail(res, 409, "This listing has bookings, payments or a sale on record, so it can't be deleted. Mark it as rented or sold, or unpublish it, to take it off the site and keep its history.");
+  // Customers with an upcoming viewing are told it won't happen (the record stays in their history)
+  const viewings = await Viewing.find({ property: id, status: { $in: ["requested", "confirmed"] } }).select("customer scheduledAt");
   await property.deleteOne();
   await Promise.all([
     User.updateMany({ savedProperties: property._id }, { $pull: { savedProperties: property._id } }),
     Review.deleteMany({ property: property._id }),
+    deleteDocumentChecks({ property: property._id }), // the private ownership documents go with it
+    Viewing.updateMany({ property: id, status: { $in: ["requested", "confirmed"] } }, { $set: { status: "cancelled", cancelledBy: "owner" }, $unset: { openKey: "" }, $push: { history: { status: "cancelled", note: "The listing was removed", by: req.user._id, at: new Date() } } }),
+    ...viewings.map((viewing) => notifyUser(viewing.customer, { type: "viewing", title: "Viewing cancelled", message: `Your viewing on ${formatViewingTime(viewing.scheduledAt)} was cancelled because "${property.title}" is no longer listed.`, link: "/account/viewings" })),
   ]);
   ok(res, null, "Property deleted");
 };
@@ -622,6 +650,7 @@ export const assignProperty = async (req, res) => {
     Offer.updateMany(scope, { $set: { assignedTo: assignee } }),
     Rental.updateMany(scope, { $set: { assignedTo: assignee } }),
     SaleRequest.updateMany(scope, { $set: { assignedTo: assignee } }),
+    Viewing.updateMany(scope, { $set: { assignedTo: assignee } }),
   ]);
   ok(res, (await presentProperties([property]))[0], assignee ? "Listing assigned" : "Listing returned to the agency owner");
 };

@@ -23,6 +23,7 @@ import ListingEditorGuide from "../../components/agent/ListingEditorGuide";
 import { adminPath } from "../../utils/adminEntry";
 import { isCoordinate } from "../../utils/geo";
 import "./propertyEditor.css";
+import { mediaLinkProblem, shareUrl } from "../../utils/mediaLinks";
 
 // Leaflet loads with the editor's map only
 const LocationPicker = lazy(() => import("../../components/location/LocationPicker"));
@@ -44,7 +45,7 @@ const toForm = (property, user, contact) => {
     return {
       title: "", description: "", type: "", listingType: "Sale", price: "", rentPeriod: "month",
       neighbourhood: "", city: "", region: "Greater Accra", address: "", country: "Ghana", digitalAddress: "", latitude: "", longitude: "",
-      bedrooms: "", bathrooms: "", area: "", amenities: [], availability: "Available",
+      bedrooms: "", bathrooms: "", area: "", amenities: [], availability: "Available", videoUrl: "", tourUrl: "",
       contactName: contact?.name ?? user.name, contactPhone: contact?.phone ?? (user.phone || ""), contactEmail: contact?.email ?? user.email,
     };
   }
@@ -69,6 +70,8 @@ const toForm = (property, user, contact) => {
     area: String(d.size?.value ?? ""),
     amenities: property.features || [],
     availability: property.listing.availability,
+    videoUrl: shareUrl(property.media.video),
+    tourUrl: shareUrl(property.media.virtualTour),
     contactName: agent.name,
     contactPhone: agent.phone,
     contactEmail: agent.email,
@@ -281,6 +284,8 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
     }
     if ((form.latitude === "") !== (form.longitude === "")) e.latitude = "Provide both coordinates or leave both empty.";
     if (form.title.trim().length < 3) e.title = "Give the property a title (at least 3 characters).";
+    if (mediaLinkProblem(form.videoUrl, "video")) e.videoUrl = mediaLinkProblem(form.videoUrl, "video");
+    if (mediaLinkProblem(form.tourUrl, "tour")) e.tourUrl = mediaLinkProblem(form.tourUrl, "tour");
     if (monthlyRental && [moveIn.agentFeeValue, moveIn.securityDeposit].some((v) => v !== "" && !(Number(v) >= 0))) e.moveIn = "Amounts can't be negative.";
     if (monthlyRental && moveIn.agentFeeType === "percent" && !(Number(moveIn.agentFeeValue) <= 20)) e.moveIn = "Enter an agent fee between 0% and 20%.";
     if ((hotel || nightlyRental) && !booking.payOnArrival && !booking.payOnline) e.booking = "Choose at least one way for guests to pay.";
@@ -327,7 +332,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
       features: form.amenities,
       ...(hotel ? { roomTypes: roomsToPayload(rooms), stayBooking: booking } : nightlyRental ? { stayBooking: booking } : {}),
       ...(monthlyRental ? { moveIn: { ...moveIn, agentFeeValue: Number(moveIn.agentFeeValue) || 0, securityDeposit: Number(moveIn.securityDeposit) || 0 } } : {}),
-      media: { images: readyImages.map((img) => img.src) },
+      media: { images: readyImages.map((img) => img.src), videoUrl: form.videoUrl.trim(), virtualTourUrl: form.tourUrl.trim() },
       agent: { id: user.id, name: form.contactName.trim() || user.name, phone: form.contactPhone.trim(), email: form.contactEmail.trim() },
       owner: { type: "agent", id: user.id },
       listing: { state, availability: form.availability },
@@ -455,7 +460,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
           <Chapter id="chapter-basics" number={next()} title={isAdminEditor ? "What are you listing?" : "Property overview"} description={isAdminEditor ? "Customers filter by these first." : "Start with the kind of property and how you want to list it."}>
             <div role="radiogroup" aria-label="Listing type" className="grid grid-cols-2 gap-3">
               {[
-                { value: "Sale", title: "For sale", text: isAdminEditor ? "Buyers make offers and pay at the office" : "Find the right buyer", icon: Tag },
+                { value: "Sale", title: "For sale", text: isAdminEditor ? "Buyers make offers and agree payment with you" : "Find the right buyer", icon: Tag },
                 { value: "Rent", title: "For rent", text: isAdminEditor ? "Tenants request dates and pay online" : "Welcome your next tenant", icon: KeyRound },
               ].map((o) => {
                 const active = form.listingType === o.value;
@@ -522,6 +527,15 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
               limitNote={isAdminEditor ? `${siteName} allows up to ${perms.imageLimit} photos per property.` : lockCopy(perms, "images").description}
               limitAction={isAdminEditor || !perms.canUpgrade ? null : { to: perms.upgradePath, label: "View Upgrade Options" }}
             />
+            {/* Optional tours: a pasted link from a supported provider (the player loads only when a visitor presses play) */}
+            <div className="mt-6 grid gap-5 sm:grid-cols-2">
+              <Field label="Video tour (optional)" error={errors.videoUrl} hint="YouTube or Vimeo link">
+                <input type="url" inputMode="url" value={form.videoUrl} onChange={(e) => { set("videoUrl", e.target.value); if (errors.videoUrl) setErrors((p) => ({ ...p, videoUrl: undefined })); }} onBlur={() => setErrors((p) => ({ ...p, videoUrl: mediaLinkProblem(form.videoUrl, "video") || undefined }))} placeholder="https://youtu.be/..." className="field" />
+              </Field>
+              <Field label="3D virtual tour (optional)" error={errors.tourUrl} hint="Matterport or Kuula link">
+                <input type="url" inputMode="url" value={form.tourUrl} onChange={(e) => { set("tourUrl", e.target.value); if (errors.tourUrl) setErrors((p) => ({ ...p, tourUrl: undefined })); }} onBlur={() => setErrors((p) => ({ ...p, tourUrl: mediaLinkProblem(form.tourUrl, "tour") || undefined }))} placeholder="https://my.matterport.com/show/?m=..." className="field" />
+              </Field>
+            </div>
           </Chapter>
 
           {/* 03 The story */}

@@ -16,6 +16,7 @@ import { createProperty, updateProperty, deleteProperty, buildPublicFilter } fro
 import { createInquiry, myInquiries } from "../controllers/inquiryController.js";
 import { quoteRental, rentalMonths } from "../controllers/rentalController.js";
 import { checkPaystackTransaction, toSubunit } from "../utils/paystack.js";
+import { fakeListedAgents } from "./support/listedAgents.js";
 
 const query = (value) => ({
   then: (resolve, reject) => Promise.resolve(value).then(resolve, reject),
@@ -30,6 +31,7 @@ const settings = (t, overrides = {}) => t.mock.method(Setting, "findOneAndUpdate
 
 test("public listings use live, allowlisted agent data rather than forged contact snapshots", async (t) => {
   t.mock.method(User, "find", () => query([agent]));
+  t.mock.method(User, "aggregate", fakeListedAgents([agent]));
   settings(t);
   t.mock.method(Plan, "findOne", () => query(null)); // no default plan, so no NyaFie chat
   const [property] = await presentProperties([listing()]);
@@ -65,6 +67,7 @@ test("public visibility requires verified subscription payment when subscription
   const valid = { status: "active", paymentStatus: "paid", expiresAt: new Date("2035-01-01"), plan: {} };
   let subscription = valid;
   t.mock.method(User, "find", () => query([{ _id: agent._id, subscription }]));
+  t.mock.method(User, "aggregate", fakeListedAgents(() => [{ _id: agent._id, subscription }]));
   assert.equal((await visibleAgentIds()).length, 1);
   for (const invalid of [{ paymentStatus: "pending" }, { paymentStatus: "failed" }, { status: "pending" }, { status: "cancelled" }, { expiresAt: new Date("2000-01-01") }, { expiresAt: "invalid" }]) {
     subscription = { ...valid, ...invalid };
@@ -107,6 +110,7 @@ test("location and purpose URL filters are case insensitive and escape regex ope
 test("inquiries route to the property's agent and customer inboxes never match an untrusted email", async (t) => {
   settings(t);
   t.mock.method(User, "find", () => query([agent]));
+  t.mock.method(User, "aggregate", fakeListedAgents([agent]));
   t.mock.method(Property, "findOne", () => query(listing()));
   let created, notice, inboxFilter;
   const conversationId = new mongoose.Types.ObjectId();
@@ -131,6 +135,7 @@ test("inquiries route to the property's agent and customer inboxes never match a
 test("hidden listings cannot start rentals or receive new inquiries", async (t) => {
   settings(t);
   t.mock.method(User, "find", () => query([]));
+  t.mock.method(User, "aggregate", fakeListedAgents([]));
   let filter;
   t.mock.method(Property, "findOne", (value) => { filter = value; return query(null); });
   const quote = await quoteRental({ propertyId: String(listing()._id), startDate: "2030-01-01", endDate: "2031-01-01" }, customer);
@@ -145,6 +150,7 @@ test("hidden listings cannot start rentals or receive new inquiries", async (t) 
 test("rental quotes use database prices and calendar months; terminal availability blocks checkout", async (t) => {
   settings(t);
   t.mock.method(User, "find", () => query([agent]));
+  t.mock.method(User, "aggregate", fakeListedAgents([agent]));
   let property = listing();
   t.mock.method(Property, "findOne", () => query(property));
   t.mock.method(Rental, "exists", async () => false);

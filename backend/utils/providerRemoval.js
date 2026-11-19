@@ -8,6 +8,7 @@ import Message from "../models/Message.js";
 import Offer from "../models/Offer.js";
 import Rental from "../models/Rental.js";
 import SaleRequest from "../models/SaleRequest.js";
+import Viewing from "../models/Viewing.js";
 import Payment from "../models/Payment.js";
 import Review from "../models/Review.js";
 import Subscription from "../models/Subscription.js";
@@ -18,6 +19,7 @@ import { notifyUser } from "./notify.js";
 import { accountTypeOf, subscriptionState } from "./permissions.js";
 import { isOrganization, ACCOUNT_LABELS } from "./accountTypes.js";
 import { isRemoved } from "./agentApplication.js";
+import { deleteDocumentChecks } from "./propertyDocuments.js";
 
 /**
  * Taking a provider (individual agent, agency or company, or one of their staff) off NyaFie.
@@ -32,7 +34,7 @@ import { isRemoved } from "./agentApplication.js";
 
 export const REMOVAL_REASONS = { fraud: "Fraud", policy: "Policy violation", duplicate: "Duplicate account", closed: "Business closed", other: "Other" };
 const HIDDEN_STATES = ["published", "pending"]; // what the public or the review queue can see
-const STAFF_WORK = [Property, Conversation, Offer, Rental, SaleRequest]; // records with owner + assignedTo
+const STAFF_WORK = [Property, Conversation, Offer, Rental, SaleRequest, Viewing]; // records with owner + assignedTo
 const DELETED_NAME = { firstName: "Deleted", lastName: "agent" };
 
 const idOf = (value) => value?._id || value;
@@ -190,7 +192,7 @@ const references = async (user) => {
   const listings = await Property.find({ owner: id, ownerType: "agent" }).select("_id");
   const listingIds = listings.map((p) => p._id);
   const onListings = { property: { $in: listingIds } };
-  const used = new Set((await Promise.all([Inquiry, Conversation, Offer, Rental, SaleRequest, Payment, Review].map((Model) => Model.distinct("property", onListings)))).flat().map(String));
+  const used = new Set((await Promise.all([Inquiry, Conversation, Offer, Rental, SaleRequest, Payment, Review, Viewing].map((Model) => Model.distinct("property", onListings)))).flat().map(String));
   const keep = listingIds.filter((pid) => used.has(String(pid)));
   const drop = listingIds.filter((pid) => !used.has(String(pid)));
   const [inquiries, conversations, messages, offers, rentals, sales, payments, paidPlans, pendingPlans, failedPlans, invites, notifications, teamHistory, actions] = await Promise.all([
@@ -257,6 +259,7 @@ export const permanentlyDeleteProvider = async (id, admin, confirm) => {
     TeamInvite.deleteMany({ agency: userId }),
     TeamInvite.updateMany({ usedBy: userId }, { $set: { usedBy: null } }),
     Notification.deleteMany({ recipient: userId }),
+    deleteDocumentChecks({ owner: userId }), // their private ownership documents, files included
   ]);
 
   const now = new Date();

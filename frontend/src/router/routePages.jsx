@@ -21,6 +21,12 @@ export const SavedSearches = lazyPage(() => import('../pages/account/SavedSearch
 export const MyInquiries = lazyPage(() => import('../pages/account/MyInquiries'));
 export const Settings = lazyPage(() => import('../pages/account/Settings'));
 export const AccountMessages = lazyPage(() => import('../pages/account/Messages'));
+export const Compare = lazyPage(() => import('../pages/Compare'));
+export const AdminDocumentChecks = lazyPage(() => import('../pages/admin/AdminDocumentChecks'));
+export const AdminSafetyReports = lazyPage(() => import('../pages/admin/AdminSafetyReports'));
+export const MyViewings = lazyPage(() => import('../pages/account/MyViewings'));
+export const AgentViewings = lazyPage(() => import('../pages/agent/Viewings'));
+export const AdminViewings = lazyPage(() => import('../pages/admin/AdminViewings'));
 export const MyOffers = lazyPage(() => import('../pages/account/MyOffers'));
 export const MyRentals = lazyPage(() => import('../pages/account/MyRentals'));
 export const MyPurchases = lazyPage(() => import('../pages/account/MyPurchases'));

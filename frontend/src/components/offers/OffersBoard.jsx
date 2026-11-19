@@ -19,6 +19,7 @@ import { offerApi } from "../../frontApi";
 import { formatDate, formatRelative, isWithinDays } from "../../utils/date";
 import { toWhatsAppNumber } from "../../utils/whatsapp";
 import { adminPath } from "../../utils/adminEntry";
+import { cloudImage } from "../../utils/cloudImage";
 
 const STATUSES = ["Pending", "Countered", "Accepted", "Rejected", "Withdrawn"];
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
@@ -205,7 +206,7 @@ const OffersBoard = ({ scope }) => {
             <StatusSteps kind="offer" status={open.status.toLowerCase()} />
             <div className="rounded-xl bg-brand-50 p-4"><p className="workspace-eyebrow">Offer summary</p><p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{ghs(open.amount)}</p><p className="mt-2 text-xs text-gray-500">Asking {ghs(open.askingPrice)}{open.askingPrice > 0 && ` · ${Math.abs(Math.round((open.amount - open.askingPrice) / open.askingPrice * 100))}% ${open.amount >= open.askingPrice ? "above or equal to" : "below"} asking price`}</p></div>
             <Link to={`/house/${open.property.id}`} className="flex items-center gap-3 rounded-lg p-2 ring-1 ring-gray-200 transition hover:ring-brand-200">
-              {open.property.image && <img src={open.property.image} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />}
+              {open.property.image && <img src={cloudImage(open.property.image, 80)} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />}
               <div className="min-w-0">
                 <p className="truncate font-semibold text-gray-900">{open.property.title}</p>
                 <p className="text-sm text-gray-500">{open.property.location}{isAdmin && ` · ${open.ownerType === "admin" ? "Admin listing" : `Agent listing (${open.owner.name})`}`}</p>

@@ -1,6 +1,7 @@
 import Hero from "../components/Landing/Hero";
 import TrustBar from "../components/Landing/TrustBar";
 import FeatureListings from "../components/Landing/FeatureListings";
+import RecentlyViewed from "../components/Landing/RecentlyViewed";
 import DiscoverCategories from "../components/Landing/DiscoverCategories";
 import HowItWorks from "../components/Landing/HowItWorks";
 import BecomeAgent from "../components/Landing/BecomeAgent";
@@ -12,6 +13,7 @@ const Home = () => (
     <Hero />
     <TrustBar />
     <FeatureListings />
+    <RecentlyViewed />
     <DiscoverCategories />
     <HowItWorks />
     <BecomeAgent />

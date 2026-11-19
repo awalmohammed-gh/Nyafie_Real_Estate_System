@@ -1,4 +1,4 @@
-import { UpgradePlan, Team, JoinAgency, AdminLogin, AgentLayout, OnboardingLayout, Onboarding, ApplicationStatus, AdminAgentApplications, Home, Contact, PropertiesDetails, SlugPage, PropertyAction, AgentDetailsPage, NotFound, AuthPage, Profile, AgentProfile, SavedProperties, SavedSearches, MyInquiries, Settings, AccountMessages, MyOffers, MyRentals, MyPurchases, AgentSaleRequests, AdminSaleRequests, AgentOffers, AgentRentals, AdminOffers, AdminRentals, AdminPayments, PaymentResult, AgentMessages, AdminMessages, Plans, Checkout, Dashboard, MyProperties, PropertyEditor, Inquiries, PropertyManage, Subscription, AdminLayout, AdminDashboard, AdminUsers, AdminAgents, AdminProperties, AdminInquiries, AdminContactMessages, AdminReviews, AdminSubscriptions, AdminPlans, AdminFinancialInventory, AdminReports, AdminSettings, AdminPropertyEditor } from './routePages';
+import { Compare, AdminDocumentChecks, AdminSafetyReports, MyViewings, AgentViewings, AdminViewings, UpgradePlan, Team, JoinAgency, AdminLogin, AgentLayout, OnboardingLayout, Onboarding, ApplicationStatus, AdminAgentApplications, Home, Contact, PropertiesDetails, SlugPage, PropertyAction, AgentDetailsPage, NotFound, AuthPage, Profile, AgentProfile, SavedProperties, SavedSearches, MyInquiries, Settings, AccountMessages, MyOffers, MyRentals, MyPurchases, AgentSaleRequests, AdminSaleRequests, AgentOffers, AgentRentals, AdminOffers, AdminRentals, AdminPayments, PaymentResult, AgentMessages, AdminMessages, Plans, Checkout, Dashboard, MyProperties, PropertyEditor, Inquiries, PropertyManage, Subscription, AdminLayout, AdminDashboard, AdminUsers, AdminAgents, AdminProperties, AdminInquiries, AdminContactMessages, AdminReviews, AdminSubscriptions, AdminPlans, AdminFinancialInventory, AdminReports, AdminSettings, AdminPropertyEditor } from './routePages';
 import {createBrowserRouter, createRoutesFromElements, Navigate, Route} from 'react-router-dom'
 import SessionLayout from '../layout/SessionLayout'
 import { About } from './routePages'
@@ -30,6 +30,7 @@ const router = createBrowserRouter(
             {/* /properties, /listings, /agents (URLs set in Admin Settings) and /sale, /rent */}
             <Route path=':slug' element={<SlugPage />} />
             <Route path='contact' element={<Contact />} />
+            <Route path='compare' element={<Compare />} />
 
             {/* Becoming an agent: the plans page is public; onboarding has its own layout below */}
             <Route path='agent/plans' element={<Plans />} />
@@ -45,6 +46,7 @@ const router = createBrowserRouter(
                <Route path='account/settings' element={<Settings />} />
                <Route path='account/messages' element={<AccountMessages />} />
                <Route path='account/offers' element={<MyOffers />} />
+               <Route path='account/viewings' element={<MyViewings />} />
                <Route path='account/rentals' element={<MyRentals />} />
                <Route path='account/purchases' element={<MyPurchases />} />
                <Route path='payment/success' element={<PaymentResult />} />
@@ -86,6 +88,7 @@ const router = createBrowserRouter(
                <Route path='properties/:propertyId' element={<PropertyManage />} />
                <Route path='inquiries' element={<Inquiries />} />
                <Route path='offers' element={<AgentOffers />} />
+               <Route path='viewings' element={<AgentViewings />} />
                <Route path='rentals' element={<AgentRentals />} />
                <Route path='sale-requests' element={<AgentSaleRequests />} />
                <Route path='messages' element={<AgentMessages />} />
@@ -112,6 +115,9 @@ const router = createBrowserRouter(
                <Route path='contact-messages' element={<AdminContactMessages />} />
                <Route path='reviews' element={<AdminReviews />} />
                <Route path='offers' element={<AdminOffers />} />
+               <Route path='viewings' element={<AdminViewings />} />
+               <Route path='safety-reports' element={<AdminSafetyReports />} />
+               <Route path='document-checks' element={<AdminDocumentChecks />} />
                <Route path='rentals' element={<AdminRentals />} />
                <Route path='sale-requests' element={<AdminSaleRequests />} />
                <Route path='payments' element={<AdminPayments />} />

@@ -3,6 +3,7 @@ import { Outlet, ScrollRestoration, useLocation, useNavigate } from 'react-route
 import { motion } from 'motion/react'
 import Navbar from './Navbar'
 import Footer from './Footer'
+import CompareBar from '../components/property/CompareBar'
 import PageLoader from '../components/ui/PageLoader'
 import AgentPromo from '../components/ui/AgentPromo'
 import SmoothScroll from '../components/ui/SmoothScroll'
@@ -39,6 +40,8 @@ const SystemLayout = () => {
           <Suspense fallback={<PageLoader label="Loading page..." />}><Outlet /></Suspense>
         </motion.main>
         <Footer />
+        {/* Homes picked for comparison on this device */}
+        <CompareBar />
         {/* "Want to become an agent?" pop-up for visitors and customers (timing rules: utils/agentPromo.js) */}
         <AgentPromo />
       </div>

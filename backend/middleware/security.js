@@ -146,6 +146,16 @@ export const limits = {
   views: rateLimit({ windowMs: 15 * MINUTE, max: 120 }),
   // Place search is typed a letter at a time (debounced in the browser) and proxies a shared free service
   geo: rateLimit({ windowMs: MINUTE, max: 60, message: "Too many location searches. Please wait a moment and try again." }),
+  // Connecting a hotel payout account checks the account password and calls Paystack. Per account,
+  // so a stolen session can't be used to guess the password. Mount after the session guard.
+  payout: rateLimit({ windowMs: 15 * MINUTE, max: 5, key: (req) => `payout:${req.user._id}`, message: "Too many payout account attempts. Please wait 15 minutes and try again." }),
+  // Saving a listing, hotel rooms or an agent profile can upload photos to Cloudinary and look the
+  // address up with the shared geocoder. Far above real editing; per account. Mount after the session guard.
+  listingSaves: rateLimit({ windowMs: 15 * MINUTE, max: 60, key: (req) => `listing-save:${req.user._id}`, message: "You're saving changes very quickly. Please wait a few minutes and try again." }),
+  // Server-rendered pages (outside /api) each read the database; crawlers slow down when they get 429
+  pages: rateLimit({ windowMs: MINUTE, max: 120, message: "Too many page requests. Please wait a moment and try again." }),
+  // A sitemap page can list up to 5,000 homes; crawlers need them only occasionally
+  sitemaps: rateLimit({ windowMs: MINUTE, max: 20, message: "Too many sitemap requests. Please wait a moment and try again." }),
 };
 
 /**

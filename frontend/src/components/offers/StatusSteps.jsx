@@ -27,7 +27,7 @@ const STEPS = {
     { key: "contacted", label: "Contacted" },
     { key: "negotiating", label: "Negotiating", also: ["offer_received", "approved"] },
     { key: "payment_pending", label: "Payment pending" },
-    { key: "paid_at_office", label: "Paid at office" },
+    { key: "paid_at_office", label: "Payment received" },
     { key: "completed", label: "Completed" },
   ],
 };

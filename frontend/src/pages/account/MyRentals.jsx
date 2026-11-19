@@ -12,6 +12,7 @@ import { bookingPath } from "../../utils/hotel";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { arrivalText, bookingHeadline, guestCanCancel, payPlace } from "../../utils/hotelPayments";
+import { cloudImage } from "../../utils/cloudImage";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
@@ -73,7 +74,7 @@ const MyRentals = () => {
                 <div className="flex flex-col gap-4 sm:flex-row">
                   <Link to={`/house/${rental.property.id}`} className="shrink-0">
                     {rental.property.image ? (
-                      <img src={rental.property.image} alt="" className="aspect-16/9 w-full rounded-2xl object-cover sm:h-28 sm:w-40" />
+                      <img src={cloudImage(rental.property.image, 400)} alt="" className="aspect-16/9 w-full rounded-2xl object-cover sm:h-28 sm:w-40" />
                     ) : (
                       <div className="grid h-28 w-40 place-items-center rounded-2xl bg-gray-100 text-xs text-gray-400">Removed</div>
                     )}

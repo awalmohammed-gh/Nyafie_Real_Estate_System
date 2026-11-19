@@ -23,6 +23,7 @@ import { formatDate, formatRelative, isWithinDays } from "../../utils/date";
 import { toWhatsAppNumber } from "../../utils/whatsapp";
 import { usePlatform } from "../../context/usePlatform";
 import { adminPath } from "../../utils/adminEntry";
+import { cloudImage } from "../../utils/cloudImage";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 const CLOSED = ["completed", "cancelled", "rejected"];
@@ -101,7 +102,7 @@ const SaleRequestsBoard = ({ scope }) => {
     };
     const messages = {
       status: `Marked as ${SALE_STATUS[status]?.toLowerCase()}`,
-      payment: "Office payment confirmed",
+      payment: "Payment confirmed",
       complete: "Sale completed and property marked as sold",
     };
     const { ok, result } = await run(requestsByKind[kind](), { success: messages[kind], description: `${open.contactName} has been notified.` });
@@ -162,12 +163,12 @@ const SaleRequestsBoard = ({ scope }) => {
       title: `${NEEDS_CONFIRM[confirm.status]}?`,
       description:
         confirm.status === "payment_pending"
-          ? `${open?.contactName} will be asked to pay ${ghs(open?.askingPrice)} at the office.`
+          ? `${open?.contactName} will be asked to pay ${ghs(open?.askingPrice)} as you agree together (in chat, by phone or in person).`
           : `The request from ${open?.contactName} will be marked as ${SALE_STATUS[confirm.status]?.toLowerCase()} and they'll be notified.`,
       label: NEEDS_CONFIRM[confirm.status],
       tone: ["cancelled", "rejected"].includes(confirm.status) ? "danger" : "primary",
     },
-    payment: { title: "Confirm office payment?", description: `Only confirm once you've received ${open?.contactName}'s payment at the office. This is recorded with your name and the time.`, label: "Confirm payment", tone: "primary" },
+    payment: { title: "Confirm payment received?", description: `Only confirm once you've received ${open?.contactName}'s payment. This is recorded with your name and the time.`, label: "Confirm payment", tone: "primary" },
     complete: { title: "Complete sale and mark as sold?", description: `"${open?.property.title}" will be marked as sold. Other open requests and offers on it will be closed.`, label: "Mark as sold", tone: "primary" },
   }[confirm.kind];
 
@@ -175,7 +176,7 @@ const SaleRequestsBoard = ({ scope }) => {
     <>
       {!isAdmin && <WorkspaceStats className="mb-6" items={[
         { label: "Open requests", value: requests.filter(TABS[0].match).length, note: "Your current buyer pipeline" },
-        { label: "Awaiting payment", value: requests.filter(TABS[1].match).length, note: "Office payment outstanding" },
+        { label: "Awaiting payment", value: requests.filter(TABS[1].match).length, note: "Buyer payment outstanding" },
         { label: "Payment received", value: requests.filter((r) => r.paymentStatusKey === "confirmed" && !CLOSED.includes(r.statusKey)).length, note: "Ready to complete the sale" },
         { label: "Completed sales", value: requests.filter(TABS[2].match).length, note: "Successfully closed requests" },
       ]} />}
@@ -245,7 +246,7 @@ const SaleRequestsBoard = ({ scope }) => {
             <StatusSteps kind="sale" status={open.statusKey} />
             <div className="rounded-xl bg-brand-50 p-4"><p className="workspace-eyebrow">Purchase summary</p><p className="mt-2 text-2xl font-semibold text-gray-900">{ghs(open.askingPrice)}</p><div className="mt-3 flex flex-wrap gap-2"><StatusBadge status={open.status} /><StatusBadge status={open.paymentStatus} /></div><p className="mt-3 text-xs leading-relaxed text-gray-600">{closed ? "This request is closed. Its history is available below." : paymentConfirmed ? "Payment is confirmed. Complete the sale when the handover is finished." : "Follow up with the buyer and confirm payment only after it is received."}</p></div>
             <Link to={`/house/${open.property.id}`} className="flex items-center gap-3 rounded-lg p-2 ring-1 ring-gray-200 transition hover:ring-brand-200">
-              {open.property.image && <img src={open.property.image} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />}
+              {open.property.image && <img src={cloudImage(open.property.image, 80)} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />}
               <div className="min-w-0">
                 <p className="truncate font-semibold text-gray-900">{open.property.title}</p>
                 <p className="text-sm text-gray-500">{open.property.location}</p>
@@ -287,7 +288,7 @@ const SaleRequestsBoard = ({ scope }) => {
               </div>
               {open.paymentConfirmedAt && (
                 <div>
-                  <dt className="text-gray-500">Paid at office</dt>
+                  <dt className="text-gray-500">Payment received</dt>
                   <dd className="font-semibold text-gray-900">
                     {ghs(open.amountPaid)} · {formatDate(open.paymentConfirmedAt)}
                     {open.paymentConfirmedBy && <span className="block text-xs font-normal text-gray-500">by {open.paymentConfirmedBy.name}</span>}
@@ -318,13 +319,13 @@ const SaleRequestsBoard = ({ scope }) => {
                     {busy === "status" ? "Updating..." : "Update status"}
                   </button>
                 </div>
-                <textarea value={note} onChange={(e) => setNote(e.target.value.slice(0, 300))} rows={2} placeholder="Note for the customer (optional), e.g. office address and opening hours" className="field resize-none" />
+                <textarea value={note} onChange={(e) => setNote(e.target.value.slice(0, 300))} rows={2} placeholder="Note for the customer (optional), e.g. how and where to pay" className="field resize-none" />
 
                 <div className="grid gap-2 border-t border-gray-100 pt-3 sm:grid-cols-2">
                   {!paymentConfirmed ? (
                     <button onClick={() => { setPaidAmount(""); setConfirm({ kind: "payment" }); }} disabled={Boolean(busy)} className="btn bg-emerald-600 text-white hover:bg-emerald-700 sm:col-span-2">
                       <Wallet className="h-4 w-4" />
-                      Confirm payment received at office
+                      Confirm payment received
                     </button>
                   ) : (
                     <button onClick={() => setConfirm({ kind: "complete" })} disabled={Boolean(busy)} className="btn btn-dark sm:col-span-2">

@@ -19,6 +19,7 @@ import { protectOwner } from "../middleware/authMiddleware.js";
 import { activateSubscription } from "../controllers/subscriptionController.js";
 import { approvedAgent, validateAgentProfile } from "../utils/agentApplication.js";
 import { canAccessAgent, agentDestination, sessionDestination } from "../../frontend/src/utils/sessionDomain.js";
+import { fakeListedAgents } from "./support/listedAgents.js";
 
 test("agent permission and return navigation fail closed", () => {
   for (const status of [undefined, "incomplete", "pending", "rejected", "suspended"]) {
@@ -65,6 +66,7 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
   replace(User, "findById", (value) => query(users.find((user) => id(user) === id(value)) || null));
   replace(User, "findOne", (filter) => query(users.find((user) => matches(user, filter)) || null));
   replace(User, "find", (filter = {}) => query(users.filter((user) => matches(user, filter))));
+  replace(User, "aggregate", fakeListedAgents(() => users, matches));
   replace(User, "findOneAndUpdate", (filter, update) => {
     const user = users.find((entry) => matches(entry, filter));
     if (user) for (const [path, value] of Object.entries(update.$set)) user.set(path, value);

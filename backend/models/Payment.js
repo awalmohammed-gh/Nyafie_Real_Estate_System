@@ -3,7 +3,7 @@ import { schemaOptions } from "../utils/schemaOptions.js";
 
 // Every payment attempt or confirmation for a property transaction:
 //  - rental: online Paystack checkouts (one record per attempt)
-//  - sale:   payments made at the office and confirmed by the owner
+//  - sale:   payments agreed directly between buyer and owner, confirmed by the owner
 // Agent subscription payments stay in the Subscription collection.
 const paymentSchema = new mongoose.Schema(
   {
@@ -16,7 +16,7 @@ const paymentSchema = new mongoose.Schema(
     ownerType: { type: String, enum: ["admin", "agent"], required: true },
     amount: { type: Number, required: true, min: 0 },
     currency: { type: String, default: "GHS" },
-    method: { type: String, enum: ["Paystack", "Test payment", "Office"], required: true },
+    method: { type: String, enum: ["Paystack", "Test payment", "Direct", "Office"], required: true }, // Office: sales confirmed before buyers paid owners directly
     reference: { type: String, required: true, unique: true },
     // duplicate: a second successful charge for something already paid (needs a refund)
     // refunded: the whole amount went back to the customer (see the Refund ledger)
@@ -29,7 +29,7 @@ const paymentSchema = new mongoose.Schema(
     channel: { type: String, default: undefined }, // card, mobile_money, bank, ...
     paidAmount: { type: Number, default: undefined }, // GHS Paystack charged, recorded when it differs from the expected amount
     paidAt: { type: Date },
-    confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // office payments
+    confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // sale payments confirmed by the owner
     note: { type: String, default: "" },
     nextReconcileAt: { type: Date, default: null },
     refund: { type: mongoose.Schema.Types.ObjectId, ref: "Refund", default: null }, // the latest refund attempt

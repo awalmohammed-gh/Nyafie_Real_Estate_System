@@ -12,9 +12,10 @@ import Setting from "../models/Setting.js";
 import Plan from "../models/Plan.js";
 import Subscription from "../models/Subscription.js";
 import TeamInvite from "../models/TeamInvite.js";
+import Notification from "../models/Notification.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
 
-test("agent safeguards: office payments are recorded once; declined applicants can't join agencies", { skip: process.env.RUN_AGENT_SAFEGUARDS_INTEGRATION !== "1", timeout: 90000 }, async (t) => {
+test("agent safeguards: sale payments are recorded once; declined applicants can't join agencies", { skip: process.env.RUN_AGENT_SAFEGUARDS_INTEGRATION !== "1", timeout: 90000 }, async (t) => {
   await isolatedMongo(t);
   process.env.JWT_KEY = "isolated-agent-safeguards-signing-key-32-chars";
   await Setting.create({ key: "platform", agent: { requireSubscription: true } });
@@ -34,8 +35,8 @@ test("agent safeguards: office payments are recorded once; declined applicants c
     return { code: response.status, ...(await response.json()) };
   };
 
-  await t.test("confirming an office payment several times at once records exactly one payment", async () => {
-    const house = await Property.create({ title: "Safe House", description: "A house used to check office payment confirmation.", propertyType: "House", listingType: "Sale", price: 500000, pricePeriod: "total", owner: owner._id, ownerType: "agent", status: "published", availability: "Available" });
+  await t.test("confirming a sale payment several times at once records exactly one payment", async () => {
+    const house = await Property.create({ title: "Safe House", description: "A house used to check sale payment confirmation.", propertyType: "House", listingType: "Sale", price: 500000, pricePeriod: "total", owner: owner._id, ownerType: "agent", status: "published", availability: "Available" });
     const request = await SaleRequest.create({ customer: customer._id, property: house._id, owner: owner._id, ownerType: "agent", askingPrice: 500000, contactName: "Buyer Test", contactEmail: customer.email, contactPhone: "0241234567", status: "payment_pending", paymentStatus: "payment_requested" });
     const results = await Promise.all(Array.from({ length: 5 }, () => asAgent(owner, `/sale-requests/${request.id}/confirm-payment`, { method: "PATCH", body: { amount: 500000 } })));
     assert.deepEqual(results.map((r) => r.code).filter((code) => code === 200).length, 1, JSON.stringify(results.map((r) => r.code)));
@@ -45,7 +46,19 @@ test("agent safeguards: office payments are recorded once; declined applicants c
     assert.equal(saved.paymentStatus, "confirmed");
     assert.equal(saved.status, "paid_at_office");
     assert.equal(saved.amountPaid, 500000);
+    assert.equal((await Payment.findOne({ saleRequest: request._id })).method, "Direct", "sales are paid to the owner, not at an office");
     assert.equal((await asAgent(owner, `/sale-requests/${request.id}/confirm-payment`, { method: "PATCH", body: { amount: 1 } })).code, 400, "already confirmed");
+  });
+
+  await t.test("requesting payment tells the buyer to agree it with the owner, never to pay at an office", async () => {
+    const house = await Property.create({ title: "Direct House", description: "A house used to check the payment request wording.", propertyType: "House", listingType: "Sale", price: 400000, pricePeriod: "total", owner: owner._id, ownerType: "agent", status: "published" });
+    const request = await SaleRequest.create({ customer: customer._id, property: house._id, owner: owner._id, ownerType: "agent", askingPrice: 400000, contactName: "Buyer Test", contactEmail: customer.email, contactPhone: "0241234567", status: "approved" });
+    const updated = await asAgent(owner, `/sale-requests/${request.id}/status`, { method: "PATCH", body: { status: "payment_pending" } });
+    assert.equal(updated.code, 200, JSON.stringify(updated));
+    const sent = await Notification.findOne({ recipient: customer._id, title: "Payment requested" }).sort({ createdAt: -1 });
+    assert.match(sent.message, /agree with .+ how to pay/);
+    assert.match(sent.message, /Only pay the owner or agent shown on/);
+    assert.doesNotMatch(sent.message, /office/i);
   });
 
   await t.test("an applicant an admin declined can't become approved by joining an agency", async () => {

@@ -13,6 +13,7 @@ import EmptyState from "../../components/ui/EmptyState";
 import { formatDate, formatRelative, isWithinDays } from "../../utils/date";
 import { formatPrice } from "../../utils/property";
 import { usePlatform } from "../../context/usePlatform";
+import { cloudImage } from "../../utils/cloudImage";
 
 const STATUSES = ["New", "Contacted", "In Progress", "Closed"];
 const RANGES = [
@@ -169,7 +170,7 @@ const AdminInquiries = () => {
             </dl>
             {openProperty && (
               <div className="flex items-center gap-3 rounded-lg p-2 ring-1 ring-slate-200">
-                <img src={openProperty.media.images[0]} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />
+                <img src={cloudImage(openProperty.media.images[0], 80)} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-gray-900">{openProperty.title}</p>
                   <p className="text-sm text-gray-500">{formatPrice(openProperty)} · {openProperty.location.name}</p>

@@ -6,6 +6,7 @@ import { useAuth } from "../../context/useAuth";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import { formatRelative, formatTime } from "../../utils/date";
+import { cloudImage } from "../../utils/cloudImage";
 
 const POLL_MS = 8000;
 const MAX = 2000;
@@ -106,7 +107,7 @@ const ChatThread = ({ conversationId, onBack, onChanged }) => {
             <ArrowLeft className="h-5 w-5" />
           </button>
         )}
-        {conversation.property.image && <img src={conversation.property.image} alt="" className="h-11 w-14 shrink-0 rounded-lg object-cover" />}
+        {conversation.property.image && <img src={cloudImage(conversation.property.image, 56)} alt="" className="h-11 w-14 shrink-0 rounded-lg object-cover" />}
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold text-gray-900">{counterpart?.name}</p>
           <Link to={`/house/${conversation.property.id}`} className="block truncate text-sm text-brand-600 hover:underline">

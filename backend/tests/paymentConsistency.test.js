@@ -9,6 +9,7 @@ import Setting from "../models/Setting.js";
 import User from "../models/User.js";
 import { initializeRentalPayment, verifyPayment } from "../controllers/paymentController.js";
 import { recordFailedRentalPayment } from "../utils/confirmRentalPayment.js";
+import { fakeListedAgents } from "./support/listedAgents.js";
 
 const response = () => ({ code: 200, status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } });
 
@@ -207,6 +208,7 @@ test("a failed checkout-start response cannot reopen a rental cancelled while Pa
   });
   t.mock.method(Setting, "findOneAndUpdate", () => ({ lean: async () => ({ payments: { rentalsEnabled: true }, agent: { requireSubscription: false } }) }));
   t.mock.method(User, "find", () => ({ select: () => ({ populate: async () => [] }) }));
+  t.mock.method(User, "aggregate", fakeListedAgents([]));
   t.mock.method(Property, "findOne", () => ({ session: async () => property }));
   t.mock.method(Rental, "findOne", () => f.query("rental", Rental));
   f.provider("failed", () => { f.stored.rental.status = "cancelled"; }, false);

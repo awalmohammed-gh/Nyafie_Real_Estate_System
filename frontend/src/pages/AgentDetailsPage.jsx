@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowUpRight, BadgeCheck, Building2, ChevronRight, Mail, MapPin, Phone, Star } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, BadgeCheck, Building2, ChevronRight, Flag, Mail, MapPin, Phone, Star } from 'lucide-react';
 import WhatsAppIcon from '../components/ui/WhatsAppIcon';
 import { toWhatsAppNumber } from '../utils/whatsapp';
 import { useRealEstate } from '../context/useRealEstate';
@@ -14,6 +14,9 @@ import './agent/workspace.css';
 import { propertyApi } from '../frontApi';
 import { useApiQuery } from '../hooks/useApiQuery';
 import SkeletonGrid from '../components/ui/SkeletonGrid';
+import { cloudImage } from '../utils/cloudImage';
+import { useAuth } from '../context/useAuth';
+import ReportModal from '../components/reports/ReportModal';
 
 const CATEGORIES = [{ label: 'All homes', value: 'All' }, { label: 'For sale', value: 'Sale' }, { label: 'To rent', value: 'Rent' }];
 
@@ -21,6 +24,10 @@ const AgentProfile = ({ agent }) => {
   const { paths, siteName } = usePlatform();
   const [category, setCategory] = useState('All');
   const [page, setPage] = useState(1);
+  const [reporting, setReporting] = useState(false);
+  const { user } = useAuth();
+  // Customers and other agents can report an agent; admins act on agents directly
+  const canReport = Boolean(user) && user.role !== 'admin' && user.id !== agent.id;
   const result = useApiQuery(`agent-listings:${agent.id}:${category}:${page}`, () => propertyApi.searchProperties({ owner: agent.id, availability: ['Available', 'Under Offer'], listingType: category === 'All' ? undefined : category, page, limit: 12 }));
   const listings = result.data?.items || [];
   const areas = agent.locations.filter(Boolean);
@@ -61,10 +68,11 @@ const AgentProfile = ({ agent }) => {
             {areas.length ? <ul>{areas.map((area) => <li key={area}>{area}</li>)}</ul> : <p>Neighbourhoods will appear with the first listing.</p>}
           </div>
           {agent.rating != null && <div className="agent-profile-rating"><Star size={18} aria-hidden="true" /><div><strong>{agent.rating.toFixed(1)} <span>/ 5</span></strong><p>Average rating across reviewed properties</p></div></div>}
+          {canReport && <button type="button" onClick={() => setReporting(true)} className="mt-4 inline-flex min-h-9 items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-red-700"><Flag size={14} aria-hidden="true" />Report this agent</button>}
         </aside>
 
         <section className="agent-profile-listings" aria-labelledby="agent-listings-title">
-          {(agent.bio || agent.city || agent.companyName) && <section className="agent-public-about" aria-labelledby="agent-about-title"><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h2 id="agent-about-title">About {firstName}</h2>{agent.agencyLogo && <img src={agent.agencyLogo} alt={`${agent.companyName || 'Agency'} logo`} className="h-12 w-12 rounded-lg object-contain" />}</div>{agent.bio && <p>{agent.bio}</p>}<div className="mt-4 flex flex-wrap gap-3 text-xs text-gray-500">{(agent.city || agent.region) && <span className="inline-flex items-center gap-1.5"><MapPin size={14} />{[agent.city, agent.region].filter(Boolean).join(', ')}</span>}{agent.yearsExperience > 0 && <span>{agent.yearsExperience} {agent.yearsExperience === 1 ? 'year' : 'years'} of experience</span>}</div></section>}
+          {(agent.bio || agent.city || agent.companyName) && <section className="agent-public-about" aria-labelledby="agent-about-title"><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h2 id="agent-about-title">About {firstName}</h2>{agent.agencyLogo && <img src={cloudImage(agent.agencyLogo, 48)} alt={`${agent.companyName || 'Agency'} logo`} className="h-12 w-12 rounded-lg object-contain" />}</div>{agent.bio && <p>{agent.bio}</p>}<div className="mt-4 flex flex-wrap gap-3 text-xs text-gray-500">{(agent.city || agent.region) && <span className="inline-flex items-center gap-1.5"><MapPin size={14} />{[agent.city, agent.region].filter(Boolean).join(', ')}</span>}{agent.yearsExperience > 0 && <span>{agent.yearsExperience} {agent.yearsExperience === 1 ? 'year' : 'years'} of experience</span>}</div></section>}
           <div className="agents-section-heading"><div><p className="agents-eyebrow">Find your next place</p><h2 id="agent-listings-title">Homes with {firstName}</h2></div></div>
           <div className="agent-profile-listing-toolbar">
             <div className="agents-segments" role="group" aria-label="Filter homes by listing type">
@@ -85,6 +93,7 @@ const AgentProfile = ({ agent }) => {
           {result.data?.pages > 1 && <nav aria-label="Agent listings pages" className="mt-6 flex items-center justify-center gap-4"><button type="button" disabled={page === 1 || result.loading} onClick={() => setPage((current) => current - 1)} className="btn btn-light">Previous</button><span className="text-sm text-gray-600">Page {page} of {result.data.pages}</span><button type="button" disabled={page >= result.data.pages || result.loading} onClick={() => setPage((current) => current + 1)} className="btn btn-light">Next</button></nav>}
         </section>
       </div>
+      {canReport && <ReportModal target={{ type: 'agent', id: agent.id, name: agent.name }} open={reporting} onClose={() => setReporting(false)} />}
     </div>
   );
 };

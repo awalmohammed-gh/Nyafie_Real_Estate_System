@@ -7,6 +7,7 @@ import Conversation from "../models/Conversation.js";
 import Offer from "../models/Offer.js";
 import Rental from "../models/Rental.js";
 import SaleRequest from "../models/SaleRequest.js";
+import Viewing from "../models/Viewing.js";
 import Subscription from "../models/Subscription.js";
 import TeamInvite from "../models/TeamInvite.js";
 import { paymentReturnUrl } from "../config/runtime.js";
@@ -109,6 +110,7 @@ export const removeMember = async (req, res) => {
     Offer.updateMany(scope, back),
     Rental.updateMany(scope, back),
     SaleRequest.updateMany(scope, back),
+    Viewing.updateMany(scope, back),
   ]);
   await endMembership(member, "removed-by-owner"); // kept in the member's history
   await notifyUser(member._id, { type: "status", title: "You left the agency team", message: "Your account no longer has access to the agency's listings and leads.", link: "/agent/status" });

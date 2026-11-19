@@ -35,7 +35,7 @@ export const ContactTab = () => {
         <Row label="WhatsApp number" description="Customers message this number about admin listings. Include the country code. Empty uses the phone number." htmlFor="c-wa">
           <Input id="c-wa" type="tel" value={c.form.whatsapp} onChange={(v) => c.set("whatsapp", v)} max={20} placeholder="+233 24 000 0000" />
         </Row>
-        <Row label="Office address" description="Where customers pay for property purchases and visit the team." htmlFor="c-address">
+        <Row label="Office address" description="Where customers can visit the team." htmlFor="c-address">
           <Input id="c-address" value={c.form.address} onChange={(v) => c.set("address", v)} max={150} placeholder="Street and area" />
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
             <Input aria-label="City" value={c.form.city} onChange={(v) => c.set("city", v)} max={60} placeholder="City" />
@@ -201,7 +201,7 @@ export const PaymentsTab = () => {
         <Switch label="Rental payments" description="Customers pay for rentals online with Rent Now." checked={f.form.rentalsEnabled} onChange={(v) => f.set("rentalsEnabled", v)} />
         <Switch label="Agent subscription payments" description="Agents pay for plans online at checkout." checked={f.form.subscriptionsEnabled} onChange={(v) => f.set("subscriptionsEnabled", v)} />
         <div className="px-5 py-4 sm:px-6">
-          <Callout>Property purchases are never charged online. Buyers pay at the office, and the payment is confirmed from Sales.</Callout>
+          <Callout>Property purchases are never charged online. Buyers agree the payment with the owner, and the owner confirms it from Sales.</Callout>
         </div>
       </Panel>
     </div>

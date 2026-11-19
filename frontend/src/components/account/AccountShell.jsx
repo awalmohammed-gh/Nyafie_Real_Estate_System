@@ -1,6 +1,6 @@
 ﻿import { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { BellRing, Building, ChevronDown, ChevronRight, HandCoins, Heart, KeyRound, MessageCircle, MessageSquare, Settings, UserRound } from "lucide-react";
+import { BellRing, Building, CalendarClock, ChevronDown, ChevronRight, HandCoins, Heart, KeyRound, MessageCircle, MessageSquare, Settings, UserRound } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { AgentBadge } from "./AccountMenu";
 import UserAvatar from "./UserAvatar";
@@ -11,6 +11,7 @@ const tabs = [
   { label: "Saved", to: "/account/saved", icon: Heart },
   { label: "Searches", to: "/account/searches", icon: BellRing },
   { label: "Conversations", to: "/account/messages", icon: MessageCircle },
+  { label: "Viewings", to: "/account/viewings", icon: CalendarClock },
   { label: "Offers", to: "/account/offers", icon: HandCoins },
   { label: "Rentals", to: "/account/rentals", icon: KeyRound },
   { label: "Purchases", to: "/account/purchases", icon: Building },

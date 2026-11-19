@@ -14,6 +14,7 @@ import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { teamApi } from "../../frontApi";
 import { formatDate } from "../../utils/date";
 import { getInitials } from "../../utils/property";
+import { cloudImage } from "../../utils/cloudImage";
 
 const ROLES = {
   manager: { label: "Manager", text: "Sees every agency listing and lead, and assigns work to the team." },
@@ -22,7 +23,7 @@ const ROLES = {
 
 const Avatar = ({ person }) => (
   <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-brand-50 text-xs font-semibold text-brand-700">
-    {person.profileImage ? <img src={person.profileImage} alt="" className="h-full w-full object-cover" /> : getInitials(person.name)}
+    {person.profileImage ? <img src={cloudImage(person.profileImage, 40)} alt="" className="h-full w-full object-cover" /> : getInitials(person.name)}
   </span>
 );
 

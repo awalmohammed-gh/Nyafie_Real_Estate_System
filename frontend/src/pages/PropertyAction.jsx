@@ -18,6 +18,7 @@ import NotFound from "./NotFound";
 import { formatType, getPriceParts, statusLabel } from "../utils/property";
 import { buildWhatsAppLink, ownerWhatsAppNumber } from "../utils/whatsapp";
 import { propertyUrl } from "../utils/siteUrl";
+import { cloudImage } from "../utils/cloudImage";
 
 const COPY = {
   rent: { title: "Proceed with Rental", intro: "Confirm availability with the agent, then review your rental details and total before paying online." },
@@ -27,7 +28,7 @@ const COPY = {
 
 /**
  * /checkout/rent/:propertyId  -> Rent Now (rental checkout + Paystack)
- * /checkout/buy/:propertyId   -> Buy Now (purchase request, pay at the office)
+ * /checkout/buy/:propertyId   -> Buy Now (purchase request; payment agreed with the owner)
  * /make-offer/:propertyId     -> Make Offer (sale or rental)
  * Loads the property from the backend; signed-in customers only.
  */
@@ -116,7 +117,7 @@ const PropertyAction = ({ mode }) => {
           {/* Property summary */}
           <section className="space-y-5 lg:col-span-2">
             <div className="overflow-hidden rounded-3xl bg-white ring-1 ring-gray-200/80">
-              <img src={media.images[0]} alt={title} className="aspect-16/10 w-full object-cover" />
+              <img src={cloudImage(media.images[0], 480)} alt={title} className="aspect-16/10 w-full object-cover" />
               <div className="p-5">
                 <div className="flex flex-wrap gap-2">
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isForSale ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-700"}`}>

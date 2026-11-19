@@ -10,6 +10,7 @@ import Setting from "../models/Setting.js";
 import Plan from "../models/Plan.js";
 import agentRoutes from "../routes/agentRoutes.js";
 import propertyRoutes from "../routes/propertyRoutes.js";
+import { fakeListedAgents } from "./support/listedAgents.js";
 
 const query = (value) => ({
   then: (resolve, reject) => Promise.resolve(value).then(resolve, reject),
@@ -25,6 +26,7 @@ test("agent directory and listing identities require a valid selected session", 
   const listing = new Property({ title: "Accra Apartment", description: "A comfortable apartment in Accra.", owner: agent._id, ownerType: "agent", status: "published", listingType: "Rent", price: 2000, location: { city: "Accra", neighbourhood: "East Legon" }, contact: { name: "Stale Agent", phone: "0000000", email: "stale@example.test" } });
   t.mock.method(User, "findById", (id) => query([customer, agent].find((user) => String(user._id) === String(id))));
   t.mock.method(User, "find", () => query([agent]));
+  t.mock.method(User, "aggregate", fakeListedAgents([agent]));
   t.mock.method(Setting, "findOneAndUpdate", () => query({ agent: { requireSubscription: false } }));
   t.mock.method(Plan, "findOne", () => query(null)); // the waived default plan, read for the chat check
   t.mock.method(Property, "aggregate", () => Promise.resolve([listing.toObject()]));

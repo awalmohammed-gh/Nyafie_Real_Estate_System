@@ -15,6 +15,7 @@ import chatRoutes from "../routes/chatRoutes.js";
 import agentRoutes from "../routes/agentRoutes.js";
 import { quotePlan } from "../utils/planChange.js";
 import { chatEnabledAgents, withinImageLimit } from "../utils/permissions.js";
+import { fakeListedAgents } from "./support/listedAgents.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date();
@@ -148,6 +149,7 @@ test("the chat API refuses agents whose plan has no chat, whatever the client se
 
   t.mock.method(User, "findById", (id) => q(users.find((u) => String(u._id) === String(id))));
   t.mock.method(User, "find", () => q([starterAgent]));
+  t.mock.method(User, "aggregate", fakeListedAgents([starterAgent]));
   t.mock.method(Subscription, "find", () => q([sub]));
   t.mock.method(Subscription, "findById", () => q(sub));
   t.mock.method(Property, "findOne", () => q(listing));

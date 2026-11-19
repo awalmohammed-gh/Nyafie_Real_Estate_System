@@ -1,4 +1,5 @@
 // Helpers for the homepage hero slides managed in Admin Settings > Homepage Hero
+import { cloudImageSources } from "./cloudImage.js";
 
 const CLOUDINARY_UPLOAD = /^(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.+)$/;
 const BUILT_IN = /^(\/hero\/[a-z0-9-]+)\.jpg$/;
@@ -8,10 +9,9 @@ const BUILT_IN = /^(\/hero\/[a-z0-9-]+)\.jpg$/;
  * (WebP/AVIF) by Cloudinary; the built-in images ship with a 960px copy for phones.
  */
 export const heroImageSources = (url = "") => {
-  const cloud = CLOUDINARY_UPLOAD.exec(url);
-  if (cloud) {
-    const at = (width) => `${cloud[1]}f_auto,q_auto,c_limit,w_${width}/${cloud[2]}`;
-    return { src: at(1920), srcSet: [960, 1440, 1920, 2560].map((w) => `${at(w)} ${w}w`).join(", ") };
+  if (CLOUDINARY_UPLOAD.test(url)) {
+    const { src, srcSet } = cloudImageSources(url, undefined, [960, 1440, 1920, 2560], 1920);
+    return { src, srcSet };
   }
   const builtIn = BUILT_IN.exec(url);
   if (builtIn) return { src: url, srcSet: `${builtIn[1]}-960.jpg 960w, ${url} 1920w` };

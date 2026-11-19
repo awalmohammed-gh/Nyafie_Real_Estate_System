@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Building, Building2, CreditCard, HandCoins, Inbox, KeyRound, LayoutDashboard, MessageCircle, LifeBuoy, PlusSquare, Settings, Users } from "lucide-react";
+import { Building, Building2, CalendarClock, CreditCard, HandCoins, Inbox, KeyRound, LayoutDashboard, MessageCircle, LifeBuoy, PlusSquare, Settings, Users } from "lucide-react";
 import { useUnreadMessages } from "../hooks/useUnreadMessages";
 import { useAgentLiveRefresh } from "../hooks/useAgentLiveRefresh";
 import { useAgent } from "../hooks/useAgent";
@@ -35,6 +35,7 @@ const navGroups = (perms) => [
       { label: "Offers", to: "/agent/offers", icon: HandCoins, badge: "offers" },
       { label: "Rental Requests", to: "/agent/rentals", icon: KeyRound, badge: "rentals" },
       { label: "Sale Requests", to: "/agent/sale-requests", icon: Building, badge: "sales" },
+      { label: "Viewings", to: "/agent/viewings", icon: CalendarClock, badge: "viewings" },
       { label: "Messages", to: "/agent/messages", icon: MessageCircle, badge: "messages" },
     ],
   },
@@ -93,6 +94,7 @@ const AgentShell = () => {
     offers: pending.offers,
     rentals: pending.rentals,
     sales: pending.sales,
+    viewings: pending.viewings,
   };
 
   return (

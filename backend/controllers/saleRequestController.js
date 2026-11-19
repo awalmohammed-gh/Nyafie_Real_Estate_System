@@ -28,8 +28,8 @@ const LABELS = {
   offer_received: "offer received",
   negotiating: "negotiating",
   approved: "approved",
-  payment_pending: "awaiting payment at the office",
-  paid_at_office: "paid at the office",
+  payment_pending: "awaiting payment",
+  paid_at_office: "payment received",
   completed: "completed",
   cancelled: "cancelled",
   rejected: "rejected",
@@ -225,7 +225,7 @@ export const createSaleRequest = async (req, res) => {
     notifyUser(req.user._id, {
       type: "sale",
       title: "Purchase request submitted",
-      message: `The owner of "${property.title}" will contact you with next steps. Don't make any payment until you receive confirmation.`,
+      message: `The owner of "${property.title}" will contact you to agree on next steps and how to pay. Don't make any payment until you've agreed the details with them.`,
       link: "/account/purchases",
     }),
     notifyOwner(request, {
@@ -311,7 +311,7 @@ export const updateSaleStatus = async (req, res) => {
 
   const customerText =
     status === "payment_pending"
-      ? `Payment requested: please pay ${formatGHS(request.askingPrice)} at the ${siteName()} office as instructed by ${ownerName(request)}. Only pay at the office.`
+      ? `Payment requested: agree with ${ownerName(request)} how to pay ${formatGHS(request.askingPrice)} (in chat, by phone or in person). Only pay the owner or agent shown on ${siteName()}, and keep a receipt.`
       : `Your purchase request is now ${LABELS[status]}.`;
   await note(
     request,
@@ -333,7 +333,7 @@ export const updateSaleStatus = async (req, res) => {
   await respond(res, request._id, req.user, "Purchase request updated");
 };
 
-// PATCH /api/sale-requests/:id/confirm-payment { amount, note } -> owner confirms the customer paid at the office
+// PATCH /api/sale-requests/:id/confirm-payment { amount, note } -> owner confirms they received the buyer's payment
 export const confirmOfficePayment = async (req, res) => {
   const request = await loadManaged(req, res);
   if (!request) return;
@@ -365,7 +365,7 @@ export const confirmOfficePayment = async (req, res) => {
     owner: request.owner?._id || request.owner,
     ownerType: request.ownerType,
     amount,
-    method: "Office",
+    method: "Direct", // paid to the owner as agreed with the buyer
     reference: newReference("HBS"),
     status: "paid",
     paidAt: now,
@@ -388,26 +388,26 @@ export const confirmOfficePayment = async (req, res) => {
   addHistory(
     request,
     req.user,
-    `Office payment of ${formatGHS(amount)} confirmed${reason ? ` – ${reason}` : ""}`,
+    `Payment of ${formatGHS(amount)} confirmed by the owner${reason ? ` – ${reason}` : ""}`,
   );
   await note(
     request,
     req.user,
     "owner",
-    `Payment of ${formatGHS(amount)} received at the office and confirmed.`,
+    `Payment of ${formatGHS(amount)} received and confirmed by the owner.`,
   );
   await request.save();
 
   await notifyUser(request.customer._id, {
     type: "payment",
-    title: "Office payment confirmed",
+    title: "Payment confirmed",
     message: `Your payment of ${formatGHS(amount)} for "${request.property?.title}" was confirmed.`,
     link: "/account/purchases",
   });
   await respond(res, request._id, req.user, "Payment confirmed");
 };
 
-// PATCH /api/sale-requests/:id/complete -> marks the property sold (after the office payment is confirmed)
+// PATCH /api/sale-requests/:id/complete -> marks the property sold (after the owner confirms the payment)
 export const completeSale = async (req, res) => {
   const request = await loadManaged(req, res);
   if (!request) return;
@@ -415,7 +415,7 @@ export const completeSale = async (req, res) => {
     return fail(
       res,
       400,
-      "Confirm the office payment before completing the sale.",
+      "Confirm the buyer's payment before completing the sale.",
     );
 
   request.status = "completed";

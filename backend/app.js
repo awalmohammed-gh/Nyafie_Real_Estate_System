@@ -25,6 +25,8 @@ import reviewRoutes from "./routes/reviewRoutes.js";
 import contactRoutes from "./routes/contactRoutes.js";
 import geoRoutes from "./routes/geoRoutes.js";
 import savedSearchRoutes from "./routes/savedSearchRoutes.js";
+import viewingRoutes from "./routes/viewingRoutes.js";
+import safetyReportRoutes from "./routes/safetyReportRoutes.js";
 import { listConversations } from "./controllers/chatController.js";
 import { protectCustomer } from "./middleware/authMiddleware.js";
 import { allowedOrigins, limits, originCheck, rejectOperatorKeys, securityHeaders } from "./middleware/security.js";
@@ -80,11 +82,11 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
   app.post(["/api/auth/login", "/api/auth/customer/login", "/api/auth/agent/login"], limits.login);
   app.post(["/api/auth/register", "/api/auth/customer/register", "/api/auth/agent/register"], limits.register);
   app.put(["/api/auth/me/password", "/api/auth/customer/me/password", "/api/auth/agent/me/password", "/api/auth/admin/me/password", "/api/admin/account"], limits.password);
-  app.use(["/api/payments", "/api/subscriptions/initialize", "/api/subscriptions/verify"], limits.payments);
+  app.use(["/api/payments", "/api/subscriptions/initialize", "/api/subscriptions/upgrade", "/api/subscriptions/verify"], limits.payments);
   app.post("/api/properties/:id/view", limits.views);
   app.get("/api/geo/search", limits.geo);
   app.post("/api/conversations/:id/messages", limits.messages);
-  app.post(["/api/inquiries", "/api/offers", "/api/rentals", "/api/sale-requests", "/api/conversations", "/api/properties/:id/reviews", "/api/team/invites/:token/accept", "/api/saved-searches"], limits.contact);
+  app.post(["/api/inquiries", "/api/offers", "/api/rentals", "/api/sale-requests", "/api/conversations", "/api/properties/:id/reviews", "/api/team/invites/:token/accept", "/api/saved-searches", "/api/viewings", "/api/reports"], limits.contact);
 
   app.use("/api/auth", authRoutes);
   app.use("/api/users", userRoutes);
@@ -106,11 +108,16 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
   app.use("/api/contact", contactRoutes);
   app.use("/api/geo", geoRoutes);
   app.use("/api/saved-searches", savedSearchRoutes);
+  app.use("/api/viewings", viewingRoutes);
+  app.use("/api/reports", safetyReportRoutes);
   app.use("/api/uploads", uploadRoutes);
   app.get("/api/messages", protectCustomer, listConversations("customer")); // conversations the user started
 
   app.use("/api", (req, res) => res.status(404).json({ success: false, message: "Endpoint not found." }));
 
+  // Pages outside /api read the database too (settings, the listing for /house/:id, sitemaps)
+  app.get(["/sitemap.xml", "/sitemap-pages.xml", "/sitemap-properties-:page.xml"], limits.sitemaps);
+  app.use(limits.pages);
   app.use(seoRoutes);
 
   // Errors: users get a safe message, details stay in the server log

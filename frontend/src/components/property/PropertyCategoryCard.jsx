@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowUpRight, BedDouble, Building2, Home, Hotel } from 'lucide-react';
 import { usePlatform } from '../../context/usePlatform';
 import { propertyCategoryHref } from '../../utils/propertyCategories';
+import { cloudImage } from '../../utils/cloudImage';
 
 const ICONS = { building: Building2, home: Home, hotel: Hotel, tower: Building2, bed: BedDouble };
 
@@ -23,7 +24,7 @@ const PropertyCategoryCard = ({ category, compact = false }) => {
     <Link to={propertyCategoryHref(paths.listings, category.value)} className={compact ? 'explore-style-tile' : 'explore-category-card'}>
       {compact ? <span className="explore-style-icon"><PropertyCategoryIcon kind={category.icon} /></span> : (
         <div className="explore-category-image">
-          {image ? <img src={category.image} alt="" loading="lazy" decoding="async" onError={() => setFailedImage(category.image)} /> : <div className="explore-category-fallback"><PropertyCategoryIcon kind={category.icon} /></div>}
+          {image ? <img src={cloudImage(category.image, 320)} alt="" loading="lazy" decoding="async" onError={() => setFailedImage(category.image)} /> : <div className="explore-category-fallback"><PropertyCategoryIcon kind={category.icon} /></div>}
           <span className="explore-category-count"><PropertyCategoryCount count={category.count} /></span>
         </div>
       )}

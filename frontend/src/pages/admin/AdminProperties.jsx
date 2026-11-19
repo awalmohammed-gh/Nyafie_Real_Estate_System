@@ -24,6 +24,7 @@ import { propertyCardImageSources } from "../../utils/propertyImages";
 import { adminPath } from "../../utils/adminEntry";
 import FreshnessNotice, { FreshnessBadge } from "../../components/dashboard/FreshnessNotice";
 import "./adminProperties.css";
+import { cloudImage } from "../../utils/cloudImage";
 
 const priceOf = (property) => {
   if (property.property.type.toLowerCase() === "hotel") {
@@ -316,7 +317,7 @@ const AdminProperties = () => {
         empty={<EmptyState icon={Building2} title={listings.length ? "No matching properties" : "No properties yet"} description={listings.length ? "Try another area, owner, or listing status." : "Add your first property to start your portfolio."} action={filtered ? <button type="button" onClick={resetFilters} className="btn btn-light">Clear filters</button> : <Link to={adminPath("/properties/add")} className="btn btn-primary">Add property</Link>} />}
         mobileCard={(p) => (
           <div className="flex gap-3">
-            <img src={p.media.images[0]} alt="" className="h-20 w-24 shrink-0 rounded-xl object-cover" />
+            <img src={cloudImage(p.media.images[0], 96)} alt="" className="h-20 w-24 shrink-0 rounded-xl object-cover" />
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
                 <button onClick={() => setParam("open", p.id)} className="min-w-0 text-left">
@@ -357,10 +358,10 @@ const AdminProperties = () => {
       >
         {viewed && (
           <div className="space-y-5">
-            <img src={viewed.media.images[0]} alt="" className="aspect-video w-full rounded-lg bg-gray-100 object-cover" />
+            <img src={cloudImage(viewed.media.images[0], 480)} alt="" className="aspect-video w-full rounded-lg bg-gray-100 object-cover" />
             {viewed.media.images.length > 1 && (
               <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                {viewed.media.images.slice(1).map((src, i) => <img key={i} src={src} alt="" className="h-14 w-20 shrink-0 rounded-md object-cover" />)}
+                {viewed.media.images.slice(1).map((src, i) => <img key={i} src={cloudImage(src, 80)} alt="" className="h-14 w-20 shrink-0 rounded-md object-cover" />)}
               </div>
             )}
             <div className="flex flex-wrap items-center justify-between gap-3">

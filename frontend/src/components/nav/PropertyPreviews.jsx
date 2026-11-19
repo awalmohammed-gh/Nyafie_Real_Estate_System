@@ -4,6 +4,7 @@ import { Home, MapPin, RotateCcw } from 'lucide-react';
 import { PREVIEW_LIMIT } from '../../hooks/useNavPropertyPreviews';
 import { formatLocation, formatType, getPriceParts } from '../../utils/property';
 import { CATEGORY_PREVIEW_LIMIT } from '../../hooks/useCategoryPreviews';
+import { cloudImage } from '../../utils/cloudImage';
 
 const Price = ({ property }) => {
   const { value, period } = getPriceParts(property);
@@ -19,7 +20,7 @@ const Thumb = ({ property, interactive = false }) => {
   const src = property.media?.images?.[0];
   const [failedSrc, setFailedSrc] = useState(null);
   return src && failedSrc !== src ? (
-    <img src={src} alt="" loading="lazy" decoding="async" onError={() => setFailedSrc(src)} className={`h-full w-full object-cover ${interactive ? 'motion-safe:transition-transform motion-safe:duration-300 motion-safe:group-hover:scale-[1.03] motion-safe:group-focus-visible:scale-[1.03]' : ''}`} />
+    <img src={cloudImage(src, 320)} alt="" loading="lazy" decoding="async" onError={() => setFailedSrc(src)} className={`h-full w-full object-cover ${interactive ? 'motion-safe:transition-transform motion-safe:duration-300 motion-safe:group-hover:scale-[1.03] motion-safe:group-focus-visible:scale-[1.03]' : ''}`} />
   ) : (
     <span className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gray-100 text-gray-400">
       <Home aria-hidden="true" className="h-6 w-6" />

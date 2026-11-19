@@ -18,11 +18,12 @@ import { adminApi } from "../../frontApi";
 import { formatDate } from "../../utils/date";
 import { getSubscriptionState } from "../../utils/subscription";
 import { getInitials } from "../../utils/property";
+import { cloudImage } from "../../utils/cloudImage";
 
 // Photo, or initials on a soft violet circle
 const Avatar = ({ name, image, large = false }) => (
   <span className={`grid shrink-0 place-items-center overflow-hidden rounded-full bg-brand-50 font-semibold text-brand-700 ${large ? "h-16 w-16 text-lg" : "h-9 w-9 text-xs"}`} aria-hidden="true">
-    {image ? <img src={image} alt="" className="h-full w-full object-cover" /> : getInitials(name)}
+    {image ? <img src={cloudImage(image, 64)} alt="" className="h-full w-full object-cover" /> : getInitials(name)}
   </span>
 );
 
@@ -242,7 +243,7 @@ const AdminAgentApplications = () => {
                 <p className="text-sm text-gray-500">Short bio</p>
                 <p className="mt-1 text-sm leading-relaxed whitespace-pre-wrap text-gray-800">{app.bio || <span className="text-gray-400">Not provided</span>}</p>
               </div>
-              {app.agencyLogo && <img src={app.agencyLogo} alt={`${app.companyName || "Agency"} logo`} className="mt-4 max-h-20 max-w-full rounded-lg object-contain ring-1 ring-gray-200" />}
+              {app.agencyLogo && <img src={cloudImage(app.agencyLogo, 240)} alt={`${app.companyName || "Agency"} logo`} className="mt-4 max-h-20 max-w-full rounded-lg object-contain ring-1 ring-gray-200" />}
             </Section>
 
             <Section title="Subscription eligibility">

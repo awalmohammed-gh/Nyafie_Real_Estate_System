@@ -11,6 +11,7 @@ import Property from "../models/Property.js";
 import Inquiry from "../models/Inquiry.js";
 import Conversation from "../models/Conversation.js";
 import Offer from "../models/Offer.js";
+import Viewing from "../models/Viewing.js";
 import Rental from "../models/Rental.js";
 import SaleRequest from "../models/SaleRequest.js";
 import Setting from "../models/Setting.js";
@@ -95,7 +96,7 @@ test("agency invites, joining, roles and removal are enforced on the server", as
   t.mock.method(Property, "aggregate", async () => []);
   t.mock.method(Inquiry, "aggregate", async () => []);
   const reassigned = [];
-  for (const Model of [Property, Inquiry, Conversation, Offer, Rental, SaleRequest]) t.mock.method(Model, "updateMany", async (filter, update) => { reassigned.push({ model: Model.modelName, filter, update }); return {}; });
+  for (const Model of [Property, Inquiry, Conversation, Offer, Rental, SaleRequest, Viewing]) t.mock.method(Model, "updateMany", async (filter, update) => { reassigned.push({ model: Model.modelName, filter, update }); return {}; });
   t.mock.method(Notification, "create", async () => ({}));
   t.mock.method(Notification, "findOneAndUpdate", async () => null);
   t.mock.method(TeamInvite, "create", async (doc) => { const invite = new TeamInvite(doc); invites.push(invite); return invite; });
@@ -190,7 +191,7 @@ test("agency invites, joining, roles and removal are enforced on the server", as
     reassigned.length = 0;
     const response = await ownerCall("DELETE", `/agents/team/members/${recruit._id}`);
     assert.equal(response.status, 200);
-    assert.equal(reassigned.length, 6, "listings, inquiries, chats, offers, rentals and sale requests go back to the owner");
+    assert.equal(reassigned.length, 7, "listings, inquiries, chats, offers, rentals, sale requests and viewings go back to the owner");
     for (const { update } of reassigned) assert.deepEqual(update, { $set: { assignedTo: null } });
     assert.equal(recruit.agency, undefined);
     assert.equal(recruit.agentApplication.status, "incomplete", "working alone needs the usual admin approval");

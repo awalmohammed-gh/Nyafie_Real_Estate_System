@@ -85,7 +85,7 @@ export const verifyPayment = async (req, res) => {
   return ok(res, await rentalResult(outcome.rental._id, req.user), outcome.repeated ? "Rental already paid" : "Rental paid");
 };
 
-// GET /api/admin/payments -> every rental and office sale payment record
+// GET /api/admin/payments -> every rental and sale payment record
 export const listPayments = async (_req, res) => {
   const payments = await Payment.find()
     .sort({ createdAt: -1 })

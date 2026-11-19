@@ -4,6 +4,7 @@ import aboutImg from "../../assets/aboutImg.jpg";
 import Reveal from '../ui/Reveal';
 import { propertyApi } from "../../frontApi";
 import { useApiQuery } from "../../hooks/useApiQuery";
+import { cloudImage } from "../../utils/cloudImage";
 
 const features = [
   {
@@ -52,7 +53,7 @@ const About = () => {
               to={`/house/${spotlight.id}`}
               className="absolute -right-2 -bottom-8 hidden w-56 overflow-hidden rounded-2xl bg-white p-2 shadow-2xl ring-1 ring-gray-100 glass-hover [--glass-lift:3px] [--glass-shadow:0_25px_50px_-12px_rgb(62_7_102/0.25)] sm:block lg:-right-10"
             >
-              <img src={spotlight.media.images[0]} alt={spotlight.title} loading="lazy" className="aspect-4/3 w-full rounded-xl object-cover" />
+              <img src={cloudImage(spotlight.media.images[0], 224)} alt={spotlight.title} loading="lazy" className="aspect-4/3 w-full rounded-xl object-cover" />
               <div className="p-2">
                 <p className="truncate text-sm font-bold text-gray-900">{spotlight.title}</p>
                 <p className="flex items-center gap-1 text-xs text-gray-500">

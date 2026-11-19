@@ -1,8 +1,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Building2, ChevronLeft, ChevronRight, Images, X } from "lucide-react";
 import { useLockBodyScroll } from "../../hooks/useLockBodyScroll";
+import { cloudImage, cloudImageSources } from "../../utils/cloudImage";
 
-const PropertyImage = ({ src, alt, className, priority = false, compact = false }) => {
+// sizes: how wide the photo is shown, so the browser downloads a matching Cloudinary copy
+const PropertyImage = ({ src, alt, className, priority = false, compact = false, sizes = "100vw" }) => {
   const [failed, setFailed] = useState(null);
   if (!src || failed === src) {
     return (
@@ -12,7 +14,8 @@ const PropertyImage = ({ src, alt, className, priority = false, compact = false 
       </span>
     );
   }
-  return <img src={src} alt={alt} loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : "auto"} decoding="async" onError={() => setFailed(src)} className={className} />;
+  const image = compact ? { src: cloudImage(src, 96) } : cloudImageSources(src, sizes);
+  return <img {...image} alt={alt} loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : "auto"} decoding="async" onError={() => setFailed(src)} className={className} />;
 };
 
 const PropertyGallery = ({ images, title }) => {
@@ -52,7 +55,7 @@ const PropertyGallery = ({ images, title }) => {
       <div className={`grid gap-2.5 ${tiled ? "sm:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]" : ""}`}>
         <div className="group relative min-w-0 overflow-hidden rounded-2xl bg-gray-100">
           <button type="button" onClick={() => showPhoto(photoIndex)} aria-label="Open property photos" className="block aspect-[4/3] max-h-[28rem] w-full sm:aspect-[16/10]">
-            <PropertyImage src={photos[photoIndex]} alt={title} priority className="h-full w-full object-cover" />
+            <PropertyImage src={photos[photoIndex]} alt={title} priority sizes={tiled ? "(min-width: 1280px) 900px, (min-width: 640px) 75vw, 100vw" : "(min-width: 1280px) 1200px, 100vw"} className="h-full w-full object-cover" />
           </button>
           {photos.length > 1 && (
             <div className="pointer-events-none absolute inset-x-3 top-1/2 flex -translate-y-1/2 justify-between">
@@ -76,7 +79,7 @@ const PropertyGallery = ({ images, title }) => {
               const last = index === tiles.length - 1 && hidden > 0;
               return (
                 <button type="button" key={`${src}:${index}`} onClick={() => showPhoto(index + 1)} aria-label={last ? `Open all ${photos.length} property photos` : `Open property photo ${index + 2}`} className="relative min-h-0 overflow-hidden rounded-2xl bg-gray-100">
-                  <PropertyImage src={src} alt="" className="absolute inset-0 h-full w-full object-cover transition duration-500 hover:scale-105" />
+                  <PropertyImage src={src} alt="" sizes="(min-width: 1280px) 300px, 25vw" className="absolute inset-0 h-full w-full object-cover transition duration-500 hover:scale-105" />
                   {last && (
                     <span className="absolute inset-0 grid place-items-center bg-gray-950/55 text-white">
                       <span className="flex flex-col items-center gap-1 text-sm font-semibold"><Images aria-hidden="true" className="h-5 w-5" />+{hidden} {hidden === 1 ? "Photo" : "Photos"}</span>

@@ -15,6 +15,7 @@ import { TEST_CUSTOMER_TAB, customerTabClaims, customerTabHeaders } from "./supp
 import { injectMetadata } from "../utils/seo.js";
 import { ensureAdmin } from "../utils/ensureAdmin.js";
 import { rateLimit } from "../middleware/security.js";
+import { fakeListedAgents } from "./support/listedAgents.js";
 
 const query = (value) => ({ then: (yes, no) => Promise.resolve(value).then(yes, no), catch: (no) => Promise.resolve(value).catch(no), select: () => query(value), populate: () => query(value), sort: () => query(value), limit: () => query(value), skip: () => query(value), lean: () => Promise.resolve(value) });
 const listen = async (server) => { server.listen(0, '127.0.0.1'); await new Promise((resolve) => server.once('listening', resolve)); return `http://127.0.0.1:${server.address().port}`; };
@@ -35,6 +36,7 @@ test("production configuration, metadata, uploads and marketplace security", asy
   let savedSubscription = null;
   t.mock.method(User, 'findById', (id) => query([customer, agent, admin].find((user) => String(user._id) === String(id))));
   t.mock.method(User, 'find', () => query([agent]));
+  t.mock.method(User, 'aggregate', fakeListedAgents([agent]));
   t.mock.method(Setting, 'findOneAndUpdate', () => query({ agent: { requireSubscription } }));
   t.mock.method(Subscription, 'findById', () => query(savedSubscription));
   t.mock.method(Property, 'countDocuments', () => Promise.resolve(1));

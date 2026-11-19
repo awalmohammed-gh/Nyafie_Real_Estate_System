@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, Coins, Crosshair, House, Map as MapIcon, MapPin, Navigation, Search } from "lucide-react";
+import {
+  ArrowUpRight,
+  Coins,
+  Crosshair,
+  House,
+  Map as MapIcon,
+  MapPin,
+  Navigation,
+  Search,
+} from "lucide-react";
 import HeroSlider from "./HeroSlider";
 import NavOverlay from "../nav/NavOverlay";
 import HeroSearchSelect from "./HeroSearchSelect";
@@ -25,7 +34,8 @@ const statuses = [
 const fallbackSlide = {
   id: "fallback",
   title: "Find your kind of *home.*",
-  description: "The city you love. The space you need. Discover homes to buy and rent across Ghana, all in one place.",
+  description:
+    "The city you love. The space you need. Discover homes to buy and rent across Ghana, all in one place.",
   primaryText: "Explore homes",
   primaryLink: "/listings",
 };
@@ -34,18 +44,70 @@ const Hero = () => {
   const navigate = useNavigate();
   const { paths, settings } = usePlatform();
   const visitor = useVisitorLocation();
-  const [search, setSearch] = useState({ status: "Sale", area: "", type: "", price: "" });
+  const [search, setSearch] = useState({
+    status: "Sale",
+    area: "",
+    type: "",
+    price: "",
+  });
   const [mapHint, setMapHint] = useState(false);
   // A place picked from the map: { label, latitude, longitude } (its option value starts with "place:")
   const [place, setPlace] = useState(null);
-  const facets = usePropertyFacets(search.status === "stay" ? "" : search.status);
-  const areas = [...(facets.data?.areas || [])].sort((a, b) => a.name.localeCompare(b.name)).map((area) => ({ value: area.name, label: area.name, description: [area.city, area.region].filter(Boolean).join(" · "), count: area.count }));
-  const types = [...(facets.data?.types || [])].filter((type) => search.status !== "stay" || ["hotel", "hotel-apartment"].includes(type.value.toLowerCase())).sort((a, b) => a.value.localeCompare(b.value)).map((type) => ({ value: type.value, label: formatType(type.value), count: type.count }));
-  const active = settings.hero.slides.filter((slide) => slide.active && slide.image);
+  const facets = usePropertyFacets(
+    search.status === "stay" ? "" : search.status,
+  );
+  const areas = [...(facets.data?.areas || [])]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((area) => ({
+      value: area.name,
+      label: area.name,
+      description: [area.city, area.region].filter(Boolean).join(" · "),
+      count: area.count,
+    }));
+  const types = [...(facets.data?.types || [])]
+    .filter(
+      (type) =>
+        search.status !== "stay" ||
+        ["hotel", "hotel-apartment"].includes(type.value.toLowerCase()),
+    )
+    .sort((a, b) => a.value.localeCompare(b.value))
+    .map((type) => ({
+      value: type.value,
+      label: formatType(type.value),
+      count: type.count,
+    }));
+  const active = settings.hero.slides.filter(
+    (slide) => slide.active && slide.image,
+  );
   // The first slide introduces the platform: a whole neighbourhood of homes to choose from
-  const slides = [{ ...fallbackSlide, id: "nyafie-introduction", image: "/hero/nyafie-neighbourhood.jpg", position: "center 60%" }, ...active];
-  const nearMe = { value: NEAR_ME, label: "Use my current location", description: "See homes around you. Only used to find nearby homes.", icon: Crosshair, action: true };
-  const searchMap = (query, signal) => geoApi.searchPlaces(query, { signal }).then((places) => places.map((found) => ({ value: `place:${found.id}`, label: found.name, description: found.description, icon: Navigation, place: found })));
+  const slides = [
+    {
+      ...fallbackSlide,
+      id: "nyafie-introduction",
+      image: "/hero/nyafie-neighbourhood.jpg",
+      position: "center 60%",
+    },
+    ...active,
+  ];
+  const nearMe = {
+    value: NEAR_ME,
+    label: "Use my current location",
+    description: "See homes around you. Only used to find nearby homes.",
+    icon: Crosshair,
+    action: true,
+  };
+  const searchMap = (query, signal) =>
+    geoApi
+      .searchPlaces(query, { signal })
+      .then((places) =>
+        places.map((found) => ({
+          value: `place:${found.id}`,
+          label: found.name,
+          description: found.description,
+          icon: Navigation,
+          place: found,
+        })),
+      );
 
   // Keep the chosen location available to the featured properties' nearby filter.
   const chooseWhere = (value, option) => {
@@ -54,15 +116,25 @@ const Hero = () => {
       setPlace(null);
       visitor.requestDevicePosition(); // the browser asks now: the visitor pressed the button
     } else if (option?.place) {
-      const chosen = { source: "place", label: option.place.label, latitude: option.place.latitude, longitude: option.place.longitude };
+      const chosen = {
+        source: "place",
+        label: option.place.label,
+        latitude: option.place.latitude,
+        longitude: option.place.longitude,
+      };
       setPlace(chosen);
       visitor.setChoice("manual");
       visitor.rememberPlace(chosen);
     } else setPlace(null);
   };
-  const whereLabel = search.area === NEAR_ME
-    ? visitor.status === "locating" ? "Finding your location…" : "Near me"
-    : search.area.startsWith("place:") && place ? place.label : undefined;
+  const whereLabel =
+    search.area === NEAR_ME
+      ? visitor.status === "locating"
+        ? "Finding your location…"
+        : "Near me"
+      : search.area.startsWith("place:") && place
+        ? place.label
+        : undefined;
 
   const handleSearch = (event) => {
     event.preventDefault();
@@ -74,11 +146,25 @@ const Hero = () => {
       return;
     }
     // Near me or a map place: nearby search within 5 km; one of our neighbourhoods: that area's homes
-    const where = area === NEAR_ME ? { near: DEVICE, radius: String(DEFAULT_RADIUS_KM) }
-      : area.startsWith("place:") && place ? { ...nearToParams(place), radius: String(DEFAULT_RADIUS_KM) }
-        : { area };
+    const where =
+      area === NEAR_ME
+        ? { near: DEVICE, radius: String(DEFAULT_RADIUS_KM) }
+        : area.startsWith("place:") && place
+          ? { ...nearToParams(place), radius: String(DEFAULT_RADIUS_KM) }
+          : { area };
     const budget = price === "" ? null : PRICE_RANGES[Number(price)];
-    const params = new URLSearchParams(Object.entries({ status: status === "stay" ? "" : status, type: type || (status === "stay" ? "Hotel,Hotel-Apartment" : ""), minPrice: budget?.min, maxPrice: budget?.max, ...where, ...(mapView && { view: "map" }) }).filter(([, value]) => value !== "" && value !== undefined && value !== null));
+    const params = new URLSearchParams(
+      Object.entries({
+        status: status === "stay" ? "" : status,
+        type: type || (status === "stay" ? "Hotel,Hotel-Apartment" : ""),
+        minPrice: budget?.min,
+        maxPrice: budget?.max,
+        ...where,
+        ...(mapView && { view: "map" }),
+      }).filter(
+        ([, value]) => value !== "" && value !== undefined && value !== null,
+      ),
+    );
     navigate(`${paths.listings}${params.size ? `?${params}` : ""}`);
   };
 
@@ -87,35 +173,152 @@ const Hero = () => {
       {/* The navbar sits on the banner (transparent) until the page scrolls */}
       <NavOverlay />
       {/* Keyed by the slide set so it starts again at slide 1 when an admin changes the slides */}
-      <HeroSlider key={slides.map((slide) => slide.id).join()} slides={slides} marketplace>
+      <HeroSlider
+        key={slides.map((slide) => slide.id).join()}
+        slides={slides}
+        marketplace
+      >
         <div className="home-search" aria-label="Find a property">
           <div className="home-search-topline">
             <fieldset className="home-search-tabs">
               <legend className="sr-only">I want to</legend>
               {statuses.map(({ label, value }) => (
-                <label key={label} className={`home-search-tab ${search.status === value ? "is-active" : ""}`}>
-                  <input className="sr-only" type="radio" name="listing-intent" value={value} checked={search.status === value} onChange={() => setSearch((previous) => ({ status: value, type: "", price: "", area: previous.area === NEAR_ME || previous.area.startsWith("place:") ? previous.area : "" }))} />
+                <label
+                  key={label}
+                  className={`home-search-tab ${search.status === value ? "is-active" : ""}`}
+                >
+                  <input
+                    className="sr-only"
+                    type="radio"
+                    name="listing-intent"
+                    value={value}
+                    checked={search.status === value}
+                    onChange={() =>
+                      setSearch((previous) => ({
+                        status: value,
+                        type: "",
+                        price: "",
+                        area:
+                          previous.area === NEAR_ME ||
+                          previous.area.startsWith("place:")
+                            ? previous.area
+                            : "",
+                      }))
+                    }
+                  />
                   {label}
                 </label>
               ))}
             </fieldset>
           </div>
-          <form key={search.status} onSubmit={handleSearch} className="home-search-form">
+          <form
+            key={search.status}
+            onSubmit={handleSearch}
+            className="home-search-form"
+          >
             <HeroSearchSelect
-              icon={MapPin} label="Location" title="Where do you want to live?" name="area" placeholder="e.g. East Legon, Kumasi..." triggerId={WHERE_TRIGGER_ID}
-              value={search.area} selectedLabel={search.area ? whereLabel : "e.g. East Legon, Kumasi..."} onChange={chooseWhere}
+              icon={MapPin}
+              label="Location"
+              title="Where do you want to live?"
+              name="area"
+              placeholder="e.g. East Legon, Kumasi..."
+              triggerId={WHERE_TRIGGER_ID}
+              value={search.area}
+              selectedLabel={
+                search.area ? whereLabel : "e.g. East Legon, Kumasi..."
+              }
+              onChange={chooseWhere}
               actions={[nearMe]}
-              options={[{ value: "", label: "All locations", description: "Explore homes across Ghana", count: facets.data?.total }, ...areas]}
-              searchRemote={searchMap} remoteHeading="Places on the map" searchPlaceholder="Type a city, neighbourhood or place…"
-              emptyHint={(typed) => `No places match “${typed}”. Try a nearby town or neighbourhood.`}
+              options={[
+                {
+                  value: "",
+                  label: "All locations",
+                  description: "Explore homes across Ghana",
+                  count: facets.data?.total,
+                },
+                ...areas,
+              ]}
+              searchRemote={searchMap}
+              remoteHeading="Places on the map"
+              searchPlaceholder="Type a city, neighbourhood or place…"
+              emptyHint={(typed) =>
+                `No places match “${typed}”. Try a nearby town or neighbourhood.`
+              }
               footerHint="Your areas first, then places on the map"
             />
-            <HeroSearchSelect icon={House} label="Property type" title="Choose a property type" name="type" placeholder="Any property type" value={search.type} disabled={facets.loading} onChange={(value) => setSearch((previous) => ({ ...previous, type: value }))} options={[{ value: "", label: "Any property type", count: facets.data?.total }, ...types]} />
-            <HeroSearchSelect icon={Coins} label="Price range" title="Choose your price range" name="price" placeholder="Any price" value={search.price} onChange={(value) => setSearch((previous) => ({ ...previous, price: value }))} options={[{ value: "", label: "Any price" }, ...PRICE_RANGES.map((range, index) => ({ value: String(index), label: range.label }))]} footerHint="Prices use each listing’s stated payment period." />
-            <button type="submit" className="home-search-submit"><Search size={18} aria-hidden="true" /> Search Properties</button>
-            <div className="home-search-map-row"><span className={mapHint ? "is-visible" : ""} role="status">{mapHint ? "Choose a map place or use your current location." : ""}</span><button type="submit" name="view" value="map" className="home-text-link"><MapIcon size={15} aria-hidden="true" />Explore on map <ArrowUpRight size={14} aria-hidden="true" /></button></div>
+            <HeroSearchSelect
+              icon={House}
+              label="Property type"
+              title="Choose a property type"
+              name="type"
+              placeholder="Any property type"
+              value={search.type}
+              disabled={facets.loading}
+              onChange={(value) =>
+                setSearch((previous) => ({ ...previous, type: value }))
+              }
+              options={[
+                {
+                  value: "",
+                  label: "Any property type",
+                  count: facets.data?.total,
+                },
+                ...types,
+              ]}
+            />
+            <HeroSearchSelect
+              icon={Coins}
+              label="Price range"
+              title="Choose your price range"
+              name="price"
+              placeholder="Any price"
+              value={search.price}
+              onChange={(value) =>
+                setSearch((previous) => ({ ...previous, price: value }))
+              }
+              options={[
+                { value: "", label: "Any price" },
+                ...PRICE_RANGES.map((range, index) => ({
+                  value: String(index),
+                  label: range.label,
+                })),
+              ]}
+              footerHint="Prices use each listing’s stated payment period."
+            />
+            <button type="submit" className="home-search-submit">
+              <Search size={18} aria-hidden="true" /> Search Properties
+            </button>
+            <div className="home-search-map-row">
+              <span className={mapHint ? "is-visible" : ""} role="status">
+                {mapHint
+                  ? "Choose a map place or use your current location."
+                  : ""}
+              </span>
+              <button
+                type="submit"
+                name="view"
+                value="map"
+                className="home-text-link"
+              >
+                <MapIcon size={15} aria-hidden="true" />
+                Explore on map <ArrowUpRight size={14} aria-hidden="true" />
+              </button>
+            </div>
           </form>
-          {facets.error && <p role="status" className="home-search-error">Filter options couldn’t load. You can still browse all {search.status === "Rent" ? "rentals" : search.status === "Sale" ? "homes for sale" : "homes"}. <button type="button" onClick={facets.reload}>Try again</button></p>}
+          {facets.error && (
+            <p role="status" className="home-search-error">
+              Filter options couldn’t load. You can still browse all{" "}
+              {search.status === "Rent"
+                ? "rentals"
+                : search.status === "Sale"
+                  ? "homes for sale"
+                  : "homes"}
+              .{" "}
+              <button type="button" onClick={facets.reload}>
+                Try again
+              </button>
+            </p>
+          )}
         </div>
       </HeroSlider>
     </section>
