@@ -10,6 +10,7 @@ import {
   ChevronDown,
   CreditCard,
   HandCoins,
+  CalendarClock,
   Heart,
   KeyRound,
   Inbox,
@@ -38,6 +39,7 @@ const userItems = [
   { label: "Saved Properties", to: "/account/saved", icon: Heart },
   { label: "Saved Searches", to: "/account/searches", icon: BellRing },
   { label: "My Conversations", to: "/account/messages", icon: MessageCircle },
+  { label: "My Viewings", to: "/account/viewings", icon: CalendarClock },
   { label: "My Offers", to: "/account/offers", icon: HandCoins },
   { label: "My Rentals", to: "/account/rentals", icon: KeyRound },
   { label: "My Purchases", to: "/account/purchases", icon: Building },
@@ -62,6 +64,7 @@ const agentItems = [
   { label: "Offers Received", to: "/agent/offers", icon: HandCoins },
   { label: "Rental Requests", to: "/agent/rentals", icon: KeyRound },
   { label: "Sale Requests", to: "/agent/sale-requests", icon: Building },
+  { label: "Viewings", to: "/agent/viewings", icon: CalendarClock },
   { label: "Messages", to: "/agent/messages", icon: MessageCircle },
   { label: "Subscription", to: "/agent/subscription", icon: CreditCard },
 ];

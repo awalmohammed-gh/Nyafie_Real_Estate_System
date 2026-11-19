@@ -13,7 +13,7 @@ const RENTAL_EVENTS = {
 };
 
 const SALE_EVENTS = {
-  paid_at_office: { title: "Office payment confirmed", icon: Wallet, tone: "green", status: "Paid at Office" },
+  paid_at_office: { title: "Payment confirmed by the owner", icon: Wallet, tone: "green", status: "Payment Received" },
   completed: { title: "Property sold", icon: BadgeCheck, tone: "green", status: "Completed" },
   rejected: { title: "Purchase request rejected", icon: XCircle, tone: "red", status: "Rejected" },
   cancelled: { title: "Purchase request cancelled", icon: XCircle, tone: "gray", status: "Cancelled" },

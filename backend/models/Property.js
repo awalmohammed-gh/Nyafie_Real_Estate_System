@@ -26,6 +26,12 @@ const moveInSchema = new mongoose.Schema({
   securityDeposit: { type: Number, default: 0, min: 0 }, // GHS
 }, { _id: false });
 
+const mediaLinkSchema = new mongoose.Schema({
+  provider: { type: String, enum: ["youtube", "vimeo", "matterport", "kuula"], required: true },
+  id: { type: String, required: true, maxlength: 40 },
+  hash: { type: String, maxlength: 30 }, // Vimeo unlisted videos
+}, { _id: false });
+
 const propertySchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true, maxlength: 120 },
@@ -57,6 +63,9 @@ const propertySchema = new mongoose.Schema(
     areaUnit: { type: String, default: "sqm", maxlength: 20 },
     amenities: [{ type: String, trim: true }],
     images: [{ type: String }], // Cloudinary (or static) URLs, never raw files
+    // Video tour (YouTube/Vimeo) and 3D tour (Matterport/Kuula): provider + id only (utils/mediaLinks.js)
+    video: { type: mediaLinkSchema, default: null },
+    virtualTour: { type: mediaLinkSchema, default: null },
     roomTypes: [roomTypeSchema],
     stayBooking: { type: stayBookingSchema, default: undefined },
     moveIn: { type: moveInSchema, default: undefined },
@@ -78,6 +87,9 @@ const propertySchema = new mongoose.Schema(
     availabilityConfirmedAt: { type: Date, default: null },
     freshnessReminderAt: { type: Date, default: null },
     staleSince: { type: Date, default: null },
+    // Set when NyaFie checked the ownership documents the owner submitted (utils/propertyDocuments.js);
+    // the documents themselves are private and never part of the listing
+    documentsVerifiedAt: { type: Date, default: null },
     rejectionReason: { type: String, default: "" },
     // Set when the listing was hidden because its provider was removed; restore can bring it back
     providerRemoval: { type: new mongoose.Schema({ hiddenAt: Date, statusBefore: String }, { _id: false }), default: undefined },

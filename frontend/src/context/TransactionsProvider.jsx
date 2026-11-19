@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { offerApi, rentalApi, saleRequestApi } from "../frontApi";
+import { offerApi, rentalApi, saleRequestApi, viewingApi } from "../frontApi";
 import { TransactionsContext } from "./transactionsContext";
 
 const POLL_MS = 60000;
 
 const LOADERS = {
-  admin: [offerApi.getAdminOffers, rentalApi.getAdminRentals, saleRequestApi.getAdminSaleRequests],
-  agent: [offerApi.getAgentOffers, rentalApi.getAgentRentals, saleRequestApi.getAgentSaleRequests],
+  admin: [offerApi.getAdminOffers, rentalApi.getAdminRentals, saleRequestApi.getAdminSaleRequests, viewingApi.getAdminViewings],
+  agent: [offerApi.getAgentOffers, rentalApi.getAgentRentals, saleRequestApi.getAgentSaleRequests, viewingApi.getAgentViewings],
 };
 
 /**
@@ -15,7 +15,7 @@ const LOADERS = {
  * management pages call reload() after changing something.
  */
 export const TransactionsProvider = ({ scope, children }) => {
-  const [data, setData] = useState({ offers: [], rentals: [], sales: [] });
+  const [data, setData] = useState({ offers: [], rentals: [], sales: [], viewings: [] });
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [error, setError] = useState("");
   const updateTransaction = useCallback((kind, updated) => {
@@ -26,8 +26,8 @@ export const TransactionsProvider = ({ scope, children }) => {
   const reload = useCallback(
     () =>
       Promise.all(LOADERS[scope].map((load) => load())).then(
-        ([offers, rentals, sales]) => {
-          setData({ offers, rentals, sales });
+        ([offers, rentals, sales, viewings]) => {
+          setData({ offers, rentals, sales, viewings });
           setStatus("ready");
           setError("");
         },
@@ -46,7 +46,7 @@ export const TransactionsProvider = ({ scope, children }) => {
   }, [reload]);
 
   const value = useMemo(() => {
-    const { offers, rentals, sales } = data;
+    const { offers, rentals, sales, viewings } = data;
     return {
       ...data,
       loading: status === "loading",
@@ -59,6 +59,7 @@ export const TransactionsProvider = ({ scope, children }) => {
         rentals: rentals.filter((r) => r.statusKey === "paid").length, // paid, waiting to be confirmed
         sales: sales.filter((s) => s.statusKey === "pending").length,
         officePayments: sales.filter((s) => s.statusKey === "payment_pending").length,
+        viewings: viewings.filter((v) => v.statusKey === "requested" && v.awaiting === "owner").length, // requests to answer
       },
     };
   }, [data, status, error, reload, updateTransaction]);

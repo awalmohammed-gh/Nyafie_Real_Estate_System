@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Loader2 } from "lucide-react";
 import BrandLogo from "../brand/BrandLogo";
 import SocialLinks from "../brand/SocialLinks";
+import InstallAppButton from "../ui/InstallAppButton";
 import { usePlatform } from "../../context/usePlatform";
 import { sendMessage } from "../../frontApi/contactApi";
 
@@ -33,7 +34,7 @@ const HomeFooter = () => {
       {groups.map(({ title, links }) => <nav key={title} aria-label={title}><h2>{title}</h2><ul>{links.map(([name, to]) => <li key={name}><Link to={to}>{name}</Link></li>)}</ul></nav>)}
       <div className="home-footer-updates"><h2>Stay in the loop</h2><p>Get the latest property updates and opportunities.</p><form onSubmit={submitUpdates} aria-busy={busy}><label className="sr-only" htmlFor="home-updates-email">Email address for property updates</label><input id="home-updates-email" type="email" name="email" maxLength={254} required autoComplete="email" placeholder="Enter your email" value={email} onChange={event => setEmail(event.target.value)} disabled={busy} /><button type="submit" disabled={busy} aria-label="Request property updates">{busy ? <Loader2 size={17} className="animate-spin" aria-hidden="true" /> : <ArrowRight size={19} aria-hidden="true" />}</button></form>{feedback && <p className={`home-footer-feedback ${failed ? "is-error" : ""}`} role={failed ? "alert" : "status"}>{feedback}</p>}</div>
     </div>
-    <div className="home-footer-bottom"><span>&copy; {new Date().getFullYear()} {siteName}. All rights reserved.</span><span>Ghana's home for property discovery.</span></div>
+    <div className="home-footer-bottom"><span>&copy; {new Date().getFullYear()} {siteName}. All rights reserved.</span><InstallAppButton className="inline-flex items-center gap-1.5 font-medium text-white hover:underline" /><span>Ghana's home for property discovery.</span></div>
   </div></footer>;
 };
 export default HomeFooter;

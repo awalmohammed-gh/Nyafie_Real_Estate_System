@@ -8,6 +8,7 @@ import ChatThread from "./ChatThread";
 import FilterTabs from "../ui/FilterTabs";
 import EmptyState from "../ui/EmptyState";
 import { timeAgo } from "../../utils/date";
+import { cloudImage } from "../../utils/cloudImage";
 
 const POLL_MS = 15000;
 
@@ -104,7 +105,7 @@ const MessagesInbox = ({ scope, emptyTitle, emptyDescription, emptyAction }) => 
                   className={`flex w-full items-start gap-3 border-b border-gray-50 px-4 py-3 text-left transition ${active ? "bg-brand-50" : "hover:bg-gray-50"}`}
                 >
                   {c.property.image ? (
-                    <img src={c.property.image} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
+                    <img src={cloudImage(c.property.image, 48)} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
                   ) : (
                     <span className="h-12 w-12 shrink-0 rounded-xl bg-gray-100" />
                   )}

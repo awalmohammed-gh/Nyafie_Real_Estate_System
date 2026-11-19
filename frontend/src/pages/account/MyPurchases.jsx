@@ -11,6 +11,7 @@ import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { saleRequestApi } from "../../frontApi";
 import { formatDate } from "../../utils/date";
 import { usePlatform } from "../../context/usePlatform";
+import { cloudImage } from "../../utils/cloudImage";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 const CLOSED = ["completed", "cancelled", "rejected"];
@@ -22,8 +23,8 @@ const statusHelp = {
   offer_received: "The owner is reviewing your offer.",
   negotiating: "You're negotiating the price with the owner.",
   approved: "Your request was approved. The owner will send payment instructions.",
-  payment_pending: "Please pay at our office as instructed by the owner. Only pay at the office.",
-  paid_at_office: "Your office payment was confirmed. The owner is completing the sale.",
+  payment_pending: "Agree with the owner how to pay (in chat, by phone or in person). Only pay the owner or agent shown on this page, and keep a receipt.",
+  paid_at_office: "The owner confirmed your payment and is completing the sale.",
   completed: "The sale is complete. Congratulations on your new property!",
   cancelled: "This purchase request was cancelled.",
   rejected: "The owner declined this purchase request.",
@@ -55,7 +56,7 @@ const MyPurchases = () => {
     <AccountShell title="My Purchases" description="Properties you've asked to buy, and where each request stands.">
       <p className="mb-6 flex items-start gap-3 rounded-2xl bg-sky-50 p-4 text-sm text-sky-800">
         <Info className="mt-0.5 h-5 w-5 shrink-0" />
-        Property purchases are paid at the {siteName} office after the owner confirms your request. Never pay anyone before you receive confirmation here.
+        Property purchases aren't paid online on {siteName}: you agree the payment directly with the owner. Never pay anyone before the owner has confirmed your request here, and only pay the owner or agent shown on the listing.
       </p>
 
       {error ? (
@@ -79,7 +80,7 @@ const MyPurchases = () => {
                 <div className="flex flex-col gap-4 sm:flex-row">
                   <Link to={`/house/${req.property.id}`} className="shrink-0">
                     {req.property.image ? (
-                      <img src={req.property.image} alt="" className="aspect-16/9 w-full rounded-2xl object-cover sm:h-28 sm:w-40" />
+                      <img src={cloudImage(req.property.image, 400)} alt="" className="aspect-16/9 w-full rounded-2xl object-cover sm:h-28 sm:w-40" />
                     ) : (
                       <div className="grid h-28 w-40 place-items-center rounded-2xl bg-gray-100 text-xs text-gray-400">Removed</div>
                     )}

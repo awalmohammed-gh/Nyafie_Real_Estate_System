@@ -42,7 +42,19 @@ const statusTone = {
   "Payment Pending": "amber",
   "Payment Requested": "amber",
   "Payment Confirmed": "green",
-  "Paid at Office": "green",
+  "Payment Received": "green",
+  // Viewings
+  Requested: "amber",
+  "Needs your answer": "amber",
+  Declined: "red",
+  Missed: "red",
+  // Safety reports
+  Open: "amber",
+  Resolved: "green",
+  Dismissed: "gray",
+  // Document checks
+  Verified: "green",
+  "Sent back": "red",
   "Due at hotel": "amber",
   "Due on arrival": "amber",
   "Offer Received": "brand",

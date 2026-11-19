@@ -12,7 +12,7 @@ const METRICS = [
     short: "Revenue",
     currency: true,
     empty: "No payments were confirmed",
-    explain: "Payments confirmed as received: Paystack rental payments, office sale payments confirmed by the owner, and agent subscriptions. Failed, pending and duplicate payments, test payments and property asking prices are not included.",
+    explain: "Payments confirmed as received: Paystack rental payments, sale payments confirmed by the owner, and agent subscriptions. Failed, pending and duplicate payments, test payments and property asking prices are not included.",
   },
   { key: "listings", label: "New property listings", short: "Listings", empty: "No properties were added", explain: "Properties added by agents and your team. Drafts that were never submitted are not included." },
   { key: "inquiries", label: "Customer inquiries", short: "Inquiries", empty: "No inquiries were received", explain: "Inquiries customers sent about any listing on the platform." },
@@ -238,7 +238,7 @@ const PerformanceChart = ({ refreshKey = "" }) => {
               <Comparison data={data} metric={metric} months={shownMonths} format={format} />
               {metric.key === "revenue" && data.total > 0 && (
                 <p className="text-xs text-gray-500">
-                  Rentals {formatCedis(data.breakdown.rental)} · Office sales {formatCedis(data.breakdown.sale)} · Subscriptions {formatCedis(data.breakdown.subscription)}
+                  Rentals {formatCedis(data.breakdown.rental)} · Sales {formatCedis(data.breakdown.sale)} · Subscriptions {formatCedis(data.breakdown.subscription)}
                 </p>
               )}
             </div>

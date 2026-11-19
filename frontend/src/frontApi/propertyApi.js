@@ -70,3 +70,6 @@ export const getPropertyFacets = async (params = {}) => (await client.get("/prop
 
 // Similar published listings for a property's details page
 export const getRelatedProperties = async (id, limit = 3) => (await client.get(`/properties/${id}/related`, { params: { limit } })).data.map(mapProperty);
+
+// Owner side: counted views per day, saves and leads for one listing (days: 14 | 30 | 90)
+export const getListingInsights = async (id, days = 14, { signal } = {}) => (await client.get(`/properties/${id}/insights`, { params: { days }, signal })).data;

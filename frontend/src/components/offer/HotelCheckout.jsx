@@ -8,6 +8,7 @@ import HotelRoomDetails from "../property/HotelRoomDetails";
 import { roomPrice, today, tomorrow } from "../../utils/hotel";
 import { formatDate } from "../../utils/date";
 import { arrivalText, bookingHeadline } from "../../utils/hotelPayments";
+import { cloudImage } from "../../utils/cloudImage";
 
 const HotelCheckout = ({ property, ownerName }) => {
   const { user } = useAuth();
@@ -69,7 +70,7 @@ const HotelCheckout = ({ property, ownerName }) => {
     {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {!saved ? <form onSubmit={review} className="space-y-5">
       <label className="block text-sm font-medium text-gray-700">Room type<select required value={form.roomTypeId} onChange={set("roomTypeId")} className="field mt-1.5"><option value="">Choose a room type</option>{rooms.map((r) => <option key={r.id} value={r.id}>{r.name} · {roomPrice(r.pricePerNight)} / night</option>)}</select></label>
-      {room && <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-3">{room.images[0] && <img src={room.images[0]} alt={room.name} className="h-20 w-24 rounded-lg object-cover" />}<div className="min-w-0"><p className="font-semibold text-gray-900">{room.name}</p><p className="text-xs text-gray-500">Up to {room.maxGuests} guests / room · {room.bedType}</p><button type="button" onClick={() => setDetails(true)} className="mt-1 text-sm font-medium text-brand-600">See everything in this room</button></div></div>}
+      {room && <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-3">{room.images[0] && <img src={cloudImage(room.images[0], 96)} alt={room.name} className="h-20 w-24 rounded-lg object-cover" />}<div className="min-w-0"><p className="font-semibold text-gray-900">{room.name}</p><p className="text-xs text-gray-500">Up to {room.maxGuests} guests / room · {room.bedType}</p><button type="button" onClick={() => setDetails(true)} className="mt-1 text-sm font-medium text-brand-600">See everything in this room</button></div></div>}
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="text-sm font-medium text-gray-700">Check-in<input required type="date" min={today()} value={form.checkIn} onChange={set("checkIn")} className="field mt-1.5" /></label>
         <label className="text-sm font-medium text-gray-700">Check-out<input required type="date" min={tomorrow(form.checkIn || today())} value={form.checkOut} onChange={set("checkOut")} className="field mt-1.5" /></label>

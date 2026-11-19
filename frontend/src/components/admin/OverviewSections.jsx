@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Building2, CheckCheck, ChevronDown, ChevronRight, Eye, Minus, Plus, RefreshCw } from "lucide-react";
 import { formatCedis } from "../../utils/reports";
 import { adminPath } from "../../utils/adminEntry";
+import { cloudImage } from "../../utils/cloudImage";
 
 const plural = (count, one, many) => count === 1 ? one : many;
 
@@ -12,7 +13,7 @@ export const OverviewHeader = ({ name, siteName, generatedAt, loading, onRefresh
   return (
     <header className="overview-heading">
       <div>
-        <p className="overview-eyebrow">Your workspace, at a glance</p>
+        <p className="overview-eyebrow">Your workspace</p>
         <h1>{greeting}{name ? `, ${name}` : ""}<span className="overview-greeting-dot">.</span></h1>
         <p className="overview-subtitle">Here’s what’s happening across {siteName}.</p>
       </div>
@@ -111,7 +112,7 @@ export const InventorySummary = ({ properties }) => {
 export const RevenueSources = ({ revenue }) => {
   const rows = [
     { label: "Rental payments", value: revenue.breakdown.rental, color: "#7950c7" },
-    { label: "Office sales", value: revenue.breakdown.sale, color: "#42a6a0" },
+    { label: "Sales", value: revenue.breakdown.sale, color: "#42a6a0" },
     { label: "Agent subscriptions", value: revenue.breakdown.subscription, color: "#e7b24e" },
   ];
   return <section className="overview-panel">
@@ -126,7 +127,7 @@ export const PopularListings = ({ properties, siteName }) => (
     <div className="overview-popular-labels" aria-hidden="true"><span>Property</span><span>Listing owner</span><span>Views</span></div>
     {properties.mostViewed?.length ? <ol className="overview-property-list">{properties.mostViewed.map((property, index) => <li key={property.id}><Link to={adminPath(`/properties?open=${encodeURIComponent(property.id)}`)}>
       <span className="overview-property-rank">{String(index + 1).padStart(2, "0")}</span>
-      {property.image ? <img src={property.image} alt="" loading="lazy" className="overview-property-image" /> : <span className="overview-property-image overview-property-placeholder"><Building2 size={21} aria-hidden="true" /></span>}
+      {property.image ? <img src={cloudImage(property.image, 64)} alt="" loading="lazy" className="overview-property-image" /> : <span className="overview-property-image overview-property-placeholder"><Building2 size={21} aria-hidden="true" /></span>}
       <span className="overview-property-name"><strong>{property.title}</strong><span>{property.area || "Location not provided"}</span></span>
       <span className={`overview-owner ${property.ownerType === "admin" ? "is-team" : ""}`}>{property.ownerType === "admin" ? siteName : "Agent"}</span>
       <span className="overview-property-views"><Eye size={15} aria-hidden="true" />{property.views.toLocaleString()}<span className="sr-only"> views</span></span><ArrowUpRight size={16} className="overview-property-arrow" aria-hidden="true" />

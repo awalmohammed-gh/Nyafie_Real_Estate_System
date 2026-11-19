@@ -8,11 +8,15 @@ import { listConversations } from "../controllers/chatController.js";
 import { ownerOffers } from "../controllers/offerController.js";
 import { ownerRentals } from "../controllers/rentalController.js";
 import { ownerSaleRequests } from "../controllers/saleRequestController.js";
+import { ownerViewings } from "../controllers/viewingController.js";
+import { listReports, reviewReport } from "../controllers/safetyReportController.js";
+import { adminDocumentLink, listDocumentChecks, reviewDocumentCheck } from "../controllers/documentCheckController.js";
 import { listPayments } from "../controllers/paymentController.js";
 import { checkRefund, createRefund, listRefunds, settleRefund } from "../controllers/refundController.js";
 import { protectAdmin } from "../middleware/authMiddleware.js";
 import { listApplications, reviewApplication } from "../controllers/agentApplicationController.js";
 import { adminOnly } from "../middleware/adminMiddleware.js";
+import { limits } from "../middleware/security.js";
 import { listContactMessages, setContactMessageStatus } from "../controllers/contactController.js";
 
 const router = Router();
@@ -50,8 +54,8 @@ router.post("/refunds/:id/check", checkRefund);
 router.post("/refunds/:id/resolve", settleRefund);
 
 router.get("/properties", admin.listProperties);
-router.post("/properties", admin.createProperty);
-router.put("/properties/:id", admin.updateProperty);
+router.post("/properties", limits.listingSaves, admin.createProperty);
+router.put("/properties/:id", limits.listingSaves, admin.updateProperty);
 router.patch("/properties/:id/status", admin.setPropertyStatus);
 router.patch("/properties/:id/feature", admin.setPropertyFeatured);
 router.patch("/properties/:id/confirm-availability", admin.confirmPropertyAvailability); // listing freshness
@@ -76,6 +80,12 @@ router.get("/messages", listConversations("owner")); // chats about admin-owned 
 router.get("/offers", ownerOffers); // every offer on the platform
 router.get("/rentals", ownerRentals);
 router.get("/sale-requests", ownerSaleRequests);
+router.get("/viewings", ownerViewings); // every viewing on the platform
+router.get("/reports", listReports); // safety reports about listings and agents: ?status=open|resolved|dismissed|all
+router.patch("/reports/:id", reviewReport);
+router.get("/document-checks", listDocumentChecks); // ?status=pending|verified|rejected|all
+router.get("/document-checks/:id/documents/:docId/link", adminDocumentLink); // a link that expires
+router.patch("/document-checks/:id", reviewDocumentCheck);
 router.get("/payments", listPayments);
 
 export default router;

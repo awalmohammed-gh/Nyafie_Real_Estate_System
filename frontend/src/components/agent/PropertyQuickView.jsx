@@ -6,6 +6,7 @@ import StatusBadge from "../ui/StatusBadge";
 import PropertyQuickActions from "./PropertyQuickActions";
 import { formatDate } from "../../utils/date";
 import { formatLocation, formatType, getPriceParts, statusLabel } from "../../utils/property";
+import { cloudImage } from "../../utils/cloudImage";
 
 /**
  * Side panel with one of the agent's listings: photos, key facts, customer interest and
@@ -45,7 +46,7 @@ const PropertyQuickView = ({ property: p, status, interest, perms, onClose, onDe
           <div>
             <div className="relative aspect-video overflow-hidden rounded-lg bg-gray-100">
               {images[photo] ? (
-                <img src={images[photo]} alt="" className="h-full w-full object-cover" />
+                <img src={cloudImage(images[photo], 640)} alt="" className="h-full w-full object-cover" />
               ) : (
                 <span className="grid h-full place-items-center text-gray-300"><Home className="h-8 w-8" /></span>
               )}
@@ -55,7 +56,7 @@ const PropertyQuickView = ({ property: p, status, interest, perms, onClose, onDe
               <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar">
                 {images.map((src, i) => (
                   <button key={src + i} type="button" onClick={() => setPhoto(i)} aria-label={`Photo ${i + 1}`} className={`shrink-0 overflow-hidden rounded-md ring-2 transition ${i === photo ? "ring-brand-500" : "ring-transparent opacity-70 hover:opacity-100"}`}>
-                    <img src={src} alt="" className="h-14 w-20 object-cover" />
+                    <img src={cloudImage(src, 80)} alt="" className="h-14 w-20 object-cover" />
                   </button>
                 ))}
               </div>

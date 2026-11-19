@@ -37,8 +37,8 @@ export const heroContent = [
     eyebrow: "Homes for sale",
     title: "Own a landmark home with character",
     description:
-      "From restored heritage houses to grand family villas. Request to buy, and our team guides you from the first viewing to payment at our office.",
-    highlights: ["Heritage & luxury homes", "Guided viewings", "Pay safely at our office"],
+      "From restored heritage houses to grand family villas. Request to buy, then agree the viewing, documents and payment directly with the owner.",
+    highlights: ["Heritage & luxury homes", "Guided viewings", "Agree payment with the owner"],
     cta: { label: "View homes for sale", to: "/sale" },
     image: heroHeritage,
   },

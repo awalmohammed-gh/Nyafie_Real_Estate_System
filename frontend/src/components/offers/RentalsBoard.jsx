@@ -22,6 +22,7 @@ import { formatDate, isWithinDays } from "../../utils/date";
 import { toWhatsAppNumber } from "../../utils/whatsapp";
 import { adminPath } from "../../utils/adminEntry";
 import { arrivalText, pastArrivalDeadline, payPlace } from "../../utils/hotelPayments";
+import { cloudImage } from "../../utils/cloudImage";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 // Short stays (hotels and rentals priced per night) use check-in words
@@ -253,7 +254,7 @@ const RentalsBoard = ({ scope }) => {
             <StatusSteps kind={open.paymentOption === "on_arrival" && open.paymentMethod !== "Paystack" ? "stayReservation" : "rental"} status={open.statusKey} />
             <div className="rounded-xl bg-brand-50 p-4"><p className="workspace-eyebrow">Rental summary</p><p className="mt-2 text-2xl font-semibold text-gray-900">{ghs(open.amount)}</p><p className="mt-2 text-sm text-gray-600">Move-in {formatDate(open.startDate)} · Until {formatDate(open.endDate)}</p><div className="mt-3 flex gap-2"><StatusBadge status={open.paymentStatus} /><StatusBadge status={open.status} /></div></div>
             <Link to={`/house/${open.property.id}`} className="flex items-center gap-3 rounded-lg p-2 ring-1 ring-gray-200 transition hover:ring-brand-200">
-              {open.property.image && <img src={open.property.image} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />}
+              {open.property.image && <img src={cloudImage(open.property.image, 80)} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />}
               <div className="min-w-0">
                 <p className="truncate font-semibold text-gray-900">{open.property.title}</p>
                 <p className="text-sm text-gray-500">{open.property.location}</p>

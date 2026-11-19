@@ -8,6 +8,7 @@ import Subscription from "../models/Subscription.js";
 import Offer from "../models/Offer.js";
 import Rental from "../models/Rental.js";
 import SaleRequest from "../models/SaleRequest.js";
+import Viewing from "../models/Viewing.js";
 import Payment from "../models/Payment.js";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
@@ -120,6 +121,7 @@ export const deleteUser = async (req, res) => {
   const reviewed = await Review.distinct("property", { user: id });
   await Promise.all([
     Offer.deleteMany({ customer: id, status: { $ne: "accepted" } }),
+    Viewing.deleteMany({ customer: id }),
     Rental.deleteMany({ customer: id, paymentStatus: { $ne: "paid" } }),
     SaleRequest.deleteMany({ customer: id, status: { $ne: "completed" }, paymentStatus: { $ne: "confirmed" } }),
     Payment.deleteMany({ customer: id, status: { $in: ["pending", "failed"] } }),

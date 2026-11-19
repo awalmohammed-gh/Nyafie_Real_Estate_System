@@ -4,6 +4,7 @@ import { CheckCircle2, Maximize2 } from 'lucide-react';
 import { apartmentPlans } from '../../assets/landing_content';
 import SectionHeading from '../ui/SectionHeading';
 import Reveal from '../ui/Reveal';
+import { cloudImage } from "../../utils/cloudImage";
 
 const INTERVAL = 6000; // ms each plan stays on screen
 const SWIPE_DISTANCE = 80; // px a swipe must travel to change plans
@@ -50,7 +51,7 @@ const ApartmentPlans = () => {
     preloaded.current = true;
     apartmentPlans.forEach((p) => {
       const img = new Image();
-      img.src = p.image;
+      img.src = cloudImage(p.image, 720);
     });
   }, [inView]);
 
@@ -131,7 +132,7 @@ const ApartmentPlans = () => {
               className="grid cursor-grab select-none active:cursor-grabbing lg:grid-cols-2"
             >
               <div className="relative aspect-16/10 lg:aspect-auto lg:min-h-[28rem]">
-                <img src={plan.image} alt={plan.title} draggable={false} className="absolute inset-0 h-full w-full object-cover" />
+                <img src={cloudImage(plan.image, 720)} alt={plan.title} draggable={false} className="absolute inset-0 h-full w-full object-cover" />
               </div>
 
               <div className="flex flex-col justify-center p-8 pb-10 sm:p-12">

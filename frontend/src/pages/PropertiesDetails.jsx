@@ -10,6 +10,7 @@ import {
   AlertCircle,
   ArrowRight,
   BadgeCheck,
+  PlayCircle,
   Bath,
   Bed,
   Building2,
@@ -37,6 +38,7 @@ import {
   Tag,
 } from "lucide-react";
 import { useRealEstate } from "../context/useRealEstate";
+import { useSessionKey } from "../hooks/useSessionKey";
 import HouseCard from "../components/card/HouseCard";
 import Reveal from "../components/ui/Reveal";
 import NotFound from "./NotFound";
@@ -47,6 +49,14 @@ import InquiryModal from "../components/InquiryModal";
 import { useAuth } from "../context/useAuth";
 import { usePlatform } from "../context/usePlatform";
 import StartChatModal from "../components/chat/StartChatModal";
+import ViewingModal from "../components/viewings/ViewingModal";
+import ReportModal from "../components/reports/ReportModal";
+import SafetyNote from "../components/reports/SafetyNote";
+import PropertyTours from "../components/property/PropertyTours";
+import CompareButton from "../components/property/CompareButton";
+import AffordabilityCalculator from "../components/property/AffordabilityCalculator";
+import { embedUrl } from "../utils/mediaLinks";
+import { addRecentlyViewed } from "../utils/browsingLists";
 import WhatsAppIcon from "../components/ui/WhatsAppIcon";
 import StatusBadge from "../components/ui/StatusBadge";
 import SignInRequiredModal, { SignInPrompt } from "../components/property/SignInRequiredModal";
@@ -71,6 +81,7 @@ import {
   getPriceParts,
   statusLabel,
 } from "../utils/property";
+import { cloudImage } from "../utils/cloudImage";
 
 // The map (and Leaflet) loads only when a listing has a location to show
 const PropertyMap = lazy(() => import("../components/location/PropertyMap"));
@@ -105,14 +116,16 @@ const PropertiesDetails = () => {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(""); // "link" | "reference" (briefly, after copying)
 
-  // The property is always loaded from the API by its database id
-  const detail = useApiQuery(`property:${id}:${user?.id || "guest"}`, () =>
+  // The property is always loaded from the API by its database id, straight away: the request carries
+  // the session cookie, so it doesn't wait for (or repeat after) the session check
+  const sessionKey = useSessionKey();
+  const detail = useApiQuery(`property:${id}:${sessionKey}`, () =>
     propertyApi.getPropertyById(id),
   );
   const property = detail.data;
   const agentOwnerId =
     user && property?.owner.type === "agent" ? property.ownerUserId : null;
-  const related = useApiQuery(`related:${id}:${user?.id || "guest"}:4`, () =>
+  const related = useApiQuery(`related:${id}:${sessionKey}:4`, () =>
     propertyApi.getRelatedProperties(id, 4),
   );
   // How many public listings the agent has (counted on the server)
@@ -131,6 +144,7 @@ const PropertiesDetails = () => {
   useEffect(() => {
     if (!property || viewedRef.current === id) return;
     viewedRef.current = id;
+    addRecentlyViewed(id); // this device's "Recently viewed" list (ids only)
     recordView(id).then((result) => Number.isFinite(result?.views) && setLiveViews({ id, views: result.views }));
   }, [id, property, recordView]);
 
@@ -168,6 +182,8 @@ const PropertiesDetails = () => {
   } = property;
   const { value, period } = getPriceParts(property);
   const images = media.images;
+  // Optional video and 3D tours (the players load only when a visitor presses play)
+  const hasTours = Boolean(embedUrl(media.video) || embedUrl(media.virtualTour));
   const canExpandDescription = description.length > 280;
   const liked = isFavorite(id);
   const isForSale = details.status === "Sale";
@@ -218,6 +234,9 @@ const PropertiesDetails = () => {
     property.pricing.currency === "GHS";
   const canPrimary = hotel ? availability === "Available" && property.roomTypes.some((room) => room.active) : isForSale || canRent;
   const canMakeOffer = !hotel && !unavailable;
+  // Hotels and nightly stays are booked directly; other homes can be viewed until they're sold or rented
+  const stay = hotel || property.pricing?.perNight != null;
+  const canBookViewing = !stay && !unavailable;
   const primaryLabel = hotel ? "Choose your room" : isForSale
     ? isAdminListing
       ? "Contact owner"
@@ -238,7 +257,7 @@ const PropertiesDetails = () => {
     user && !isOwnListing ? searchParams.get("action") : null;
   const activeDialog =
     dialog ??
-    (["chat", "inquiry"].includes(resumeAction) ? (resumeAction === "chat" ? chatAction : resumeAction) : null);
+    (["chat", "inquiry", "viewing", "report"].includes(resumeAction) ? (resumeAction === "chat" ? chatAction : resumeAction) : null);
 
   // A guest who picked a star comes back from sign-in with ?action=review&rating=N
   const resumeRating =
@@ -380,6 +399,16 @@ const PropertiesDetails = () => {
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
               <span className="rounded-full bg-brand-600 px-3 py-1 text-white">{statusLabel(details.status)}</span>
               <span className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-brand-700 capitalize">{formatType(details.type)}</span>
+              {hasTours && (
+                <a href="#property-tours-heading" className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-gray-700 hover:border-brand-200 hover:text-brand-700">
+                  <PlayCircle aria-hidden="true" className="h-3.5 w-3.5" />{embedUrl(media.video) ? "Video tour" : "3D tour"}
+                </a>
+              )}
+              {isForSale && property.listing.documentsVerifiedAt && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-emerald-800 ring-1 ring-emerald-200" title="Our team checked the ownership documents for this property">
+                  <BadgeCheck aria-hidden="true" className="h-3.5 w-3.5" />Documents checked
+                </span>
+              )}
               {availability !== "Available" && <StatusBadge status={availability} />}
               {meta?.isFeatured && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-amber-800">
@@ -435,7 +464,8 @@ const PropertiesDetails = () => {
               )}
             </div>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {!hotel && <CompareButton propertyId={id} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:border-brand-200 hover:bg-brand-50/40" />}
             <button
               type="button"
               onClick={handleShare}
@@ -489,6 +519,12 @@ const PropertiesDetails = () => {
               </dl>
             </section>
 
+            {hasTours && (
+              <Section id="property-tours-heading" title={embedUrl(media.video) && embedUrl(media.virtualTour) ? "Video & 3D tour" : embedUrl(media.video) ? "Video tour" : "3D virtual tour"}>
+                <PropertyTours video={media.video} virtualTour={media.virtualTour} title={title} poster={images[0]} />
+              </Section>
+            )}
+
             <Section id="property-description-heading" title="About this property">
               <p
                 id="property-description"
@@ -540,6 +576,13 @@ const PropertiesDetails = () => {
             </Section>
 
             {hotel && <HotelRooms key={`rooms-${property.id}`} property={property} canBook={!isOwnListing && availability === "Available"} />}
+
+            {/* Homes for sale priced in cedis: what a bank loan could cost each month (an estimate) */}
+            {isForSale && property.pricing.amount > 0 && (property.pricing.currency || "GHS") === "GHS" && (
+              <Section id="property-affordability-heading" title="Affordability" className="border-t border-gray-200">
+                <AffordabilityCalculator price={property.pricing.amount} />
+              </Section>
+            )}
 
             <Section id="property-location-heading" title="Location" className="border-t border-gray-200">
               {hasCoordinates ? (
@@ -647,15 +690,22 @@ const PropertiesDetails = () => {
                       Call {isAdminListing ? siteName : "Agent"}
                     </a>
                   )}
-                  <button type="button" onClick={() => requireAuth("inquiry")} className={`${outlineButton} w-full`}>
-                    <CalendarDays aria-hidden="true" className="h-4 w-4" />
-                    Request a Viewing
-                  </button>
+                  {!stay && (
+                    <button type="button" onClick={() => requireAuth("viewing")} disabled={!canBookViewing} className={`${outlineButton} w-full`}>
+                      <CalendarDays aria-hidden="true" className="h-4 w-4" />
+                      Book a viewing
+                    </button>
+                  )}
                   <div className="flex flex-wrap items-center justify-center gap-x-5 text-sm">
-                    {chatAction === "chat" && (
+                    {chatAction === "chat" ? (
                       <button type="button" onClick={() => requireAuth("chat")} className="inline-flex min-h-10 items-center gap-1.5 font-medium text-gray-600 hover:text-brand-700">
                         <MessageSquare aria-hidden="true" className="h-4 w-4" />
                         Chat with {contactLabel}
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => requireAuth("inquiry")} className="inline-flex min-h-10 items-center gap-1.5 font-medium text-gray-600 hover:text-brand-700">
+                        <MessageSquare aria-hidden="true" className="h-4 w-4" />
+                        Send a message
                       </button>
                     )}
                     {!hotel && (
@@ -666,6 +716,7 @@ const PropertiesDetails = () => {
                     )}
                   </div>
                   <p className="text-xs leading-5 text-gray-500">{helpText}</p>
+                  <SafetyNote forSale={isForSale} documentsVerifiedAt={property.listing.documentsVerifiedAt} onReport={() => requireAuth("report")} />
                 </div>
               )}
 
@@ -675,7 +726,7 @@ const PropertiesDetails = () => {
                     <p className="text-xs text-gray-500">Listed by</p>
                     <div className="mt-2 flex items-center gap-3">
                       {agent.profileImage && !isAdminListing ? (
-                        <img src={agent.profileImage} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
+                        <img src={cloudImage(agent.profileImage, 48)} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
                       ) : (
                         <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand-50 text-sm font-semibold text-brand-700">
                           {getInitials(ownerName)}
@@ -789,16 +840,20 @@ const PropertiesDetails = () => {
                   {primaryLabel}
                 </button>
               )}
-              <button type="button" onClick={() => requireAuth("inquiry")} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/60 px-5 text-sm font-semibold text-white transition-colors hover:bg-white/10">
-                <CalendarDays aria-hidden="true" className="h-4 w-4" />
-                Request a Viewing
-              </button>
+              {canBookViewing && (
+                <button type="button" onClick={() => requireAuth("viewing")} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/60 px-5 text-sm font-semibold text-white transition-colors hover:bg-white/10">
+                  <CalendarDays aria-hidden="true" className="h-4 w-4" />
+                  Book a viewing
+                </button>
+              )}
             </div>
           </section>
         )}
       </div>
       <InquiryModal key={property.id} property={property} open={activeDialog === "inquiry"} onClose={closeDialog} />
       <StartChatModal key={`chat-${property.id}`} property={property} ownerName={ownerName} open={activeDialog === "chat"} onClose={closeDialog} />
+      {!isOwnListing && <ReportModal key={`report-${property.id}`} target={{ type: "property", id: property.id, name: title }} open={activeDialog === "report"} onClose={closeDialog} />}
+      {canBookViewing && !isOwnListing && <ViewingModal key={`viewing-${property.id}`} property={property} ownerName={ownerName} open={activeDialog === "viewing"} onClose={closeDialog} />}
       <SignInRequiredModal
         open={Boolean(signInFor)}
         onClose={() => setSignInFor(null)}
@@ -808,7 +863,7 @@ const PropertiesDetails = () => {
             ? reviewReturnTo
             : flowPaths[signInFor]
               ? flowPaths[signInFor]
-              : ["chat", "inquiry"].includes(signInFor)
+              : ["chat", "inquiry", "viewing", "report"].includes(signInFor)
                 ? `${location.pathname}?action=${signInFor}`
                 : location.pathname
         }

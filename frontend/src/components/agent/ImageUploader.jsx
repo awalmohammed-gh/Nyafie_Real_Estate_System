@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { AlertCircle, CheckCircle2, ImagePlus, Star, X } from "lucide-react";
 import { compressImage } from "../../utils/image";
 import { createId } from "../../utils/crypto";
+import { cloudImage } from "../../utils/cloudImage";
 
 const MAX_SIZE_MB = 10;
 
@@ -139,7 +140,7 @@ const ImageUploader = ({ images, setImages, error, max = 8, limitNote, limitActi
                 exit={{ opacity: 0, scale: 0.9 }}
                 className="group relative aspect-4/3 overflow-hidden rounded-lg bg-gray-100 ring-1 ring-gray-200"
               >
-                {img.src && <img src={img.src} alt={img.name} className="h-full w-full object-cover" />}
+                {img.src && <img src={cloudImage(img.src, 200)} alt={img.name} className="h-full w-full object-cover" />}
 
                 {img.status === "uploading" && (
                   <div className="absolute inset-0 flex flex-col justify-end bg-gray-900/40 p-3">

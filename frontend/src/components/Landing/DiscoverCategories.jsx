@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Building2, Hotel, House, KeyRound, Layers3 } from "lucide-react";
 import { usePlatform } from "../../context/usePlatform";
+import { cloudImage } from "../../utils/cloudImage";
 
 const DiscoverCategories = () => {
   const { paths } = usePlatform();
@@ -18,7 +19,7 @@ const DiscoverCategories = () => {
         <header className="home-section-header"><div><p className="home-eyebrow">BROWSE BY CATEGORY</p><h2 id="discover-heading" className="home-section-title">What are you looking for?</h2><p className="home-section-description">Find properties that match your plans &mdash; buy, rent, stay or invest.</p></div></header>
         <ul className="home-categories">{categories.map(({ label, note, Icon, image, to }) => (
           <li key={label}><Link to={to} className="home-category">
-            <span className="home-category-image"><img src={image} alt="" loading="lazy" decoding="async" width="480" height="300" /><span className="home-category-icon"><Icon size={24} strokeWidth={1.7} aria-hidden="true" /></span></span>
+            <span className="home-category-image"><img src={cloudImage(image, 320)} alt="" loading="lazy" decoding="async" width="480" height="300" /><span className="home-category-icon"><Icon size={24} strokeWidth={1.7} aria-hidden="true" /></span></span>
             <span className="home-category-body"><span className="home-category-label">{label}</span><span className="home-category-note">{note}</span></span>
           </Link></li>
         ))}</ul>

@@ -23,11 +23,12 @@ const buildLinks = (paths, propertyTypes) => {
   const listingLinks = buildFindPropertyLinks(paths.listings, propertyTypes);
   const navLinks = [
     { name: "Home", path: "/" },
-    { name: "Find Property", menu: "listings", matches: [paths.listings, "/rent", "/sale"] },
+    // The full catalogue has its own link (All Listings), so it highlights that one instead
+    { name: "Find Property", menu: "listings", matches: ["/rent", "/sale"] },
     { name: "Properties", menu: "properties", matches: [paths.properties, "/house/"] },
+    { name: "All Listings", path: paths.listings },
+    // About and Contact are linked from the footer
     { name: "Agents", path: paths.agents },
-    { name: "About", path: "/about" },
-    { name: "Contact", path: "/contact" },
   ];
   return { listingLinks, navLinks };
 };
@@ -117,7 +118,8 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
     { name: "Buy", menu: "buy", matches: ["/sale"] },
     { name: "Rent", menu: "rent", matches: ["/rent"] },
     { name: "Short Stays", menu: "stays", matches: [] },
-    { name: "Agents", path: paths.agents }, { name: "About", path: "/about" }, { name: "Contact", path: "/contact" },
+    { name: "All Listings", path: paths.listings },
+    { name: "Agents", path: paths.agents },
   ] : standardLinks.navLinks;
   const homeMenuLinks = (menu) => {
     const href = (params) => `${paths.listings}?${new URLSearchParams(params)}`;

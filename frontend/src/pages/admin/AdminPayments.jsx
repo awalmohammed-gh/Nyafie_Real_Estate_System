@@ -17,13 +17,15 @@ import { formatDate } from "../../utils/date";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 const cap = (s = "") => s.charAt(0).toUpperCase() + s.slice(1);
-const TYPE_LABEL = { rental: "Rental", sale: "Sale (office)", subscription: "Subscription" };
+const TYPE_LABEL = { rental: "Rental", sale: "Sale", subscription: "Subscription" };
+// How a payment was made: sales are paid to the owner (older ones were paid at the office)
+const METHOD_LABEL = { Direct: "Paid to owner", Office: "Office" };
 const TYPE_TONE = { rental: "sky", sale: "green", subscription: "brand" };
 const FLAGGED = ["duplicate", "refund_required"];
 // Flagged Paystack charges can be refunded; once a refund exists it can be followed up from here
 const refundAction = (p) => (p.refund && p.refund.status !== "failed" ? "manage" : p.method === "Paystack" && FLAGGED.includes(p.statusKey) ? "refund" : null);
 
-// Every payment on the platform: rentals (Paystack), sales (paid at the office) and agent subscriptions
+// Every payment on the platform: rentals (Paystack), sales (paid to the owner) and agent subscriptions
 const AdminPayments = () => {
   const { payments, users } = useAdminData();
   const { refreshPayments } = usePlatform();
@@ -41,7 +43,7 @@ const AdminPayments = () => {
 
   const header = (
     <>
-      <AdminPageTitle title="Payments" description="Rental payments verified with Paystack, sale payments confirmed at the office, and agent subscriptions." />
+      <AdminPageTitle title="Payments" description="Rental payments verified with Paystack, sale payments confirmed by the owner, and agent subscriptions." />
       <TransactionNav scope="admin" />
     </>
   );
@@ -58,7 +60,7 @@ const AdminPayments = () => {
   if (!records) return <>{header}<TableSkeleton /></>;
 
   const all = [
-    // One record per Paystack attempt or confirmed office payment
+    // One record per Paystack attempt or confirmed sale payment
     ...records.map((p) => ({
       id: `p-${p.id}`,
       source: "payment",
@@ -108,7 +110,7 @@ const AdminPayments = () => {
       header: "Method",
       render: (p) => (
         <span className="whitespace-nowrap text-gray-600">
-          {p.method}
+          {METHOD_LABEL[p.method] || p.method}
           {/* Once live, older test-mode checkouts stay visible but are not real money */}
           {p.method === "Paystack" && provider.data?.environment === "live" && p.environment === "test" && <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">Test mode</span>}
         </span>
@@ -155,7 +157,7 @@ const AdminPayments = () => {
     <>
       <AdminPageTitle
         title="Payments"
-        description="Rental payments verified with Paystack, sale payments confirmed at the office, and agent subscriptions."
+        description="Rental payments verified with Paystack, sale payments confirmed by the owner, and agent subscriptions."
         action={<p className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm text-gray-500">Paid <span className="font-semibold text-gray-900 tabular-nums">{ghs(paidTotal)}</span></p>}
       />
       <TransactionNav scope="admin" />

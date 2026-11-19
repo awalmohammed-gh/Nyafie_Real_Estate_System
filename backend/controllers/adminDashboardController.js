@@ -12,6 +12,8 @@ import { subscriptionState } from "../utils/permissions.js";
 import { visibleAgentIds } from "./propertyController.js";
 import { ok } from "../utils/response.js";
 import { providerScope } from "../utils/paystack.js";
+import { openReportCount } from "./safetyReportController.js";
+import { pendingDocumentCheckCount } from "./documentCheckController.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 const EXPIRING_SOON_DAYS = 7; // same window as the frontend's subscription state
@@ -24,7 +26,7 @@ const percentChange = (current, previous) =>
   previous > 0
     ? Math.round(((current - previous) / previous) * 1000) / 10
     : null;
-// Purchase requests still being worked on (paid-at-office ones only await completion)
+// Purchase requests still being worked on (paid ones only await completion)
 const OPEN_SALE_STATUSES = [
   "pending",
   "contacted",
@@ -36,7 +38,7 @@ const OPEN_SALE_STATUSES = [
 
 /**
  * Revenue = money actually collected:
- *  - rental payments confirmed paid by Paystack, and sale payments confirmed at the office (Payment, status "paid")
+ *  - rental payments confirmed paid by Paystack, and sale payments confirmed by the owner (Payment, status "paid")
  *  - agent subscription payments confirmed paid by Paystack (Subscription, paymentStatus "paid")
  * Excluded: pending and failed attempts, duplicate charges (to be refunded), "Test payment"
  * records, waived subscriptions, and property asking prices. Dated by when the payment was confirmed.
@@ -410,5 +412,6 @@ export const performance = async (req, res) => {
 
 // GET /api/admin/counts -> small counters for the sidebar badges (polled)
 export const counts = async (_req, res) => {
-  ok(res, { pendingApplications: await pendingApplicationCount() });
+  const [pendingApplications, openReports, pendingDocumentChecks] = await Promise.all([pendingApplicationCount(), openReportCount(), pendingDocumentCheckCount()]);
+  ok(res, { pendingApplications, openReports, pendingDocumentChecks });
 };

@@ -176,7 +176,8 @@ export const mapProperty = (p) => ({
   stayBooking: p.stayBooking || null,
   moveIn: p.moveIn || null, // monthly rentals: advance, agent fee, deposit (utils/moveIn.js)
   paymentOptions: p.paymentOptions || null,
-  media: { images: p.images || [] },
+  // video / virtualTour: { provider, id } or null (utils/mediaLinks.js builds the players)
+  media: { images: p.images || [], video: p.video || null, virtualTour: p.virtualTour || null },
   agent: {
     id: p.agent?.id || idOf(p.owner),
     name: p.agent?.name || p.contact?.name || "Agent",
@@ -209,6 +210,8 @@ export const mapProperty = (p) => ({
     // Listing freshness: when the owner last confirmed it is available; "hidden" | "confirm" | "fresh"
     confirmedAt: p.availabilityConfirmedAt || null,
     freshness: p.staleSince ? "hidden" : p.freshnessReminderAt ? "confirm" : "fresh",
+    // When NyaFie checked the owner's ownership documents (sale listings); null when not checked
+    documentsVerifiedAt: p.documentsVerifiedAt || null,
   },
 });
 
@@ -236,7 +239,12 @@ export const toApiProperty = (p) => {
   if (p.roomTypes !== undefined) out.roomTypes = p.roomTypes;
   if (p.stayBooking) out.stayBooking = p.stayBooking;
   if (p.moveIn !== undefined) out.moveIn = p.moveIn;
-  if (p.media) out.images = p.media.images;
+  if (p.media) {
+    out.images = p.media.images;
+    // Pasted links, checked by the server ("" removes them)
+    if (p.media.videoUrl !== undefined) out.videoUrl = p.media.videoUrl;
+    if (p.media.virtualTourUrl !== undefined) out.virtualTourUrl = p.media.virtualTourUrl;
+  }
   if (p.agent) out.contact = { name: p.agent.name, phone: p.agent.phone, email: p.agent.email };
   if (p.listing?.state !== undefined) out.status = p.listing.state;
   if (p.listing?.availability !== undefined) out.availability = p.listing.availability;
@@ -336,6 +344,32 @@ export const mapOffer = (o) => ({
 });
 
 
+// ---------- Viewings ----------
+export const VIEWING_STATUS = { requested: "Requested", confirmed: "Confirmed", declined: "Declined", cancelled: "Cancelled", completed: "Completed", missed: "Missed", expired: "Expired" };
+
+// awaiting: "owner" | "customer" | null, the side that must answer the proposed time
+export const mapViewing = (v) => ({
+  id: v.id,
+  property: mapListingSummary(v.property),
+  customer: v.customer,
+  owner: v.owner,
+  ownerType: v.ownerType,
+  scheduledAt: v.scheduledAt,
+  statusKey: v.status,
+  status: VIEWING_STATUS[v.status] || v.status,
+  awaiting: v.awaiting || null,
+  proposedBy: v.proposedBy,
+  contactName: v.contactName || "",
+  contactPhone: v.contactPhone || "",
+  message: v.message || "",
+  response: v.response || "",
+  cancelledBy: v.cancelledBy || null,
+  conversationId: v.conversation || null,
+  history: v.history || [],
+  createdAt: v.createdAt,
+  updatedAt: v.updatedAt,
+});
+
 // Who made each change to a rental or purchase request
 const mapHistory = (history = []) => history.map((h) => ({ ...h, statusLabel: h.status, at: h.at }));
 
@@ -397,7 +431,7 @@ export const SALE_STATUS = {
   negotiating: "Negotiating",
   approved: "Approved",
   payment_pending: "Payment Pending",
-  paid_at_office: "Paid at Office",
+  paid_at_office: "Payment Received",
   completed: "Completed",
   cancelled: "Cancelled",
   rejected: "Rejected",
@@ -429,7 +463,7 @@ export const mapSaleRequest = (s) => ({
   createdAt: s.createdAt,
 });
 
-// ---------- Payment records (rentals online, sales at the office) ----------
+// ---------- Payment records (rentals online, sales paid to the owner) ----------
 export const mapPaymentRecord = (p) => ({
   id: p.id,
   kind: p.kind,

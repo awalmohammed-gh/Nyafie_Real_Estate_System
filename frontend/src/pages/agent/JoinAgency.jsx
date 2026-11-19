@@ -6,6 +6,7 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import { teamApi } from "../../frontApi";
 import PageLoader from "../../components/ui/PageLoader";
 import { formatDate } from "../../utils/date";
+import { cloudImage } from "../../utils/cloudImage";
 
 const ROLE_COPY = {
   manager: "As a manager you'll see every agency listing and lead, and assign work to the team.",
@@ -50,7 +51,7 @@ const JoinAgency = () => {
         ) : (
           <>
             <span className="mx-auto grid h-16 w-16 place-items-center overflow-hidden rounded-2xl bg-brand-50 text-brand-600">
-              {invite.data.agency.logo ? <img src={invite.data.agency.logo} alt="" className="h-full w-full object-contain" /> : <Building2 className="h-7 w-7" />}
+              {invite.data.agency.logo ? <img src={cloudImage(invite.data.agency.logo, 64)} alt="" className="h-full w-full object-contain" /> : <Building2 className="h-7 w-7" />}
             </span>
             <p className="mt-5 text-xs font-bold tracking-wider text-brand-700 uppercase">Team invite</p>
             <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-gray-900">Join {invite.data.agency.name} on NyaFie</h1>

@@ -2,6 +2,7 @@ import { ArrowUpRight, BadgeCheck, Building2, Mail, MapPin, Phone, Star } from '
 import { Link } from 'react-router-dom';
 import { usePlatform } from '../../context/usePlatform';
 import AgentAvatar from '../agent/AgentAvatar';
+import { cloudImage } from '../../utils/cloudImage';
 
 const AgentCard = ({ agent }) => {
   const { siteName } = usePlatform();
@@ -14,7 +15,7 @@ const AgentCard = ({ agent }) => {
   return (
     <article className="agent-card">
       <div className={`agent-card-cover${image ? '' : ' agent-card-cover-empty'}`}>
-        {image ? <img src={image} alt="" loading="lazy" decoding="async" /> : <Building2 size={46} strokeWidth={1.2} aria-hidden="true" />}
+        {image ? <img src={cloudImage(image, 400)} alt="" loading="lazy" decoding="async" /> : <Building2 size={46} strokeWidth={1.2} aria-hidden="true" />}
         <span className="agent-listing-badge"><Building2 size={14} aria-hidden="true" />{listings} {listings === 1 ? 'home listed' : 'homes listed'}</span>
       </div>
       <div className="agent-card-body">

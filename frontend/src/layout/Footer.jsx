@@ -7,6 +7,7 @@ import BrandLogo from '../components/brand/BrandLogo';
 import SocialLinks from '../components/brand/SocialLinks';
 import { businessContactItems } from '../utils/contact';
 import HomeFooter from '../components/Landing/HomeFooter';
+import InstallAppButton from '../components/ui/InstallAppButton';
 
 const exploreLinks = [
   { name: "Home", path: "/" },
@@ -117,8 +118,9 @@ const Footer = () => {
         </div>
 
         {/* Bottom bar */}
-        <div className="mt-14 flex items-center justify-center border-t border-white/10 pt-8 text-center text-sm text-gray-500">
+        <div className="mt-14 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 border-t border-white/10 pt-8 text-center text-sm text-gray-500">
           <p>© {new Date().getFullYear()} {siteName}. All rights reserved.</p>
+          <InstallAppButton className="inline-flex items-center gap-1.5 font-medium text-gray-300 hover:text-white" />
         </div>
       </div>
 

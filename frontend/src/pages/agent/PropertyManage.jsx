@@ -18,6 +18,9 @@ import { usePlatform } from "../../context/usePlatform";
 import WorkspaceStats from "../../components/agent/WorkspaceStats";
 import HotelInventory from "../../components/agent/HotelInventory";
 import { isHotel } from "../../utils/hotel";
+import { cloudImage } from "../../utils/cloudImage";
+import PropertyDocuments from "../../components/agent/PropertyDocuments";
+import ListingInsights from "../../components/agent/ListingInsights";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
@@ -172,12 +175,12 @@ const PropertyManage = () => {
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="space-y-6 xl:col-span-2">
           <Panel bodyClassName="p-3">
-            <img src={images[activeImage] || images[0]} alt={property.title} className="aspect-video w-full rounded-lg bg-gray-100 object-cover" />
+            <img src={cloudImage(images[activeImage] || images[0], 640)} alt={property.title} className="aspect-video w-full rounded-lg bg-gray-100 object-cover" />
             {images.length > 1 && (
               <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar">
                 {images.map((src, i) => (
                   <button key={src + i} onClick={() => setActiveImage(i)} aria-label={`Show photo ${i + 1}`} className={`h-14 w-20 shrink-0 overflow-hidden rounded-md ring-2 transition ${i === activeImage ? "ring-brand-500" : "ring-transparent opacity-70 hover:opacity-100"}`}>
-                    <img src={src} alt="" className="h-full w-full object-cover" />
+                    <img src={cloudImage(src, 80)} alt="" className="h-full w-full object-cover" />
                   </button>
                 ))}
               </div>
@@ -227,6 +230,11 @@ const PropertyManage = () => {
             <PropertyQuickActions property={property} perms={perms} />
             {perms.canAssignWork && <div className="mt-5 border-t border-gray-100 pt-5"><AssignWork assignedTo={property.assignedTo} canAssign assign={(memberId) => propertyApi.assignProperty(property.id, memberId)} onDone={() => { refreshListings(); refreshInquiries(); }} note="Its inquiries, chats, offers and requests go to the same person." /></div>}
           </Panel>
+
+          <ListingInsights propertyId={property.id} />
+
+          {/* Sale listings: private ownership documents for the "Documents checked" badge */}
+          {property.details?.status === "Sale" && <PropertyDocuments propertyId={property.id} />}
 
           <Panel title="Customer interest" bodyClassName="">
             <div className="grid grid-cols-3 border-b border-gray-100 text-center">

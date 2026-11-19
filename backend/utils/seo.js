@@ -14,8 +14,10 @@ export const pageMetadata = (path, settings, property) => {
     canonical: absoluteUrl(path),
     noindex: !settings.seo.allowIndexing || process.env.VERCEL_ENV === "preview" || privatePath(path, settings),
   };
-  const titles = { [`/${settings.slugs.listings}`]: "All property listings", [`/${settings.slugs.properties}`]: "Explore properties", '/sale': 'Properties for sale', '/rent': 'Properties to rent', '/contact': 'Contact our team', '/about': 'About us' };
+  const titles = { [`/${settings.slugs.listings}`]: "All property listings", [`/${settings.slugs.properties}`]: "Explore properties", '/sale': 'Properties for sale', '/rent': 'Properties to rent', '/contact': 'Contact our team', '/about': 'About us', '/compare': 'Compare homes' };
   if (titles[path]) metadata.title = `${titles[path]} | ${name}`;
+  // Each visitor's own comparison: nothing for search engines to index
+  if (path === '/compare') metadata.noindex = true;
   if (path.startsWith('/house/')) {
     if (property) {
       metadata.title = `${property.title} | ${name}`;

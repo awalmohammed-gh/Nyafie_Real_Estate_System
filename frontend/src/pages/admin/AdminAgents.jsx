@@ -18,6 +18,7 @@ import EmptyState from "../../components/ui/EmptyState";
 import { formatDate, isWithinDays } from "../../utils/date";
 import { formatPrice, getInitials, getListingStatus } from "../../utils/property";
 import { adminPath } from "../../utils/adminEntry";
+import { cloudImage } from "../../utils/cloudImage";
 
 const UsageBar = ({ used, limit }) => {
   const pct = limit ? Math.min(100, (used / limit) * 100) : 0;
@@ -289,7 +290,7 @@ const AdminAgents = () => {
                 <ul className="space-y-2">
                   {viewed.properties.map((p) => (
                     <li key={p.id} className="flex items-center gap-3 rounded-lg border border-gray-200 p-2">
-                      <img src={p.media.images[0]} alt="" className="h-11 w-14 shrink-0 rounded-lg object-cover" />
+                      <img src={cloudImage(p.media.images[0], 56)} alt="" className="h-11 w-14 shrink-0 rounded-lg object-cover" />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-gray-900">{p.title}</span>
                         <span className="text-xs text-gray-500">{formatPrice(p)}</span>

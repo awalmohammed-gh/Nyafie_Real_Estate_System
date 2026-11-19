@@ -10,6 +10,7 @@ import { agentProfileForm } from "../../utils/agentProfile";
 import PageTitle from "../../components/agent/PageTitle";
 import { AccountSettings } from "../account/Settings";
 import { getInitials } from "../../utils/property";
+import { cloudImage } from "../../utils/cloudImage";
 
 const SECTIONS = [
   { id: "profile", label: "Profile", description: "Your professional details", icon: UserRound },
@@ -44,7 +45,7 @@ const ProfileForm = ({ user }) => {
     finally { setSaving(false); }
   };
   const profilePreview = <div className="settings-profile-preview">
-      <div className="settings-profile-avatar">{form.profileImage ? <img src={form.profileImage} alt="Your profile preview" /> : getInitials(name)}</div>
+      <div className="settings-profile-avatar">{form.profileImage ? <img src={cloudImage(form.profileImage, 96)} alt="Your profile preview" /> : getInitials(name)}</div>
       <div className="min-w-0 flex-1">
         <p className="workspace-eyebrow">Your public identity</p>
         <h3 className="mt-2 break-words text-xl font-semibold tracking-tight text-gray-900">{name || "Your name"}</h3>

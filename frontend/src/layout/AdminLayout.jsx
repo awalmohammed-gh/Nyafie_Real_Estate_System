@@ -7,6 +7,9 @@ import {
   CreditCard,
   ExternalLink,
   HandCoins,
+  FileCheck2,
+  ShieldAlert,
+  CalendarClock,
   Inbox,
   KeyRound,
   Layers,
@@ -25,7 +28,7 @@ import { TransactionsProvider } from "../context/TransactionsProvider";
 import { useTransactions } from "../context/useTransactions";
 import { useUnreadMessages } from "../hooks/useUnreadMessages";
 import { useUnseenReviews } from "../hooks/useUnseenReviews";
-import { usePendingApplications } from "../hooks/usePendingApplications";
+import { useAdminCounts } from "../hooks/useAdminCounts";
 import { useAdminLiveRefresh } from "../hooks/useAdminLiveRefresh";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
 import PageLoader from "../components/ui/PageLoader";
@@ -51,6 +54,8 @@ const groups = [
       { label: "Agents", to: adminPath("/agents"), icon: UserCog },
       { label: "Agent Applications", to: adminPath("/agent-applications"), icon: ClipboardCheck, badge: "applications", urgent: true },
       { label: "Customers", to: adminPath("/customers"), icon: Users },
+      { label: "Safety reports", to: adminPath("/safety-reports"), icon: ShieldAlert, badge: "reports", urgent: true },
+      { label: "Document checks", to: adminPath("/document-checks"), icon: FileCheck2, badge: "documents" },
     ],
   },
   {
@@ -59,6 +64,7 @@ const groups = [
       { label: "Offers", to: adminPath("/offers"), icon: HandCoins, badge: "offers" },
       { label: "Rentals", to: adminPath("/rentals"), icon: KeyRound, badge: "rentals" },
       { label: "Sales", to: adminPath("/sale-requests"), icon: Building, badge: "sales" },
+      { label: "Viewings", to: adminPath("/viewings"), icon: CalendarClock, badge: "viewings" },
     ],
   },
   {
@@ -91,19 +97,22 @@ const AdminShell = () => {
   const { pending } = useTransactions();
   const unreadMessages = useUnreadMessages("admin");
   const newReviews = useUnseenReviews();
-  const pendingApplications = usePendingApplications();
+  const { pendingApplications, openReports, pendingDocumentChecks } = useAdminCounts();
   useAdminLiveRefresh();
   const review = listings.filter((p) => p.listing.state === "pending").length;
 
   const badges = {
     review,
     applications: pendingApplications,
+    reports: openReports,
+    documents: pendingDocumentChecks,
     inquiries: inquiries.filter((i) => i.status === "New").length,
     messages: unreadMessages,
     reviews: newReviews,
     offers: pending.offers,
     rentals: pending.rentals,
     sales: pending.sales,
+    viewings: pending.viewings,
   };
 
   return (

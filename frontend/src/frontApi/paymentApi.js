@@ -9,7 +9,7 @@ export const initializeRentalPayment = async (rentalId) => (await client.post("/
 export const verifyPayment = async (reference) =>
   mapRental((await client.get(`/payments/verify/${encodeURIComponent(reference)}`)).data);
 
-// Admin: every rental (Paystack) and sale (office) payment record
+// Admin: every rental (Paystack) and sale (confirmed by the owner) payment record
 export const getAdminPayments = async () => (await client.get("/admin/payments")).data.map(mapPaymentRecord);
 
 // Admin refunds of flagged payments. Each returns { refund, message }.

@@ -69,7 +69,7 @@ export const checkPaystackConfig = () => {
 /**
  * MongoDB filter for records that belong to the current Paystack environment. Records made
  * before environments were stored are test-mode records: only test keys were accepted then.
- * Records not processed by Paystack (office sales, admin plans) are always included.
+ * Records not processed by Paystack (owner-confirmed sales, admin plans) are always included.
  */
 export const providerScope = (methodField = "method") => {
   const environment = paymentEnvironment() || "test";

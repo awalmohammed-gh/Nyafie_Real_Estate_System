@@ -4,7 +4,7 @@ import SaleRequestsBoard from "../../components/offers/SaleRequestsBoard";
 
 const AdminSaleRequests = () => (
   <>
-    <AdminPageTitle title="Sales" description="Purchase requests on admin and agent listings, paid at the office." />
+    <AdminPageTitle title="Sales" description="Purchase requests on admin and agent listings. Buyers pay the owner as agreed; the owner confirms the payment." />
     <TransactionNav scope="admin" />
     <SaleRequestsBoard scope="admin" />
   </>

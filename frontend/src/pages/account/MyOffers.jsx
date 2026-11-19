@@ -8,6 +8,7 @@ import StatusBadge from "../../components/ui/StatusBadge";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { offerApi } from "../../frontApi";
 import { formatRelative } from "../../utils/date";
+import { cloudImage } from "../../utils/cloudImage";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
@@ -54,7 +55,7 @@ const MyOffers = () => {
               <li key={offer.id} className="flex flex-col gap-4 rounded-3xl bg-white p-4 ring-1 ring-gray-200 sm:flex-row sm:p-5">
                 <Link to={`/house/${offer.property.id}`} className="shrink-0">
                   {offer.property.image ? (
-                    <img src={offer.property.image} alt="" className="aspect-16/9 w-full rounded-2xl object-cover sm:h-28 sm:w-40" />
+                    <img src={cloudImage(offer.property.image, 400)} alt="" className="aspect-16/9 w-full rounded-2xl object-cover sm:h-28 sm:w-40" />
                   ) : (
                     <div className="grid h-28 w-40 place-items-center rounded-2xl bg-gray-100 text-xs text-gray-400">Removed</div>
                   )}

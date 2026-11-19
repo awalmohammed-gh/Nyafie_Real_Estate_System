@@ -4,6 +4,7 @@ import { Bed, Check, Loader2, Maximize2, Users } from "lucide-react";
 import { hotelApi } from "../../frontApi";
 import { bookingPath, roomPrice, today, tomorrow } from "../../utils/hotel";
 import HotelRoomDetails from "./HotelRoomDetails";
+import { cloudImage } from "../../utils/cloudImage";
 
 const HotelRooms = ({ property, canBook = true }) => {
   const navigate = useNavigate();
@@ -40,7 +41,7 @@ const HotelRooms = ({ property, canBook = true }) => {
     </form>}
     {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     <div className="mt-6 space-y-5">{rooms.map((room) => <article key={room.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm sm:grid sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-      {room.images[0] ? <img src={room.images[0]} alt={room.name} loading="lazy" className="h-56 w-full object-cover sm:h-full sm:min-h-64" /> : <div className="grid h-56 place-items-center bg-gray-100 text-gray-400"><Bed className="h-8 w-8" /></div>}
+      {room.images[0] ? <img src={cloudImage(room.images[0], 480)} alt={room.name} loading="lazy" className="h-56 w-full object-cover sm:h-full sm:min-h-64" /> : <div className="grid h-56 place-items-center bg-gray-100 text-gray-400"><Bed className="h-8 w-8" /></div>}
       <div className="min-w-0 p-5"><div className="flex flex-wrap items-start justify-between gap-2"><h3 className="text-lg font-semibold text-gray-900">{room.name}</h3><p className="font-semibold text-brand-700">{roomPrice(room.pricePerNight, property.pricing.currency)}<span className="block text-right text-xs font-normal text-gray-500">per room / night</span></p></div>
         <p className="mt-2 line-clamp-2 text-sm leading-6 text-gray-500">{room.description}</p><div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-600"><span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" />Up to {room.maxGuests} guests</span><span className="flex items-center gap-1"><Bed className="h-3.5 w-3.5" />{room.beds} bed(s) · {room.bedType}</span>{room.size > 0 && <span className="flex items-center gap-1"><Maximize2 className="h-3.5 w-3.5" />{room.size} {room.sizeUnit}</span>}</div>
         <ul aria-label="Room amenities" className="mt-4 flex flex-wrap gap-x-4 gap-y-2">{room.amenities.slice(0, 4).map((a) => <li key={a} className="flex items-center gap-1 text-xs text-gray-600"><Check className="h-3.5 w-3.5 text-brand-600" />{a}</li>)}</ul>

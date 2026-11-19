@@ -1,4 +1,7 @@
+import mongoose from "mongoose";
 import User from "../models/User.js";
+import Subscription from "../models/Subscription.js";
+import Plan from "../models/Plan.js";
 import { getSettings } from "../models/Setting.js";
 import { chatEnabledAgents, subscriptionState } from "./permissions.js";
 import { isOrganization } from "./accountTypes.js";
@@ -28,25 +31,35 @@ export const publicAgent = (user) => ({
 const LISTED_AGENT = { role: "agent", isActive: true, "agentApplication.status": "approved", agency: { $exists: false } };
 const inGoodStanding = (settings, agent) => !settings.agent.requireSubscription || subscriptionState(agent.subscription).isActive;
 
+/**
+ * Listed agents matching `match`, each with { _id, subscription: { status, paymentStatus, expiresAt },
+ * priority } in ONE database round trip. (find + populate takes three trips in a row: users, then
+ * subscriptions, then plans; this runs on every public listing request, so it adds up.)
+ */
+const listedAgents = (match) => User.aggregate([
+  { $match: { ...match, ...LISTED_AGENT } },
+  { $project: { subscription: 1 } },
+  { $lookup: { from: Subscription.collection.name, localField: "subscription", foreignField: "_id", as: "subscription", pipeline: [{ $project: { status: 1, paymentStatus: 1, expiresAt: 1, plan: 1 } }] } },
+  { $set: { subscription: { $first: "$subscription" } } },
+  { $lookup: { from: Plan.collection.name, localField: "subscription.plan", foreignField: "_id", as: "plan", pipeline: [{ $project: { priorityVisibility: 1 } }] } },
+  { $project: { subscription: 1, priority: { $toBool: { $ifNull: [{ $first: "$plan.priorityVisibility" }, false] } } } },
+]);
+
 export const visibleAgentIds = async () => {
-  const [settings, agents] = await Promise.all([
-    getSettings(),
-    User.find(LISTED_AGENT).select("subscription").populate({
-      path: "subscription",
-      select: "status paymentStatus expiresAt plan",
-      populate: { path: "plan", select: "priorityVisibility" },
-    }),
-  ]);
-  return agents.filter((agent) => inGoodStanding(settings, agent))
-    .map((agent) => ({ id: agent._id, priority: Boolean(agent.subscription?.plan?.priorityVisibility) }));
+  const [settings, agents] = await Promise.all([getSettings(), listedAgents({})]);
+  return agents.filter((agent) => inGoodStanding(settings, agent)).map((agent) => ({ id: agent._id, priority: agent.priority }));
 };
 
 // The publicQuery() rule for a single listing, without loading the whole agent directory
 export const isPubliclyVisible = async (property) => {
   if (property.status !== "published" || property.staleSince) return false; // stale: hidden until the owner confirms it
   if (property.ownerType === "admin") return true;
-  const [settings, owner] = await Promise.all([getSettings(), User.findOne({ _id: property.owner, ...LISTED_AGENT }).select("subscription").populate("subscription")]);
-  return Boolean(owner) && inGoodStanding(settings, owner);
+  // Aggregations aren't cast by the schema: match on a real ObjectId (owner may also be populated)
+  const ownerId = String(property.owner?._id ?? property.owner ?? "");
+  const owner = /^[a-f\d]{24}$/i.test(ownerId) ? new mongoose.Types.ObjectId(ownerId) : null;
+  if (!owner) return false;
+  const [settings, [agent]] = await Promise.all([getSettings(), listedAgents({ _id: owner })]);
+  return Boolean(agent) && inGoodStanding(settings, agent);
 };
 
 /**

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Bed, Check, Maximize2, Users } from "lucide-react";
 import Modal from "../ui/Modal";
 import { roomPrice } from "../../utils/hotel";
+import { cloudImage } from "../../utils/cloudImage";
 
 const Gallery = ({ room }) => {
   const [index, setIndex] = useState(0);
@@ -14,7 +15,7 @@ const Gallery = ({ room }) => {
   return (
     <div>
       <img
-        src={room.images[index]}
+        src={cloudImage(room.images[index], 720)}
         alt={`${room.name} photo ${index + 1}`}
         className="aspect-video w-full rounded-xl object-cover"
       />
@@ -30,7 +31,7 @@ const Gallery = ({ room }) => {
               onClick={() => setIndex(i)}
               className={`shrink-0 overflow-hidden rounded-lg border-2 ${index === i ? "border-brand-600" : "border-transparent"}`}
             >
-              <img src={src} alt="" className="h-16 w-24 object-cover" />
+              <img src={cloudImage(src, 96)} alt="" className="h-16 w-24 object-cover" />
             </button>
           ))}
         </div>

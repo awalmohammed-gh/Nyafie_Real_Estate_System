@@ -10,7 +10,7 @@ import { getPriceParts } from "../../utils/property";
 // Buy Now (sale properties). Two ways forward:
 //  A. make an offer or chat with the owner to negotiate
 //  B. submit a purchase request at the asking price
-// No payment happens online: the owner sends instructions and the customer pays at the office.
+// No payment happens online: the customer and the owner agree how to pay, and the owner confirms it.
 const BuyNowPanel = ({ property, ownerName, whatsappLink, onChat }) => {
   const { user } = useAuth();
   const [form, setForm] = useState({ fullName: user?.name || "", email: user?.email || "", phone: user?.phone || "", message: "" });

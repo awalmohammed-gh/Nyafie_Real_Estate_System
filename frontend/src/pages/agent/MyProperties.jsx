@@ -24,6 +24,7 @@ import ViewToggle from "../../components/dashboard/ViewToggle";
 import PropertyQuickView from "../../components/agent/PropertyQuickView";
 import WorkspaceStats from "../../components/agent/WorkspaceStats";
 import FreshnessNotice, { FreshnessBadge } from "../../components/dashboard/FreshnessNotice";
+import { cloudImage } from "../../utils/cloudImage";
 
 const tabs = [
   { id: "all", label: "All" },
@@ -114,7 +115,7 @@ const MyProperties = () => {
       header: "Property",
       render: (p) => (
         <div className="flex min-w-0 items-center gap-3">
-          <img src={p.media.images[0]} alt="" className="h-10 w-14 shrink-0 rounded-md bg-gray-100 object-cover" />
+          <img src={cloudImage(p.media.images[0], 56)} alt="" className="h-10 w-14 shrink-0 rounded-md bg-gray-100 object-cover" />
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 truncate font-medium text-gray-900">
               {p.meta?.isFeatured && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" aria-label="Featured" />}
@@ -242,7 +243,7 @@ const MyProperties = () => {
             mobileCard={(p) => (
               <div className="flex gap-3">
                 <button onClick={() => setViewed(p)} className="shrink-0">
-                  <img src={p.media.images[0]} alt="" className="h-16 w-20 rounded-md bg-gray-100 object-cover" />
+                  <img src={cloudImage(p.media.images[0], 80)} alt="" className="h-16 w-20 rounded-md bg-gray-100 object-cover" />
                 </button>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">

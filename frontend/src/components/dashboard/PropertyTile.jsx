@@ -5,6 +5,7 @@ import StatusBadge from "../ui/StatusBadge";
 import ActionMenu from "../ui/ActionMenu";
 import { formatDate } from "../../utils/date";
 import { formatLocation, formatType, getPriceParts } from "../../utils/property";
+import { cloudImage } from "../../utils/cloudImage";
 
 // Availability shown on the photo; listing state (Published, In review...) sits in the footer
 const AVAILABILITY_DOT = { Available: "bg-emerald-500", "Under Offer": "bg-amber-400", Rented: "bg-sky-500", Sold: "bg-gray-500" };
@@ -30,7 +31,7 @@ const PropertyTile = ({ property: p, status, owner, metrics, actions, onOpen, in
     >
       <div className="relative aspect-16/10 overflow-hidden bg-gray-100">
         {image ? (
-          <img src={image} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+          <img src={cloudImage(image, 400)} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
         ) : (
           <span className="grid h-full place-items-center text-gray-300"><Home className="h-8 w-8" /></span>
         )}

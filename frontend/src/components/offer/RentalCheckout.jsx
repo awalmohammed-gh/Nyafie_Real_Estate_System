@@ -7,6 +7,7 @@ import { formatDate } from "../../utils/date";
 import { getPriceParts } from "../../utils/property";
 import { usePlatform } from "../../context/usePlatform";
 import { arrivalText, bookingHeadline } from "../../utils/hotelPayments";
+import { cloudImage } from "../../utils/cloudImage";
 
 const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
@@ -246,7 +247,7 @@ const RentalCheckout = ({ property, ownerName }) => {
         <div className="space-y-5">
           <h2 className="text-lg font-bold text-gray-900">Rental Summary</h2>
           <div className="flex items-center gap-3 rounded-2xl bg-gray-50 p-2.5">
-            <img src={property.media.images[0]} alt="" className="h-16 w-24 shrink-0 rounded-xl object-cover" />
+            <img src={cloudImage(property.media.images[0], 96)} alt="" className="h-16 w-24 shrink-0 rounded-xl object-cover" />
             <div className="min-w-0">
               <p className="truncate font-semibold text-gray-900">{property.title}</p>
               <p className="truncate text-sm text-gray-500">{[property.location.name, property.location.city].filter(Boolean).join(", ")}</p>

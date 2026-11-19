@@ -2,10 +2,12 @@ import {
   BadgeCheck,
   Bath,
   Bed,
+  BedDouble,
   Eye,
   Heart,
   MapPin,
   Maximize2,
+  PlayCircle,
   Star,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -22,6 +24,11 @@ import { useAuth } from "../../context/useAuth";
 import { propertyCardImageSources } from "../../utils/propertyImages";
 import { formatDistance } from "../../utils/geo";
 import { advanceLabel } from "../../utils/moveIn";
+import { isHotel } from "../../utils/hotel";
+import { embedUrl } from "../../utils/mediaLinks";
+
+// View counts are shown once a listing has real interest: a handful of views reads as "nobody looks"
+export const VIEWS_SHOWN_FROM = 25;
 
 const HouseCard = ({ house, variant }) => {
   const { isFavorite, toggleFavorite } = useRealEstate();
@@ -38,10 +45,19 @@ const HouseCard = ({ house, variant }) => {
       : "Agent"
     : siteName;
   const unavailable = ["Sold", "Rented"].includes(house.listing?.availability);
+  const hotel = isHotel(house);
+  const roomTypeCount = hotel ? (house.roomTypes || []).filter((room) => room.active !== false).length : 0;
+  // Trust signals on the photo: ownership documents checked (sale listings) and a video or 3D tour
+  const documentsChecked = isForSale && Boolean(house.listing?.documentsVerifiedAt);
+  const hasTour = Boolean(embedUrl(media?.video) || embedUrl(media?.virtualTour));
   // Monthly rentals: how many months of rent the owner asks for upfront
   const advanceMonths = house.pricing?.perMonth != null ? Number(house.moveIn?.advanceMonths) || 0 : 0;
-  const identity =
-    isAgent && !isAuthenticated ? (
+  const identity = !isAgent ? (
+      <span className="flex min-w-0 items-center gap-1 truncate text-xs text-gray-500">
+        By <span className="font-semibold text-gray-700">{siteName}</span>
+        <BadgeCheck aria-label="Platform listing" className="h-3.5 w-3.5 shrink-0 text-brand-600" />
+      </span>
+    ) : isAgent && !isAuthenticated ? (
       <span className="text-xs font-medium text-brand-600">
         Sign in to view agent
       </span>
@@ -82,7 +98,7 @@ const HouseCard = ({ house, variant }) => {
     );
 
   return (
-    <article className={`${variant === "home" ? "house-card-home " : ""}@container group relative flex h-full flex-col overflow-hidden rounded-3xl bg-white ring-1 ring-gray-200/80 glass-hover [--glass-lift:3px]`}>
+    <article className={`${variant === "home" ? "house-card-home " : ""}@container group relative flex h-full flex-col overflow-hidden rounded-3xl bg-white ring-1 ring-gray-200/80 glass-hover [--glass-lift:0px]`}>
       {/* Image */}
       <div className="property-card-image relative aspect-4/3 overflow-hidden bg-gray-100">
         <img
@@ -92,7 +108,8 @@ const HouseCard = ({ house, variant }) => {
           decoding="async"
           className="h-full w-full object-cover transition duration-700 ease-out group-hover:scale-105 group-hover:contrast-[1.03] group-hover:saturate-[1.08] group-has-focus-visible:scale-105"
         />
-        <div className="absolute inset-0 bg-linear-to-t from-gray-950/70 via-transparent to-transparent" />
+        {/* Darker at the bottom so the white price stays readable on bright photos */}
+        <div className="absolute inset-0 bg-linear-to-t from-gray-950/80 via-gray-950/10 via-45% to-transparent" />
 
         <span className="absolute top-4 left-4 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-gray-900 shadow-sm backdrop-blur">
           <span
@@ -115,7 +132,21 @@ const HouseCard = ({ house, variant }) => {
           />
         </button>
 
-        <p className="absolute bottom-4 left-4 text-white">
+        {(documentsChecked || hasTour) && (
+          <div className="absolute right-3 bottom-3 flex gap-1.5">
+            {documentsChecked && (
+              <span className="grid h-7 w-7 place-items-center rounded-full bg-white/95 text-emerald-600 shadow-sm" title="Documents checked">
+                <BadgeCheck className="h-4 w-4" aria-hidden="true" /><span className="sr-only">Documents checked</span>
+              </span>
+            )}
+            {hasTour && (
+              <span className="grid h-7 w-7 place-items-center rounded-full bg-white/95 text-brand-700 shadow-sm" title="Video or 3D tour">
+                <PlayCircle className="h-4 w-4" aria-hidden="true" /><span className="sr-only">Has a video or 3D tour</span>
+              </span>
+            )}
+          </div>
+        )}
+        <p className="absolute bottom-4 left-4 text-white [text-shadow:0_1px_6px_rgb(0_0_0/0.35)]">
           <span className="text-2xl font-extrabold tracking-tight">
             {variant === "home" ? value.replace(/^₵/, "GHS ") : value}
           </span>
@@ -163,21 +194,27 @@ const HouseCard = ({ house, variant }) => {
         </p>
 
         <div className="mt-auto flex items-center justify-between gap-2 border-t border-gray-100 pt-4 text-sm text-gray-600">
-          {property.bedrooms != null && (
+          {hotel && roomTypeCount > 0 && (
+            <span className="flex items-center gap-1.5 whitespace-nowrap">
+              <BedDouble className="h-4 w-4 shrink-0 text-gray-400" />
+              {roomTypeCount} {roomTypeCount === 1 ? "room type" : "room types"}
+            </span>
+          )}
+          {!hotel && property.bedrooms != null && (
             <span className="flex items-center gap-1.5 whitespace-nowrap">
               <Bed className="h-4 w-4 shrink-0 text-gray-400" />
               {property.bedrooms}{" "}
               <span className="hidden @[19rem]:inline">Beds</span>
             </span>
           )}
-          {property.bathrooms != null && (
+          {!hotel && property.bathrooms != null && (
             <span className="flex items-center gap-1.5 whitespace-nowrap">
               <Bath className="h-4 w-4 shrink-0 text-gray-400" />
               {property.bathrooms}{" "}
               <span className="hidden @[19rem]:inline">Baths</span>
             </span>
           )}
-          {property.size && (
+          {property.size?.value > 0 && (
             <span className="flex items-center gap-1.5 whitespace-nowrap">
               <Maximize2 className="h-4 w-4 shrink-0 text-gray-400" />
               {property.size.value} {property.size.unit}
@@ -202,11 +239,11 @@ const HouseCard = ({ house, variant }) => {
               {identity}
             </Link>
           ) : (
-            <div className="flex min-h-11 min-w-0 items-center gap-2.5">
+            <div className={`flex ${isAgent ? "min-h-11" : "min-h-8"} min-w-0 items-center gap-2.5`}>
               {identity}
             </div>
           )}
-          {meta?.views > 0 && (
+          {meta?.views >= VIEWS_SHOWN_FROM && (
             <span className="flex shrink-0 items-center gap-1 text-xs text-gray-400 tabular-nums">
               <Eye aria-hidden="true" className="h-3.5 w-3.5" />
               {meta.views.toLocaleString()}

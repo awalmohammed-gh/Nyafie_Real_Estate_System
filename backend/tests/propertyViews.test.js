@@ -6,6 +6,8 @@ import PropertyView from "../models/PropertyView.js";
 import Setting from "../models/Setting.js";
 import { recordView } from "../controllers/propertyController.js";
 import { isCrawler } from "../utils/propertyViews.js";
+import { fakeListedAgents } from "./support/listedAgents.js";
+import PropertyViewDay from "../models/PropertyViewDay.js";
 
 const query = (value) => ({
   then: (resolve, reject) => Promise.resolve(value).then(resolve, reject),
@@ -30,14 +32,20 @@ const setup = (t, { listed = true } = {}) => {
   const windows = new Map(); // `${property}:${viewer}` -> viewedAt
   const stored = [];
   const incOptions = [];
+  const daily = new Map(); // property -> views counted today (the owner's insights chart)
   t.mock.method(Setting, "findOneAndUpdate", () => query({ agent: { requireSubscription: false } }));
   t.mock.method(User, "findOne", () => query(listed ? company : null));
+  t.mock.method(User, "aggregate", fakeListedAgents(() => (listed ? [company] : [])));
   t.mock.method(Property, "findById", (id) => query(listings.get(String(id)) || null));
   t.mock.method(Property, "findByIdAndUpdate", async (id, update, options) => {
     incOptions.push(options);
     const property = listings.get(String(id));
     property.views += update.$inc.views;
     return { views: property.views };
+  });
+  t.mock.method(PropertyViewDay, "updateOne", async (filter, update) => {
+    daily.set(String(filter.property), (daily.get(String(filter.property)) || 0) + update.$inc.count);
+    return { acknowledged: true };
   });
   t.mock.method(PropertyView, "updateOne", async (filter, update) => {
     const key = `${filter.property}:${filter.viewer}`;
@@ -55,7 +63,7 @@ const setup = (t, { listed = true } = {}) => {
     listings.set(String(property._id), property);
     return property;
   };
-  return { listing, windows, stored, incOptions };
+  return { listing, windows, stored, incOptions, daily };
 };
 
 const view = async (property, { ip = "41.66.10.20", ua = CHROME, body = {}, sessions = {} } = {}) => {
@@ -66,7 +74,7 @@ const view = async (property, { ip = "41.66.10.20", ua = CHROME, body = {}, sess
 const data = (res) => res.body.data;
 
 test("an anonymous visitor counts once per listing; refreshes don't count; another listing counts on its own", async (t) => {
-  const { listing, incOptions } = setup(t);
+  const { listing, incOptions, daily } = setup(t);
   const a = listing();
   const b = listing({ title: "Airport Residential House" });
   assert.deepEqual(data(await view(a)), { counted: true, views: 1 });
@@ -75,6 +83,9 @@ test("an anonymous visitor counts once per listing; refreshes don't count; anoth
   assert.deepEqual(data(await view(b)), { counted: true, views: 1 });
   assert.equal(a.views, 1);
   assert.equal(incOptions[0].timestamps, false); // a view never changes the listing's updatedAt
+  await new Promise((resolve) => setImmediate(resolve)); // the daily count is recorded without holding up the answer
+  assert.equal(daily.get(String(a._id)), 1, "only counted views reach the owner's daily chart");
+  assert.equal(daily.get(String(b._id)), 1);
 });
 
 test("a visitor counts again only after the window has passed", async (t) => {
