@@ -17,6 +17,8 @@ export const AGENT_PROOF_KINDS = Object.freeze({
 const MAX_PROOFS = 4;
 const present = (user) => ({
   agentId: String(user._id),
+  // Proof is deleted as soon as an admin has reviewed it (approved or rejected): when that happened
+  reviewedAt: user.agentApplication?.proofReviewedAt || null,
   editable: user.isActive === true && (
     ["incomplete", "rejected"].includes(
       user.agentApplication?.status || "incomplete",

@@ -12,6 +12,20 @@ import { notifyAdmins, notifyUser } from "../utils/notify.js";
 import { ok, fail } from "../utils/response.js";
 import { loadUser } from "./authController.js";
 import { reconcileOpenPayments } from "./subscriptionController.js";
+import { destroyDocument } from "../utils/propertyDocuments.js";
+import { reportError } from "../utils/monitoring.js";
+
+// After a review the proof files are removed from storage (the database no longer lists them).
+// A file the storage provider fails to delete is reported, so it can be removed by hand.
+const deleteReviewedProofs = async (agentId, files) => {
+  const results = await Promise.allSettled(files.map((file) => destroyDocument(file)));
+  // Cloudinary answers { result: "ok" } (or "not found" when it is already gone); anything else failed
+  const failed = results.filter((result) => !(result.status === "fulfilled" && ["ok", "not found"].includes(result.value?.result)));
+  if (!failed.length) return;
+  const error = new Error(`${failed.length} reviewed agent proof file(s) could not be deleted from storage for agent ${agentId}.`);
+  console.error(error.message);
+  await reportError(error, { tags: { area: "agent-proof-deletion" } });
+};
 
 // GET /api/agents/application -> the onboarding status page. Re-checks unfinished payments with
 // Paystack first, and submits once the profile, proof and subscription are ready.
@@ -232,10 +246,21 @@ export const reviewApplication = async (req, res) => {
     isActive: action !== "suspend",
   };
   if (action === "approve") {
-    changes["agentApplication.proofReviewedAt"] = new Date();
-    changes["agentApplication.proofReviewedBy"] = req.user._id;
     changes["agentApplication.approvedAt"] = new Date();
     changes["agentApplication.approvedBy"] = req.user._id;
+  }
+  // Proof documents are kept only until the review: approved or rejected, the files are deleted
+  // (below, once the decision is saved). Only the fact that they were reviewed, when and by whom, stays.
+  // Approved agents keep their document count (their onboarding stays complete); rejected agents
+  // upload new documents to apply again.
+  const reviewed = action === "approve" || action === "reject";
+  let proofFiles = [];
+  if (reviewed) {
+    proofFiles = (await User.findById(user._id).select("+agentApplication.proofDocuments"))?.agentApplication?.proofDocuments?.map((doc) => doc.toObject()) || [];
+    changes["agentApplication.proofReviewedAt"] = new Date();
+    changes["agentApplication.proofReviewedBy"] = req.user._id;
+    changes["agentApplication.proofDocuments"] = [];
+    if (action === "reject") changes["agentApplication.proofCount"] = 0;
   }
   const updated = await User.findOneAndUpdate(
     { _id: user._id, role: "agent", isActive: user.isActive, "agentApplication.status": storedStatus === undefined ? { $exists: false } : storedStatus, ...(action === "approve" ? { "agentApplication.proofCount": { $gt: 0 }, "agentApplication.submittedAt": user.agentApplication.submittedAt } : {}) },
@@ -248,6 +273,7 @@ export const reviewApplication = async (req, res) => {
       409,
       "Another reviewer updated this application. Refresh to see the latest status.",
     );
+  if (reviewed) await deleteReviewedProofs(updated._id, proofFiles);
   notifyUser(updated._id, {
     type: "agent_application",
     title: `Agent application ${next}`,
