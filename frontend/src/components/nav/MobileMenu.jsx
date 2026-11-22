@@ -90,7 +90,7 @@ const MobileMenu = ({ showHeader = false, onClose, onNavigate, wishlistCount = 0
           <img src="/hero/nyafie-modern-villa-960.jpg" alt="" loading="lazy" decoding="async" className="absolute inset-y-0 right-0 h-full w-[45%] object-cover [mask-image:linear-gradient(to_right,transparent,black_45%)]" />
           <div className="relative max-w-[62%]">
             <p className="text-base leading-tight font-bold">List Your Property</p>
-            <p className="mt-1 text-[13px] leading-snug text-white/85">Reach more buyers and renters on {siteName}.</p>
+            <p className="mt-1 text-[13px] leading-snug text-white/85">Agents and owners welcome. Get verified, then reach buyers and renters on {siteName}.</p>
             <Link to={user ? "/agent/plans" : "/agent/register"} onClick={onNavigate} className="mt-3 inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-white px-3.5 text-[13px] font-semibold text-brand-800 transition-colors hover:bg-brand-50">
               Become an Agent <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>

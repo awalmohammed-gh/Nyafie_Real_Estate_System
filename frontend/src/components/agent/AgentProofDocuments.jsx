@@ -7,10 +7,13 @@ import * as proofs from "../../frontApi/agentApplicationApi";
 import { openDocument, readFileAsDataUrl } from "../../utils/openDocument";
 import { formatDate } from "../../utils/date";
 
+// The same types as the server (backend controllers/agentProofController.js AGENT_PROOF_KINDS)
 const KINDS = [
   ["professional_certificate", "Professional registration or licence"],
   ["agency_authorization", "Agency authorization / employment letter"],
   ["business_registration", "Agency / company registration certificate"],
+  ["national_id", "Ghana Card or passport"],
+  ["ownership_proof", "Proof of ownership (land title, indenture or site plan)"],
 ];
 
 const AgentProofDocuments = ({
@@ -97,7 +100,7 @@ const AgentProofDocuments = ({
           <p className="mt-2 text-sm leading-6 text-gray-600">
             {admin
               ? "Review these documents before approving the applicant. Files are private; viewing links expire after 10 minutes. They're permanently deleted as soon as you approve or reject the application."
-              : "Upload at least one document showing that you work as an agent, represent an agency, or operate a registered property business. Our team must review and approve your application before your workspace opens."}
+              : "To keep buyers and renters safe, we verify everyone before they can post properties. Agents and agencies: upload your licence, agency letter or business registration. Property owners: upload your Ghana Card or passport and proof that the property is yours. Our team must review and approve your application before your workspace opens."}
           </p>
         </div>
       </div>

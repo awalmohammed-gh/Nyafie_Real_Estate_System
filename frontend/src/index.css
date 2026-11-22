@@ -310,6 +310,18 @@
 }
 
 /*
+ * The server's plain page text (backend utils/seoContent.js) inside #root: readable by search engines
+ * and link previews without JavaScript, and shown tidily for the moment before the app replaces it.
+ */
+.seo-shell { max-width: 72rem; margin: 0 auto; padding: 6.5rem 1.25rem 3rem; color: #1f2937; line-height: 1.65; }
+.seo-shell h1 { margin: 0.75rem 0; font-size: 1.75rem; font-weight: 700; line-height: 1.2; color: #111827; }
+.seo-shell h2 { margin: 1.75rem 0 0.5rem; font-size: 1.15rem; font-weight: 650; }
+.seo-shell p { margin: 0.5rem 0; }
+.seo-shell ul { margin: 0.5rem 0; padding-left: 1.25rem; list-style: disc; }
+.seo-shell nav, .seo-shell nav a { font-size: 0.875rem; color: #6b7280; }
+.seo-shell a { color: #6b1d84; text-decoration: underline; text-underline-offset: 2px; }
+
+/*
  * Phone tab bar (layout/BottomNav.jsx). While it shows, below the desktop breakpoint, the page reserves
  * its height so the footer ends above it, and --bottom-nav tells floating cards how high to sit.
  * .above-bottom-nav: the usual 1rem (1.5rem from 640px) gap from the bottom, plus the tab bar if present.

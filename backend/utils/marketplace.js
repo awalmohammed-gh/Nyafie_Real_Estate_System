@@ -5,6 +5,7 @@ import Plan from "../models/Plan.js";
 import { getSettings } from "../models/Setting.js";
 import { chatEnabledAgents, subscriptionState } from "./permissions.js";
 import { isOrganization } from "./accountTypes.js";
+import { memo } from "./memo.js";
 
 // Deliberately exclude application documents, approval actors, billing and account preferences.
 export const PUBLIC_AGENT_FIELDS = "firstName lastName phone email profileImage createdAt isActive agentApplication.status agentApplication.agentType agentApplication.companyName agentApplication.bio agentApplication.region agentApplication.city agentApplication.yearsExperience agentApplication.agencyLogo agentApplication.whatsapp";
@@ -45,9 +46,35 @@ const listedAgents = (match) => User.aggregate([
   { $project: { subscription: 1, priority: { $toBool: { $ifNull: [{ $first: "$plan.priorityVisibility" }, false] } } } },
 ]);
 
-export const visibleAgentIds = async () => {
+const loadVisibleAgents = async () => {
   const [settings, agents] = await Promise.all([getSettings(), listedAgents({})]);
   return agents.filter((agent) => inGoodStanding(settings, agent)).map((agent) => ({ id: agent._id, priority: agent.priority }));
+};
+// Every public listing request needs this list (publicQuery). It is computed once per server instance
+// every 30 seconds rather than on every request (utils/memo.js), so traffic doesn't multiply the
+// agent lookups. Approving, suspending, removing or restoring an agent, or activating a subscription,
+// clears it at once on that instance; other instances follow within 30 seconds. A single listing's
+// own page is always checked live (isPubliclyVisible).
+const cachedVisibleAgents = memo(loadVisibleAgents, 30 * 1000);
+export const visibleAgentIds = async () => (await cachedVisibleAgents()).map((agent) => ({ ...agent }));
+export const clearVisibleAgentsCache = () => cachedVisibleAgents.clear();
+
+/**
+ * Listings in one place, by its key (models/Property.js location.areaKey / cityKey): every spelling of
+ * the place matches, through an index. Listings saved before keys existed have none yet; they match by
+ * name (`names`: exact strings or patterns) until `npm run places:backfill` gives them keys.
+ * kind: "area" (neighbourhood) | "city"
+ */
+/**
+ * A name pattern for listings without a key yet: the place's words with any spaces, hyphens or
+ * punctuation between them, any capitals ("East-Legon" also finds "east legon"). Built from the key,
+ * whose words are letters and digits only, so nothing typed can act as a pattern.
+ */
+export const placePattern = (key) => new RegExp(`^[\\W_]*${String(key).split("-").filter(Boolean).join("[\\W_]+")}[\\W_]*$`, "i");
+
+export const placeFilter = (kind, key, names = []) => {
+  const [keyField, nameField] = kind === "city" ? ["location.cityKey", "location.city"] : ["location.areaKey", "location.neighbourhood"];
+  return { $or: [{ [keyField]: key }, { [keyField]: { $exists: false }, [nameField]: { $in: names } }] };
 };
 
 // The publicQuery() rule for a single listing, without loading the whole agent directory

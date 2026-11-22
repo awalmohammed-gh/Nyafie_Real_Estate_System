@@ -13,6 +13,7 @@ import { formatDate } from "../../utils/date";
 import { usePlatform } from "../../context/usePlatform";
 import { cloudImage } from "../../utils/cloudImage";
 import { formatGhs } from "../../utils/property";
+import { AskAgentToUpdate } from "../../components/reports/PaymentSafety";
 
 const CLOSED = ["completed", "cancelled", "rejected"];
 
@@ -56,8 +57,9 @@ const MyPurchases = () => {
     <AccountShell title="My Purchases" description="Properties you've asked to buy, and where each request stands.">
       <p className="mb-6 flex items-start gap-3 rounded-2xl bg-sky-50 p-4 text-sm text-sky-800">
         <Info className="mt-0.5 h-5 w-5 shrink-0" />
-        Property purchases aren't paid online on {siteName}: you agree the payment directly with the owner. Never pay anyone before the owner has confirmed your request here, and only pay the owner or agent shown on the listing.
+        Property purchases aren't paid online on {siteName}: you agree the payment directly with the owner. Never pay anything, online or in cash, until you've seen the property in person and the owner has confirmed your request here, and only pay the owner or agent shown on the listing.
       </p>
+      <AskAgentToUpdate kind="sale" siteName={siteName} className="mb-6" />
 
       {error ? (
         <p role="alert" className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">{error}</p>

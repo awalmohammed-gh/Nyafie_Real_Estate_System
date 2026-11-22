@@ -9,10 +9,14 @@ import {
 } from "../utils/propertyDocuments.js";
 import { ok, fail } from "../utils/response.js";
 
+// Agents and agencies prove their trade; property owners listing their own homes prove who they are
+// and that the property is theirs. Every lister is checked by an admin before anything can go live.
 export const AGENT_PROOF_KINDS = Object.freeze({
   professional_certificate: "Professional registration or licence",
   agency_authorization: "Agency authorization or employment letter",
   business_registration: "Agency / company registration certificate",
+  national_id: "Ghana Card or passport",
+  ownership_proof: "Proof of ownership (land title, indenture or site plan)",
 });
 const MAX_PROOFS = 4;
 const present = (user) => ({

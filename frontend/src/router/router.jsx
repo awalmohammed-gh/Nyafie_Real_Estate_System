@@ -1,4 +1,4 @@
-import { Compare, AdminDocumentChecks, AdminSafetyReports, MyViewings, AgentViewings, AdminViewings, UpgradePlan, Team, JoinAgency, AdminLogin, AgentLayout, OnboardingLayout, Onboarding, ApplicationStatus, AdminAgentApplications, Home, Contact, PropertiesDetails, SlugPage, PropertyAction, AgentDetailsPage, NotFound, AuthPage, Profile, AgentProfile, SavedProperties, SavedSearches, MyInquiries, Settings, AccountMessages, MyOffers, MyRentals, MyPurchases, AgentSaleRequests, AdminSaleRequests, AgentOffers, AgentRentals, AdminOffers, AdminRentals, AdminPayments, PaymentResult, AgentMessages, AdminMessages, Plans, Checkout, Dashboard, MyProperties, PropertyEditor, Inquiries, PropertyManage, Subscription, AdminLayout, AdminDashboard, AdminUsers, AdminAgents, AdminProperties, AdminInquiries, AdminContactMessages, AdminReviews, AdminSubscriptions, AdminPlans, AdminFinancialInventory, AdminReports, AdminSettings, AdminPropertyEditor } from './routePages';
+import { Compare, AdminDocumentChecks, AdminSafetyReports, MyViewings, AgentViewings, AdminViewings, UpgradePlan, Team, JoinAgency, AdminLogin, AgentLayout, OnboardingLayout, Onboarding, ApplicationStatus, AdminAgentApplications, Home, Contact, PropertiesDetails, SlugPage, PlaceListings, PropertyAction, AgentDetailsPage, NotFound, AuthPage, Profile, AgentProfile, SavedProperties, SavedSearches, MyInquiries, Settings, AccountMessages, MyOffers, MyRentals, MyPurchases, AgentSaleRequests, AdminSaleRequests, AgentOffers, AgentRentals, AdminOffers, AdminRentals, AdminPayments, PaymentResult, AgentMessages, AdminMessages, Plans, Checkout, Dashboard, MyProperties, PropertyEditor, Inquiries, PropertyManage, Subscription, AdminLayout, AdminDashboard, AdminUsers, AdminAgents, AdminProperties, AdminInquiries, AdminContactMessages, AdminReviews, AdminSubscriptions, AdminPlans, AdminFinancialInventory, AdminReports, AdminSettings, AdminPropertyEditor } from './routePages';
 import {createBrowserRouter, createRoutesFromElements, Navigate, Route} from 'react-router-dom'
 import SessionLayout from '../layout/SessionLayout'
 import { About } from './routePages'
@@ -29,6 +29,9 @@ const router = createBrowserRouter(
             <Route path='checkout/buy/:propertyId' element={<PropertyAction mode='buy' key='buy' />} />
             {/* /properties, /listings, /agents (URLs set in Admin Settings) and /sale, /rent */}
             <Route path=':slug' element={<SlugPage />} />
+            {/* Location pages: homes for sale / for rent in one neighbourhood or city */}
+            <Route path='sale/:place' element={<PlaceListings status='sale' key='sale' />} />
+            <Route path='rent/:place' element={<PlaceListings status='rent' key='rent' />} />
             <Route path='contact' element={<Contact />} />
             <Route path='compare' element={<Compare />} />
 

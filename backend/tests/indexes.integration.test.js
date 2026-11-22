@@ -5,6 +5,7 @@ import { readdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import mongoose from "mongoose";
 import { isolatedMongo } from "./support/isolatedMongo.js";
+import { placeFilter } from "../utils/marketplace.js";
 
 const run = promisify(execFile);
 
@@ -48,7 +49,7 @@ test("searches and inbox lists are answered from indexes", { skip: process.env.R
   const properties = Array.from({ length: 120 }, (_, i) => ({
     _id: id(), title: `Home ${i}`, price: 1000 + i * 37, propertyType: ["Apartment", "Villa", "Studio"][i % 3], listingType: i % 2 ? "Rent" : "Sale",
     owner: agents[i % 3], ownerType: i % 5 ? "agent" : "admin", status: ["published", "draft", "pending"][i % 3], staleSince: i % 7 ? null : days(1),
-    location: { city: ["Accra", "Kumasi"][i % 2] }, createdAt: days(i), updatedAt: days(i),
+    location: { neighbourhood: ["East Legon", "Osu", "Spintex"][i % 3], city: ["Accra", "Kumasi"][i % 2], areaKey: ["east-legon", "osu", "spintex"][i % 3], cityKey: ["accra", "kumasi"][i % 2] }, createdAt: days(i), updatedAt: days(i),
   }));
   await Property.collection.insertMany(properties);
   await User.collection.insertMany(Array.from({ length: 60 }, (_, i) => ({ email: `person${i}@example.test`, role: ["user", "agent"][i % 2], savedProperties: [properties[i % 10]._id], createdAt: days(i) })));
@@ -65,6 +66,9 @@ test("searches and inbox lists are answered from indexes", { skip: process.env.R
   const published = { status: "published", staleSince: null, $or: [{ ownerType: "admin" }, { ownerType: "agent", owner: { $in: agents.slice(0, 2) } }] };
   await assertIndexed("public listings, newest", Property.find(published).sort({ createdAt: -1 }).limit(12));
   await assertIndexed("rent listings, newest", Property.find({ $and: [published, { listingType: "Rent" }] }).sort({ createdAt: -1 }).limit(12));
+  // One place's listings: area search and location pages (/rent/east-legon), by place key
+  await assertIndexed("rent listings in one area, newest", Property.find({ $and: [published, { listingType: "Rent" }, placeFilter("area", "east-legon", ["East Legon"])] }).sort({ createdAt: -1 }).limit(24));
+  await assertIndexed("sale listings in one city, newest", Property.find({ $and: [published, { listingType: "Sale" }, placeFilter("city", "accra", ["Accra"])] }).sort({ createdAt: -1 }).limit(24));
   await assertIndexed("public listings by price", Property.find(published).sort({ price: 1, createdAt: -1 }).limit(12));
   await assertIndexed("public listings by price, high to low", Property.find(published).sort({ price: -1, createdAt: -1 }).limit(12));
   await assertIndexed("public listing count", Property.find(published).countDocuments());

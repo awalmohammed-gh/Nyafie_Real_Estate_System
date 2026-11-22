@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { siteUrl } from "../config/runtime.js";
 import { schemaOptions } from "../utils/schemaOptions.js";
+import { memo } from "../utils/memo.js";
 
 // Every system setting and its default. Only keys listed here are ever read or saved.
 // Secrets (Paystack, JWT, Cloudinary) stay in backend/.env and never appear here.
@@ -101,7 +102,14 @@ let cachedSiteName = defaultSettings.general.siteName;
 export const siteName = () => cachedSiteName;
 
 // Settings merged with defaults (creates the document on first use). Unknown keys are dropped.
-export const getSettings = async () => {
+// Nearly every request reads them, so each server instance keeps them for 15 seconds (utils/memo.js):
+// one database call per instance every 15 seconds instead of one per request. Saving settings clears
+// it at once (clearSettingsCache); other instances pick up the change within 15 seconds.
+// Each caller gets its own copy, so changing it never affects anyone else.
+export const getSettings = async () => structuredClone(await cachedSettings());
+export const clearSettingsCache = () => cachedSettings.clear();
+
+const loadSettings = async () => {
   // Atomic upsert, so parallel first requests on a fresh database never create duplicates
   const doc = await Setting.findOneAndUpdate({ key: "platform" }, { $setOnInsert: { key: "platform" } }, { upsert: true, returnDocument: "after" }).lean();
   const legacy = legacyValues(doc);
@@ -117,5 +125,6 @@ export const getSettings = async () => {
   if (process.env.VERCEL_ENV === "preview") merged.seo.allowIndexing = false;
   return merged;
 };
+const cachedSettings = memo(loadSettings, 15 * 1000);
 
 export default Setting;

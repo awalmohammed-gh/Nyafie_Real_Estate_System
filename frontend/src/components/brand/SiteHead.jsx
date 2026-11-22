@@ -32,8 +32,9 @@ const SiteHead = () => {
 
   useEffect(() => {
     const current = metadata?.pathname === pathname ? metadata : null;
-    const labels = { [`/${settings.slugs.listings}`]: "All property listings", [`/${settings.slugs.properties}`]: "Explore properties", "/about": `About ${general.siteName}`, "/sale": "Properties for sale", "/rent": "Properties to rent", "/contact": "Contact our team" };
-    const title = current?.title || (labels[pathname] ? `${labels[pathname]} | ${general.siteName}` : seo.title || (pathname === "/" ? `${general.siteName} | Find Houses for Sale, Rent & Short Stays in Ghana` : [general.siteName, general.tagline].filter(Boolean).join(" | ")));
+    // The same wording as the server's titles (backend/utils/seo.js pageMetadata)
+    const labels = { [`/${settings.slugs.listings}`]: "Houses, Apartments & Land for Sale and Rent in Ghana", [`/${settings.slugs.properties}`]: "Explore Properties in Ghana", "/about": "About us", "/sale": "Houses & Apartments for Sale in Ghana", "/rent": "Houses & Apartments for Rent in Ghana", "/contact": "Contact our team" };
+    const title = current?.title || (labels[pathname] ? `${labels[pathname]} | ${general.siteName}` : seo.title || (pathname === "/" ? `${general.siteName}: Houses & Apartments for Sale and Rent in Ghana` : [general.siteName, general.tagline].filter(Boolean).join(" | ")));
     const description = current?.description || seo.metaDescription || (pathname === "/" ? `Discover houses for sale, apartments for rent, and short-stay properties across Ghana. Explore listings and connect with property agents on ${general.siteName}.` : general.description);
     const image = new URL(current?.image || seo.ogImage || branding.logo || "/favicon.png", publicSiteUrl(settings)).href;
     const privatePage = /^\/(admin|account|agent|agents|checkout|make-offer|login|register|offer|payment)(\/|$)/.test(pathname) || pathname === `/${settings.slugs.agents}`;

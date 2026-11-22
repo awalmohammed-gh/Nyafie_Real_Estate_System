@@ -14,6 +14,8 @@ import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { arrivalText, bookingHeadline, guestCanCancel, payPlace } from "../../utils/hotelPayments";
 import { cloudImage } from "../../utils/cloudImage";
 import { formatGhs } from "../../utils/property";
+import { AskAgentToUpdate } from "../../components/reports/PaymentSafety";
+import { usePlatform } from "../../context/usePlatform";
 
 // What each rental status means for the customer
 const statusHelp = {
@@ -27,6 +29,7 @@ const statusHelp = {
 };
 
 const MyRentals = () => {
+  const { siteName } = usePlatform();
   const [rentals, setRentals] = useState(null);
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState(null);
@@ -47,6 +50,7 @@ const MyRentals = () => {
 
   return (
     <AccountShell title="My Rentals & Hotel Bookings" description="Your rentals and hotel stays, with payment and booking status.">
+      <AskAgentToUpdate siteName={siteName} className="mb-6" />
       {error ? (
         <p role="alert" className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">{error}</p>
       ) : !rentals ? (

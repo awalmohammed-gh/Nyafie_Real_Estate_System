@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { clearVisibleAgentsCache } from "../utils/marketplace.js";
 import mongoose from "mongoose";
 import { isOrganization } from "../utils/accountTypes.js";
 import User from "../models/User.js";
@@ -16,7 +17,7 @@ import Message from "../models/Message.js";
 import Notification from "../models/Notification.js";
 import Review from "../models/Review.js";
 import { syncPropertyRating } from "../utils/reviews.js";
-import Setting, { getSettings } from "../models/Setting.js";
+import Setting, { clearSettingsCache, getSettings } from "../models/Setting.js";
 import { validateSection } from "../utils/settingsValidation.js";
 import { newReference as paystackReference, paymentStatus } from "../utils/paystack.js";
 import { COUNTED_STATES, subscriptionState } from "../utils/permissions.js";
@@ -151,12 +152,14 @@ export const getRemovalImpact = async (req, res) => ok(res, await removalImpact(
 // POST /api/admin/agents/:id/remove { reason, note } -> deactivate; nothing is deleted
 export const removeAgent = async (req, res) => {
   const result = await removeProvider(req.params.id, req.user, { reason: req.body.reason, note: req.body.note });
+  clearVisibleAgentsCache();
   ok(res, result, `${result.name} was removed`);
 };
 
 // POST /api/admin/agents/:id/restore { republish } -> the account only, unless listings are asked for
 export const restoreAgent = async (req, res) => {
   const result = await restoreProvider(req.params.id, req.user, { republish: req.body.republish === true });
+  clearVisibleAgentsCache();
   ok(res, result, `${result.name} was restored`);
 };
 
@@ -169,6 +172,7 @@ export const getDeletionPlan = async (req, res) => {
 // DELETE /api/admin/agents/:id { confirm } -> permanent; only for removed providers, typed confirmation
 export const deleteAgentPermanently = async (req, res) => {
   const result = await permanentlyDeleteProvider(req.params.id, req.user, req.body?.confirm);
+  clearVisibleAgentsCache();
   ok(res, result, result.mode === "erase" ? `${result.name} was permanently deleted` : `${result.name}'s personal details were permanently deleted`);
 };
 
@@ -417,9 +421,12 @@ export const setInquiryStatus = async (req, res) => {
 // PUT /api/admin/settings/:section -> validates and saves one section (admins only, see adminRoutes)
 export const updateSettings = async (req, res) => {
   const { section } = req.params;
+  // Saving reads and returns the stored settings, never this instance's short-lived copy
+  clearSettingsCache();
   const current = await getSettings();
   const next = await validateSection(section, req.body, current);
   await Setting.updateOne({ key: "platform" }, { $set: { [section]: next, updatedBy: req.user._id } }, { upsert: true });
+  clearSettingsCache();
   const saved = await getSettings();
 
   // Admin-owned listings show the business name and contact details: keep them in step

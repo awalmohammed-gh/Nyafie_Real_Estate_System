@@ -100,11 +100,21 @@ test("editing a live listing validates publication requirements again", async (t
 test("location and purpose URL filters are case insensitive and escape regex operators", () => {
   const filter = buildPublicFilter({ purpose: "rent", city: "accra", region: "Greater Accra", area: "East (Legon)", search: ".*" }, { status: "published" });
   assert.ok(filter.$and.some((clause) => clause.listingType === "Rent"));
-  assert.ok(filter.$and.find((clause) => clause["location.city"])["location.city"].test("Accra"));
-  const area = filter.$and.find((clause) => clause["location.neighbourhood"])["location.neighbourhood"];
-  assert.ok(area.test("East (Legon)"));
-  assert.equal(area.test("East Legon"), false);
-  assert.equal(filter.$and.find((clause) => clause.$or).$or[0].title.test("anything"), false);
+  // Places match by their key, so every spelling counts ("East (Legon)", "East-Legon" -> east-legon)
+  const place = (keyField) => filter.$and.find((clause) => clause.$or?.some((option) => keyField in option)).$or;
+  const [cityKey, cityLegacy] = place("location.cityKey");
+  assert.equal(cityKey["location.cityKey"], "accra");
+  assert.ok(cityLegacy["location.city"].$in[0].test("Accra"), "listings saved before keys existed still match by name");
+  const [areaKey, areaLegacy] = place("location.areaKey");
+  assert.equal(areaKey["location.areaKey"], "east-legon");
+  // Listings without a key yet match any spelling of the same words, and nothing else
+  const legacy = areaLegacy["location.neighbourhood"].$in[0];
+  for (const spelling of ["East (Legon)", "East Legon", "east-legon", " EAST  LEGON "]) assert.ok(legacy.test(spelling), spelling);
+  for (const other of ["East Legon Hills", "Legon", "Eastlegon"]) assert.equal(legacy.test(other), false, other);
+  // Typed pattern characters never become a pattern
+  const sneaky = buildPublicFilter({ area: ".*" }, { status: "published" }).$and.find((clause) => clause.$or?.some((option) => "location.areaKey" in option)).$or[1]["location.neighbourhood"].$in[0];
+  assert.equal(sneaky.test("East Legon"), false);
+  assert.equal(filter.$and.find((clause) => clause.$or?.[0]?.title).$or[0].title.test("anything"), false);
 });
 
 test("inquiries route to the property's agent and customer inboxes never match an untrusted email", async (t) => {

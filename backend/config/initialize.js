@@ -6,7 +6,7 @@ import { checkPaystackConfig } from "../utils/paystack.js";
 import { checkAdminEntryConfig } from "../utils/adminEntry.js";
 import { emailConfigProblem } from "../utils/email.js";
 import { reportError } from "../utils/monitoring.js";
-import Setting from "../models/Setting.js";
+import Setting, { clearSettingsCache } from "../models/Setting.js";
 import Plan from "../models/Plan.js";
 
 // Plans from before upgrade tiers get one, so each account type has a ladder: within a type, plans
@@ -37,6 +37,7 @@ export const initializeBackend = async () => {
       await ensureAdmin();
       // Existing installations gain Hotel once; later admin option changes are respected.
       await Setting.updateOne({ key: "platform", hotelRoomsVersion: { $ne: 1 } }, { $addToSet: { "property.propertyTypes": "Hotel" }, $set: { hotelRoomsVersion: 1 } });
+      clearSettingsCache();
       // Plans from before account types and chat: individual plans, with chat where inquiry management is full
       // (Starter plans stay without chat). Only fills in missing fields, so admin choices are kept.
       await Plan.updateMany({ accountType: { $exists: false } }, { $set: { accountType: "individual" } });

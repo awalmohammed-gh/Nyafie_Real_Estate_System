@@ -13,9 +13,11 @@ const SafetyNote = ({ forSale, onReport, reportLabel = "Report this listing", do
     )}
     <p className="flex items-center gap-1.5 font-semibold text-gray-900"><ShieldCheck className="h-4 w-4 text-emerald-600" aria-hidden="true" />Stay safe</p>
     <ul className="mt-1.5 list-disc space-y-0.5 pl-4">
-      <li>Never pay anyone just to view a property.</li>
-      <li>{forSale ? "View it and check the title documents before paying anything." : "View it before paying a deposit or rent."}</li>
+      <li><span className="font-semibold text-gray-800">Don't pay anything, online or in cash, until you've seen the property in person.</span></li>
+      <li>Never pay anyone just to view a property. Viewings are free.</li>
+      {forSale && <li>Check the title documents before paying anything.</li>}
       <li>Only pay the owner or agent shown on this page, and keep a receipt.</li>
+      <li>Once you've paid, ask the agent to mark it as {forSale ? "sold" : "rented"} here, so nobody else pays for it.</li>
     </ul>
     {onReport && (
       <button type="button" onClick={onReport} className="mt-2 inline-flex min-h-8 items-center gap-1.5 font-semibold text-gray-700 hover:text-red-700">

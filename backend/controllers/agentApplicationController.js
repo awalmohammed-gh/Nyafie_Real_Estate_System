@@ -1,4 +1,5 @@
 import User from "../models/User.js";
+import { clearVisibleAgentsCache } from "../utils/marketplace.js";
 import {
   applicationRequirements,
   applicationStatus,
@@ -274,6 +275,7 @@ export const reviewApplication = async (req, res) => {
       "Another reviewer updated this application. Refresh to see the latest status.",
     );
   if (reviewed) await deleteReviewedProofs(updated._id, proofFiles);
+  clearVisibleAgentsCache(); // approved, suspended or restored: whose listings are public changed
   notifyUser(updated._id, {
     type: "agent_application",
     title: `Agent application ${next}`,
