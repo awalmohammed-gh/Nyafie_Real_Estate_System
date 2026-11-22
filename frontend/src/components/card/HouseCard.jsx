@@ -49,7 +49,7 @@ const HouseCard = ({ house, variant }) => {
   const roomTypeCount = hotel ? (house.roomTypes || []).filter((room) => room.active !== false).length : 0;
   // Trust signals on the photo: ownership documents checked (sale listings) and a video or 3D tour
   const documentsChecked = isForSale && Boolean(house.listing?.documentsVerifiedAt);
-  const hasTour = Boolean(embedUrl(media?.video) || embedUrl(media?.virtualTour));
+  const hasTour = Boolean(embedUrl(media?.video) || embedUrl(media?.virtualTour) || media?.videoFile?.url);
   // Monthly rentals: how many months of rent the owner asks for upfront
   const advanceMonths = house.pricing?.perMonth != null ? Number(house.moveIn?.advanceMonths) || 0 : 0;
   const identity = !isAgent ? (

@@ -34,7 +34,17 @@ export const financialInventory = async (req, res) => {
   const search = req.query.search ?? "";
   if (typeof search !== "string" || search.length > 100) throw new HttpError(400, "Search must be 100 characters or fewer.");
   const at = { ...(from ? { $gte: from } : {}), $lt: to ? new Date(to.getTime() + 86400000) : new Date(now.getTime() + 1) };
-  const ledgerFilter = { ...(sector !== "all" ? { sector } : {}), ...(status !== "all" ? { state: status } : {}), ...(search.trim() ? { reference: { $regex: search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } } : {}) };
+  const ledgerFilter = { ...(sector !== "all" ? { sector } : {}), ...(status !== "all" ? { state: status } : {}) };
+  const term = search.trim();
+  const literal = { $regex: term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
+  const amountText = term.replace(/^(?:GHS|GH₵|₵)\s*/i, "").replaceAll(",", "");
+  const searchedAmount = /^\d+(?:\.\d{1,2})?$/.test(amountText) ? Math.round(Number(amountText) * 100) : null;
+  // Join names only for an active search. Summary totals always cover the whole period.
+  const searchStages = term ? [
+    { $lookup: { from: "users", localField: "account", foreignField: "_id", pipeline: [{ $project: { firstName: 1, lastName: 1 } }], as: "searchPerson" } },
+    { $set: { searchName: { $trim: { input: { $concat: [{ $ifNull: [{ $arrayElemAt: ["$searchPerson.firstName", 0] }, ""] }, " ", { $ifNull: [{ $arrayElemAt: ["$searchPerson.lastName", 0] }, ""] }] } } } } },
+    { $match: { $or: [{ reference: literal }, { searchName: literal }, ...(Number.isSafeInteger(searchedAmount) ? [{ amountMinor: searchedAmount }] : [])] } },
+  ] : [];
   const [result] = await Payment.aggregate([
     // Only the current Paystack mode: test checkouts never mix with live money
     { $match: { amount: { $gt: 0 }, method: { $ne: "Test payment" }, currency: { $in: ["GHS", null] }, ...providerScope() } },
@@ -53,8 +63,8 @@ export const financialInventory = async (req, res) => {
     { $match: { at } },
     { $facet: {
       summary: [{ $group: { _id: { sector: "$sector", status: "$state" }, amount: { $sum: "$amountMinor" }, count: { $sum: 1 } } }],
-      count: [{ $match: ledgerFilter }, { $count: "total" }],
-      rows: [{ $match: ledgerFilter }, { $sort: { at: -1, _id: -1, source: 1 } }, { $skip: (page - 1) * limit }, { $limit: limit },
+      count: [{ $match: ledgerFilter }, ...searchStages, { $count: "total" }],
+      rows: [{ $match: ledgerFilter }, ...searchStages, { $sort: { at: -1, _id: -1, source: 1 } }, { $skip: (page - 1) * limit }, { $limit: limit },
         { $lookup: { from: "users", localField: "account", foreignField: "_id", pipeline: [{ $project: { firstName: 1, lastName: 1 } }], as: "person" } },
         { $project: { source: 1, reference: 1, amountMinor: 1, at: 1, method: 1, state: 1, sector: 1, subject: 1, ownerType: 1, name: { $trim: { input: { $concat: [{ $ifNull: [{ $arrayElemAt: ["$person.firstName", 0] }, ""] }, " ", { $ifNull: [{ $arrayElemAt: ["$person.lastName", 0] }, ""] }] } } } } }],
     } },

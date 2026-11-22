@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, RotateCcw, Table2 } from "lucide-react";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { adminApi } from "../../frontApi";
-import { formatCedis } from "../../utils/reports";
+const formatCedis = value => `GH₵${Number(value || 0).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 // What each metric counts. Revenue is defined on the server (adminDashboardController.js).
 const METRICS = [
@@ -177,9 +177,8 @@ const ChartSkeleton = () => (
  * Platform performance: one metric at a time over the last 3, 6 or 12 months, with the period
  * total and a comparison with the equal period before it. Data: GET /api/admin/performance.
  */
-const PerformanceChart = ({ refreshKey = "" }) => {
+const PerformanceChart = ({ refreshKey = "", months = 6, onMonthsChange }) => {
   const [metricKey, setMetricKey] = useState("revenue");
-  const [months, setMonths] = useState(6);
   const [showTable, setShowTable] = useState(false);
   const query = useApiQuery(`performance:${months}:${refreshKey}`, () => adminApi.getPerformance(months));
   // A new period keeps the last chart on screen (dimmed) until its data arrives
@@ -189,7 +188,7 @@ const PerformanceChart = ({ refreshKey = "" }) => {
   const metric = METRICS.find((m) => m.key === metricKey);
   const data = result?.metrics[metricKey];
   const format = metric.currency ? formatCedis : (v) => v.toLocaleString();
-  const axisFormat = metric.currency ? (v) => `₵${compact(v)}` : compact;
+  const axisFormat = compact;
   const shownMonths = result?.months ?? months;
   const series = data?.series || [];
   const currentMonth = series.at(-1)?.month;
@@ -201,9 +200,9 @@ const PerformanceChart = ({ refreshKey = "" }) => {
       <header className="flex flex-col gap-4 border-b border-gray-100 px-4 py-4 sm:px-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <h2 id="performance-title" className="text-[0.9375rem] font-semibold text-gray-900">Platform performance</h2>
-          <p className="mt-1 text-xs text-gray-500">See how your platform is growing over time.</p>
+          <p className="mt-1 text-xs text-gray-500">{metric.currency ? "Revenue collected over time." : `${metric.label} over time.`}</p>
         </div>
-        <Segmented label="Period" value={months} onChange={setMonths} options={PERIODS.map((p) => ({ value: p, label: `${p} months` }))} className="overview-period w-full shrink-0 sm:w-auto" />
+        <Segmented label="Period" value={months} onChange={onMonthsChange} options={PERIODS.map((p) => ({ value: p, label: `${p} months` }))} className="overview-period w-full shrink-0 sm:w-auto" />
       </header>
 
       <div className="overview-metric-controls px-4 pt-4 sm:px-6">
@@ -230,7 +229,7 @@ const PerformanceChart = ({ refreshKey = "" }) => {
             <p className="sr-only" role="status">Loading performance data…</p>
           </>
         ) : (
-          <div className={`transition-opacity ${refreshing ? "opacity-60" : ""}`}>
+          <div className={`overview-performance-content transition-opacity ${refreshing ? "opacity-60" : ""}`}>
             {/* Period summary */}
             <div className="overview-chart-summary mb-5 flex flex-col gap-1">
               <p className="text-xs font-medium text-gray-500">{metric.label} · last {shownMonths} months <span className="text-gray-400">({range}, this month to date)</span></p>
@@ -243,7 +242,7 @@ const PerformanceChart = ({ refreshKey = "" }) => {
               )}
             </div>
 
-            {empty ? (
+            <div className="overview-chart-plot">{empty ? (
               <div className="grid h-52 place-items-center rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-6 text-center sm:h-64">
                 <div>
                   <p className="text-sm font-medium text-gray-900">{metric.empty} in the last {shownMonths} months</p>
@@ -252,9 +251,9 @@ const PerformanceChart = ({ refreshKey = "" }) => {
               </div>
             ) : (
               <Columns key={`${metricKey}:${shownMonths}`} series={series} format={format} axisFormat={axisFormat} integer={!metric.currency} currentMonth={currentMonth} title={`${metric.label} per month, ${range}`} />
-            )}
+            )}</div>
 
-            <div className="overview-chart-footer mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
+            <details className="overview-chart-options"><summary>Chart details &amp; table</summary><div className="overview-chart-footer mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
               <p className="text-xs text-gray-500">{metric.currency ? "Ghana cedis, by the date each payment was confirmed." : "Counted by the date each record was created."}</p>
               <button type="button" onClick={() => setShowTable((v) => !v)} aria-expanded={showTable} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-brand-700 hover:bg-brand-50 hover:text-brand-800">
                 <Table2 className="h-4 w-4" aria-hidden="true" />
@@ -280,6 +279,7 @@ const PerformanceChart = ({ refreshKey = "" }) => {
                 </table>
               </div>
             )}
+            </details>
           </div>
         )}
       </div>

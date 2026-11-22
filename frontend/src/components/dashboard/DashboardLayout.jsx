@@ -14,7 +14,7 @@ const SMOOTH_TRANSITION = { duration: 0.3, ease: [0.22, 1, 0.36, 1] };
 // Both workspaces use the existing brand palette; the admin sidebar is violet.
 const THEMES = {
   admin: {
-    sidebar: "bg-brand-900 text-white/80",
+    sidebar: "bg-[#3e0766] text-white/80",
     border: "border-white/10",
     group: "text-white/70",
     item: "text-white/80 hover:bg-white/10 hover:text-white hover:ring-white/10 focus-visible:bg-white/10 focus-visible:text-white",
@@ -54,8 +54,8 @@ const isItemActive = (item, location) =>
 const Brand = ({ theme, label, compact }) => {
   const { siteName } = usePlatform();
   return (
-    <Link to="/" className="flex min-w-0 items-center" title={`${siteName} website`}>
-      <BrandLogo tone={theme.tone} size="sm" compact={compact} subtitle={label} />
+    <Link to="/" className={`flex min-w-0 items-center ${theme.tone === "violet" && !compact ? "w-full" : ""}`} title={`${siteName} website`}>
+      <BrandLogo tone={theme.tone} size="sm" compact={compact} subtitle={label} className={theme.tone === "violet" && !compact ? "w-full justify-between" : ""} gapClassName={theme.tone === "violet" ? "gap-5" : undefined} subtitleClassName={theme.tone === "violet" ? "text-sm font-semibold leading-none whitespace-nowrap" : undefined} />
     </Link>
   );
 };
@@ -135,15 +135,19 @@ const DashboardLayout = ({ variant, label, groups, badges = {}, headerActions, s
     .flatMap((g) => g.items.map((item) => ({ ...item, group: g.label })))
     .filter((item) => isItemActive(item, location))
     .sort((a, b) => b.to.length - a.to.length)[0];
+  const inventoryPage = variant === "admin" && current?.label === "Inventory";
+  const overviewPage = variant === "admin" && current?.label === "Dashboard";
+  // Keep the workspace rail stable across routes; only the collapse control resizes it.
+  const expandedSidebarWidth = 240;
 
   return (
     // --sidebar-width lets fixed elements (e.g. the property form's save bar) line up with the sidebar
     <MotionConfig reducedMotion="user" transition={SMOOTH_TRANSITION}>
-    <div className={`dash min-h-dvh bg-gray-50 ${variant === "agent" ? "agent-workspace" : "admin-workspace"}`} style={{ "--sidebar-width": collapsed ? "4rem" : "15rem" }}>
+    <div className={`dash min-h-dvh bg-gray-50 ${variant === "agent" ? "agent-workspace" : "admin-workspace"} ${inventoryPage ? "admin-inventory-workspace" : ""} ${overviewPage ? "admin-overview-workspace" : ""}`} style={{ "--sidebar-width": `${collapsed ? 64 : expandedSidebarWidth}px` }}>
       <ScrollRestoration />
 
       {/* Desktop sidebar */}
-      <motion.aside initial={false} animate={{ width: collapsed ? 64 : 240 }} transition={transition} className={`workspace-sidebar fixed inset-y-0 left-0 z-30 hidden flex-col lg:flex ${theme.sidebar}`}>
+      <motion.aside initial={false} animate={{ width: collapsed ? 64 : expandedSidebarWidth }} transition={transition} className={`workspace-sidebar fixed inset-y-0 left-0 z-30 hidden flex-col lg:flex ${theme.sidebar}`}>
         <div className={`flex h-14 shrink-0 items-center border-b px-4 ${theme.border} ${collapsed ? "justify-center px-0" : ""}`}>
           <Brand theme={theme} label={label} compact={collapsed} />
         </div>
@@ -164,7 +168,7 @@ const DashboardLayout = ({ variant, label, groups, badges = {}, headerActions, s
         </div>
       </motion.aside>
 
-      <div className={`transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${collapsed ? "lg:pl-16" : "lg:pl-60"}`}>
+      <div className="workspace-body transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:pl-[var(--sidebar-width)]">
         <header className="workspace-header sticky top-0 z-40 border-b border-gray-200 bg-white/90 backdrop-blur">
           <div className="flex h-14 items-center gap-3 px-4 sm:px-6 lg:px-8">
             <button

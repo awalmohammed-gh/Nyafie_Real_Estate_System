@@ -66,6 +66,14 @@ test("financial inventory combines cash ledgers without counting attempts, credi
     const literal=await payment(1,"pending",{reference:"literal[ref].*"});
     const result=await call(dates+"&search="+encodeURIComponent("[ref].*"));assert.equal(result.data.total,1);assert.equal(result.data.rows[0].reference,literal.reference);
   });
+  await t.test("ledger search matches account names and exact amounts without changing totals",async()=>{
+    const byName=await call(dates+"&search="+encodeURIComponent("Plan Agent"));
+    assert.equal(byName.data.total,3);assert.ok(byName.data.rows.every(row=>row.sector==="subscription"));
+    const byAmount=await call(dates+"&search="+encodeURIComponent("GH₵49.99"));
+    assert.equal(byAmount.data.total,1);assert.equal(byAmount.data.rows[0].amount,49.99);
+    assert.equal(byAmount.data.totals.paid,201.42);
+    const combined=await call(dates+"&search=49.99&status=pending");assert.equal(combined.data.total,0);
+  });
   await t.test("paginates records without duplicating or skipping rows and retains deleted-account history",async()=>{
     for(let i=0;i<25;i++)await payment(1,"pending");
     const first=(await call(dates)).data,second=(await call(dates+"&page=2")).data;

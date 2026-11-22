@@ -118,7 +118,7 @@ const AdminShell = () => {
   return (
     <DashboardLayout
       variant="admin"
-      label="Admin console"
+      label="Admin"
       groups={groups}
       badges={badges}
       ready={listingsReady && !plansLoading && settingsReady}

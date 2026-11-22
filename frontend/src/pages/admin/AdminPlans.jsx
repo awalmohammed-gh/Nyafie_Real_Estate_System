@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Check, Layers, Pencil, Plus, Power, Search, Trash2, Users, ArrowUpRight } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowRight, BriefcaseBusiness, Building, Building2, ChartColumn, Check, Crown, Eye, EyeOff, House, Image as ImageIcon, Layers, Pencil, Plus, Power, Search, Settings, Star, Trash2, TrendingDown, TrendingUp, UserRound, Users, UsersRound } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAdminData } from "../../hooks/useAdminData";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
@@ -7,6 +7,7 @@ import Modal from "../../components/ui/Modal";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import StatusBadge from "../../components/ui/StatusBadge";
 import EmptyState from "../../components/ui/EmptyState";
+import ActionMenu from "../../components/ui/ActionMenu";
 import { ACCOUNT_TYPES, ANALYTICS_LEVELS, INQUIRY_LEVELS, durationLabel, isOrganization, planFeatureList } from "../../data/plans";
 import "./adminReports.css";
 import "./adminPlans.css";
@@ -176,12 +177,85 @@ const PlanForm = ({ plan, plans, onClose, onSave }) => {
   );
 };
 
+// Each account type has its own icons, one per tier (the highest repeats for more tiers)
+const TYPE_ICONS = { individual: UserRound, agency: UsersRound, company: Building2 };
+const TIER_ICONS = { individual: [UserRound, UsersRound, Crown], agency: [Building, Building2, BriefcaseBusiness], company: [Building2, ChartColumn, Crown] };
+const SHORT_TYPE = { individual: "Individual", agency: "Agency", company: "Company" };
+const cedis = (value, decimals = 2) => `GH₵${Number(value || 0).toLocaleString("en-GH", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+const monthKey = (date) => `${date.getFullYear()}-${date.getMonth()}`;
+
+// Paid subscription payments: this month, the change from last month and the last 8 months for the bars
+const revenueSummary = (payments) => {
+  const totals = new Map();
+  payments.filter((p) => p.status === "paid" && p.amount > 0).forEach((p) => {
+    const key = monthKey(new Date(p.createdAt));
+    totals.set(key, (totals.get(key) || 0) + p.amount);
+  });
+  const now = new Date();
+  const months = Array.from({ length: 8 }, (_, i) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - 7 + i, 1);
+    return { label: date.toLocaleDateString("en-GB", { month: "short" }), value: totals.get(monthKey(date)) || 0 };
+  });
+  const current = months[7].value;
+  const previous = months[6].value;
+  return { current, change: previous > 0 ? Math.round(((current - previous) / previous) * 100) : null, months };
+};
+
+const SummaryCard = ({ icon: Icon, label, value, hint }) => (
+  <div className="plans-stat">
+    <span className="plans-stat-icon"><Icon size={20} aria-hidden="true" /></span>
+    <p className="plans-stat-label">{label}</p>
+    <p className="plans-stat-value">{value}</p>
+    <p>{hint}</p>
+  </div>
+);
+
+const PlanCard = ({ plan, tierIndex, working, onEdit, onView, onToggle, onDelete, activeCount }) => {
+  const icons = TIER_ICONS[plan.accountType];
+  const Icon = icons[Math.min(tierIndex, icons.length - 1)];
+  return (
+    <article className={`plan-card${plan.active ? "" : " is-hidden"}`}>
+      <div className="plan-card-top">
+        <span className="plan-icon"><Icon size={22} aria-hidden="true" /></span>
+        <div className="plan-heading">
+          <span className="plan-type-chip">{ACCOUNT_TYPES[plan.accountType].label}</span>
+          <h3>{plan.name}{plan.popular && <span className="plan-popular">Popular</span>}</h3>
+          <p>{plan.tagline || `A plan for ${ACCOUNT_TYPES[plan.accountType].plural.toLowerCase()}.`}</p>
+        </div>
+        <span className={`plan-status${plan.active ? " is-active" : ""}`}>{plan.active ? "Active" : "Hidden"}</span>
+      </div>
+      <p className="plan-price">
+        <strong>{cedis(plan.price)}</strong>
+        <span>/ {durationLabel(plan.durationDays)}</span>
+        <span className="plan-tier">Tier {plan.sortOrder}</span>
+      </p>
+      <ul className="plan-limits" aria-label="Plan limits">
+        {[[House, plan.propertyLimit, "Properties"], [ImageIcon, plan.imageLimit, "Images / listing"], [Star, plan.featuredLimit, "Featured"]].map(([LimitIcon, value, label]) => (
+          <li key={label}>
+            <LimitIcon size={18} aria-hidden="true" />
+            <span><strong>{value}</strong>{label}</span>
+          </li>
+        ))}
+      </ul>
+      <footer className="plan-actions">
+        <button type="button" className="is-primary" disabled={working} onClick={onEdit} aria-label={`Edit ${plan.name}`}><Pencil size={15} aria-hidden="true" />Edit plan</button>
+        <button type="button" onClick={onView} aria-label={`View ${plan.name} details`}><Eye size={15} aria-hidden="true" />View details</button>
+        <ActionMenu label={`More actions for ${plan.name}`} actions={[
+          { label: `Subscribers (${activeCount} active)`, icon: Users, onClick: onView },
+          { label: plan.active ? "Hide from new subscribers" : "Make available again", icon: Power, onClick: onToggle, disabled: working },
+          { label: "Delete plan", icon: Trash2, onClick: onDelete, danger: true, disabled: working || activeCount > 0, disabledReason: "Hide this plan instead: active subscribers still use it." },
+        ]} />
+      </footer>
+    </article>
+  );
+};
+
 const AdminPlans = () => {
-  const { plans, agents, savePlan, togglePlanActive, deletePlan, plansError, refreshPlans } = useAdminData();
+  const { plans, agents, payments, savePlan, togglePlanActive, deletePlan, plansError, refreshPlans } = useAdminData();
   const run = useAsyncAction();
   const [editing, setEditing] = useState(null); // plan | "new"
   const [deleting, setDeleting] = useState(null);
-  const [subscribersOf, setSubscribersOf] = useState(null);
+  const [viewing, setViewing] = useState(null);
   const [typeFilter, setTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [availability, setAvailability] = useState("all");
@@ -189,35 +263,120 @@ const AdminPlans = () => {
 
   const subscribers = (plan) => agents.filter((a) => a.subscription?.planId === plan.id);
   const activeSubscribers = (plan) => subscribers(plan).filter((a) => a.sub.isActive);
+  const revenue = useMemo(() => revenueSummary(payments), [payments]);
+  const peak = Math.max(...revenue.months.map((m) => m.value), 1);
 
-  const visible = plans.filter(plan => (typeFilter === "all" || plan.accountType === typeFilter) && (availability === "all" || plan.active === (availability === "active")) && (plan.name + " " + plan.tagline).toLowerCase().includes(search.trim().toLowerCase())).sort((a,b) => TYPE_ORDER.indexOf(a.accountType)-TYPE_ORDER.indexOf(b.accountType) || a.sortOrder-b.sortOrder || a.price-b.price);
-  const resetFilters = () => { setSearch("");setTypeFilter("all");setAvailability("all"); };
+  const term = search.trim().toLowerCase();
+  const visible = plans.filter((plan) => (typeFilter === "all" || plan.accountType === typeFilter) && (availability === "all" || plan.active === (availability === "active")) && `${plan.name} ${plan.tagline}`.toLowerCase().includes(term));
+  const groups = TYPE_ORDER.map((type) => ({ type, plans: ladderOf(visible, type) })).filter((group) => group.plans.length);
+  const resetFilters = () => { setSearch(""); setTypeFilter("all"); setAvailability("all"); };
+  const toggle = async (plan) => {
+    setWorking(true);
+    try { await run(togglePlanActive(plan.id), { success: plan.active ? "Plan hidden" : "Plan available again", description: plan.active ? "Hidden from new subscriptions. Existing subscribers keep access." : "Available to new subscribers and upgrades." }); }
+    finally { setWorking(false); }
+  };
+
   return (
     <div className="admin-reports admin-plans">
-      <header className="reports-heading"><div><p className="reports-eyebrow">The right plan for every provider</p><h1>Plans &amp; pricing<span>.</span></h1><p>Manage pricing, access and upgrade paths in one place.</p></div><div className="reports-heading-actions"><Link to={adminPath("/inventory")} className="reports-button is-secondary">Financial inventory<ArrowUpRight size={15} aria-hidden="true" /></Link><button type="button" disabled={Boolean(plansError)} onClick={()=>setEditing("new")} className="reports-button is-primary"><Plus size={16} aria-hidden="true" />Create plan</button></div></header>
-      {plansError && <div className="plans-load-error" role="alert"><div><h2>Couldn't load the latest plans</h2><p>{plansError}{plans.length ? " Showing the last loaded plans." : " Please retry before making changes."}</p></div><button type="button" disabled={working} onClick={async()=>{setWorking(true);try{await run(refreshPlans(),{});}finally{setWorking(false);}}} className="reports-button is-secondary">Retry plans</button></div>}
-      {(!plansError || plans.length > 0) && <>
-      <dl className="plans-summary">{[["Plans available",plans.filter(plan=>plan.active).length,"Open to new subscriptions"],["Active subscribers",agents.filter(agent=>agent.sub.isActive).length,"Across current agent accounts"],["Account types",new Set(plans.map(plan=>plan.accountType)).size,"Individuals, agencies and companies"],["Hidden plans",plans.filter(plan=>!plan.active).length,"Existing subscribers keep access"]].map(([label,value,hint])=><div key={label}><dt>{label}</dt><dd>{value}</dd><p>{hint}</p></div>)}</dl>
-      <div className="plans-workspace">
-        <div className="plans-toolbar"><div className="plans-type-filter" role="group" aria-label="Plan account type">{[{id:"all",label:"All plans"},...TYPE_ORDER.map(type=>({id:type,label:ACCOUNT_TYPES[type].label}))].map(item=><button type="button" key={item.id} onClick={()=>setTypeFilter(item.id)} aria-pressed={typeFilter===item.id}>{item.label}<span>{plans.filter(plan=>item.id==="all"||plan.accountType===item.id).length}</span></button>)}</div><div className="plans-filter-tools"><label className="plans-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search plans</span><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search plans..." /></label><label><span className="sr-only">Plan availability</span><select value={availability} onChange={event=>setAvailability(event.target.value)}><option value="all">All availability</option><option value="active">Active plans</option><option value="hidden">Hidden plans</option></select></label></div></div>
-        <div className="plans-list-heading"><span>{visible.length} {visible.length===1?"plan":"plans"} shown</span><p>Lower tiers first within each account type</p></div>
-        {!plans.length ? <EmptyState icon={Layers} title="Your first plan starts here" description="Set a price, choose the limits and give agents a clear way to get started." action={<button type="button" onClick={()=>setEditing("new")} className="reports-button is-primary">Create your first plan</button>} /> : !visible.length ? <EmptyState icon={Search} title="No plans match these filters" description="Try another name, account type or availability." action={<button type="button" onClick={resetFilters} className="reports-button is-secondary">Reset filters</button>} /> : <div className="plans-card-grid">{visible.map(plan=>{
-          const activeCount=activeSubscribers(plan).length;
-          return <article key={plan.id} className={"plan-card plan-type-"+plan.accountType+(plan.active?"":" is-hidden")}>
-            <header><span className="plan-type-label"><Layers size={15} aria-hidden="true" />{ACCOUNT_TYPES[plan.accountType].label}</span><span className={"plan-availability "+(plan.active?"is-active":"")}>{plan.active?"Active":"Hidden"}</span></header>
-            <div className="plan-title"><h2>{plan.name}</h2>{plan.popular&&<span className="plan-popular">Popular</span>}</div><p className="plan-tagline">{plan.tagline || "A plan for "+ACCOUNT_TYPES[plan.accountType].plural.toLowerCase()+"."}</p>
-            <p className="plan-price"><strong>₵{plan.price.toLocaleString("en-GH",{minimumFractionDigits:2,maximumFractionDigits:2})}</strong><span>{durationLabel(plan.durationDays)}</span><span className="plan-tier">Tier {plan.sortOrder}</span></p>
-            <dl className="plan-limits">{[["Properties",plan.propertyLimit],["Images / listing",plan.imageLimit],["Featured",plan.featuredLimit]].map(([label,value])=><div key={label}><dd>{value}</dd><dt>{label}</dt></div>)}</dl>
-            <ul className="plan-feature-list">{planFeatureList(plan).slice(3).map(feature=><li key={feature}><Check size={15} aria-hidden="true" />{feature}</li>)}</ul>
-            <button type="button" className="plan-subscribers" onClick={()=>setSubscribersOf(plan)} aria-label={"View "+plan.name+" subscribers"}><span><Users size={16} aria-hidden="true" />Subscribers</span><strong>{activeCount} active <span>/ {subscribers(plan).length} total</span></strong></button>
-            <footer className="plan-actions"><button type="button" disabled={working} onClick={()=>setEditing(plan)} aria-label={"Edit "+plan.name}><Pencil size={15} aria-hidden="true" />Edit plan</button><button type="button" disabled={working} onClick={async()=>{setWorking(true);try{await run(togglePlanActive(plan.id),{success:plan.active?"Plan deactivated":"Plan activated",description:plan.active?"Hidden from new subscriptions. Existing subscribers keep access.":"Available to new subscribers and upgrades."});}finally{setWorking(false);}}} aria-label={(plan.active?"Deactivate ":"Activate ")+plan.name}><Power size={15} aria-hidden="true" />{plan.active?"Deactivate":"Activate"}</button><button type="button" disabled={working||activeCount>0} title={activeCount>0?"Deactivate this plan instead; active subscribers still use it.":"Delete plan"} aria-label={"Delete "+plan.name} onClick={()=>setDeleting(plan)}><Trash2 size={15} aria-hidden="true" /></button></footer>
-            {activeCount>0&&<p className="plan-protection-note">Active subscribers keep this plan when it is hidden.</p>}
-          </article>;
-        })}</div>}
-      </div>
-      <aside className="plans-guidance"><span><Layers size={20} aria-hidden="true" /></span><div><h2>Keep upgrade paths simple.</h2><p>Agents can upgrade to a higher tier within their account type. Changes to limits apply immediately; deactivating a plan hides it from new subscriptions.</p></div><Link to={adminPath("/subscriptions")}>Manage subscriptions<ArrowUpRight size={15} aria-hidden="true" /></Link></aside>
+      <header className="plans-header">
+        <div>
+          <p className="reports-eyebrow">Subscriptions &amp; billing</p>
+          <h1>Plans &amp; Pricing</h1>
+          <p>Create and manage subscription plans, pricing and feature access for agents, agencies and companies.</p>
+        </div>
+        <div className="plans-header-actions">
+          <Link to={`${adminPath("/settings")}?tab=agents`} className="reports-button is-secondary"><Settings size={16} aria-hidden="true" />Plan settings</Link>
+          <button type="button" disabled={Boolean(plansError)} onClick={() => setEditing("new")} className="reports-button is-primary"><Plus size={16} aria-hidden="true" />Create plan</button>
+        </div>
+      </header>
 
+      {plansError && <div className="plans-load-error" role="alert"><div><h2>Couldn't load the latest plans</h2><p>{plansError}{plans.length ? " Showing the last loaded plans." : " Please retry before making changes."}</p></div><button type="button" disabled={working} onClick={async () => { setWorking(true); try { await run(refreshPlans(), {}); } finally { setWorking(false); } }} className="reports-button is-secondary">Retry plans</button></div>}
+
+      {(!plansError || plans.length > 0) && <>
+        <div className="plans-overview">
+          <div className="plans-stats">
+            <SummaryCard icon={Layers} label="Total plans" value={plans.length} hint={`${plans.filter((p) => p.active).length} open to new subscribers`} />
+            <SummaryCard icon={UsersRound} label="Active subscribers" value={agents.filter((a) => a.sub.isActive).length} hint={`Of ${agents.length} provider ${agents.length === 1 ? "account" : "accounts"}`} />
+            <SummaryCard icon={Building2} label="Account types" value={new Set(plans.map((p) => p.accountType)).size} hint="Individual, agency, company" />
+            <SummaryCard icon={EyeOff} label="Hidden plans" value={plans.filter((p) => !p.active).length} hint="Not offered to new subscribers" />
+          </div>
+          <section className="plans-revenue" aria-label="Subscription revenue">
+            <div>
+              <h2>Subscription revenue</h2>
+              <p className="plans-revenue-value">{cedis(revenue.current, 0)}</p>
+              <p className="plans-revenue-note">
+                This month
+                {revenue.change !== null && <span className={revenue.change < 0 ? "is-down" : ""}>{revenue.change >= 0 ? <TrendingUp size={13} aria-hidden="true" /> : <TrendingDown size={13} aria-hidden="true" />}{revenue.change > 0 ? "+" : ""}{revenue.change}% vs last month</span>}
+              </p>
+            </div>
+            <ol className="plans-revenue-bars" aria-label="Paid subscriptions, last 8 months">
+              {revenue.months.map((month) => (
+                <li key={month.label} title={`${month.label}: ${cedis(month.value, 0)}`}>
+                  <span style={{ height: `${Math.max(6, (month.value / peak) * 100)}%` }} />
+                  <span className="sr-only">{month.label}: {cedis(month.value, 0)}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+        </div>
+
+        <div className="plans-toolbar">
+          <div className="plans-type-filter" role="group" aria-label="Plan account type">
+            {[{ id: "all", label: "All plans", icon: null }, ...TYPE_ORDER.map((type) => ({ id: type, label: ACCOUNT_TYPES[type].label, icon: TYPE_ICONS[type] }))].map((item) => (
+              <button type="button" key={item.id} onClick={() => setTypeFilter(item.id)} aria-pressed={typeFilter === item.id}>
+                {item.icon && <item.icon size={16} aria-hidden="true" />}
+                {item.label}
+                <span>({plans.filter((p) => item.id === "all" || p.accountType === item.id).length})</span>
+              </button>
+            ))}
+          </div>
+          <div className="plans-filter-tools">
+            <label className="plans-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search plans</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search plans by name…" /></label>
+            <label className="plans-select"><span className="sr-only">Plan status</span><select value={availability} onChange={(event) => setAvailability(event.target.value)}><option value="all">All status</option><option value="active">Active</option><option value="hidden">Hidden</option></select></label>
+          </div>
+        </div>
+
+        {!plans.length ? (
+          <EmptyState icon={Layers} title="Your first plan starts here" description="Set a price, choose the limits and give agents a clear way to get started." action={<button type="button" onClick={() => setEditing("new")} className="reports-button is-primary">Create your first plan</button>} />
+        ) : !groups.length ? (
+          <EmptyState icon={Search} title="No plans match these filters" description="Try another name, account type or status." action={<button type="button" onClick={resetFilters} className="reports-button is-secondary">Reset filters</button>} />
+        ) : groups.map(({ type, plans: group }) => {
+          const TypeIcon = TYPE_ICONS[type];
+          return (
+            <section key={type} className="plans-group" aria-labelledby={`plans-${type}`}>
+              <div className="plans-group-heading">
+                <h2 id={`plans-${type}`}><TypeIcon size={20} aria-hidden="true" />{SHORT_TYPE[type]} plans <span>({group.length})</span></h2>
+                {typeFilter === "all" && <button type="button" onClick={() => setTypeFilter(type)}>Show only {SHORT_TYPE[type].toLowerCase()} plans<ArrowRight size={15} aria-hidden="true" /></button>}
+              </div>
+              <div className="plans-card-grid">
+                {group.map((plan) => (
+                  <PlanCard
+                    key={plan.id}
+                    plan={plan}
+                    tierIndex={ladderOf(plans, type).findIndex((p) => p.id === plan.id)}
+                    activeCount={activeSubscribers(plan).length}
+                    working={working}
+                    onEdit={() => setEditing(plan)}
+                    onView={() => setViewing(plan)}
+                    onToggle={() => toggle(plan)}
+                    onDelete={() => setDeleting(plan)}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
+
+        <aside className="plans-guidance">
+          <span><Layers size={20} aria-hidden="true" /></span>
+          <div>
+            <h2>Keep your subscription plans up to date.</h2>
+            <p>Providers can upgrade to a higher tier within their account type. Limit changes apply to current subscribers straight away; hiding a plan only stops new subscriptions.</p>
+          </div>
+          <Link to={adminPath("/subscriptions")}>Manage subscriptions<ArrowRight size={16} aria-hidden="true" /></Link>
+        </aside>
       </>}
+
       {editing && (
         <PlanForm
           plan={editing === "new" ? null : editing}
@@ -246,22 +405,32 @@ const AdminPlans = () => {
         }}
       />
 
-      <Modal open={Boolean(subscribersOf)} onClose={() => setSubscribersOf(null)} title={`${subscribersOf?.name} subscribers`}>
-        {subscribersOf && (subscribers(subscribersOf).length === 0 ? (
-          <p className="py-6 text-center text-sm text-gray-500">No agents on this plan yet.</p>
-        ) : (
-          <ul className="divide-y divide-slate-100">
-            {subscribers(subscribersOf).map((a) => (
-              <li key={a.id} className="flex items-center justify-between gap-3 py-3">
-                <span className="min-w-0">
-                  <span className="block truncate font-semibold text-gray-900">{a.name}</span>
-                  <span className="text-xs text-gray-500">{a.activeCount}/{subscribersOf.propertyLimit} properties · expires {formatDate(a.subscription.expiryDate)}</span>
-                </span>
-                <StatusBadge status={a.sub.statusLabel} tone={{ active: "green", expiring: "amber", expired: "red", cancelled: "gray", pending: "amber" }[a.sub.status]} />
-              </li>
-            ))}
-          </ul>
-        ))}
+      <Modal open={Boolean(viewing)} onClose={() => setViewing(null)} title={viewing?.name || ""} description={viewing ? `${ACCOUNT_TYPES[viewing.accountType].label} · Tier ${viewing.sortOrder} · ${viewing.active ? "Active" : "Hidden from new subscribers"}` : ""} size="lg"
+        footer={viewing && <><button type="button" onClick={() => setViewing(null)} className="btn btn-light">Close</button><button type="button" onClick={() => { setEditing(viewing); setViewing(null); }} className="btn btn-primary">Edit plan</button></>}
+      >
+        {viewing && (
+          <div className="plan-details">
+            <p className="plan-details-price"><strong>{cedis(viewing.price)}</strong> / {durationLabel(viewing.durationDays)}</p>
+            <h3>What's included</h3>
+            <ul>{planFeatureList(viewing).map((feature) => <li key={feature}><Check size={15} aria-hidden="true" />{feature}</li>)}</ul>
+            <h3>Subscribers <span>{activeSubscribers(viewing).length} active · {subscribers(viewing).length} total</span></h3>
+            {subscribers(viewing).length === 0 ? (
+              <p className="plan-details-empty">No providers on this plan yet.</p>
+            ) : (
+              <ul className="plan-details-subscribers">
+                {subscribers(viewing).map((a) => (
+                  <li key={a.id}>
+                    <span>
+                      <strong>{a.name}</strong>
+                      <small>{a.activeCount}/{viewing.propertyLimit} properties · expires {formatDate(a.subscription.expiryDate)}</small>
+                    </span>
+                    <StatusBadge status={a.sub.statusLabel} tone={{ active: "green", expiring: "amber", expired: "red", cancelled: "gray", pending: "amber" }[a.sub.status]} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );

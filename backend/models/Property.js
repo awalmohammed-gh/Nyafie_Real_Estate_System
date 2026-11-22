@@ -71,6 +71,19 @@ const propertySchema = new mongoose.Schema(
     images: [{ type: String }], // Cloudinary (or static) URLs, never raw files
     // Video tour (YouTube/Vimeo) and 3D tour (Matterport/Kuula): provider + id only (utils/mediaLinks.js)
     video: { type: mediaLinkSchema, default: null },
+    // An uploaded video (optional): stored compressed in Cloudinary and checked by the server
+    // (utils/listingMedia.js verifyVideo); never written by clients directly
+    videoFile: {
+      type: new mongoose.Schema({
+        publicId: { type: String, required: true, maxlength: 200 },
+        url: { type: String, required: true, maxlength: 500 },
+        duration: { type: Number, min: 0 },
+        bytes: { type: Number, min: 0 },
+        width: { type: Number, min: 0 },
+        height: { type: Number, min: 0 },
+      }, { _id: false }),
+      default: null,
+    },
     virtualTour: { type: mediaLinkSchema, default: null },
     roomTypes: [roomTypeSchema],
     stayBooking: { type: stayBookingSchema, default: undefined },

@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowDownRight, ArrowRight, ArrowUpRight, Building2, CheckCheck, ChevronDown, ChevronRight, Eye, Minus, Plus, RefreshCw } from "lucide-react";
-import { formatCedis } from "../../utils/reports";
+import { ArrowDownRight, ArrowRight, ArrowUpRight, Building2, CalendarDays, CheckCheck, ChevronDown, ChevronRight, Eye, Minus, Plus, RefreshCw } from "lucide-react";
 import { adminPath } from "../../utils/adminEntry";
 import { cloudImage } from "../../utils/cloudImage";
 
 const plural = (count, one, many) => count === 1 ? one : many;
+const formatCedis = value => `GH₵${Number(value || 0).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export const OverviewHeader = ({ name, siteName, generatedAt, loading, onRefresh }) => {
-  const hour = new Date().getHours();
+export const OverviewHeader = ({ name, siteName, generatedAt, loading, onRefresh, months, onMonthsChange }) => {
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Accra", hour: "numeric", hourCycle: "h23" }).format(new Date()));
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   return (
     <header className="overview-heading">
@@ -18,15 +18,12 @@ export const OverviewHeader = ({ name, siteName, generatedAt, loading, onRefresh
         <p className="overview-subtitle">Here’s what’s happening across {siteName}.</p>
       </div>
       <div className="overview-heading-actions">
-        <button type="button" onClick={onRefresh} disabled={loading} className="overview-button overview-button-secondary" aria-label="Refresh overview">
-          <RefreshCw size={15} aria-hidden="true" className={loading ? "animate-spin motion-reduce:animate-none" : ""} />
-          <span>{loading ? "Refreshing" : "Refresh"}</span>
-        </button>
+        <label className="overview-period-select"><span className="sr-only">Performance period</span><CalendarDays size={17} aria-hidden="true" /><select value={months} onChange={event => onMonthsChange(Number(event.target.value))}>{[3, 6, 12].map(value => <option key={value} value={value}>Last {value} months</option>)}</select><ChevronDown size={16} aria-hidden="true" /></label>
         <Link to={adminPath("/properties/add")} className="overview-button overview-button-primary"><Plus size={17} aria-hidden="true" />Add property</Link>
       </div>
       <div className="overview-dateline">
-        <span>{new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span>
-        {generatedAt && <span className="overview-updated" role="status"><span aria-hidden="true" />{loading ? "Updating overview…" : `Updated ${new Date(generatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`}<span className="overview-auto-refresh"> · Refreshes every minute</span></span>}
+        <span>{new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Accra" })}</span>
+        <button type="button" onClick={onRefresh} disabled={loading} className="overview-refresh" title={generatedAt ? `Last updated ${new Date(generatedAt).toLocaleTimeString("en-GB", { timeZone: "Africa/Accra", hour: "2-digit", minute: "2-digit" })}. Refreshes every minute.` : "Refresh overview"} aria-label="Refresh overview"><RefreshCw size={14} aria-hidden="true" className={loading ? "animate-spin motion-reduce:animate-none" : ""} /><span className="sr-only" role="status">{loading ? "Updating overview" : "Refresh overview"}</span></button>
       </div>
     </header>
   );
@@ -39,10 +36,12 @@ export const MetricGrid = ({ items }) => (
       return (
         <li key={label} className={`overview-stat overview-stat-${tone}`}>
           <Link to={to} className="overview-stat-link">
-            <div className="overview-stat-top"><span className="overview-icon"><Icon size={19} aria-hidden="true" /></span><ArrowUpRight size={17} className="overview-stat-arrow" aria-hidden="true" /></div>
+            <span className="overview-icon"><Icon size={24} strokeWidth={1.7} aria-hidden="true" /></span>
+            <div className="overview-stat-main">
             <p className="overview-stat-label">{label}</p>
-            <div className="overview-stat-value"><strong>{value}</strong>{Number.isFinite(change) && <span className={`overview-change ${change === 0 ? "is-flat" : change < 0 ? "is-down" : "is-up"}`}><ChangeIcon size={13} aria-hidden="true" />{Math.abs(change)}%<span className="sr-only"> {change === 0 ? "change" : change < 0 ? "decrease" : "increase"} versus previous 30 days</span></span>}</div>
-            <p className={`overview-stat-hint ${attention ? "has-attention" : ""}`}>{attention && <span className="overview-attention-dot" aria-hidden="true" />}{hint}</p>
+            <div className="overview-stat-value"><strong>{value}</strong></div>
+            </div>
+            <p className={`overview-stat-hint ${attention ? "has-attention" : ""}`} title={hint}>{Number.isFinite(change) ? <><span className={`overview-change ${change === 0 ? "is-flat" : change < 0 ? "is-down" : "is-up"}`}><ChangeIcon size={12} aria-hidden="true" />{Math.abs(change)}%</span><span>vs previous 30 days</span></> : <>{attention && <span className="overview-attention-dot" aria-hidden="true" />}{hint}</>}</p>
             <span className="sr-only">{toLabel}</span>
           </Link>
         </li>
@@ -59,16 +58,17 @@ export const SectionHeading = ({ title, description, to, toLabel = "View all", c
   </header>
 );
 
-export const AttentionQueue = ({ items, total }) => {
+export const AttentionQueue = ({ items, total, summary = [] }) => {
   const [expanded, setExpanded] = useState(false);
-  const visible = expanded ? items : items.slice(0, 4);
   return (
     <section className="overview-panel overview-attention" aria-labelledby="attention-heading">
-      <header className="overview-section-heading"><div><p className="overview-kicker">Keep things moving</p><h2 id="attention-heading">Needs attention <span className="overview-count">{total}</span></h2></div><span className="overview-priority-label">Action queue</span></header>
+      <header className="overview-section-heading"><h2 id="attention-heading">Needs attention <span className={`overview-count ${total === 0 ? "is-clear" : ""}`}>{total}</span></h2></header>
+      <ul className="overview-attention-summary">{summary.map(({ icon: Icon, label, count, to }) => <li key={label}><Link to={to}><Icon size={20} aria-hidden="true" /><span>{label}</span><strong>{count.toLocaleString()}</strong><ChevronRight size={15} aria-hidden="true" /></Link></li>)}</ul>
       {items.length ? <>
-        <p className="overview-queue-intro">Start here. Your pending work, in priority order.</p>
+        <button type="button" className="overview-queue-toggle" aria-expanded={expanded} aria-controls="overview-action-queue" onClick={() => setExpanded(!expanded)}>{expanded ? "Hide task details" : `Review all ${items.length} task categories`}<ChevronDown size={15} className={expanded ? "rotate-180" : ""} aria-hidden="true" /></button>
+        {expanded && <>
         <ul className="overview-queue" id="overview-action-queue">
-          {visible.map(({ icon: Icon, count, label, hint, to, tone, action }) => (
+          {items.map(({ icon: Icon, count, label, hint, to, tone, action }) => (
             <li key={to + label[0]}><Link to={to} className="overview-queue-link">
               <span className={`overview-task-icon tone-${tone}`}><Icon size={17} aria-hidden="true" /></span>
               <span className="overview-task-copy"><strong>{count.toLocaleString()} {plural(count, label[0], label[1])}</strong><span>{hint}</span></span>
@@ -76,8 +76,8 @@ export const AttentionQueue = ({ items, total }) => {
             </Link></li>
           ))}
         </ul>
-        {items.length > 4 && <button type="button" className="overview-queue-toggle" aria-expanded={expanded} aria-controls="overview-action-queue" onClick={() => setExpanded(!expanded)}>{expanded ? "Show fewer tasks" : `Show all ${items.length} task categories`}<ChevronDown size={15} className={expanded ? "rotate-180" : ""} aria-hidden="true" /></button>}
-      </> : <div className="overview-all-clear"><span><CheckCheck size={26} aria-hidden="true" /></span><h3>You’re all caught up</h3><p>Applications, listing reviews and payments that need your attention will appear here.</p><Link className="overview-text-link" to={adminPath("/properties")}>Explore your properties<ArrowRight size={15} aria-hidden="true" /></Link></div>}
+        </>}
+      </> : <div className="overview-all-clear"><CheckCheck size={17} aria-hidden="true" /><p>You're all caught up.</p></div>}
     </section>
   );
 };
@@ -99,7 +99,7 @@ export const InventorySummary = ({ properties }) => {
     { label: "Other / hidden", value: properties.hidden + (properties.rejected || 0) + (properties.suspended || 0), color: "#e5e7ee" },
   ];
   return <section className="overview-panel">
-    <SectionHeading title="Property portfolio" description="Publication status" to={adminPath("/properties")} toLabel="Manage" />
+    <SectionHeading title="Property portfolio" to={adminPath("/properties")} toLabel="Manage" />
     <div className="overview-inventory-body">
       <div className="overview-inventory-total"><strong>{properties.total.toLocaleString()}</strong><span>total {plural(properties.total, "property", "properties")}</span><span className="overview-neutral-pill">+{properties.addedThisMonth} this month</span></div>
       <div className="overview-stacked-bar" role="img" aria-label={states.map(s => `${s.label}: ${s.value}`).join(", ")}>{states.map(s => s.value > 0 && <span key={s.label} style={{ width: `${properties.total > 0 ? s.value / properties.total * 100 : 0}%`, backgroundColor: s.color }} />)}</div>
@@ -116,7 +116,7 @@ export const RevenueSources = ({ revenue }) => {
     { label: "Agent subscriptions", value: revenue.breakdown.subscription, color: "#e7b24e" },
   ];
   return <section className="overview-panel">
-    <SectionHeading title="Revenue sources" description="Collected since launch" to={adminPath("/payments")} toLabel="Payments" />
+    <SectionHeading title="Revenue sources" to={adminPath("/payments")} toLabel="Payments" />
     <div className="overview-revenue-body"><p className="overview-revenue-total">{formatCedis(revenue.total)}</p><dl className="overview-revenue-list">{rows.map(({ label, value, color }) => <div key={label}><div className="overview-revenue-row"><dt><span style={{ backgroundColor: color }} />{label}</dt><dd>{formatCedis(value)}</dd></div><div className="overview-source-track" aria-hidden="true"><span style={{ width: `${revenue.total > 0 ? value / revenue.total * 100 : 0}%`, backgroundColor: color }} /></div></div>)}</dl></div>
   </section>;
 };
@@ -124,7 +124,7 @@ export const RevenueSources = ({ revenue }) => {
 export const PopularListings = ({ properties, siteName }) => (
   <section className="overview-panel overview-popular">
     <SectionHeading title="Most viewed properties" description="The listings getting the most attention" to={adminPath("/properties")} toLabel="All properties" />
-    <div className="overview-popular-labels" aria-hidden="true"><span>Property</span><span>Listing owner</span><span>Views</span></div>
+    <div className="overview-popular-labels" aria-hidden="true"><span>#</span><span>Property</span><span>Listing owner</span><span>Views</span></div>
     {properties.mostViewed?.length ? <ol className="overview-property-list">{properties.mostViewed.map((property, index) => <li key={property.id}><Link to={adminPath(`/properties?open=${encodeURIComponent(property.id)}`)}>
       <span className="overview-property-rank">{String(index + 1).padStart(2, "0")}</span>
       {property.image ? <img src={cloudImage(property.image, 64)} alt="" loading="lazy" className="overview-property-image" /> : <span className="overview-property-image overview-property-placeholder"><Building2 size={21} aria-hidden="true" /></span>}

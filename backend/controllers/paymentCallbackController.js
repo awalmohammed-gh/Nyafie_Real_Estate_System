@@ -11,6 +11,7 @@ import { reportError } from "../utils/monitoring.js";
 import { checkListingFreshness } from "../utils/listingFreshness.js";
 import { releasePastViewings, sendViewingReminders } from "../utils/viewings.js";
 import { cleanUpOldRecords } from "../utils/housekeeping.js";
+import { cleanUpAbandonedVideos } from "../utils/listingMedia.js";
 
 // The rental ledger or the agent subscription history: whichever stored record owns the reference
 const callbackRecord = async (reference) => {
@@ -103,6 +104,9 @@ export const reconcilePayments = async (req, res) => {
   let cleanup = null;
   try { cleanup = await cleanUpOldRecords(); }
   catch (error) { console.error("Housekeeping failed:", error.message); await reportError(error, { tags: { job: "housekeeping" } }); }
+  // ...and deletes listing videos uploaded over a day ago that no listing was saved with
+  try { cleanup = { ...cleanup, abandonedVideos: await cleanUpAbandonedVideos() }; }
+  catch (error) { console.error("Abandoned video clean-up failed:", error.message); await reportError(error, { tags: { job: "abandoned-videos" } }); }
   // ...and reminds both sides of viewings today or tomorrow, expiring requests nobody answered in time
   let viewings = { reminded: 0, expired: 0 };
   try { viewings = { expired: await releasePastViewings(), reminded: await sendViewingReminders() }; }

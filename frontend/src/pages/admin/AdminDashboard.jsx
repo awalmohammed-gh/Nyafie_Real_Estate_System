@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Building, Building2, ClipboardCheck, Clock, CreditCard, FileClock, HandCoins, Inbox, MessageCircle, Star, UserCog, Users, Wallet } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Building, ClipboardCheck, Clock, CreditCard, Database, FileClock, HandCoins, House, Inbox, MessageCircle, Star, UserCog, Users, Wallet } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { usePlatform } from "../../context/usePlatform";
 import { useApiQuery } from "../../hooks/useApiQuery";
@@ -20,6 +20,7 @@ const REFRESH_MS = 60000; // same cadence as the sidebar's badges
 const AdminDashboard = () => {
   const { user } = useAuth();
   const { siteName } = usePlatform();
+  const [months, setMonths] = useState(6);
   const query = useApiQuery("admin-dashboard", adminApi.getAdminDashboard);
   const { reload } = query;
   // Keep the last result on screen while a refresh runs
@@ -37,7 +38,7 @@ const AdminDashboard = () => {
   }, [reload]);
 
   const header = (
-    <OverviewHeader name={user?.firstName} siteName={siteName} generatedAt={data?.generatedAt} loading={query.loading} onRefresh={reload} />
+    <OverviewHeader name={user?.firstName} siteName={siteName} generatedAt={data?.generatedAt} loading={query.loading} onRefresh={reload} months={months} onMonthsChange={setMonths} />
   );
 
   if (!data) {
@@ -56,12 +57,12 @@ const AdminDashboard = () => {
 
   const metrics = [
     {
-      label: "Revenue · last 30 days",
-      value: formatCedis(revenue.last30),
+      label: "Recorded receipts",
+      value: `GH₵${Number(revenue.last30).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       hint: revenue.change !== null ? `Previous 30 days: ${formatCedis(revenue.previous30)}` : "Confirmed payments received",
       change: revenue.change,
       tone: "violet",
-      icon: Wallet,
+      icon: Database,
       to: adminPath("/payments"),
       toLabel: "View payments",
     },
@@ -70,7 +71,7 @@ const AdminDashboard = () => {
       value: live.toLocaleString(),
       hint: properties.inReview ? `${properties.inReview} awaiting review · ${properties.addedThisMonth} added this month` : `${properties.addedThisMonth} added this month · ${properties.total} in total`,
       attention: properties.inReview > 0,
-      icon: Building2,
+      icon: House,
       tone: "teal",
       to: adminPath("/properties"),
       toLabel: "Manage properties",
@@ -82,7 +83,7 @@ const AdminDashboard = () => {
         ? `${agents.pendingApplications} ${agents.pendingApplications === 1 ? "application" : "applications"} awaiting review`
         : `${agents.total} registered${agents.expiringSoon ? ` · ${agents.expiringSoon} expiring soon` : ""}`,
       attention: agents.pendingApplications > 0,
-      icon: UserCog,
+      icon: Users,
       tone: "amber",
       to: agents.pendingApplications ? adminPath("/agent-applications") : adminPath("/agents"),
       toLabel: agents.pendingApplications ? "Review applications" : "Manage agents",
@@ -125,15 +126,19 @@ const AdminDashboard = () => {
       {header}
       <MetricGrid items={metrics} />
       <div className="overview-primary-grid">
-        <div className="overview-chart-column"><PerformanceChart refreshKey={data.generatedAt} /></div>
-        <AttentionQueue items={attention} total={attentionTotal} />
+        <div className="overview-chart-column"><PerformanceChart refreshKey={data.generatedAt} months={months} onMonthsChange={setMonths} /></div>
+        <AttentionQueue items={attention} total={attentionTotal} summary={[
+          { icon: UserCog, count: agents.pendingApplications, label: "Pending agent applications", to: adminPath("/agent-applications") },
+          { icon: Inbox, count: properties.inReview, label: "Properties in review", to: adminPath("/properties?status=pending") },
+          { icon: Inbox, count: deals.newInquiries, label: "Unanswered inquiries", to: adminPath("/inquiries?status=New") },
+          { icon: CreditCard, count: deals.rentalsToConfirm + deals.officePaymentsExpected, label: "Payment confirmations", to: adminPath("/payments") },
+        ]} />
       </div>
       <div className="overview-secondary-grid">
         <InventorySummary properties={properties} />
         <section className="overview-panel">
-          <SectionHeading title="Deals in progress" description="Your open pipeline" to={adminPath("/reports")} toLabel="Reports" />
+          <SectionHeading title="Deals in progress" to={adminPath("/reports")} toLabel="Reports" />
           <CounterList items={counters} />
-          <p className="overview-pipeline-note">Open a category to manage the next step.</p>
         </section>
         <RevenueSources revenue={revenue} />
       </div>

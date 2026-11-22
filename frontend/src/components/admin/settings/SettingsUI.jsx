@@ -1,50 +1,66 @@
-import { useRef, useState } from "react";
-import { AlertCircle, Check, ImagePlus, Loader2, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { useContext, useRef, useState } from "react";
+import { AlertCircle, Check, ImagePlus, Loader2, Plus, Trash2, X } from "lucide-react";
 import { compressImage } from "../../../utils/image";
+import { SettingsSectionContext } from "./settingsSection";
 
 // Building blocks for the admin Settings page
 
-export const Panel = ({ title, description, children, footer }) => (
-  <section className="overflow-hidden rounded-lg bg-white ring-1 ring-slate-200">
-    <header className="border-b border-slate-100 px-5 py-4 sm:px-6">
-      <h2 className="text-base font-bold text-gray-900">{title}</h2>
-      {description && <p className="mt-0.5 text-sm text-gray-500">{description}</p>}
-    </header>
-    <div className="divide-y divide-slate-100">{children}</div>
-    {footer}
-  </section>
-);
+export const Panel = ({ title, description, children, footer }) => {
+  const section = useContext(SettingsSectionContext);
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[#e9e4f0] bg-white shadow-[0_1px_2px_rgba(42,18,64,0.04)]">
+      <header className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-7 sm:py-6">
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">{title}</h2>
+          {description && <p className="mt-1 text-sm leading-relaxed text-gray-500 sm:text-[15px]">{description}</p>}
+        </div>
+        {section && (
+          <span className="hidden shrink-0 items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700 ring-1 ring-brand-100 sm:inline-flex">
+            <section.icon aria-hidden="true" className="h-4 w-4" />
+            {section.group}
+          </span>
+        )}
+      </header>
+      <div className="divide-y divide-slate-100">{children}</div>
+      {footer}
+    </section>
+  );
+};
 
-// One setting: label and help text on the left, the control on the right (stacked on phones)
-export const Row = ({ label, description, htmlFor, children }) => (
-  <div className="grid gap-3 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-8">
-    <div>
-      {htmlFor ? (
-        <label htmlFor={htmlFor} className="text-sm font-semibold text-gray-900">{label}</label>
-      ) : (
-        <p className="text-sm font-semibold text-gray-900">{label}</p>
-      )}
-      {description && <p className="mt-1 text-sm text-gray-500">{description}</p>}
+// One setting: label and help text on the left, the control on the right (stacked on phones).
+// The side margins keep the dividers between settings inset, inside the panel's padding.
+export const Row = ({ label, description, htmlFor, required = false, children }) => {
+  const title = <>{label}{required && <span aria-hidden="true" className="ml-1 text-red-500">*</span>}</>;
+  return (
+    <div className="mx-5 grid gap-3 py-6 sm:mx-7 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-10">
+      <div>
+        {htmlFor ? (
+          <label htmlFor={htmlFor} className="text-[15px] font-semibold text-gray-900">{title}</label>
+        ) : (
+          <p className="text-[15px] font-semibold text-gray-900">{title}</p>
+        )}
+        {description && <p className="mt-1.5 text-sm leading-relaxed text-gray-500">{description}</p>}
+      </div>
+      <div className="min-w-0">{children}</div>
     </div>
-    <div className="min-w-0">{children}</div>
-  </div>
-);
+  );
+};
 
 export const Counter = ({ value = "", max, recommended }) => {
   const over = recommended && value.length > recommended;
   return (
-    <p className={`mt-1.5 text-right text-xs ${over ? "text-amber-600" : "text-gray-400"}`}>
-      {value.length}/{recommended || max}
+    <p className={`mt-2 text-right text-xs tabular-nums ${over ? "text-amber-600" : "text-gray-500"}`}>
+      {value.length.toLocaleString()} / {(recommended || max).toLocaleString()}
       {over ? " (longer than search engines usually show)" : ""}
     </p>
   );
 };
 
 export const Switch = ({ label, description, checked, onChange }) => (
-  <div className="flex items-start justify-between gap-4 px-5 py-4 sm:px-6">
+  <div className="mx-5 flex items-start justify-between gap-4 py-5 sm:mx-7">
     <div>
-      <p className="text-sm font-semibold text-gray-900">{label}</p>
-      {description && <p className="mt-0.5 text-sm text-gray-500">{description}</p>}
+      <p className="text-[15px] font-semibold text-gray-900">{label}</p>
+      {description && <p className="mt-1 text-sm leading-relaxed text-gray-500">{description}</p>}
     </div>
     <button
       type="button"
@@ -74,32 +90,36 @@ export const Callout = ({ tone = "gray", icon: Icon = AlertCircle, children }) =
   );
 };
 
-// Save / discard for one section, with the saving state shown next to the button
-export const SaveBar = ({ form: { dirty, status, error, save, reset }, disabled = false, label = "Save Changes" }) => (
-  <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-3 sm:px-6">
-    <p className="mr-auto min-w-0 text-sm" aria-live="polite">
-      {status === "saving" ? (
-        <span className="inline-flex items-center gap-1.5 text-gray-500"><Loader2 className="h-4 w-4 animate-spin" />Saving...</span>
-      ) : status === "error" ? (
-        <span className="inline-flex items-center gap-1.5 text-red-600"><AlertCircle className="h-4 w-4 shrink-0" />{error || "Failed to save"}</span>
-      ) : dirty ? (
-        <span className="text-amber-700">Unsaved changes</span>
-      ) : status === "saved" ? (
-        <span className="inline-flex items-center gap-1.5 text-emerald-600"><Check className="h-4 w-4" />Saved successfully</span>
-      ) : null}
-    </p>
-    {dirty && status !== "saving" && (
-      <button type="button" onClick={reset} className="btn btn-light px-4 py-2 text-sm">
-        <RotateCcw className="h-4 w-4" />
-        Discard
+// Save / discard for one section, with the saving state on the left
+const StatusDot = ({ className, children }) => <span aria-hidden="true" className={`grid h-6 w-6 shrink-0 place-items-center rounded-full ${className}`}>{children}</span>;
+
+export const SaveBar = ({ form: { dirty, status, error, save, reset }, disabled = false, label = "Save Changes", note = "All changes will be saved to your website." }) => {
+  const saving = status === "saving";
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 px-5 py-4 sm:px-7 sm:py-5">
+      <p className="mr-auto flex min-w-0 basis-full items-center gap-2.5 text-sm sm:basis-auto" aria-live="polite">
+        {saving ? (
+          <><StatusDot className="bg-brand-50 text-brand-600"><Loader2 className="h-3.5 w-3.5 animate-spin" /></StatusDot><span className="text-gray-600">Saving…</span></>
+        ) : status === "error" ? (
+          <><StatusDot className="bg-red-50 text-red-600"><AlertCircle className="h-3.5 w-3.5" /></StatusDot><span className="text-red-600">{error || "Failed to save"}</span></>
+        ) : dirty ? (
+          <><StatusDot className="bg-amber-50"><span className="h-2 w-2 rounded-full bg-amber-500" /></StatusDot><span className="text-amber-800">You have unsaved changes.</span></>
+        ) : status === "saved" ? (
+          <><StatusDot className="bg-emerald-500 text-white"><Check className="h-3.5 w-3.5" strokeWidth={3} /></StatusDot><span className="text-emerald-700">Saved successfully.</span></>
+        ) : (
+          <><StatusDot className="bg-emerald-500 text-white"><Check className="h-3.5 w-3.5" strokeWidth={3} /></StatusDot><span className="text-gray-600">{note}</span></>
+        )}
+      </p>
+      <button type="button" onClick={reset} disabled={!dirty || saving} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-sm whitespace-nowrap sm:px-5 font-semibold text-gray-800 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-500 disabled:hover:bg-white sm:flex-none">
+        Discard Changes
       </button>
-    )}
-    <button type="button" onClick={save} disabled={!dirty || status === "saving" || disabled} className="btn btn-primary px-5 py-2 text-sm">
-      {status === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-      {status === "saving" ? "Saving..." : label}
-    </button>
-  </div>
-);
+      <button type="button" onClick={save} disabled={!dirty || saving || disabled} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-brand-700 px-3 text-sm whitespace-nowrap sm:px-5 font-semibold text-white shadow-sm transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-75 disabled:hover:bg-brand-700 sm:flex-none">
+        {saving ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" className="h-4 w-4" />}
+        {saving ? "Saving…" : label}
+      </button>
+    </div>
+  );
+};
 
 const readAsDataUrl = (file) =>
   new Promise((resolve, reject) => {
