@@ -76,7 +76,8 @@ const AuthForm = ({ initialMode = "login", onSuccess, onModeChange }) => {
     }
   };
 
-  if (verification) return <EmailVerificationForm verification={verification} onSuccess={(user) => onSuccess?.(user, mode)} onBack={() => { setVerification(null); setError(""); switchMode("login"); }} />;
+  // A finished sign-up is a new account, even when it was finished from the sign-in form
+  if (verification) return <EmailVerificationForm verification={verification} onSuccess={(user) => onSuccess?.(user, verification.registration ? "signup" : mode)} onBack={() => { setVerification(null); setError(""); switchMode("login"); }} />;
   if (recovering) return <PasswordResetForm initialEmail={formData.email} onBack={(email) => { setRecovering(false); setError(""); setFormData((previous) => ({ ...previous, email, password: "", confirmPassword: "" })); }} />;
 
   return (

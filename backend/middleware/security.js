@@ -28,6 +28,42 @@ export const securityHeaders = (_req, res, next) => {
 };
 
 /**
+ * Content Security Policy for the site's pages (routes/seoRoutes.js), sent as Report-Only for now:
+ * nothing is blocked; browsers report what would have been to /api/csp-report (written to the logs).
+ * Once the logs stay quiet in production, switch the header name to Content-Security-Policy.
+ * What the pages legitimately use:
+ *  - scripts: our own bundles and Google sign-in (no inline scripts; page metadata is JSON data)
+ *  - styles: our own, inline style attributes (React, animations, maps), Google Fonts and Google sign-in
+ *  - images: any HTTPS (Cloudinary photos, map tiles, video thumbnails, older listing image links)
+ *  - connections: our own API, Google sign-in and Sentry error reports
+ *  - frames: Google sign-in and the video/virtual tour players (utils/mediaLinks.js on the frontend)
+ */
+export const PAGE_CSP = [
+  "default-src 'self'",
+  "script-src 'self' https://accounts.google.com/gsi/client",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "img-src 'self' https: data: blob:",
+  "connect-src 'self' https://accounts.google.com/gsi/ https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io",
+  "frame-src https://accounts.google.com/gsi/ https://www.youtube-nocookie.com https://player.vimeo.com https://my.matterport.com https://kuula.co",
+  "worker-src 'self'",
+  "manifest-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "report-uri /api/csp-report",
+].join("; ");
+
+// POST /api/csp-report: one short log line per violation (never the full report, which can hold URLs with queries)
+export const cspReport = (req, res) => {
+  const body = Array.isArray(req.body) ? req.body[0]?.body : req.body?.["csp-report"] || req.body;
+  const pick = (...keys) => String(keys.map((key) => body?.[key]).find(Boolean) || "").split("?")[0].slice(0, 200);
+  if (body && typeof body === "object") console.warn(`CSP report-only: ${pick("effectiveDirective", "violated-directive", "effective-directive")} blocked ${pick("blockedURL", "blocked-uri")} on ${pick("documentURL", "document-uri")}`);
+  res.sendStatus(204);
+};
+
+/**
  * CSRF defence in depth for cookie-authenticated requests: state-changing requests that carry an
  * Origin (or Referer) must come from the trusted frontend. Browsers always send Origin on
  * cross-site POST/PUT/PATCH/DELETE, so a forged form or fetch from another site is refused.
@@ -134,7 +170,9 @@ export const limits = {
   // Separate flood protection; password failures use the shared 3-attempt/30-minute account lock.
   login: rateLimit({ windowMs: 15 * MINUTE, max: 40, message: loginMessage }),
   adminLogin: rateLimit({ windowMs: 15 * MINUTE, max: 20, message: loginMessage }),
-  register: rateLimit({ windowMs: 60 * MINUTE, max: 10, message: "Too many accounts created from this network. Please try again later." }),
+  // Per network, not per person: many mobile users share one address (carrier NAT), so this only
+  // stops floods. Each email address separately gets at most 5 codes an hour (utils/emailVerification.js).
+  register: rateLimit({ windowMs: 60 * MINUTE, max: 30, message: "Too many sign-ups from this network. Please try again later." }),
   password: rateLimit({ windowMs: 15 * MINUTE, max: 5, message: "Too many password attempts. Please wait 15 minutes and try again." }),
   // Payment starts and checks, and things customers send to owners
   payments: rateLimit({ windowMs: 15 * MINUTE, max: 30 }),
@@ -144,6 +182,8 @@ export const limits = {
   messages: rateLimit({ windowMs: 15 * MINUTE, max: 120, key: accountKey, message: "You're sending messages very quickly. Please wait a few minutes and try again." }),
   // Property views: plenty for real browsing, stops scripts inflating counts with fresh visitor ids
   views: rateLimit({ windowMs: 15 * MINUTE, max: 120 }),
+  // Browser security reports (one page can send several): enough to see problems, not a log flood
+  cspReports: rateLimit({ windowMs: 15 * MINUTE, max: 30 }),
   // Place search is typed a letter at a time (debounced in the browser) and proxies a shared free service
   geo: rateLimit({ windowMs: MINUTE, max: 60, message: "Too many location searches. Please wait a moment and try again." }),
   // Connecting a hotel payout account checks the account password and calls Paystack. Per account,

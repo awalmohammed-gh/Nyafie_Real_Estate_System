@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import PendingRegistration from "../models/PendingRegistration.js";
 import { createApp } from "../app.js";
 import { CUSTOMER_SESSION_SECONDS, tabSecretHash } from "../utils/customerTabSession.js";
 import { TEST_CUSTOMER_TAB } from "./support/customerTab.js";
@@ -15,6 +16,7 @@ const setup = async (t) => {
   user.matchPassword = async (value) => value === "CorrectPassword123";
   t.mock.method(User, "findOne", ({ email }) => query(email === user.email ? user : null));
   t.mock.method(User, "findById", () => query(user));
+  t.mock.method(PendingRegistration, "findOne", () => query(null)); // no unfinished sign-ups
   const app = createApp({ initialize: async () => {} });
   const server = app.listen(0, "127.0.0.1");
   await new Promise(done => server.once("listening", done));

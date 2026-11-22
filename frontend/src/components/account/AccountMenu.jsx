@@ -140,7 +140,8 @@ const AccountMenu = ({ onAuth, compact = false, onDark = false, label }) => {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={isAuthenticated ? `Account menu for ${user.name}` : "Account"}
-        className={`flex items-center gap-2 rounded-full transition ${
+        // is-compact: photo only (no name), so the button is an exact circle around it (home.css)
+        className={`flex items-center gap-2 rounded-full transition ${compact || !(isAuthenticated || label) ? "is-compact" : ""} ${
           isAuthenticated && !compact ? `py-1 pr-3 pl-1 ${onDark ? "hover:bg-white/10" : "hover:bg-gray-100"}` : ""
         } ${open ? (onDark ? "bg-white/15" : "bg-gray-100") : ""}`}
       >

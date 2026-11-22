@@ -3,12 +3,12 @@ import User from "../models/User.js";
 import Plan from "../models/Plan.js";
 import { setAuthCookie, clearAuthCookie } from "../utils/generateToken.js";
 import { ok, fail } from "../utils/response.js";
-import { notifyAdmins } from "../utils/notify.js";
 import { onboardingState, validPhone } from "../utils/agentApplication.js";
 import { CUSTOMER_TAB_HEADER, validTabSecret } from "../utils/customerTabSession.js";
 import { matchesSessionRole } from "../utils/sessionAccess.js";
 import { loginAttempts, rejectLoginAttempt } from "../utils/loginAttempts.js";
 import { startEmailVerification } from "./emailVerificationController.js";
+import { pendingRegistrationFor, resumeRegistration, startRegistration } from "./registrationController.js";
 import { passwordProblem, validPasswordInput } from "../utils/passwordPolicy.js";
 import { siteName } from "../models/Setting.js";
 
@@ -51,29 +51,12 @@ export const register = async (req, res) => {
   if (phone && !validPhone(phone)) return fail(res, 400, "Enter a valid phone number.");
   const problem = passwordProblem(password);
   if (problem) return fail(res, 400, problem);
-  if (await User.exists({ email: email.trim().toLowerCase() })) {
-    return fail(
-      res,
-      409,
-      "An account with this email already exists. Try signing in.",
-    );
-  }
-
-  // Role is never taken from the request: every new account is a normal user
-  let user;
-  try {
-    user = await User.create({ firstName, lastName, email, phone, password, role: "user" });
-  } catch (error) {
-    if (error.code === 11000) return fail(res, 409, "An account with this email already exists. Try signing in.");
-    throw error;
-  }
-  notifyAdmins({
-    type: "user",
-    title: "New account",
-    message: `${user.firstName} ${user.lastName} (${user.email}) signed up.`,
-    link: "/admin/customers",
-  });
-  return startEmailVerification(req, res, user);
+  const normalizedEmail = email.trim().toLowerCase();
+  if (await User.exists({ email: normalizedEmail }))
+    return fail(res, 409, "An account with this email already exists. Try signing in.");
+  // The account is created only once the emailed code is entered (controllers/registrationController.js).
+  // Role is never taken from the request: every new account is a normal user.
+  return startRegistration(req, res, "customer", { email: normalizedEmail, password, firstName, lastName, phone });
 };
 
 // New agent registrations start with zero workspace permissions.
@@ -98,30 +81,8 @@ export const registerAgent = async (req, res) => {
       409,
       "An account with this email already exists. Use your existing sign-in or a different email.",
     );
-  let user;
-  try {
-    user = await User.create({
-      firstName: names[0],
-      lastName: names.slice(1).join(" "),
-      email: normalizedEmail,
-      phone,
-      password,
-      role: "agent",
-      isActive: true,
-      agentApplication: { status: "incomplete" },
-    });
-  } catch (error) {
-    if (error.code === 11000)
-      return fail(res, 409, "An account with this email already exists.");
-    throw error;
-  }
-  setAuthCookie(res, user._id, "agent", user.sessionVersion);
-  ok(
-    res,
-    await loadUser(user._id),
-    "Agent account created. Complete your application to continue.",
-    201,
-  );
+  // Like customers, the agent account (with zero permissions) is created once the emailed code is entered
+  return startRegistration(req, res, "agent", { email: normalizedEmail, password, firstName: names[0], lastName: names.slice(1).join(" "), phone: phone.trim() });
 };
 
 // POST /api/auth/customer/become-agent: reuse the authenticated customer's identity.
@@ -164,7 +125,14 @@ export const loginFor = (session) => async (req, res) => {
   const attempt = await loginAttempts.check(email);
   if (attempt.retryAfter) return rejectLoginAttempt(res, attempt);
   const user = await checkCredentials(email, password);
-  if (!user) return rejectLoginAttempt(res, await loginAttempts.failure(email));
+  if (!user) {
+    // An unfinished sign-up with these details: send a fresh code rather than "incorrect password"
+    const pending = session !== "admin" ? await pendingRegistrationFor(email.trim().toLowerCase(), password, session) : null;
+    if (!pending) return rejectLoginAttempt(res, await loginAttempts.failure(email));
+    const cleared = await loginAttempts.success(email);
+    if (cleared.retryAfter) return rejectLoginAttempt(res, cleared);
+    return resumeRegistration(res, session, pending);
+  }
   if (!matchesSessionRole(user, session) || (session !== "agent" && !user.isActive))
     return fail(res, 401, "Incorrect email or password for this area.");
   // Removed providers: a plain message, never the internal reason

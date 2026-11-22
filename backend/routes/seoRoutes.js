@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import Property from "../models/Property.js";
 import { getSettings } from "../models/Setting.js";
 import { isPubliclyVisible, publicQuery } from "../utils/marketplace.js";
+import { PAGE_CSP } from "../middleware/security.js";
 import {
   absoluteUrl,
   escapeHtml,
@@ -204,6 +205,8 @@ router.get(
       "X-Content-Type-Options": "nosniff",
       "X-Frame-Options": "DENY",
       "Referrer-Policy": "strict-origin-when-cross-origin",
+      // Report-only until production logs confirm nothing legitimate is caught (middleware/security.js)
+      "Content-Security-Policy-Report-Only": PAGE_CSP,
     });
     if (metadata.noindex) res.set("X-Robots-Tag", "noindex, nofollow");
     // The HTML contains no private agent/account data. The SPA performs its usual session guards.

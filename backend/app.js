@@ -29,7 +29,7 @@ import viewingRoutes from "./routes/viewingRoutes.js";
 import safetyReportRoutes from "./routes/safetyReportRoutes.js";
 import { listConversations } from "./controllers/chatController.js";
 import { protectCustomer } from "./middleware/authMiddleware.js";
-import { allowedOrigins, limits, originCheck, rejectOperatorKeys, securityHeaders } from "./middleware/security.js";
+import { allowedOrigins, cspReport, limits, originCheck, rejectOperatorKeys, securityHeaders } from "./middleware/security.js";
 import { authenticatePaystackWebhook, authenticatePaymentRecovery } from "./middleware/paymentCallbacks.js";
 import { paystackWebhook, reconcilePayments } from "./controllers/paymentCallbackController.js";
 import { requireAdminEntry } from "./utils/adminEntry.js";
@@ -76,6 +76,8 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
   //api endpoints
   app.use("/api", limits.api);
   app.get("/api/health", (_req, res) => res.json({ success: true, service: "NyaFie" }));
+  // Browsers send these with their own content types, so they're parsed here (small bodies only)
+  app.post("/api/csp-report", limits.cspReports, express.json({ type: ["application/csp-report", "application/reports+json", "application/json"], limit: "16kb" }), cspReport);
 
   // Brute-force and abuse limits on sensitive endpoints (before the routes they protect)
   app.post("/api/auth/admin/login", limits.adminLogin);

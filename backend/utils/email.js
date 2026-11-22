@@ -36,6 +36,16 @@ export const smtpOptions = () => {
   return { host: "smtp.gmail.com", port: 465, secure: true, auth: { user, pass }, from: user, ...SAFETY };
 };
 
+// At startup: new accounts can only be finished with an emailed code, so a missing or incomplete mail
+// setup is reported loudly (browsing keeps working; sign-up and password reset can't until it's fixed)
+export const emailConfigProblem = () => {
+  try { smtpOptions(); return ""; }
+  catch {
+    return process.env.EMAIL_SMTP_HOST?.trim()
+      ? "EMAIL_SMTP_HOST is set, but EMAIL_SMTP_USER, EMAIL_SMTP_PASSWORD, EMAIL_FROM or EMAIL_SMTP_PORT is missing or invalid."
+      : "Set EMAIL_SMTP_HOST, EMAIL_SMTP_USER, EMAIL_SMTP_PASSWORD and EMAIL_FROM (an email provider), or SMTP_USER and SMTP_APP_PASSWORD (Gmail).";
+  }
+};
 
 // A short, plain HTML version alongside the text: better delivery and readability in mail apps
 const codeEmailHtml = ({ name, heading, intro, code, note }) => `<!doctype html><html><body style="margin:0;background:#f6f5f9;font-family:Arial,Helvetica,sans-serif;color:#1f2937">

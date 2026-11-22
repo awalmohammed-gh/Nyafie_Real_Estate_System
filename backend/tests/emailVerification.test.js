@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import User from "../models/User.js";
 import { verificationChallenge, readVerificationChallenge, verificationHash } from "../utils/emailVerification.js";
-import { smtpOptions, verificationMailer, passwordResetMailer } from "../utils/email.js";
+import { emailConfigProblem, smtpOptions, verificationMailer, passwordResetMailer } from "../utils/email.js";
 
 test("verification challenges cannot be replaced by session tokens and codes are keyed to identity", () => {
   const previous = process.env.JWT_KEY;
@@ -85,4 +85,18 @@ test("an email provider over SMTP is used when configured: its own sender addres
   assert.throws(smtpOptions, /temporarily unavailable/);
   delete process.env.EMAIL_SMTP_HOST;
   assert.equal(smtpOptions().host, "smtp.gmail.com");
+});
+
+test("startup names what's missing when email can't be sent (sign-up and password reset need it)", (t) => {
+  const keys = ["EMAIL_SMTP_HOST", "EMAIL_SMTP_PORT", "EMAIL_SMTP_USER", "EMAIL_SMTP_PASSWORD", "EMAIL_FROM", "SMTP_USER", "SMTP_APP_PASSWORD"];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+  keys.forEach((key) => delete process.env[key]);
+  assert.match(emailConfigProblem(), /SMTP_USER and SMTP_APP_PASSWORD/);
+  Object.assign(process.env, { SMTP_USER: "sender@gmail.com", SMTP_APP_PASSWORD: "gmail-app-password" });
+  assert.equal(emailConfigProblem(), "");
+  Object.assign(process.env, { EMAIL_SMTP_HOST: "smtp-relay.example.test", EMAIL_SMTP_USER: "apikey" });
+  assert.match(emailConfigProblem(), /EMAIL_SMTP_HOST is set/, "a half-configured provider is reported, not hidden by Gmail");
+  Object.assign(process.env, { EMAIL_SMTP_PASSWORD: "provider-secret", EMAIL_FROM: "no-reply@nyafie.example" });
+  assert.equal(emailConfigProblem(), "");
 });

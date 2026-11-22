@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowUpRight, BriefcaseBusiness } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
+import { CORNER_CARD } from "./cornerCard";
 import { usePlatform } from "../../context/usePlatform";
 import { accepted, addActiveTime, notNow, promoAllowedFor, promoAllowedOn, readPromo, remindLater, shouldShowPromo, startVisit, writePromo } from "../../utils/agentPromo";
 
@@ -62,7 +63,7 @@ const AgentPromo = ({ paused = false }) => {
           role="dialog" aria-modal="false" aria-labelledby={titleId}
           initial={{ opacity: 0, y: 16, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, transition: { duration: 0.15 } }}
           transition={{ type: "spring", damping: 26, stiffness: 320 }}
-          className="fixed inset-x-4 bottom-4 z-[90] mx-auto max-w-md rounded-2xl bg-white p-5 shadow-2xl ring-1 shadow-gray-900/15 ring-gray-100 sm:inset-x-auto sm:bottom-6 sm:left-6 sm:mx-0 sm:w-[26.5rem]"
+          className={CORNER_CARD}
         >
           <div className="flex items-start gap-3.5">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-700"><BriefcaseBusiness className="h-5 w-5" aria-hidden="true" /></span>

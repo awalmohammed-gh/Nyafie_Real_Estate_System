@@ -1,8 +1,8 @@
 import User from "../models/User.js";
-import { timingSafeEqual } from "node:crypto";
 import EmailVerification from "../models/EmailVerification.js";
 import { loadUser } from "./authController.js";
-import { verificationChallenge, readVerificationChallenge, sendVerificationCode, verificationHash } from "../utils/emailVerification.js";
+import { completeRegistration, isRegistrationChallenge, resendRegistrationCode } from "./registrationController.js";
+import { verificationChallenge, readVerificationChallenge, sendVerificationCode, consumeCode } from "../utils/emailVerification.js";
 import { setAuthCookie, clearAuthCookie } from "../utils/generateToken.js";
 import { CUSTOMER_TAB_HEADER, validTabSecret } from "../utils/customerTabSession.js";
 import { matchesSessionRole } from "../utils/sessionAccess.js";
@@ -31,7 +31,10 @@ const challengedUser = async (req) => {
   return user;
 };
 
+// New sign-ups (no account yet) and existing customers share these two endpoints.
+// Built per request: the controllers import each other, so nothing runs at load time.
 export const resendEmailVerification = async (req, res) => {
+  if (isRegistrationChallenge(req.body?.challenge)) return resendRegistrationCode("customer")(req, res);
   const user = await challengedUser(req);
   if (user.emailVerifiedAt) return fail(res, 409, "This email is already verified. Sign in to continue.");
   const delivery = await sendVerificationCode(user);
@@ -43,20 +46,11 @@ export const resendEmailVerification = async (req, res) => {
 };
 
 export const verifyCustomerEmail = async (req, res) => {
+  if (isRegistrationChallenge(req.body?.challenge)) return completeRegistration("customer")(req, res);
   const user = await challengedUser(req);
   if (user.emailVerifiedAt) return fail(res, 409, "This email is already verified. Sign in to continue.");
-  if (typeof req.body?.code !== "string" || !/^\d{6}$/.test(req.body.code)) return fail(res, 400, "Enter the six-digit code from your email.");
+  await consumeCode(EmailVerification, user._id, user.email, req.body?.code);
   const now = new Date();
-  // Claim an attempt atomically before comparing. Parallel guesses share the five-attempt limit.
-  const attempt = await EmailVerification.findOneAndUpdate({
-    _id: user._id, email: user.email, codeHash: { $exists: true }, expiresAt: { $gt: now }, attempts: { $lt: 5 },
-  }, { $inc: { attempts: 1 } }, { returnDocument: "after" }).select("+codeHash");
-  if (!attempt) return fail(res, 400, "This code expired or has too many attempts. Request a new code.");
-  const hash = verificationHash(user._id, user.email, req.body.code);
-  if (typeof attempt.codeHash !== "string" || !/^[a-f0-9]{64}$/.test(attempt.codeHash) || !timingSafeEqual(Buffer.from(attempt.codeHash, "hex"), Buffer.from(hash, "hex"))) return fail(res, 400, "Incorrect verification code. Please check your email.");
-  // Consume exactly this code once, even if verification or resend races this request.
-  const consumed = await EmailVerification.findOneAndUpdate({ _id: user._id, codeHash: hash, expiresAt: { $gt: now }, attempts: { $lte: 5 } }, { $unset: { codeHash: 1, expiresAt: 1 } });
-  if (!consumed) return fail(res, 400, "This code is no longer valid. Request a new code.");
   const versionFilter = user.sessionVersion ? { sessionVersion: user.sessionVersion } : { $or: [{ sessionVersion: "" }, { sessionVersion: { $exists: false } }] };
   const verified = await User.findOneAndUpdate({ _id: user._id, email: user.email, isActive: true, role: user.role, ...versionFilter }, { $set: { emailVerifiedAt: now } }, { returnDocument: "after" }).select("+sessionVersion");
   if (!verified) return fail(res, 401, "Your account changed. Sign in again to continue.");

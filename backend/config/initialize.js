@@ -4,6 +4,8 @@ import { validateRuntimeConfig } from "./runtime.js";
 import { ensureAdmin } from "../utils/ensureAdmin.js";
 import { checkPaystackConfig } from "../utils/paystack.js";
 import { checkAdminEntryConfig } from "../utils/adminEntry.js";
+import { emailConfigProblem } from "../utils/email.js";
+import { reportError } from "../utils/monitoring.js";
 import Setting from "../models/Setting.js";
 import Plan from "../models/Plan.js";
 
@@ -43,6 +45,12 @@ export const initializeBackend = async () => {
       await assignMissingTiers();
       checkPaystackConfig();
       checkAdminEntryConfig();
+      const emailProblem = emailConfigProblem();
+      if (emailProblem) {
+        const message = `Email is not configured, so nobody can finish signing up or reset a password. ${emailProblem}`;
+        console.error(message);
+        if (process.env.NODE_ENV === "production") reportError(new Error(message), { tags: { stage: "initialize", check: "email" } });
+      }
       initialized = true;
     })().finally(() => { initializing = undefined; });
   }

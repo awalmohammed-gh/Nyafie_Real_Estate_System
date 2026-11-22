@@ -1,6 +1,7 @@
 // In-memory stand-ins for Mongoose model methods, for tests that need several collections to
 // change together (no database). Supports the filters and updates the app uses: equality on
-// dotted paths (arrays match any element), $in, $ne, $exists, $gt, $or, and $set/$unset/$push/$pull.
+// dotted paths (arrays match any element), $in, $ne, $exists, $gt, $lt, $lte, $or, $set/$unset/$inc/$push/$pull,
+// and upserts with $setOnInsert.
 import mongoose from "mongoose";
 
 const isOperatorObject = (value) =>
@@ -54,6 +55,10 @@ const test = (values, condition) => {
         : values.every((value) => value === undefined);
     if (op === "$gt")
       return values.some((value) => value != null && value > arg);
+    if (op === "$lt")
+      return values.some((value) => value != null && value < arg);
+    if (op === "$lte")
+      return values.some((value) => value != null && value <= arg);
     throw new Error(`memoryModels: unsupported operator ${op}`);
   });
 };
@@ -71,6 +76,8 @@ const apply = (doc, update) => {
     for (const [path, value] of Object.entries(fields)) {
       if (op === "$set") doc.set(path, value);
       else if (op === "$unset") doc.set(path, undefined);
+      else if (op === "$inc") doc.set(path, (doc.get(path) || 0) + value);
+      else if (op === "$setOnInsert") continue; // only when an upsert inserts (see findOneAndUpdate)
       else if (op === "$push") doc.set(path, [...(doc.get(path) || []), value]);
       else if (op === "$pull")
         doc.set(
@@ -149,11 +156,16 @@ export const memoryModel = (t, Model, docs = []) => {
     if (doc) apply(doc, update);
     return { matchedCount: doc ? 1 : 0, modifiedCount: doc ? 1 : 0 };
   });
-  t.mock.method(Model, "findOneAndUpdate", async (filter, update) => {
-    const doc = all(filter)[0];
-    if (!doc) return null;
+  t.mock.method(Model, "findOneAndUpdate", (filter, update, options = {}) => {
+    let doc = all(filter)[0];
+    if (!doc && options.upsert) {
+      // As MongoDB does: the filter's plain values, then $setOnInsert, then the update itself
+      const fields = Object.fromEntries(Object.entries(filter).filter(([path, value]) => !path.startsWith("$") && !isOperatorObject(value)));
+      doc = store.add({ ...fields, ...update.$setOnInsert });
+    }
+    if (!doc) return q(null);
     apply(doc, update);
-    return doc;
+    return q(doc);
   });
   t.mock.method(Model, "deleteMany", async (filter) => {
     const hit = all(filter);

@@ -15,6 +15,7 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import Offer from "../models/Offer.js";
 import Viewing from "../models/Viewing.js";
+import PendingRegistration from "../models/PendingRegistration.js";
 import DocumentCheck from "../models/DocumentCheck.js";
 import Rental from "../models/Rental.js";
 import SaleRequest from "../models/SaleRequest.js";
@@ -77,6 +78,7 @@ test("removing a provider ends access and public presence, keeps history; perman
   memoryModel(t, Rental, []);
   memoryModel(t, SaleRequest, []);
   memoryModel(t, Viewing, []);
+  memoryModel(t, PendingRegistration, []);
   memoryModel(t, DocumentCheck, []);
   memoryModel(t, Review, []);
   const payments = memoryModel(t, Payment, [new Payment({ kind: "rental", customer: customer._id, property: withHistory._id, owner: company._id, ownerType: "agent", amount: 2000, method: "Paystack", reference: "PAY-1", status: "paid" })]);
