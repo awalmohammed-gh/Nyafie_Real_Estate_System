@@ -7,6 +7,7 @@ import { useLockBodyScroll } from "../../hooks/useLockBodyScroll";
 import { readStorage, writeStorage } from "../../utils/storage";
 import { usePlatform } from "../../context/usePlatform";
 import BrandLogo from "../brand/BrandLogo";
+import InstallAppButton from "../ui/InstallAppButton";
 
 const SMOOTH_TRANSITION = { duration: 0.3, ease: [0.22, 1, 0.36, 1] };
 
@@ -185,7 +186,15 @@ const DashboardLayout = ({ variant, label, groups, badges = {}, headerActions, s
                 </>
               )}
             </nav>
-            <div className="flex shrink-0 items-center gap-1 sm:gap-2">{headerActions}</div>
+            <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+              {/* This workspace as its own app (only when the browser offers it; icon-only on phones) */}
+              <InstallAppButton
+                label={variant === "agent" ? "Install agent app" : "Install admin app"}
+                labelClassName="hidden sm:inline"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              />
+              {headerActions}
+            </div>
           </div>
         </header>
 

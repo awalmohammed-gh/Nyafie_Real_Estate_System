@@ -1,7 +1,7 @@
-// Phone bottom navigation (layout/BottomNav.jsx): the pages it stays off.
-//  - property pages, checkout, payment and making an offer have their own action bar at the bottom
-//  - /agent/... belongs to the agent area (plans, joining an agency)
-export const bottomNavAllowedOn = (pathname) => !/^\/(house|checkout|payment|make-offer|agent)(\/|$)/.test(pathname);
+// Phone bottom navigation (layout/BottomNav.jsx): on every customer page. Only /agent/... (agent plans,
+// joining an agency) belongs to the agent area. A page with its own bottom action bar (property pages)
+// places that bar just above the tab bar (.page-action-bar in index.css).
+export const bottomNavAllowedOn = (pathname) => !/^\/agent(\/|$)/.test(pathname);
 
 // Which tab a page belongs to. paths: the configurable listing/property slugs (PlatformProvider).
 export const bottomNavTab = (pathname, paths) => {

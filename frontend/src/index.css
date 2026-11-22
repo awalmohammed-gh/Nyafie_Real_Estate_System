@@ -326,9 +326,21 @@
 @media (min-width: 640px) {
   .above-bottom-nav { bottom: calc(var(--bottom-nav-float, 0px) + 1.5rem); }
 }
-/* Back-to-top (layout/Footer.jsx): clear of a property page's action bar (6rem) and of the tab bar */
+/*
+ * A page's own bottom action bar on phones (property pages: price, Book, Contact). It sits just above
+ * the tab bar, with room at its bottom for the tab bar's raised Menu button.
+ * .above-page-bar: floating buttons on such pages (compare bar, back-to-top) clear both bars.
+ */
+.page-action-bar {
+  bottom: var(--bottom-nav, 0px);
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+.has-bottom-nav .page-action-bar { padding-bottom: 1.75rem; }
+.above-page-bar { bottom: calc(var(--bottom-nav, 0px) + 9rem); }
+/* Back-to-top (layout/Footer.jsx) on other pages: clear of the tab bar */
 .scroll-top-button { bottom: max(6rem, calc(var(--bottom-nav, 0px) + 1rem)); }
 @media (min-width: 1024px) {
+  .above-page-bar { bottom: 1.5rem; }
   .scroll-top-button { bottom: 2rem; }
 }
 

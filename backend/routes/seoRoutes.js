@@ -210,10 +210,14 @@ router.get(
     });
     if (metadata.noindex) res.set("X-Robots-Tag", "noindex, nofollow");
     // The HTML contains no private agent/account data. The SPA performs its usual session guards.
+    // Agent pages install as the agent app (frontend/public/agent.webmanifest). The admin console's
+    // address is served exactly like a missing page, so it never names an app here: the console
+    // points the browser at its own app once it has recognised the address (frontend utils/appManifest.js).
+    const manifest = /^\/agent(\/|$)/.test(req.path) ? "/agent.webmanifest" : undefined;
     res
       .status(status)
       .type("html")
-      .send(injectMetadata(await template(), metadata));
+      .send(injectMetadata(await template(), metadata, { manifest }));
   },
 );
 export default router;

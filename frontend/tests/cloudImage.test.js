@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cloudImage, cloudImageSources, cloudinaryAt } from "../src/utils/cloudImage.js";
+import { cloudImage, cloudImageSources, cloudinaryAt, cloudLogo } from "../src/utils/cloudImage.js";
 import { heroImageSources } from "../src/utils/hero.js";
 
 const photo = "https://res.cloudinary.com/nyafie/image/upload/v123/nyafie/properties/home.jpg";
@@ -33,4 +33,12 @@ test("hero slides keep their sizes", () => {
   const hero = heroImageSources(photo);
   assert.match(hero.src, /w_1920\//);
   for (const width of [960, 1440, 1920, 2560]) assert.ok(hero.srcSet.includes(`${width}w`));
+});
+
+test("uploaded logos are trimmed of empty margins at one cached size; other logos are left alone", () => {
+  const upload = "https://res.cloudinary.com/demo/image/upload/v1/nyafie/uploads/logo.png";
+  assert.equal(cloudLogo(upload), "https://res.cloudinary.com/demo/image/upload/e_trim/f_auto,q_auto,c_limit,h_144/v1/nyafie/uploads/logo.png");
+  assert.equal(cloudLogo(cloudLogo(upload)), cloudLogo(upload), "never trimmed twice");
+  assert.equal(cloudLogo("/brand/nyafie-logo-purple.png"), "/brand/nyafie-logo-purple.png", "site files are already trimmed");
+  assert.equal(cloudLogo("https://res.cloudinary.com/demo/image/upload/v1/logo.svg"), "https://res.cloudinary.com/demo/image/upload/v1/logo.svg", "vector logos are served as stored");
 });
