@@ -178,7 +178,8 @@ export const mapProperty = (p) => ({
   moveIn: p.moveIn || null, // monthly rentals: advance, agent fee, deposit (utils/moveIn.js)
   paymentOptions: p.paymentOptions || null,
   // video / virtualTour: { provider, id } or null (utils/mediaLinks.js builds the players)
-  media: { images: p.images || [], video: p.video || null, virtualTour: p.virtualTour || null },
+  // videoFile: an uploaded video { publicId, url, duration, ... } or null (frontApi/videoApi.js)
+  media: { images: p.images || [], video: p.video || null, virtualTour: p.virtualTour || null, videoFile: p.videoFile || null },
   agent: {
     id: p.agent?.id || idOf(p.owner),
     name: p.agent?.name || p.contact?.name || "Agent",
@@ -245,6 +246,8 @@ export const toApiProperty = (p) => {
     // Pasted links, checked by the server ("" removes them)
     if (p.media.videoUrl !== undefined) out.videoUrl = p.media.videoUrl;
     if (p.media.virtualTourUrl !== undefined) out.virtualTourUrl = p.media.virtualTourUrl;
+    // An uploaded video: its id only (the server checks it with Cloudinary); null removes it
+    if (p.media.videoFile !== undefined) out.videoFile = p.media.videoFile ? { publicId: p.media.videoFile.publicId } : null;
   }
   if (p.agent) out.contact = { name: p.agent.name, phone: p.agent.phone, email: p.agent.email };
   if (p.listing?.state !== undefined) out.status = p.listing.state;

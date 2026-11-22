@@ -21,6 +21,7 @@ import { accountTypeOf, subscriptionState } from "./permissions.js";
 import { isOrganization, ACCOUNT_LABELS } from "./accountTypes.js";
 import { isRemoved } from "./agentApplication.js";
 import { deleteDocumentChecks, destroyDocuments } from "./propertyDocuments.js";
+import { destroyListingMedia, listingImages } from "./listingMedia.js";
 
 /**
  * Taking a provider (individual agent, agency or company, or one of their staff) off NyaFie.
@@ -273,6 +274,8 @@ export const permanentlyDeleteProvider = async (id, admin, confirm) => {
   const userId = provider._id;
   const { keep, drop } = plan.references;
   const now = new Date();
+  // The photos and videos of the listings being deleted, removed from Cloudinary once the delete is saved
+  const dropMedia = await Property.find({ _id: { $in: drop }, owner: userId }).select("images roomTypes.images videoFile").lean();
   // Hashed before the transaction starts: transactions should stay short
   const unusablePassword = plan.mode === "erase" ? null : await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10); // nobody can sign in
 
@@ -308,5 +311,6 @@ export const permanentlyDeleteProvider = async (id, admin, confirm) => {
     return [...files, ...proofFiles];
   });
   await destroyDocuments(documents); // the files go only once the delete is saved
+  await destroyListingMedia({ images: dropMedia.flatMap(listingImages), videos: dropMedia.map((listing) => listing.videoFile?.publicId) });
   return { name: plan.name, mode: plan.mode, listingsDeleted: drop.length, listingsKept: keep.length };
 };

@@ -24,6 +24,7 @@ import { COUNTED_STATES, subscriptionState } from "../utils/permissions.js";
 import { checkPropertyOptions, pickPropertyFields, validateForPublishing } from "./propertyController.js";
 import { locationSnapshot, settleLocation } from "../utils/autoLocate.js";
 import { resolveImages } from "../utils/uploadImages.js";
+import { destroyListingMedia, keepVideo, listingImages, removedMedia, resolveListingVideo } from "../utils/listingMedia.js";
 import { updateInquiryStatus } from "./inquiryController.js";
 import { activateSubscription, createAndActivateSubscription, processSubscriptionPayment } from "./subscriptionController.js";
 import { removalImpact, removeProvider, restoreProvider, deletionPlan, permanentlyDeleteProvider } from "../utils/providerRemoval.js";
@@ -300,6 +301,8 @@ export const createProperty = async (req, res) => {
     status: draft ? "draft" : "published",
     reviewedAt: draft ? undefined : new Date(),
     availabilityConfirmedAt: new Date(), // a new listing is fresh (utils/listingFreshness.js)
+    // An uploaded video (optional), checked against what Cloudinary stored (utils/listingMedia.js)
+    videoFile: (await resolveListingVideo(req.body, null, [req.user._id])).video,
   });
   if (!draft) {
     const problem = validateForPublishing(property);
@@ -312,6 +315,7 @@ export const createProperty = async (req, res) => {
     property.set({ "location.latitude": settled.latitude, "location.longitude": settled.longitude, "location.pinSource": settled.pinSource });
   }
   await property.save();
+  await keepVideo(property.videoFile);
   if (!draft) await alertSavedSearches(property); // customers whose saved searches match
   ok(res, property, draft ? "Draft saved" : "Property published", 201);
 };
@@ -328,7 +332,10 @@ export const updateProperty = async (req, res) => {
   if (fields.contact) fields.contact = { ...fields.contact, id: property.contact?.id || (property.ownerType === "admin" ? "nyafie" : String(property.owner)) };
   const wasPublished = property.status === "published";
   const before = locationSnapshot(property.location);
+  const mediaBefore = { images: listingImages(property), videoFile: property.videoFile };
+  const { video } = await resolveListingVideo(req.body, property.videoFile, [req.user._id]);
   Object.assign(property, fields);
+  property.videoFile = video;
   markConfirmed(property); // editing a listing confirms it is current
   if (Array.isArray(req.body.images)) {
     if (req.body.images.length > settings.property.maxImages) return fail(res, 400, `Up to ${settings.property.maxImages} photos per property.`);
@@ -355,6 +362,9 @@ export const updateProperty = async (req, res) => {
     property.set({ "location.latitude": settled.latitude, "location.longitude": settled.longitude, "location.pinSource": settled.pinSource });
   }
   await saveHotelProperty(property);
+  // Saved: the new video is kept; photos and a video the listing no longer uses are deleted from Cloudinary
+  await keepVideo(property.videoFile);
+  await destroyListingMedia(removedMedia(mediaBefore, property), property._id);
   if (!wasPublished && property.status === "published") await alertSavedSearches(property);
   ok(res, property, "Property updated");
 };

@@ -24,6 +24,7 @@ import { adminPath } from "../../utils/adminEntry";
 import { isCoordinate } from "../../utils/geo";
 import "./propertyEditor.css";
 import { mediaLinkProblem, shareUrl } from "../../utils/mediaLinks";
+import VideoUploadField from "../../components/property/VideoUploadField";
 import { GHANA_REGIONS as REGIONS } from "../../data/regions";
 
 // Leaflet loads with the editor's map only
@@ -41,7 +42,7 @@ const toForm = (property, user, contact) => {
     return {
       title: "", description: "", type: "", listingType: "Sale", price: "", rentPeriod: "month",
       neighbourhood: "", city: "", region: "Greater Accra", address: "", country: "Ghana", digitalAddress: "", latitude: "", longitude: "",
-      bedrooms: "", bathrooms: "", area: "", amenities: [], availability: "Available", videoUrl: "", tourUrl: "",
+      bedrooms: "", bathrooms: "", area: "", amenities: [], availability: "Available", videoUrl: "", tourUrl: "", videoFile: null,
       contactName: contact?.name ?? user.name, contactPhone: contact?.phone ?? (user.phone || ""), contactEmail: contact?.email ?? user.email,
     };
   }
@@ -68,6 +69,7 @@ const toForm = (property, user, contact) => {
     availability: property.listing.availability,
     videoUrl: shareUrl(property.media.video),
     tourUrl: shareUrl(property.media.virtualTour),
+    videoFile: property.media.videoFile || null,
     contactName: agent.name,
     contactPhone: agent.phone,
     contactEmail: agent.email,
@@ -212,6 +214,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
   const [errors, setErrors] = useState({});
   const [previewOpen, setPreviewOpen] = useState(false);
   const [saving, setSaving] = useState(null); // "draft" | "publish"
+  const [videoUploading, setVideoUploading] = useState(false); // the property video is uploading
 
   if (isEdit && !existing) {
     return (
@@ -271,7 +274,8 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
   const readyImages = images.filter((img) => img.status === "done");
   // Matches the server: photos kept after a downgrade may stay, but no new ones beyond the limit
   const photosOk = withinImageLimit(readyImages, perms.imageLimit, existing?.media.images);
-  const uploading = images.some((img) => img.status === "uploading") || rooms.some((room) => room.images.some((img) => img.status === "uploading"));
+  // A video upload in progress also holds the save (it would otherwise be lost)
+  const uploading = videoUploading || images.some((img) => img.status === "uploading") || rooms.some((room) => room.images.some((img) => img.status === "uploading"));
 
   const validate = (mode) => {
     const e = {};
@@ -328,7 +332,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
       features: form.amenities,
       ...(hotel ? { roomTypes: roomsToPayload(rooms), stayBooking: booking } : nightlyRental ? { stayBooking: booking } : {}),
       ...(monthlyRental ? { moveIn: { ...moveIn, agentFeeValue: Number(moveIn.agentFeeValue) || 0, securityDeposit: Number(moveIn.securityDeposit) || 0 } } : {}),
-      media: { images: readyImages.map((img) => img.src), videoUrl: form.videoUrl.trim(), virtualTourUrl: form.tourUrl.trim() },
+      media: { images: readyImages.map((img) => img.src), videoUrl: form.videoUrl.trim(), virtualTourUrl: form.tourUrl.trim(), videoFile: form.videoFile },
       agent: { id: user.id, name: form.contactName.trim() || user.name, phone: form.contactPhone.trim(), email: form.contactEmail.trim() },
       owner: { type: "agent", id: user.id },
       listing: { state, availability: form.availability },
@@ -338,7 +342,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
 
   const save = async (mode) => {
     if (uploading) {
-      toast({ type: "warning", title: "Photos are still uploading", description: "Please wait for them to finish." });
+      toast({ type: "warning", title: videoUploading ? "The video is still uploading" : "Photos are still uploading", description: "Please wait for it to finish." });
       return;
     }
     const found = validate(mode);
@@ -523,6 +527,12 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
               limitNote={isAdminEditor ? `${siteName} allows up to ${perms.imageLimit} photos per property.` : lockCopy(perms, "images").description}
               limitAction={isAdminEditor || !perms.canUpgrade ? null : { to: perms.upgradePath, label: "View Upgrade Options" }}
             />
+            {/* Optional video file: uploaded straight to Cloudinary and compressed there (components/property/VideoUploadField.jsx) */}
+            <div className="mt-6">
+              <Field label="Property video (optional)" hint="Show buyers and renters around the home. It plays on the listing page.">
+                <VideoUploadField value={form.videoFile} onChange={(video) => set("videoFile", video)} onBusyChange={setVideoUploading} disabled={Boolean(saving)} />
+              </Field>
+            </div>
             {/* Optional tours: a pasted link from a supported provider (the player loads only when a visitor presses play) */}
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
               <Field label="Video tour (optional)" error={errors.videoUrl} hint="YouTube or Vimeo link">
@@ -789,7 +799,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
         <div className={`fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur lg:left-(--sidebar-width) ${isAdminEditor ? "ape-actions" : "agpe-actions"}`}>
           <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8">
             <p className="hidden text-sm text-gray-500 md:block">
-              {uploading ? "Waiting for photos to finish uploading..." : readyCount === checklist.length ? "Everything's ready." : `${checklist.length - readyCount} ${checklist.length - readyCount === 1 ? "section" : "sections"} left before you can ${needsReview ? "submit" : "publish"}. Drafts can be saved anytime.`}
+              {uploading ? (videoUploading ? "Waiting for the video to finish uploading..." : "Waiting for photos to finish uploading...") : readyCount === checklist.length ? "Everything's ready." : `${checklist.length - readyCount} ${checklist.length - readyCount === 1 ? "section" : "sections"} left before you can ${needsReview ? "submit" : "publish"}. Drafts can be saved anytime.`}
             </p>
             <div className="grid w-full grid-cols-3 gap-2 md:flex md:w-auto">
               <button type="button" onClick={() => save("draft")} disabled={Boolean(saving)} className="btn btn-light px-3 sm:px-5">

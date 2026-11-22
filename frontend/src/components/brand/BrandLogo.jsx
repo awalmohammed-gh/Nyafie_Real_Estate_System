@@ -16,7 +16,7 @@ const SIZES = {
  * tone: "light" (purple logo, for light backgrounds) | "dark" / "violet" (white logo, for dark ones)
  * compact: the square icon only. subtitle: small text beside the logo (dashboards).
  */
-const BrandLogo = ({ tone = "light", size = "md", compact = false, subtitle, className = "" }) => {
+const BrandLogo = ({ tone = "light", size = "md", compact = false, subtitle, subtitleClassName = "text-[11px] font-medium", gapClassName = "gap-2.5", className = "" }) => {
   const { settings, siteName } = usePlatform();
   const { logo, logoDark, favicon } = settings.branding;
   const inverse = tone === "dark" || tone === "violet";
@@ -28,7 +28,7 @@ const BrandLogo = ({ tone = "light", size = "md", compact = false, subtitle, cla
   const src = compact ? favicon || MARK : builtIn ? BUILT_IN[inverse ? "dark" : "light"] : cloudLogo(uploaded);
 
   return (
-    <span className={`flex min-w-0 items-center gap-2.5 ${className}`}>
+    <span className={`flex min-w-0 items-center ${gapClassName} ${className}`}>
       <img
         src={src}
         alt={siteName}
@@ -36,7 +36,7 @@ const BrandLogo = ({ tone = "light", size = "md", compact = false, subtitle, cla
         className={`block shrink-0 object-contain ${compact ? `${dimensions.compact} rounded-lg` : `${dimensions.full} w-auto max-w-52`}`}
       />
       {!compact && subtitle && (
-        <span className={`text-[11px] font-medium ${inverse ? "text-white/70" : "text-gray-500"}`}>{subtitle}</span>
+        <span className={`shrink-0 self-center ${subtitleClassName} ${inverse ? "text-white/70" : "text-gray-500"}`}>{subtitle}</span>
       )}
     </span>
   );

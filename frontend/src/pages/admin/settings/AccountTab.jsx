@@ -88,7 +88,7 @@ const ProfileForm = () => {
     <Panel
       title="Personal details"
       description="Your own admin account. These details are private to the admin console."
-      footer={<SaveBar form={{ dirty, status: s.status, error: s.error, save, reset: () => s.setForm(initial) }} />}
+      footer={<SaveBar form={{ dirty, status: s.status, error: s.error, save, reset: () => s.setForm(initial) }} note="Changes apply to your admin account only." />}
     >
       <div className="flex items-center gap-4 px-5 py-5 sm:px-6">
         <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-brand-500 text-lg font-bold text-white">{getInitials(user.name)}</span>
@@ -145,7 +145,7 @@ const PasswordForm = () => {
     <Panel
       title="Password"
       description="Change the password you sign in with. You'll stay signed in on this device."
-      footer={<SaveBar form={{ dirty, status: s.status, error: s.error, save, reset: () => s.setForm(empty) }} label="Change Password" />}
+      footer={<SaveBar form={{ dirty, status: s.status, error: s.error, save, reset: () => s.setForm(empty) }} label="Change Password" note="Passwords are stored encrypted and never shown." />}
     >
       <Row label="Current password" htmlFor="pw-current">
         <PasswordInput id="pw-current" value={s.form.current} onChange={(v) => s.set("current", v)} autoComplete="current-password" />

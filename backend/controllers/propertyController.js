@@ -11,6 +11,7 @@ import { placeSlug } from "../utils/seo.js";
 import { claimView, isCrawler, viewerHash } from "../utils/propertyViews.js";
 export { publicQuery, visibleAgentIds } from "../utils/marketplace.js";
 import { resolveImages } from "../utils/uploadImages.js";
+import { destroyListingMedia, keepVideo, listingImages, removedMedia, resolveListingVideo } from "../utils/listingMedia.js";
 import { HttpError, ok, fail } from "../utils/response.js";
 import Rental from "../models/Rental.js";
 import Payment from "../models/Payment.js";
@@ -500,10 +501,13 @@ export const createProperty = async (req, res) => {
     if (problem) return fail(res, 400, problem);
   }
   draft.status = resolveAgentStatus(intent, null, access);
+  // An uploaded video (optional), checked against what Cloudinary stored (utils/listingMedia.js)
+  draft.videoFile = (await resolveListingVideo(req.body, null, [req.user._id])).video;
 
   // No pin placed: the listing is put on the map from its address (approximate)
   if (draft.location) Object.assign(draft.location, await settleLocation(draft.location));
   const property = await Property.create(draft);
+  await keepVideo(property.videoFile);
   if (property.status === "pending") notifyReview(property, req.user);
   if (property.status === "published") await alertSavedSearches(property); // customers whose saved searches match
   const message = property.status === "pending" ? "Submitted for review" : property.status === "published" ? "Property published" : "Draft saved";
@@ -563,7 +567,10 @@ export const updateProperty = async (req, res) => {
   const before = locationSnapshot(property.location);
   const addressBefore = addressOf(property.location);
   const wasPublished = property.status === "published";
+  const mediaBefore = { images: listingImages(property), videoFile: property.videoFile };
+  const { video } = await resolveListingVideo(req.body, property.videoFile, [req.user._id]);
   Object.assign(property, fields);
+  property.videoFile = video;
   markConfirmed(property); // editing a listing confirms it is current
   if (fields.contact) property.contact = { ...fields.contact, id: String(req.user._id) };
   if (images) property.images = await resolveImages(images);
@@ -597,6 +604,9 @@ export const updateProperty = async (req, res) => {
   if (recheck) {
     await notifyAdmins({ type: "documents", title: "Documents to check again", message: `The address of "${property.title}" changed after its documents were verified.`, link: "/admin/document-checks" });
   }
+  // Saved: the new video is kept; photos and a video the listing no longer uses are deleted from Cloudinary
+  await keepVideo(property.videoFile);
+  await destroyListingMedia(removedMedia({ images: mediaBefore.images, videoFile: mediaBefore.videoFile }, property), property._id);
   if (!wasPublished && property.status === "published") await alertSavedSearches(property);
   ok(res, property, status === "pending" ? "Submitted for review" : "Property updated");
 };
@@ -666,6 +676,8 @@ export const deleteProperty = async (req, res) => {
   // Only after the delete is saved: the files can't be restored, and customers hear about it once
   await Promise.all([
     destroyDocuments(documents),
+    // Its photos and video are deleted from Cloudinary for good, once the listing is gone
+    destroyListingMedia({ images: listingImages(property), videos: [property.videoFile?.publicId] }, property._id),
     ...viewings.map((viewing) => notifyUser(viewing.customer, { type: "viewing", title: "Viewing cancelled", message: `Your viewing on ${formatViewingTime(viewing.scheduledAt)} was cancelled because "${property.title}" is no longer listed.`, link: "/account/viewings" })),
   ]);
   ok(res, null, "Property deleted");

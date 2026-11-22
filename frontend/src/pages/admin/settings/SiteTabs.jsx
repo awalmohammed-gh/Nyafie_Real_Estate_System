@@ -4,31 +4,25 @@ import { usePlatform } from "../../../context/usePlatform";
 import { useSettingsForm } from "../../../hooks/useSettingsForm";
 import { Callout, Counter, ImageField, Panel, Row, SaveBar, Switch } from "../../../components/admin/settings/SettingsUI";
 import BrandLogo from "../../../components/brand/BrandLogo";
-import { splitBrandName } from "../../../utils/brand";
 
 // ---------- General ----------
 export const GeneralTab = () => {
   const f = useSettingsForm("general", { label: "General settings" });
-  const example = [f.form.siteName || "Your site", f.form.tagline || "Real Estate in Ghana"].join(" | ");
-  const [first, second] = splitBrandName(f.form.siteName || "");
+  const name = f.form.siteName?.trim() || "your business";
   return (
-    <Panel title="General" description="The identity of the website. The name appears in the navbar, footer, sign-in pages, browser tab and dashboards." footer={<SaveBar form={f} />}>
-      <Row label="Website name" description="Shown everywhere the brand appears. Without an uploaded logo, the first letter becomes the logo mark." htmlFor="set-name">
-        <input id="set-name" value={f.form.siteName} onChange={(e) => f.set("siteName", e.target.value.slice(0, 40))} required className="field" />
-        <p className="mt-2 text-sm text-gray-500">
-          Preview: <span className="font-extrabold text-gray-900">{first}</span>
-          <span className="font-extrabold text-brand-500">{second}</span>
-        </p>
+    <Panel title="General Settings" description="Manage your website's name, tagline and description." footer={<SaveBar form={f} />}>
+      <Row label="Website name" required description="Displayed in the website header and browser tab." htmlFor="set-name">
+        <input id="set-name" value={f.form.siteName} onChange={(e) => f.set("siteName", e.target.value.slice(0, 40))} required aria-required="true" className="field" />
       </Row>
-      <Row label="Tagline" description={`A short line used in the browser title, e.g. “${example}”.`} htmlFor="set-tagline">
+      <Row label="Tagline" description="A short, memorable phrase about your brand." htmlFor="set-tagline">
         <input id="set-tagline" value={f.form.tagline} onChange={(e) => f.set("tagline", e.target.value.slice(0, 80))} className="field" />
       </Row>
-      <Row label="Short description" description="One or two sentences about the business. Shown in the footer and used as the default search description." htmlFor="set-desc">
+      <Row label="Short description" description="A brief introduction about the business. Used in the footer, search results and link previews." htmlFor="set-desc">
         <textarea id="set-desc" rows={3} value={f.form.description} onChange={(e) => f.set("description", e.target.value.slice(0, 300))} className="field resize-y" />
         <Counter value={f.form.description} max={300} />
       </Row>
-      <Row label="Full description" description="The complete introduction to NyaFie. Use blank lines to separate paragraphs." htmlFor="set-full-desc">
-        <textarea id="set-full-desc" rows={10} value={f.form.fullDescription || ""} onChange={(e) => f.set("fullDescription", e.target.value.slice(0, 5000))} className="field resize-y" />
+      <Row label="Full description" description={`A complete description about ${name}. You can use multiple paragraphs.`} htmlFor="set-full-desc">
+        <textarea id="set-full-desc" rows={6} value={f.form.fullDescription || ""} onChange={(e) => f.set("fullDescription", e.target.value.slice(0, 5000))} className="field resize-y" />
         <Counter value={f.form.fullDescription || ""} max={5000} />
       </Row>
     </Panel>

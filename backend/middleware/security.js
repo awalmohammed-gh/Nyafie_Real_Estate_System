@@ -35,7 +35,8 @@ export const securityHeaders = (_req, res, next) => {
  *  - scripts: our own bundles and Google sign-in (no inline scripts; page metadata is JSON data)
  *  - styles: our own, inline style attributes (React, animations, maps), Google Fonts and Google sign-in
  *  - images: any HTTPS (Cloudinary photos, map tiles, video thumbnails, older listing image links)
- *  - connections: our own API, Google sign-in and Sentry error reports
+ *  - connections: our own API, direct video uploads to Cloudinary, Google sign-in and Sentry error reports
+ *  - media: listing videos from Cloudinary (and local previews in the editor)
  *  - frames: Google sign-in and the video/virtual tour players (utils/mediaLinks.js on the frontend)
  */
 export const PAGE_CSP = [
@@ -44,7 +45,9 @@ export const PAGE_CSP = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style",
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' https: data: blob:",
-  "connect-src 'self' https://accounts.google.com/gsi/ https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io",
+  // Listing videos (Cloudinary) and the editor's preview of a video before it uploads
+  "media-src 'self' https://res.cloudinary.com blob:",
+  "connect-src 'self' https://api.cloudinary.com https://accounts.google.com/gsi/ https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io",
   "frame-src https://accounts.google.com/gsi/ https://www.youtube-nocookie.com https://player.vimeo.com https://my.matterport.com https://kuula.co",
   "worker-src 'self'",
   "manifest-src 'self'",

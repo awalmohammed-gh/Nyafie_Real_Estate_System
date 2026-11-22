@@ -55,6 +55,7 @@ import ViewingModal from "../components/viewings/ViewingModal";
 import ReportModal from "../components/reports/ReportModal";
 import SafetyNote from "../components/reports/SafetyNote";
 import PropertyTours from "../components/property/PropertyTours";
+import { videoPlaybackUrl, videoPosterUrl } from "../frontApi/videoApi";
 import CompareButton from "../components/property/CompareButton";
 import { embedUrl } from "../utils/mediaLinks";
 import { addRecentlyViewed } from "../utils/browsingLists";
@@ -186,6 +187,8 @@ const PropertiesDetails = () => {
   const images = media.images;
   // Optional video and 3D tours (the players load only when a visitor presses play)
   const hasTours = Boolean(embedUrl(media.video) || embedUrl(media.virtualTour));
+  // The listing's own uploaded video (compressed in Cloudinary; nothing downloads until it plays)
+  const hasVideoFile = Boolean(media.videoFile?.url);
   const canExpandDescription = description.length > 280;
   const liked = isFavorite(id);
   const isForSale = details.status === "Sale";
@@ -411,6 +414,11 @@ const PropertiesDetails = () => {
             <div className="property-status-badges flex flex-wrap items-center gap-2 text-xs font-semibold">
               <span className="rounded-full bg-brand-600 px-3 py-1 text-white">{statusLabel(details.status)}</span>
               <span className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-brand-700 capitalize">{formatType(details.type)}</span>
+              {hasVideoFile && (
+                <a href="#property-video-heading" className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-gray-700 hover:border-brand-200 hover:text-brand-700">
+                  <PlayCircle aria-hidden="true" className="h-3.5 w-3.5" />Video
+                </a>
+              )}
               {hasTours && (
                 <a href="#property-tours-heading" className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-gray-700 hover:border-brand-200 hover:text-brand-700">
                   <PlayCircle aria-hidden="true" className="h-3.5 w-3.5" />{embedUrl(media.video) ? "Video tour" : "3D tour"}
@@ -551,6 +559,12 @@ const PropertiesDetails = () => {
                 ))}
               </dl>
             </section>
+
+            {hasVideoFile && (
+              <Section id="property-video-heading" title="Property video">
+                <video src={videoPlaybackUrl(media.videoFile)} poster={videoPosterUrl(media.videoFile)} controls preload="none" playsInline className="aspect-video w-full rounded-2xl bg-black" aria-label={`Video of ${title}`} />
+              </Section>
+            )}
 
             {hasTours && (
               <Section id="property-tours-heading" title={embedUrl(media.video) && embedUrl(media.virtualTour) ? "Video & 3D tour" : embedUrl(media.video) ? "Video tour" : "3D virtual tour"}>
