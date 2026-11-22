@@ -5,6 +5,7 @@ import { useToast } from "../../context/useToast";
 import { useAuth } from "../../context/useAuth";
 import * as proofs from "../../frontApi/agentApplicationApi";
 import { openDocument, readFileAsDataUrl } from "../../utils/openDocument";
+import { formatDate } from "../../utils/date";
 
 const KINDS = [
   ["professional_certificate", "Professional registration or licence"],
@@ -95,11 +96,22 @@ const AgentProofDocuments = ({
           </h2>
           <p className="mt-2 text-sm leading-6 text-gray-600">
             {admin
-              ? "Review these documents before approving the applicant. Files are private; viewing links expire after 10 minutes."
+              ? "Review these documents before approving the applicant. Files are private; viewing links expire after 10 minutes. They're permanently deleted as soon as you approve or reject the application."
               : "Upload at least one document showing that you work as an agent, represent an agency, or operate a registered property business. Our team must review and approve your application before your workspace opens."}
           </p>
         </div>
       </div>
+      {/* What happens to the agent's documents (the server deletes them after review: agentApplicationController) */}
+      {!admin && (
+        <p className="mt-4 flex items-start gap-2.5 rounded-xl bg-brand-50 p-4 text-sm leading-6 text-brand-900">
+          <Lock size={17} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span>
+            <strong className="font-semibold">We don't keep your documents.</strong> They're used only to confirm you're a genuine agent:
+            stored privately while our team reviews your application, then permanently deleted once the review is done, whether you're
+            approved or not. No copies are kept.
+          </span>
+        </p>
+      )}
       {query.error && !data ? (
         <p role="alert" className="mt-4 text-sm text-red-700">
           {query.error}{" "}
@@ -156,7 +168,19 @@ const AgentProofDocuments = ({
               </li>
             ))}
           </ul>
-          {!data.documents.length && (
+          {!data.documents.length && data.reviewedAt && (
+            <p role="status" className="mt-5 flex items-start gap-2.5 rounded-xl bg-gray-50 p-4 text-sm leading-6 text-gray-700">
+              <Lock size={17} className="mt-0.5 shrink-0 text-gray-500" aria-hidden="true" />
+              <span>
+                {admin
+                  ? `These documents were reviewed on ${formatDate(data.reviewedAt)} and permanently deleted.`
+                  : data.editable
+                    ? `Your previous documents were reviewed on ${formatDate(data.reviewedAt)} and permanently deleted. Upload your documents again to reapply.`
+                    : `Your documents were reviewed on ${formatDate(data.reviewedAt)} and permanently deleted. We don't keep copies.`}
+              </span>
+            </p>
+          )}
+          {!data.documents.length && (!data.reviewedAt || data.editable) && (
             <p className="mt-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
               {admin
                 ? "No professional proof uploaded. Approval is blocked until the applicant provides a document."

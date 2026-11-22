@@ -259,7 +259,7 @@ const AdminAgentApplications = () => {
             <Section title="Approval requirements">
               <ul className="space-y-3">
                 <Check ok={check.profile} label="Agent profile complete" detail={app.profileCompletedAt ? `Completed ${formatDate(app.profileCompletedAt)}` : "The agent hasn’t finished their profile"} />
-                <Check ok={check.documents} label="Professional proof uploaded" detail={`${app.proofCount || 0} document(s) available for review`} />
+                <Check ok={check.documents} label="Professional proof uploaded" detail={app.proofReviewedAt && statusOf(selected) !== "pending" ? `Reviewed ${formatDate(app.proofReviewedAt)}; the documents were then deleted` : `${app.proofCount || 0} document(s) available for review`} />
                 <Check
                   ok={check.subscription}
                   label={requireSubscription ? "Paid, active subscription" : "Subscription not required"}
@@ -311,8 +311,8 @@ const AdminAgentApplications = () => {
         description={
           confirmation &&
           {
-            approve: "You confirm that you reviewed their proof documents. The server checks the profile, uploaded proof and subscription before opening their workspace.",
-            reject: "They’ll see your feedback and can update their profile and apply again. Their subscription is kept.",
+            approve: "You confirm that you reviewed their proof documents. The server checks the profile, uploaded proof and subscription before opening their workspace. Their proof documents are then permanently deleted.",
+            reject: "They’ll see your feedback and can update their profile and apply again with new documents. Their proof documents are permanently deleted; their subscription is kept.",
             suspend: "Their dashboard access and public listings are blocked until you reactivate them.",
             reactivate: "Their previous access is restored if they had been approved before.",
           }[confirmation.action]

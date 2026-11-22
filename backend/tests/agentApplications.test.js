@@ -255,9 +255,14 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
       const path = `/api/admin/agent-applications/${id(second)}`;
       assert.equal((await call(path, "admin", { action: "reject", rejectionReason: "Please clarify your service area." }, "PATCH")).status, 200);
       assert.equal(second.agentApplication.rejectionReason, "Please clarify your service area.");
+      // Reviewed proof is deleted, so applying again needs new documents
+      assert.equal(second.agentApplication.proofCount, 0);
+      assert.ok(second.agentApplication.proofReviewedAt);
       assert.equal((await call("/api/auth/agent/login", "agent", { email: second.email, password: signup.password })).status, 200);
       assert.equal((await call("/api/agents/dashboard")).status, 403);
       assert.equal((await call("/api/agents/application", "agent", { ...profile, city: "Accra" }, "PUT")).status, 200);
+      assert.notEqual((await call("/api/agents/application/submit", "agent", {})).status, 200, "no resubmission without new proof");
+      second.agentApplication.proofCount = 1; // uploads a new document
       assert.equal((await call("/api/agents/application/submit", "agent", {})).status, 200);
       assert.equal(second.agentApplication.status, "pending");
       assert.equal(second.agentApplication.approvedBy, null);

@@ -82,23 +82,44 @@ test("private agent proof uploads are required, locked during review, and approv
     assert.equal((await request(applicant, "DELETE", `${documents}/${docId}`)).status, 409);
     assert.equal((await User.findById(applicant.id)).agentApplication.proofCount, 1);
   });
-  await t.test("rejection allows correction and removal; admin review confirmation is required", async () => {
+  await t.test("proof is deleted once reviewed: rejected applicants upload again, approved agents keep only the review record", async () => {
     const review = `/admin/agent-applications/${applicant.id}`;
     assert.equal((await request(admin, "PATCH", review, { action: "approve" })).status, 400);
+    assert.equal(destroyed.length, 0, "nothing is deleted before a decision");
     assert.equal((await request(admin, "PATCH", review, { action: "reject", rejectionReason: "Upload a clearer document." })).status, 200);
-    assert.equal((await request(applicant, "DELETE", `${documents}/${docId}`)).status, 200);
+    // Rejected: the file is deleted from storage and from the database straight away
+    assert.equal(destroyed.length, 1);
+    assert.equal(destroyed[0].id, uploads[0].folder + "/proof-1");
     assert.equal(destroyed[0].options.type, "private");
-    assert.equal((await User.findById(applicant.id)).agentApplication.proofCount, 0);
+    const rejected = await User.findById(applicant.id).select("+agentApplication.proofDocuments");
+    assert.equal(rejected.agentApplication.proofDocuments.length, 0);
+    assert.equal(rejected.agentApplication.proofCount, 0);
+    assert.ok(rejected.agentApplication.proofReviewedAt);
+    const afterReject = await request(applicant, "GET", documents);
+    assert.deepEqual(afterReject.body.data.documents, []);
+    assert.ok(afterReject.body.data.reviewedAt, "the agent is told their documents were reviewed (and deleted)");
+    assert.equal((await request(applicant, "DELETE", `${documents}/${docId}`)).status, 404);
+    assert.equal((await request(admin, "GET", `/admin/agent-applications/${applicant.id}/documents/${docId}/link`)).status, 404);
     assert.equal((await request(applicant, "POST", "/agents/application/submit", {})).status, 409);
-    assert.equal((await request(applicant, "POST", documents, { kind: "agency_authorization", file: PDF })).status, 201);
+    // Applying again needs new documents
+    const resubmitted = await request(applicant, "POST", documents, { kind: "agency_authorization", file: PDF });
+    assert.equal(resubmitted.status, 201);
+    const newDocId = resubmitted.body.data.documents[0].id;
     assert.equal((await request(applicant, "POST", "/agents/application/submit", {})).status, 200);
     assert.equal((await request(admin, "PATCH", review, { action: "approve", proofReviewed: true, reviewSubmittedAt: "2000-01-01" })).status, 409);
+    assert.equal(destroyed.length, 1, "a refused approval deletes nothing");
     const submitted = (await User.findById(applicant.id)).agentApplication.submittedAt.toISOString();
     assert.equal((await request(admin, "PATCH", review, { action: "approve", proofReviewed: true, reviewSubmittedAt: submitted })).status, 200);
-    const approved = await User.findById(applicant.id);
+    // Approved: the file is deleted too; the review record and the completed onboarding stay
+    assert.equal(destroyed.length, 2);
+    const approved = await User.findById(applicant.id).select("+agentApplication.proofDocuments");
     assert.equal(approved.agentApplication.status, "approved");
     assert.equal(String(approved.agentApplication.proofReviewedBy), admin.id);
     assert.ok(approved.agentApplication.proofReviewedAt);
+    assert.equal(approved.agentApplication.proofDocuments.length, 0);
+    assert.equal(approved.agentApplication.proofCount, 1);
+    assert.equal((await request(admin, "GET", `/admin/agent-applications/${applicant.id}/documents/${newDocId}/link`)).status, 404);
+    assert.deepEqual((await request(admin, "GET", `/admin/agent-applications/${applicant.id}/documents`)).body.data.documents, []);
     assert.equal((await request(applicant, "GET", "/auth/agent/me")).body.data.onboarding.dashboardAccess, true);
   });
   await t.test("concurrent uploads cannot exceed four documents, and failed additions are cleaned up", async () => {
