@@ -13,6 +13,7 @@ const SubscriptionBanner = () => {
   const perms = useAgentPermissions();
   const sub = user?.subscription;
   const { restriction, subscription } = perms;
+  if (!perms.subscriptionsEnabled && restriction !== "suspended") return null;
 
   let banner = null;
   if (restriction === "suspended") {

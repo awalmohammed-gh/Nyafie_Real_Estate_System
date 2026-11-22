@@ -43,7 +43,7 @@ const navGroups = (perms) => [
     label: "Account",
     items: [
       ...(perms.canViewTeam ? [{ label: "Team", to: "/agent/team", icon: Users }] : []),
-      ...(perms.canManageSubscription ? [{ label: "Subscription", to: "/agent/subscription", icon: CreditCard }] : []),
+      ...(perms.canManageSubscription ? [{ label: perms.subscriptionsEnabled ? "Subscription" : "Workspace access", to: "/agent/subscription", icon: CreditCard }] : []),
       { label: "Settings", to: "/agent/settings", icon: Settings },
     ],
   },
@@ -57,6 +57,7 @@ const navGroups = (perms) => [
 const PlanSummary = () => {
   const { user, permissions } = useAgent();
   const { isActive, isSuspended, subscription, plan } = permissions;
+  if (!permissions.subscriptionsEnabled && isActive) return <Link to={permissions.isTeamMember ? "/agent/dashboard" : "/agent/subscription"} className="block rounded-md px-2.5 py-2 text-xs"><p className="font-semibold text-emerald-700">Free workspace</p><p className="mt-1 text-gray-500">{permissions.activeCount}/{permissions.propertyLimit} listings</p></Link>;
   const tone = isSuspended || !isActive ? "bg-red-500" : subscription.expiringSoon ? "bg-amber-500" : "bg-emerald-500";
   if (permissions.isTeamMember) {
     return (

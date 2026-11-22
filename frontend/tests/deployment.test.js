@@ -50,3 +50,12 @@ test("directory totals survive a bounded shared property cache", () => {
   assert.equal(agent.rating, 4.5);
   assert.deepEqual(agent.properties, []);
 });
+
+test("agent proof files stay private instead of using the public image uploader", async () => {
+  const data = { kind: "professional_certificate", name: "Registration", file: "data:image/png;base64,YQ==" };
+  const result = await prepareRequestImagePayload(
+    { url: "/agents/application/documents", method: "post", data },
+    () => assert.fail("Private proof must not use the public image uploader"),
+  );
+  assert.deepEqual(result, data);
+});

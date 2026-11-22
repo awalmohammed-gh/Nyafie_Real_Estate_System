@@ -117,18 +117,19 @@ export const AgentsTab = () => {
   const { plans } = usePlatform();
   const f = useSettingsForm("agent", { label: "Agent settings" });
   return (
-    <Panel title="Agents & plans" description="How agent accounts work when their subscription lapses." footer={<SaveBar form={f} />}>
+    <Panel title="Agents & plans" description="Choose whether agents need a paid subscription or can use the workspace for free after approval." footer={<SaveBar form={f} />}>
       <Switch
-        label="Require an active subscription"
-        description="When off, agents without an active plan keep listing with the default plan's limits."
+        label="Enable agent subscriptions"
+        description="On: agents need an active subscription. Off: plan checkout is locked and agents apply with their information and professional proof, without paying. Admin approval is always required."
         checked={f.form.requireSubscription}
         onChange={(v) => f.set("requireSubscription", v)}
       />
-      <Row label="Default plan" description="The limits used for agents without a subscription (when the switch above is off)." htmlFor="a-plan">
+      <div className="px-5 py-5 sm:px-6"><Callout tone={f.form.requireSubscription ? "amber" : "brand"}>{f.form.requireSubscription ? "Paid subscriptions enabled. Agents without an active subscription will need a plan to publish or edit listings. Their accounts and saved work are kept." : "Free access enabled. No plan purchase is needed. Approved agents use the free workspace limits below; existing active subscriptions keep their features until they expire. You can enable paid subscriptions later."}</Callout></div>
+      <Row label="Free workspace plan" description="Use an existing plan's features and limits without charging agents. If automatic, the lowest-priced active plan for their account type is used. Plan prices and subscription history are kept for when you enable subscriptions." htmlFor="a-plan">
         <select id="a-plan" value={f.form.defaultPlan} onChange={(e) => f.set("defaultPlan", e.target.value)} className="field max-w-72">
-          <option value="">No default plan</option>
-          {plans.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}{p.active ? "" : " (inactive)"}</option>
+          <option value="">Automatic active plan</option>
+          {plans.filter((p) => p.active || p.id === f.form.defaultPlan).map((p) => (
+            <option key={p.id} value={p.id} disabled={!p.active}>{p.name}{p.active ? "" : " (inactive)"}</option>
           ))}
         </select>
       </Row>
@@ -199,7 +200,7 @@ export const PaymentsTab = () => {
 
       <Panel title="Online payments" description="Switch Paystack checkouts on or off. Payments already in progress can still be confirmed." footer={<SaveBar form={f} />}>
         <Switch label="Rental payments" description="Customers pay for rentals online with Rent Now." checked={f.form.rentalsEnabled} onChange={(v) => f.set("rentalsEnabled", v)} />
-        <Switch label="Agent subscription payments" description="Agents pay for plans online at checkout." checked={f.form.subscriptionsEnabled} onChange={(v) => f.set("subscriptionsEnabled", v)} />
+        <Switch label="Agent subscription payments" description="Allow online checkout when agent subscriptions are enabled under Agents & Plans. To offer free agent access, turn off Enable agent subscriptions there." checked={f.form.subscriptionsEnabled} onChange={(v) => f.set("subscriptionsEnabled", v)} />
         <div className="px-5 py-4 sm:px-6">
           <Callout>Property purchases are never charged online. Buyers agree the payment with the owner, and the owner confirms it from Sales.</Callout>
         </div>

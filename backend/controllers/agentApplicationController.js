@@ -14,7 +14,7 @@ import { loadUser } from "./authController.js";
 import { reconcileOpenPayments } from "./subscriptionController.js";
 
 // GET /api/agents/application -> the onboarding status page. Re-checks unfinished payments with
-// Paystack first, and submits the application for review once profile and subscription are done.
+// Paystack first, and submits once the profile, proof and subscription are ready.
 export const getApplication = async (req, res) => {
   await reconcileOpenPayments(req.user);
   await submitReadyApplication(await User.findById(req.user._id));
@@ -33,9 +33,9 @@ export const saveApplication = async (req, res) => {
       409,
       "This application cannot be edited at its current status.",
     );
-  const { firstName, lastName, phone, profile } = validateAgentProfile(
-    req.body,
-  );
+  const { firstName, lastName, phone, profile } = validateAgentProfile(req.user.agency?.owner ? {
+    ...req.body, agentType: accountTypeOf(req.user), companyName: req.user.agentApplication?.companyName || "",
+  } : req.body);
   // An active plan is for one account type: switching type needs a plan for that type
   const subscription = req.user.subscription ? await Subscription.findById(req.user.subscription).populate("plan") : null;
   const planType = subscriptionState(subscription).isActive ? subscription.plan?.accountType || "individual" : null;
@@ -112,7 +112,7 @@ export const updateAgentProfile = async (req, res) => {
 
 export const submitReadyApplication = async (user) => {
   const requirements = await applicationRequirements(user);
-  if (!requirements.profileComplete || !requirements.subscriptionSatisfied)
+  if (!requirements.profileComplete || !requirements.documentsComplete || !requirements.subscriptionSatisfied)
     return false;
   const updated = await User.findOneAndUpdate(
     {
@@ -120,6 +120,7 @@ export const submitReadyApplication = async (user) => {
       role: "agent",
       isActive: true,
       "agentApplication.status": "incomplete",
+      "agentApplication.proofCount": { $gt: 0 },
     },
     {
       $set: {
@@ -150,6 +151,8 @@ export const submitApplication = async (req, res) => {
   const requirements = await applicationRequirements(req.user);
   if (!requirements.profileComplete)
     return fail(res, 400, "Complete your agent profile first.");
+  if (!requirements.documentsComplete)
+    return fail(res, 400, "Upload proof that you work as an agent before submitting your application.");
   if (!requirements.subscriptionSatisfied)
     return fail(
       res,
@@ -165,14 +168,12 @@ export const submitApplication = async (req, res) => {
   ok(res, await loadUser(req.user._id), "Application submitted for review");
 };
 
-export const listApplications = async (_req, res) =>
-  ok(
-    res,
-    // Removed providers are managed from the Agents page (Removed tab), not as applications
-    await User.find({ role: "agent", "agentApplication.status": { $ne: "removed" } })
-      .populate({ path: "subscription", populate: { path: "plan" } })
-      .sort({ "agentApplication.submittedAt": -1, createdAt: -1 }),
-  );
+export const listApplications = async (_req, res) => {
+  const users = await User.find({ role: "agent", "agentApplication.status": { $ne: "removed" } })
+    .populate({ path: "subscription", populate: { path: "plan" } })
+    .sort({ "agentApplication.submittedAt": -1, createdAt: -1 });
+  ok(res, await Promise.all(users.map(async user => ({ ...user.toJSON(), applicationRequirements: await applicationRequirements(user) }))));
+};
 
 export const reviewApplication = async (req, res) => {
   const user = await User.findById(req.params.id).catch(() => null);
@@ -195,7 +196,13 @@ export const reviewApplication = async (req, res) => {
       "This action is not available for the current application status.",
     );
   if (action === "approve" || (action === "reactivate" && previouslyApproved)) {
+    if (action === "approve" && req.body.proofReviewed !== true)
+      return fail(res, 400, "Confirm that you have reviewed the agent's professional proof documents.");
+    if (action === "approve" && Date.parse(req.body.reviewSubmittedAt) !== new Date(user.agentApplication.submittedAt).getTime())
+      return fail(res, 409, "This application was resubmitted. Refresh and review the latest proof documents before approving.");
     const requirements = await applicationRequirements(user);
+    if (action === "approve" && !requirements.documentsComplete)
+      return fail(res, 400, "The agent must upload professional proof documents before approval.");
     if (!requirements.profileComplete || !requirements.subscriptionSatisfied)
       return fail(
         res,
@@ -225,11 +232,13 @@ export const reviewApplication = async (req, res) => {
     isActive: action !== "suspend",
   };
   if (action === "approve") {
+    changes["agentApplication.proofReviewedAt"] = new Date();
+    changes["agentApplication.proofReviewedBy"] = req.user._id;
     changes["agentApplication.approvedAt"] = new Date();
     changes["agentApplication.approvedBy"] = req.user._id;
   }
   const updated = await User.findOneAndUpdate(
-    { _id: user._id, role: "agent", isActive: user.isActive, "agentApplication.status": storedStatus === undefined ? { $exists: false } : storedStatus },
+    { _id: user._id, role: "agent", isActive: user.isActive, "agentApplication.status": storedStatus === undefined ? { $exists: false } : storedStatus, ...(action === "approve" ? { "agentApplication.proofCount": { $gt: 0 }, "agentApplication.submittedAt": user.agentApplication.submittedAt } : {}) },
     { $set: changes },
     { returnDocument: "after", runValidators: true },
   );

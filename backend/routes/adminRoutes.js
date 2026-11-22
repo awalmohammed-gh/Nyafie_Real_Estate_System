@@ -15,6 +15,7 @@ import { listPayments } from "../controllers/paymentController.js";
 import { checkRefund, createRefund, listRefunds, settleRefund } from "../controllers/refundController.js";
 import { protectAdmin } from "../middleware/authMiddleware.js";
 import { listApplications, reviewApplication } from "../controllers/agentApplicationController.js";
+import { adminAgentProofs, agentProofLink } from "../controllers/agentProofController.js";
 import { adminOnly } from "../middleware/adminMiddleware.js";
 import { limits } from "../middleware/security.js";
 import { listContactMessages, setContactMessageStatus } from "../controllers/contactController.js";
@@ -38,6 +39,8 @@ router.delete("/users/:id", admin.deleteUser);
 router.get("/agents", admin.listAgents);
 router.get("/agent-applications", listApplications);
 router.patch("/agent-applications/:id", reviewApplication);
+router.get("/agent-applications/:agentId/documents", adminAgentProofs);
+router.get("/agent-applications/:agentId/documents/:docId/link", agentProofLink);
 router.patch("/agents/:id/subscription", admin.manageSubscription);
 router.get("/agents/:id/removal", admin.getRemovalImpact);
 router.post("/agents/:id/remove", admin.removeAgent); // the normal action: deactivate, keep history

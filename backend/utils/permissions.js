@@ -35,11 +35,14 @@ export const subscriptionState = (sub) => {
 };
 
 // When the admin turns off "Require subscription", agents use the default plan (or the cheapest for their account type)
-const waivedPlan = async (settings, accountType) =>
-  (settings.agent.defaultPlan &&
-    (await Plan.findById(settings.agent.defaultPlan).catch(() => null))) ||
-  (await Plan.findOne({ isActive: true, accountType }).sort({ price: 1 })) ||
-  (await Plan.findOne({ isActive: true }).sort({ price: 1 }));
+const waivedPlan = async (settings, accountType) => {
+  const configured = settings.agent.defaultPlan
+    ? await Plan.findById(settings.agent.defaultPlan).catch(() => null)
+    : null;
+  return (configured?.isActive ? configured : null) ||
+    (await Plan.findOne({ isActive: true, accountType }).sort({ price: 1 })) ||
+    (await Plan.findOne({ isActive: true }).sort({ price: 1 }));
+};
 
 /**
  * Everything the server needs to decide what an agent may do: plan, limits, usage and features.

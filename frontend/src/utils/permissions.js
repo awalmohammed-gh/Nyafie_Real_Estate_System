@@ -1,4 +1,4 @@
-import { getSubscriptionState } from "./subscription";
+import { getSubscriptionState } from "./subscription.js";
 
 // Listing states that occupy a slot in the agent's plan limit
 export const COUNTED_STATES = ["published", "pending"];
@@ -18,14 +18,17 @@ export const getAgentPermissions = ({ user, plans, settings, listings }) => {
   const teamRole = team ? team.role : "owner";
   const accountSubscription = team ? team.subscription : user?.subscription;
   const subscription = getSubscriptionState(accountSubscription);
+  const subscriptionsEnabled = settings.agent.requireSubscription;
+  const accountType = ["agency", "company"].includes(user?.agentApplication?.agentType) ? user.agentApplication.agentType : "individual";
 
   // When the admin turns off "Require subscription", agents fall back to the default plan
   const subscriptionWaived = isAgent && !settings.agent.requireSubscription && !subscription.isActive;
   const planId = subscriptionWaived ? settings.agent.defaultPlan : accountSubscription?.planId;
-  const plan = plans.find((p) => p.id === planId) || (subscriptionWaived ? [...plans].filter((p) => p.active).sort((a, b) => a.price - b.price)[0] : null) || null;
+  const activePlans = subscriptionWaived ? plans.filter((p) => p.active).sort((a, b) => a.price - b.price) : [];
+  const plan = plans.find((p) => p.id === planId && (!subscriptionWaived || p.active)) ||
+    activePlans.find((p) => p.accountType === accountType) || activePlans[0] || null;
   const isApproved = user?.agentApplication?.status === "approved";
   // Staff hold their organisation's type (agency or company), set when they join
-  const accountType = ["agency", "company"].includes(user?.agentApplication?.agentType) ? user.agentApplication.agentType : "individual";
   const isOrganization = accountType !== "individual";
   const isActive = isAgent && isApproved && !isSuspended && Boolean(plan) && (subscription.isActive || subscriptionWaived);
 
@@ -38,7 +41,7 @@ export const getAgentPermissions = ({ user, plans, settings, listings }) => {
   const featuredLimit = plan?.featuredLimit ?? 0;
   const analytics = plan?.analytics ?? "basic";
   // The upgrade ladder: active plans of the same account type on a higher tier (the server decides; this is for display)
-  const upgradePlans = !team && subscription.isActive && plan ? plans.filter((p) => p.active && p.accountType === plan.accountType && p.sortOrder > plan.sortOrder) : [];
+  const upgradePlans = subscriptionsEnabled && !team && subscription.isActive && plan ? plans.filter((p) => p.active && p.accountType === plan.accountType && p.sortOrder > plan.sortOrder) : [];
   const limitReached = activeCount >= propertyLimit;
   const nearLimit = !limitReached && propertyLimit > 0 && activeCount / propertyLimit >= 0.8;
 
@@ -67,8 +70,9 @@ export const getAgentPermissions = ({ user, plans, settings, listings }) => {
     canManageTeam: isOrganization && teamRole === "owner",
     canAssignWork: isActive && isOrganization && teamRole !== "agent",
     canManageSubscription: !team,
+    subscriptionsEnabled,
     canUpgrade: upgradePlans.length > 0, // only the account owner, on an active plan with a higher tier available
-    isHighestPlan: !team && subscription.isActive && Boolean(plan) && upgradePlans.length === 0,
+    isHighestPlan: subscriptionsEnabled && !team && subscription.isActive && Boolean(plan) && upgradePlans.length === 0,
     upgradePath: upgradePlans.length > 0 ? "/agent/subscription/upgrade" : "/agent/subscription",
     restriction,
     subscription,
@@ -113,6 +117,14 @@ export const lockCopy = (perms, feature) => {
   if (perms.restriction && perms.restriction !== "not-agent") {
     const reason = { expired: "has expired", cancelled: "was cancelled", pending: "is waiting for payment confirmation", none: "is not active" }[perms.restriction];
     return { title: "Subscription required", description: `Your subscription ${reason}. Renew to use this feature again. Your data is safe.`, cta: "Renew Subscription" };
+  }
+  if (perms.subscriptionsEnabled === false && feature !== "publishing") {
+    const limits = {
+      propertyLimit: `Your free workspace allows ${perms.propertyLimit} active properties. Unpublish a listing to free a slot, or contact support about your limits.`,
+      images: `Your free workspace allows ${perms.imageLimit} photos per property.`,
+      featured: "Featured listings are limited by the platform's free workspace plan.",
+    };
+    return { title: feature === "propertyLimit" ? "Property limit reached" : "Workspace limits", description: limits[feature] || "This feature is not included in your free workspace. Contact support for help with access.", cta: null };
   }
   switch (feature) {
     case "propertyLimit":

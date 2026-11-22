@@ -6,6 +6,7 @@ import User from "../models/User.js";
 import Plan from "../models/Plan.js";
 import Subscription from "../models/Subscription.js";
 import Setting from "../models/Setting.js";
+import { cloudinary } from "../config/cloudinary.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
 import { customerTabHeaders } from "./support/customerTab.js";
 
@@ -21,6 +22,7 @@ test("customers become agents on the same account, pay first, and retain custome
     }
   });
   await isolatedMongo(t);
+  t.mock.method(cloudinary.uploader, "upload", async () => ({ public_id: "private-agent-proof", format: "pdf" }));
   await Setting.create({ key: "platform", agent: { requireSubscription: true }, payments: { subscriptionsEnabled: true } });
   const savedProperty = new mongoose.Types.ObjectId();
   const account = await User.create({ emailVerifiedAt: new Date(), firstName: "Existing", lastName: "Customer", email: "existing@example.test", password: "OriginalPassword123", savedProperties: [savedProperty], preferences: { offerUpdates: false } });
@@ -109,6 +111,8 @@ test("customers become agents on the same account, pay first, and retain custome
 
   await t.test("verified payment opens the prefilled profile, never another registration or approval", async () => {
     paymentStatus = "success";
+    // Switching to free access must still settle a checkout already in progress.
+    await Setting.updateOne({ key: "platform" }, { $set: { "agent.requireSubscription": false } });
     const paid = await request("/api/subscriptions/verify", { session: "agent", cookie: agentCookie, method: "POST", body: { reference } });
     assert.equal(paid.status, 200);
     const user = (await paid.json()).data;
@@ -118,11 +122,16 @@ test("customers become agents on the same account, pay first, and retain custome
     assert.equal(user.agentApplication.status, "incomplete");
     assert.equal(user.subscription.paymentStatus, "paid");
     assert.equal(user.onboarding.dashboardAccess, false);
+    assert.equal(user.onboarding.requireSubscription, false);
+    await Setting.updateOne({ key: "platform" }, { $set: { "agent.requireSubscription": true } });
     agentCookie = cookieFrom(paid, "agent");
     assert.equal((await request("/api/subscriptions/verify", { session: "agent", cookie: agentCookie, method: "POST", body: { reference } })).status, 200);
     const expiresAt = (await Subscription.findOne({ paymentReference: reference })).expiresAt;
     const profile = await request("/api/agents/application", { session: "agent", cookie: agentCookie, method: "PUT", body: { firstName: "Existing", lastName: "Customer", phone: "+233241234567", agentType: "individual", region: "Greater Accra", city: "Accra", yearsExperience: 2, bio: "Helping people find homes in Accra." } });
     assert.equal(profile.status, 200);
+    assert.equal((await request("/api/agents/application/submit", { session: "agent", cookie: agentCookie, method: "POST", body: {} })).status, 400, "payment and profile do not replace proof");
+    const proof = await request("/api/agents/application/documents", { session: "agent", cookie: agentCookie, method: "POST", body: { kind: "professional_certificate", file: `data:application/pdf;base64,${Buffer.from("%PDF-1.4\nAgent registration\n%%EOF").toString("base64")}` } });
+    assert.equal(proof.status, 201);
     const application = await request("/api/agents/application", { session: "agent", cookie: agentCookie });
     assert.equal(application.status, 200);
     assert.equal((await application.json()).data.user.agentApplication.status, "pending");

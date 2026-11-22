@@ -169,7 +169,8 @@ const validators = {
 
   agent: async (b) => {
     const defaultPlan = String(b.defaultPlan ?? "");
-    if (defaultPlan && !(mongoose.isValidObjectId(defaultPlan) && (await Plan.exists({ _id: defaultPlan })))) fail("Choose an existing plan.");
+    if (defaultPlan && !(mongoose.isValidObjectId(defaultPlan) && (await Plan.exists({ _id: defaultPlan, isActive: true })))) fail("Choose an active plan for free workspace limits.");
+    if (!bool(b.requireSubscription) && !defaultPlan && !(await Plan.exists({ isActive: true }))) fail("Create or activate a plan to set the free workspace limits before switching subscriptions off.");
     return { requireSubscription: bool(b.requireSubscription), defaultPlan };
   },
 

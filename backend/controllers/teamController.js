@@ -154,13 +154,13 @@ export const acceptInvite = async (req, res) => {
     const joined = await User.updateOne({ _id: user._id, role: "agent", agency: { $exists: false } }, {
       $set: {
         agency: { owner: owner._id, role: invite.role, joinedAt: now },
-        // Joining is approved by the agency owner; the agency's admin approval and plan cover the member
-        "agentApplication.status": "approved",
+        // Team membership shares the plan; it never grants a new applicant admin approval.
+        "agentApplication.status": user.agentApplication?.status === "approved" ? "approved" : "incomplete",
         "agentApplication.agentType": access.accountType, // agency or company, like the organisation they join
         "agentApplication.companyName": owner.agentApplication?.companyName || "",
-        "agentApplication.approvedAt": now,
-        "agentApplication.approvedBy": owner._id,
-        "agentApplication.profileCompletedAt": user.agentApplication?.profileCompletedAt || now,
+        "agentApplication.approvedAt": user.agentApplication?.approvedAt || null,
+        "agentApplication.approvedBy": user.agentApplication?.approvedBy || null,
+        "agentApplication.profileCompletedAt": user.agentApplication?.profileCompletedAt || null,
       },
     }, { session });
     if (!joined.matchedCount) throw new HttpError(409, "Your account is already part of an agency team.");

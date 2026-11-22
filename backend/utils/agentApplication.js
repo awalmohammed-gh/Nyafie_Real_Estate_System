@@ -1,4 +1,5 @@
 import Subscription from "../models/Subscription.js";
+import User from "../models/User.js";
 import { getSettings } from "../models/Setting.js";
 import { subscriptionState } from "./permissions.js";
 import { HttpError } from "./response.js";
@@ -11,9 +12,11 @@ export const validPhone = (value) => typeof value === "string" && /^\+?[\d\s().-
 
 export const applicationRequirements = async (user) => {
   const settings = await getSettings();
-  const subscription = user.subscription ? await Subscription.findById(user.subscription).populate("plan") : null;
+  const account = user.agency?.owner ? await User.findById(user.agency.owner) : user;
+  const subscription = account?.subscription ? await Subscription.findById(account.subscription).populate("plan") : null;
   return {
     profileComplete: Boolean(user.agentApplication?.profileCompletedAt),
+    documentsComplete: Number(user.agentApplication?.proofCount) > 0,
     requireSubscription: Boolean(settings.agent.requireSubscription),
     subscriptionSatisfied: !settings.agent.requireSubscription || Boolean(subscription?.plan && subscription.status === "active" && subscriptionState(subscription).isActive && ["paid", "waived"].includes(subscription.paymentStatus)),
   };
@@ -39,13 +42,15 @@ const STEP_PATHS = {
 export const onboardingState = async (user) => {
   const settings = await getSettings();
   const requireSubscription = Boolean(settings.agent.requireSubscription);
-  const subscriptionId = user.subscription?._id || user.subscription;
+  const account = user.agency?.owner ? await User.findById(user.agency.owner) : user;
+  const subscriptionId = account?.subscription?._id || account?.subscription;
   const [current, latest] = await Promise.all([
     subscriptionId ? Subscription.findById(subscriptionId) : null,
-    Subscription.findOne({ user: user._id }).sort({ createdAt: -1 }),
+    Subscription.findOne({ user: account?._id || user._id }).sort({ createdAt: -1 }),
   ]);
   const status = applicationStatus(user);
   const profileComplete = Boolean(user.agentApplication?.profileCompletedAt);
+  const documentsComplete = Number(user.agentApplication?.proofCount) > 0;
   const currentState = subscriptionState(current).status; // active | expired | cancelled | pending | none
   const subscriptionActive = Boolean(current && currentState === "active" && ["paid", "waived"].includes(current.paymentStatus));
   const subscriptionSatisfied = !requireSubscription || subscriptionActive;
@@ -63,7 +68,7 @@ export const onboardingState = async (user) => {
   if (status === "suspended") step = "suspended";
   else if (status === "approved") step = "complete";
   else if (status === "rejected") step = "rejected";
-  else if (!profileComplete && !(user.customerAccess && !subscriptionSatisfied)) step = "profile";
+  else if ((!profileComplete || !documentsComplete) && !(user.customerAccess && !subscriptionSatisfied)) step = "profile";
   else if (!subscriptionSatisfied) step = attemptStatus === "pending" ? "payment_pending" : attemptStatus === "failed" ? "payment_failed" : "subscription";
   else step = "review";
 
@@ -74,6 +79,7 @@ export const onboardingState = async (user) => {
     nextPath: STEP_PATHS[step],
     requireSubscription,
     profile: profileComplete ? "complete" : "incomplete",
+    documents: documentsComplete ? "provided" : "missing",
     payment, // paid | waived | pending | failed | none | not_required
     subscription, // active | pending | expired | cancelled | none | not_required
     application: status, // incomplete | pending | approved | rejected | suspended

@@ -268,6 +268,8 @@ export const permanentlyDeleteProvider = async (id, admin, confirm) => {
   const plan = await deletionPlan(id);
   if (normalise(confirm) !== plan.confirmText) throw new HttpError(400, `Type ${plan.confirmText} to confirm.`);
   const provider = await loadProvider(id);
+  const proofOwner = await User.findById(provider._id).select("+agentApplication.proofDocuments");
+  const proofFiles = proofOwner?.agentApplication?.proofDocuments || [];
   const userId = provider._id;
   const { keep, drop } = plan.references;
   const now = new Date();
@@ -303,7 +305,7 @@ export const permanentlyDeleteProvider = async (id, admin, confirm) => {
         },
       }, { session })).matchedCount;
     if (!done) throw new HttpError(409, "This provider was restored or changed meanwhile. Refresh and try again.");
-    return files;
+    return [...files, ...proofFiles];
   });
   await destroyDocuments(documents); // the files go only once the delete is saved
   return { name: plan.name, mode: plan.mode, listingsDeleted: drop.length, listingsKept: keep.length };

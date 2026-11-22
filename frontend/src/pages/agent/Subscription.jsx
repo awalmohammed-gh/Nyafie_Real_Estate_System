@@ -13,7 +13,7 @@ const Meter = ({ label, used, limit }) => <div><div className="flex justify-betw
 // What the current plan includes. Locked features stay listed, with the way to unlock them:
 // a higher plan of the same account type, a renewal, or nothing when this is the highest plan.
 const featureRows = (perms, companyName, renewPath) => {
-  const unlock = perms.canUpgrade ? { to: perms.upgradePath, label: "Upgrade" } : !perms.isActive ? { to: renewPath, label: "Renew" } : null;
+  const unlock = !perms.subscriptionsEnabled ? null : perms.canUpgrade ? { to: perms.upgradePath, label: "Upgrade" } : !perms.isActive ? { to: renewPath, label: "Renew" } : null;
   const on = (value) => (perms.isActive ? value : null);
   return [
     { label: "Property listings", value: on(`Up to ${perms.propertyLimit} active`) },
@@ -45,38 +45,40 @@ const Subscription = () => {
   const type = ACCOUNT_TYPES[perms.accountType];
   const renewPath = sub ? `/agent/subscription/checkout?plan=${sub.planId}` : "/agent/subscription/plans";
   const tone = state.isActive ? state.expiringSoon ? "amber" : "green" : state.status === "pending" ? "amber" : "gray";
-  const message = !sub
+  const message = !perms.subscriptionsEnabled
+    ? "Agent subscriptions are switched off. Your approved account can use the workspace without paying. The platform sets your listing limits and features; existing active plans keep their features until they expire."
+    : !sub
     ? perms.isActive ? "Your account currently uses the platform's default plan. A paid subscription is optional while this requirement is waived." : "Choose a plan to start publishing your properties."
     : state.isActive
       ? state.expiringSoon ? `Your plan ends in ${state.daysRemaining} days. Renew early to keep your listings available.` : perms.isHighestPlan ? "You're on the highest available plan. Renewing early adds time to your current expiry date." : "Your plan is active. Upgrade any time for higher limits, or renew early to add time to your expiry date."
       : state.status === "pending" ? "Your payment is awaiting confirmation. Check its status before starting another payment." : "Your listings are saved. Renew your plan to restore publishing and public visibility.";
 
   return <div className="space-y-6">
-    <PageTitle title="Your subscription" eyebrow="Your account" description="Your current plan, what you're using, and when it renews." />
+    <PageTitle title={perms.subscriptionsEnabled ? "Your subscription" : "Your workspace access"} eyebrow="Your account" description={perms.subscriptionsEnabled ? "Your current plan, what you're using, and when it renews." : "Free access after approval, with limits set by the platform."} />
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
       <section className="workspace-card">
-        <div className="workspace-card-header"><h2>Current plan</h2><StatusBadge status={sub ? state.statusLabel : perms.isActive ? "Subscription waived" : "No subscription"} tone={tone} /></div>
+        <div className="workspace-card-header"><h2>{perms.subscriptionsEnabled ? "Current plan" : "Workspace limits"}</h2><StatusBadge status={!perms.subscriptionsEnabled ? "Free access" : sub ? state.statusLabel : "No subscription"} tone={!perms.subscriptionsEnabled && perms.isActive ? "green" : tone} /></div>
         <div className="p-6 sm:p-8">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="workspace-eyebrow">{type.label} plan</p>
               <div className="mt-3 flex flex-wrap items-center gap-2"><h2 className="text-3xl font-semibold tracking-tight text-gray-900">{plan?.name || sub?.planName || "Choose your plan"}</h2>{perms.isHighestPlan && <StatusBadge status="Highest plan" tone="brand" dot={false} />}</div>
-              {sub && <p className="mt-2 text-sm text-gray-500">₵{Number(plan?.price ?? sub.price ?? 0).toLocaleString()} / {plan ? durationLabel(plan.durationDays) : "billing period"}</p>}
+              {perms.subscriptionsEnabled && sub && <p className="mt-2 text-sm text-gray-500">₵{Number(plan?.price ?? sub.price ?? 0).toLocaleString()} / {plan ? durationLabel(plan.durationDays) : "billing period"}</p>}
             </div>
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand-700">{perms.isHighestPlan ? <Crown className="h-6 w-6" /> : <CreditCard className="h-6 w-6" />}</span>
           </div>
           <p className="mt-5 text-sm leading-relaxed text-gray-500">{message}</p>
-          <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-gray-100 pt-5 text-sm sm:grid-cols-4">
+          {perms.subscriptionsEnabled ? <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-gray-100 pt-5 text-sm sm:grid-cols-4">
             <div><dt className="text-gray-500">Status</dt><dd className="mt-1 font-semibold text-gray-900">{sub ? state.statusLabel : perms.isActive ? "Waived" : "None"}</dd></div>
             <div><dt className="text-gray-500">Started</dt><dd className="mt-1 font-semibold text-gray-900">{sub ? formatDate(sub.startDate) : "—"}</dd></div>
             <div><dt className="text-gray-500">Expires</dt><dd className="mt-1 font-semibold text-gray-900">{sub ? formatDate(sub.expiryDate) : "—"}</dd></div>
             <div><dt className="text-gray-500">Days left</dt><dd className="mt-1 font-semibold text-gray-900">{state.isActive ? state.daysRemaining : "—"}</dd></div>
-          </dl>
-          <div className="mt-7 flex flex-wrap gap-3">
+          </dl> : <p className="mt-6 border-t border-gray-100 pt-5 text-sm font-medium text-brand-700">No payment or renewal is required while subscriptions are off.</p>}
+          {perms.subscriptionsEnabled && <div className="mt-7 flex flex-wrap gap-3">
             {perms.canUpgrade && <Link to={perms.upgradePath} className="btn btn-primary"><ArrowUpRight className="h-4 w-4" />Upgrade Plan</Link>}
             {sub && state.status !== "pending" && <Link to={renewPath} className={`btn ${perms.canUpgrade ? "btn-light" : "btn-primary"}`}><RefreshCw className="h-4 w-4" />Renew {plan?.name || sub.planName}</Link>}
             {!state.isActive && state.status !== "pending" && <Link to="/agent/subscription/plans" className={`btn ${sub ? "btn-light" : "btn-primary"}`}>{sub ? "Choose a different plan" : "Choose a plan"}<ArrowRight className="h-4 w-4" /></Link>}
-          </div>
+          </div>}
         </div>
       </section>
       <section className="workspace-card">

@@ -19,6 +19,7 @@ import { formatDate } from "../../utils/date";
 import { getSubscriptionState } from "../../utils/subscription";
 import { getInitials } from "../../utils/property";
 import { cloudImage } from "../../utils/cloudImage";
+import AgentProofDocuments from "../../components/agent/AgentProofDocuments";
 
 // Photo, or initials on a soft violet circle
 const Avatar = ({ name, image, large = false }) => (
@@ -39,13 +40,15 @@ const eligibility = (agent, requireSubscription) => {
   const state = getSubscriptionState(agent.subscription);
   const paid = ["paid", "waived"].includes(agent.subscription?.paymentStatus);
   const profile = Boolean(agent.agentApplication?.profileCompletedAt);
-  const subscription = !requireSubscription || (state.isActive && paid);
+  const documents = Number(agent.agentApplication?.proofCount) > 0;
+  const subscription = agent.applicationRequirements?.subscriptionSatisfied ?? (!requireSubscription || (state.isActive && paid));
   return {
     profile,
     subscription,
-    eligible: profile && subscription,
+    documents,
+    eligible: profile && documents && subscription,
     state,
-    subscriptionText: !requireSubscription && !agent.subscription ? "Not required" : agent.subscription ? `${agent.subscription.planName} · ${state.statusLabel}` : "No plan yet",
+    subscriptionText: agent.agency?.ownerId ? subscription ? "Agency plan covers this applicant" : "Agency subscription required" : !requireSubscription && !agent.subscription ? "Not required" : agent.subscription ? `${agent.subscription.planName} · ${state.statusLabel}` : "No plan yet",
   };
 };
 
@@ -92,11 +95,14 @@ const AdminAgentApplications = () => {
   const [confirmation, setConfirmation] = useState(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [proofReviewed, setProofReviewed] = useState(null);
   const [error, setError] = useState("");
   const requireSubscription = settings.agent.requireSubscription;
 
   const selected = agents.find((agent) => agent.id === params.get("open"));
+  const proofReviewKey = selected ? `${selected.id}:${selected.agentApplication?.submittedAt || ""}` : "";
   const show = (id) => {
+    setProofReviewed(null);
     const next = new URLSearchParams(params);
     if (id) next.set("open", id);
     else next.delete("open");
@@ -115,11 +121,12 @@ const AdminAgentApplications = () => {
     setBusy(true);
     setError("");
     try {
-      await adminApi.reviewAgentApplication(confirmation.agent.id, confirmation.action, reason);
+      await adminApi.reviewAgentApplication(confirmation.agent.id, confirmation.action, reason, confirmation.agent.agentApplication?.submittedAt);
       await refreshUsers();
       query.reload();
       toast({ title: `Application ${{ approve: "approved", reject: "rejected", suspend: "suspended", reactivate: "reactivated" }[confirmation.action]}`, description: confirmation.agent.name });
       setConfirmation(null);
+      setProofReviewed(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -157,7 +164,7 @@ const AdminAgentApplications = () => {
     <>
       <AdminPageTitle
         title="Agent Applications"
-        description="Agents can open their dashboard only after you approve them. Approval needs a complete profile and, when required, a paid and active subscription."
+        description="Review the applicant's professional proof before approval. Agents need a complete profile, proof documents, and any required active subscription before their workspace opens."
         action={<button type="button" className="btn btn-light min-h-11" onClick={query.reload}><RefreshCw className="h-4 w-4" />Refresh</button>}
       />
 
@@ -204,7 +211,7 @@ const AdminAgentApplications = () => {
                   key={action}
                   type="button"
                   onClick={() => confirm(selected, action)}
-                  disabled={busy || (action === "approve" && !check.eligible)}
+                  disabled={busy || (action === "approve" && (!check.eligible || proofReviewed !== proofReviewKey))}
                   className={["reject", "suspend"].includes(action) ? "btn min-h-11 border border-red-200 bg-white px-4 text-red-700 hover:bg-red-50" : "btn btn-primary min-h-11 px-5"}
                 >
                   {ACTION_LABEL[action]}
@@ -227,6 +234,9 @@ const AdminAgentApplications = () => {
               </div>
             </div>
 
+            <AgentProofDocuments key={selected.id} agentId={selected.id} />
+            {statusOf(selected) === "pending" && check.documents && <label className="flex items-start gap-3 rounded-xl border border-brand-100 bg-brand-50 p-4 text-sm text-brand-900"><input type="checkbox" className="mt-1 accent-brand-600" checked={proofReviewed === proofReviewKey} onChange={event => setProofReviewed(event.target.checked ? proofReviewKey : null)} /><span>I have reviewed the professional proof documents and confirm they support this agent's application.</span></label>}
+
             <Section title="Professional details">
               <Facts
                 items={[
@@ -246,14 +256,17 @@ const AdminAgentApplications = () => {
               {app.agencyLogo && <img src={cloudImage(app.agencyLogo, 240)} alt={`${app.companyName || "Agency"} logo`} className="mt-4 max-h-20 max-w-full rounded-lg object-contain ring-1 ring-gray-200" />}
             </Section>
 
-            <Section title="Subscription eligibility">
+            <Section title="Approval requirements">
               <ul className="space-y-3">
                 <Check ok={check.profile} label="Agent profile complete" detail={app.profileCompletedAt ? `Completed ${formatDate(app.profileCompletedAt)}` : "The agent hasn’t finished their profile"} />
+                <Check ok={check.documents} label="Professional proof uploaded" detail={`${app.proofCount || 0} document(s) available for review`} />
                 <Check
                   ok={check.subscription}
                   label={requireSubscription ? "Paid, active subscription" : "Subscription not required"}
                   detail={
-                    !requireSubscription
+                    selected.agency?.ownerId
+                      ? check.subscription ? "Covered by the agency's subscription" : "The agency needs an active subscription"
+                      : !requireSubscription
                       ? "Turned off in Settings › Agents & Plans"
                       : selected.subscription
                         ? `${selected.subscription.planName} · payment ${selected.subscription.paymentStatus} · ${check.state.isActive ? `active until ${formatDate(selected.subscription.expiryDate)}` : check.state.statusLabel.toLowerCase()}`
@@ -273,6 +286,7 @@ const AdminAgentApplications = () => {
                   ["Submitted for review", submitted(selected)],
                   ["Last reviewed", app.reviewedAt ? formatDate(app.reviewedAt) : "Not reviewed yet"],
                   ["Approved", app.approvedAt ? formatDate(app.approvedAt) : "Not approved"],
+                  ["Proof reviewed", app.proofReviewedAt ? formatDate(app.proofReviewedAt) : "Not reviewed"],
                 ]}
               />
               {app.rejectionReason && (
@@ -297,7 +311,7 @@ const AdminAgentApplications = () => {
         description={
           confirmation &&
           {
-            approve: "They get access to the agent dashboard and can start listing properties. The server re-checks their profile and subscription first.",
+            approve: "You confirm that you reviewed their proof documents. The server checks the profile, uploaded proof and subscription before opening their workspace.",
             reject: "They’ll see your feedback and can update their profile and apply again. Their subscription is kept.",
             suspend: "Their dashboard access and public listings are blocked until you reactivate them.",
             reactivate: "Their previous access is restored if they had been approved before.",

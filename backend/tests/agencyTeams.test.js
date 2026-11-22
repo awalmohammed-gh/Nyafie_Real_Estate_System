@@ -156,18 +156,25 @@ test("agency invites, joining, roles and removal are enforced on the server", as
     assert.equal(busyAgent.agency?.owner, undefined);
   });
 
-  await t.test("an eligible agent joins once; the agency owner's approval covers them", async () => {
+  await t.test("an eligible applicant joins once without bypassing professional proof and admin approval", async () => {
     const response = await as(recruit)("POST", `/team/invites/${token}/accept`);
     assert.equal(response.status, 200);
     assert.equal(String(recruit.agency.owner), String(owner._id));
     assert.equal(recruit.agency.role, "agent");
-    assert.equal(recruit.agentApplication.status, "approved");
+    assert.equal(recruit.agentApplication.status, "incomplete");
+    assert.equal(recruit.agentApplication.approvedAt, null);
+    assert.equal((await as(recruit)("GET", "/agents/dashboard")).status, 403);
     assert.equal(recruit.agentApplication.companyName, "Akwaaba Homes");
     assert.ok(invites[0].usedAt, "the invite is used up");
     assert.equal((await as(busyAgent)("POST", `/team/invites/${token}/accept`)).status, 404, "a used link can't be reused");
   });
 
   await t.test("staff can't manage the team, buy plans, or assign work", async () => {
+    // Permissions below apply after the separate professional-proof review is approved by an admin.
+    recruit.agentApplication.status = "approved";
+    recruit.agentApplication.proofCount = 1;
+    recruit.agentApplication.profileCompletedAt = new Date();
+    recruit.agentApplication.approvedAt = new Date();
     const staff = as(recruit);
     t.mock.method(Property, "find", () => q([]));
     t.mock.method(Inquiry, "find", () => q([]));

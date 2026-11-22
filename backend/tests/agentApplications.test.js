@@ -50,6 +50,7 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
     if (key === "$or") return value.some((choice) => matches(user, choice));
     const current = key.split(".").reduce((object, part) => object?.[part], user);
     if (value?.$in) return value.$in.includes(current);
+    if (value && Object.hasOwn(value, "$gt")) return current > value.$gt;
     if (value && Object.hasOwn(value, "$exists")) return (current !== undefined) === value.$exists;
     return typeof current === "boolean" ? current === value : id(current) === id(value);
   });
@@ -175,6 +176,7 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
       assert.equal((await call("/api/agents/application/submit", "agent", {})).status, 400);
     });
     await t.test("server payment activation submits for review without approving or changing customer roles", async () => {
+      agent.agentApplication.proofCount = 1;
       const subscription = new Subscription({ user: agent._id, plan: plan._id, planName: plan.name, amount: 100, paymentReference: "TEST-PAID" });
       subscription.save = async () => subscription;
       subscriptions.push(subscription);
@@ -197,7 +199,7 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
       subscriptions[0].paymentStatus = "pending";
       assert.equal((await call(path, "admin", { action: "approve" }, "PATCH")).status, 400);
       subscriptions[0].paymentStatus = "paid";
-      assert.equal((await call(path, "admin", { action: "approve", approvedBy: id(customer) }, "PATCH")).status, 200);
+      assert.equal((await call(path, "admin", { action: "approve", proofReviewed: true, reviewSubmittedAt: agent.agentApplication.submittedAt.toISOString(), approvedBy: id(customer) }, "PATCH")).status, 200);
       assert.equal(agent.agentApplication.status, "approved"); assert.ok(agent.agentApplication.approvedAt);
       assert.equal(id(agent.agentApplication.approvedBy), id(admin));
       assert.equal(id(agent.subscription), id(subscriptions[0]));
@@ -247,6 +249,7 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
       requireSubscription = false;
       assert.equal((await signUp("/api/auth/agent/register", "agent", { ...signup, email: "second@example.test" })).status, 201);
       const second = users.find((user) => user.email === "second@example.test");
+      second.agentApplication.proofCount = 1;
       await call("/api/agents/application", "agent", profile, "PUT");
       assert.equal((await call("/api/agents/application/submit", "agent", {})).status, 200);
       const path = `/api/admin/agent-applications/${id(second)}`;

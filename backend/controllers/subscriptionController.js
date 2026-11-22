@@ -16,7 +16,12 @@ import { submitReadyApplication } from "./agentApplicationController.js";
 import { mismatchFields, recordProviderDetails } from "../utils/paymentAudit.js";
 
 // Subscription payments need Paystack and the admin's "subscription payments" switch
-const paymentMode = async () => (paystackMode() === "paystack" && (await getSettings()).payments.subscriptionsEnabled ? "paystack" : "disabled");
+const paymentMode = async () => {
+  const settings = await getSettings();
+  return paystackMode() === "paystack" && settings.agent.requireSubscription && settings.payments.subscriptionsEnabled ? "paystack" : "disabled";
+};
+
+const freeAccessMessage = "Agent subscriptions are switched off. Complete your profile and professional proof for admin approval; no payment is required.";
 
 const DAY = 24 * 60 * 60 * 1000;
 // Failed checkouts are re-checked with Paystack for this long (abandoned ones can still be
@@ -245,6 +250,7 @@ const requestedPlan = async (user, planId) => {
 
 // POST /api/subscriptions/quote { planId } -> what this plan costs the agent now (credit, amount, dates)
 export const quoteSubscription = async (req, res) => {
+  if (!(await getSettings()).agent.requireSubscription) return fail(res, 403, freeAccessMessage);
   const blocked = checkoutBlocker(req.user);
   if (blocked) return fail(res, ...blocked);
   const plan = await requestedPlan(req.user, req.body.planId);
@@ -254,6 +260,7 @@ export const quoteSubscription = async (req, res) => {
 
 // GET /api/subscriptions/upgrades -> the owner's current plan and the higher plans of their account type
 export const listUpgrades = async (req, res) => {
+  if (!(await getSettings()).agent.requireSubscription) return fail(res, 403, freeAccessMessage);
   const blocked = checkoutBlocker(req.user);
   if (blocked) return fail(res, ...blocked);
   const { status, currentPlan, upgrades } = await upgradeOptions(req.user);
@@ -268,6 +275,7 @@ export const listUpgrades = async (req, res) => {
 // Starts paying for a plan: the plan and amount always come from the server, never from the request.
 // `upgradeOnly` refuses anything that isn't a move to a higher plan (same plan, lower plans, no active plan).
 const startCheckout = async (req, res, { upgradeOnly = false } = {}) => {
+  if (!(await getSettings()).agent.requireSubscription) return fail(res, 403, freeAccessMessage);
   const blocked = checkoutBlocker(req.user);
   if (blocked) return fail(res, ...blocked);
   const plan = await requestedPlan(req.user, req.body.planId);

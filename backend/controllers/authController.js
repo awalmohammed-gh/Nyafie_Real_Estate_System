@@ -10,7 +10,7 @@ import { loginAttempts, rejectLoginAttempt } from "../utils/loginAttempts.js";
 import { startEmailVerification } from "./emailVerificationController.js";
 import { pendingRegistrationFor, resumeRegistration, startRegistration } from "./registrationController.js";
 import { passwordProblem, validPasswordInput } from "../utils/passwordPolicy.js";
-import { siteName } from "../models/Setting.js";
+import { getSettings, siteName } from "../models/Setting.js";
 
 const isEmail = (value) => typeof value === "string" && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 const text = (value) => (typeof value === "string" ? value.trim() : "");
@@ -88,13 +88,16 @@ export const registerAgent = async (req, res) => {
 // POST /api/auth/customer/become-agent: reuse the authenticated customer's identity.
 // Opening onboarding creates no subscription and grants no publishing/dashboard permissions.
 export const becomeAgent = async (req, res) => {
-  const plan = await Plan.findById(req.body?.planId).catch(() => null);
-  if (!plan?.isActive) return fail(res, 404, "This plan is not available.");
+  const settings = await getSettings();
+  const plan = settings.agent.requireSubscription
+    ? await Plan.findById(req.body?.planId).catch(() => null)
+    : null;
+  if (settings.agent.requireSubscription && !plan?.isActive) return fail(res, 404, "This plan is not available.");
   let user = req.user;
   if (user.role === "user") {
     user = await User.findOneAndUpdate(
       { _id: user._id, role: "user", isActive: true },
-      { $set: { role: "agent", customerAccess: true, agentApplication: { status: "incomplete", agentType: plan.accountType } } },
+      { $set: { role: "agent", customerAccess: true, agentApplication: { status: "incomplete", agentType: plan?.accountType || "individual" } } },
       { returnDocument: "after", runValidators: true },
     ).select("+sessionVersion");
     // A concurrent click may already have opened onboarding; never overwrite its progress.

@@ -44,7 +44,7 @@ const Stepper = ({ current }) => (
 
 const Checkout = () => {
   const [searchParams] = useSearchParams();
-  const { getPlan, plansLoading, siteName } = usePlatform();
+  const { getPlan, plansLoading, siteName, settings, settingsReady } = usePlatform();
   const plan = getPlan(searchParams.get("plan"));
   // Paystack sends the user back here with ?reference=... after paying
   const returnReference = searchParams.get("reference") || searchParams.get("trxref");
@@ -59,7 +59,7 @@ const Checkout = () => {
   const timers = useRef([]);
 
   // What this plan costs now always comes from the server: credit for the current plan, amount due and dates
-  const quoteKey = plan && !returnReference && user?.role === "agent" ? `quote:${plan.id}:${user.subscription?.id || "none"}` : null;
+  const quoteKey = settingsReady && settings.agent.requireSubscription && plan && !returnReference && user?.role === "agent" ? `quote:${plan.id}:${user.subscription?.id || "none"}` : null;
   const quote = useApiQuery(quoteKey || "quote:none", () => (quoteKey ? subscriptionApi.quotePlan(plan.id) : Promise.resolve(null)));
   const due = quote.data;
 
@@ -122,6 +122,8 @@ const Checkout = () => {
   }, [returnReference]);
 
   if (isAdmin) return <Navigate to={adminPath("/plans")} replace />;
+  if (!returnReference && !settingsReady) return <PageLoader label="Loading agent access..." />;
+  if (!returnReference && !settings.agent.requireSubscription) return <Navigate to={canAccessAgent(user) ? "/agent/subscription" : "/agent/status"} replace />;
 
   if (returnReference && status !== "success") {
     return (
