@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { clearVisibleAgentsCache } from "../utils/marketplace.js";
 import { setAuthCookie } from "../utils/generateToken.js";
 import { paymentReturnUrl } from "../config/runtime.js";
 import Plan from "../models/Plan.js";
@@ -144,6 +145,7 @@ const settleSubscription = async (subscription, extra = {}, { create = null } = 
       notifyUser(record.user, { type: "payment", title: "Subscription payment will be refunded", message: `We received ${formatGHS(record.amount)} for ${record.planName}, but a newer plan was already active, so your current plan was kept. ${siteName()} will refund this payment.`, link: "/agent/subscription" }),
     ]);
   }
+  clearVisibleAgentsCache(); // a new or renewed plan can make the agent's listings visible
   return { user: result.holder, record: result.record, flagged: Boolean(result.flagged) };
 };
 

@@ -10,6 +10,7 @@ export const About = lazyPage(() => import('../pages/About'));
 export const Contact = lazyPage(() => import('../pages/Contact'));
 export const PropertiesDetails = lazyPage(() => import('../pages/PropertiesDetails'));
 export const SlugPage = lazyPage(() => import('../pages/SlugPage'));
+export const PlaceListings = lazyPage(() => import('../pages/PlaceListings'));
 export const PropertyAction = lazyPage(() => import('../pages/PropertyAction'));
 export const AgentDetailsPage = lazyPage(() => import('../pages/AgentDetailsPage'));
 export const NotFound = lazyPage(() => import('../pages/NotFound'));

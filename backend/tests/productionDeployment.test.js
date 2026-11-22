@@ -31,7 +31,12 @@ test("production configuration, metadata, uploads and marketplace security", asy
   const customer = new User({ emailVerifiedAt: new Date(), firstName: 'Customer', lastName: 'Test', email: 'customer@example.test', role: 'user', isActive: true });
   const agent = new User({ emailVerifiedAt: new Date(), firstName: 'Agent', lastName: 'Test', email: 'agent@example.test', role: 'agent', isActive: true, agentApplication: { status: 'approved' } });
   const admin = new User({ emailVerifiedAt: new Date(), firstName: 'Admin', lastName: 'Test', email: 'admin@example.test', role: 'admin', isActive: true });
-  const property = new Property({ title: 'Accra & East Legon Home', description: 'A comfortable home with a garden in Accra.', owner: agent._id, ownerType: 'agent', status: 'published', images: ['/home.jpg'], location: { city: 'Accra' } });
+  const property = new Property({ title: 'Accra & East Legon Home', description: 'A comfortable home with a garden in Accra.', owner: agent._id, ownerType: 'agent', status: 'published', images: ['/home.jpg'], propertyType: 'House', listingType: 'Rent', bedrooms: 3, bathrooms: 2, price: 5000, pricePeriod: 'month', location: { neighbourhood: 'East Legon', city: 'Accra', region: 'Greater Accra' } });
+  // The location pages' index (routes/seoRoutes.js placeIndex): one neighbourhood and its city, for rent
+  t.mock.method(Property, 'aggregate', async () => [{
+    areas: [{ _id: { listingType: 'Rent', name: 'East Legon' }, city: 'Accra', count: 1, minPrice: 5000, pricePeriod: 'month' }],
+    cities: [{ _id: { listingType: 'Rent', name: 'Accra' }, count: 1, minPrice: 5000, pricePeriod: 'month' }],
+  }]);
   let requireSubscription = false;
   let savedSubscription = null;
   t.mock.method(User, 'findById', (id) => query([customer, agent, admin].find((user) => String(user._id) === String(id))));
@@ -102,7 +107,8 @@ test("production configuration, metadata, uploads and marketplace security", asy
       const html = await response.text();
       assert.equal(response.status, 200);
       assert.match(response.headers.get('content-type'), /text\/html/);
-      assert.match(html, /<title>Accra &amp; East Legon Home \| NyaFie<\/title>/);
+      // Titles say what people search for: bedrooms, type, rent or sale, and the place
+      assert.match(html, /<title>3-Bedroom House for Rent in East Legon, Accra \| NyaFie<\/title>/);
       assert.ok(html.includes(`https://real-estate-home-phi.vercel.app/house/${property._id}`));
       assert.ok(html.includes('/assets/app.js'));
       assert.equal(html.includes('agent@example.test'), false);
@@ -136,6 +142,51 @@ test("production configuration, metadata, uploads and marketplace security", asy
         assert.equal(response.status, 404, path);
         assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow', path);
       }
+    });
+    await t.test('search engines get structured data, readable content and a page per neighbourhood and city', async () => {
+      const jsonLd = (html) => JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1] || 'null');
+      // A listing: its price, place and size as schema.org data, with breadcrumbs to its area page
+      const listingHtml = await (await call(`/house/${property._id}`)).text();
+      const graph = jsonLd(listingHtml)['@graph'];
+      const listing = graph.find((node) => node['@type'] === 'RealEstateListing');
+      assert.equal(listing.offers.price, 5000);
+      assert.equal(listing.offers.priceCurrency, 'GHS');
+      assert.equal(listing.offers.priceSpecification.unitCode, 'MON');
+      assert.equal(listing.about['@type'], 'House');
+      assert.equal(listing.about.numberOfBedrooms, 3);
+      assert.equal(listing.about.address.addressLocality, 'East Legon');
+      assert.equal(JSON.stringify(listing).includes('latitude'), false, 'map pins are never published');
+      const crumbs = graph.find((node) => node['@type'] === 'BreadcrumbList').itemListElement.map((item) => item.item);
+      assert.ok(crumbs.includes('https://real-estate-home-phi.vercel.app/rent/east-legon'));
+      // Readable without JavaScript, and replaced by the app
+      assert.match(listingHtml, /<div id="root"><main class="seo-shell">.*<h1>Accra &amp; East Legon Home<\/h1>/s);
+      assert.match(listingHtml, /GH₵5,000\/month/);
+      assert.match(listingHtml, /href="\/rent\/east-legon"/);
+      assert.match(listingHtml, /<meta property="og:locale" content="en_GH" \/>/);
+      // The homepage: the business and the sitelinks search box
+      const home = jsonLd(await (await call('/')).text())['@graph'];
+      assert.equal(home.find((node) => node['@type'] === 'WebSite').potentialAction['@type'], 'SearchAction');
+      assert.equal(home.find((node) => node['@type'] === 'RealEstateAgent').address.addressCountry, 'GH');
+      // Location pages: neighbourhoods and cities with listings, any capitalisation, canonical in lower case
+      for (const path of ['/rent/east-legon', '/rent/accra', '/rent/East-Legon']) {
+        const response = await call(path);
+        assert.equal(response.status, 200, path);
+        const html = await response.text();
+        assert.match(html, /<title>Houses &amp; Apartments for Rent in (East Legon, Accra|Accra) \| NyaFie<\/title>/, path);
+        assert.match(html, /1 verified home for rent in .* from GH₵5,000\/month/, path);
+        assert.match(html, /<link rel="canonical" href="https:\/\/real-estate-home-phi\.vercel\.app\/rent\/(east-legon|accra)" \/>/, path);
+        assert.ok(jsonLd(html)['@graph'].some((node) => node['@type'] === 'ItemList'), path);
+      }
+      for (const path of ['/rent/kumasi', '/sale/east-legon']) assert.equal((await call(path)).status, 404, path);
+      // /rent links to its areas; the sitemap lists the location pages and listing photos
+      assert.match(await (await call('/rent')).text(), /href="\/rent\/east-legon"/);
+      const pages = await (await call('/sitemap-pages.xml')).text();
+      assert.ok(pages.includes('/rent/east-legon</loc>') && pages.includes('/rent/accra</loc>'));
+      const listings = await (await call('/sitemap-properties-1.xml')).text();
+      assert.match(listings, /<image:loc>https:\/\/real-estate-home-phi\.vercel\.app\/home\.jpg<\/image:loc>/);
+      // Missing pages (and the admin console's address) get none of this
+      const missing = await (await call('/hb-production-fixture-entry/dashboard')).text();
+      assert.equal(missing.includes('application/ld+json') || missing.includes('seo-shell'), false);
     });
     await t.test('the agent workspace and the admin console install as their own apps; the admin app only at its private address', async () => {
       const manifestOf = (html) => html.match(/<link rel="manifest" href="([^"]+)"/)?.[1];

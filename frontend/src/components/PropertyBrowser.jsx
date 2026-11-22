@@ -17,6 +17,7 @@ import { propertyApi } from "../frontApi";
 import { formatType } from "../utils/property";
 import SaveSearchButton from "./property/SaveSearchButton";
 import { hasSearchCriteria, toSavedFilters } from "../utils/savedSearch";
+import { placePath } from "../utils/places";
 import "./property/catalogue.css";
 import "./property/catalogueSearch.css";
 
@@ -34,10 +35,27 @@ const MAP_MARKER_LIMIT = 200;
 const DiscoveryMap = lazy(() => import("./location/DiscoveryMap"));
 
 // banner (optional): { image: { src, srcSet, position }, heading } shows the full-width image banner
-const PropertyBrowser = ({ title, description, fixedListingType, banner }) => {
+// place (location pages, pages/PlaceListings.jsx): the fixed neighbourhood or city ({ area?, city, label })
+const PropertyBrowser = ({ title, description, fixedListingType, banner, place = null }) => {
   const { paths } = usePlatform();
   const navigate = useNavigate();
-  const { filters, query, search, sort, page, view, params: urlParams, update, clear } = usePropertyBrowseState(fixedListingType);
+  const { filters, query, search, sort, page, view, params: urlParams, update: updateSearch, clear: clearSearch } = usePropertyBrowseState(fixedListingType, place);
+  // On a location page the place is part of the address: changing or clearing it continues on the
+  // general /sale or /rent results, with the visitor's other filters kept
+  const basePath = fixedListingType === "Sale" ? "/sale" : "/rent";
+  const leavePlace = (changes = {}) => {
+    const next = new URLSearchParams(urlParams);
+    next.delete("page");
+    for (const [key, value] of Object.entries({ area: place?.area || "", city: place?.city || "", ...changes })) {
+      if (["area", "city", "region"].includes(key)) {
+        if (value) next.set(key, value);
+        else next.delete(key);
+      }
+    }
+    navigate(`${basePath}${next.size ? `?${next}` : ""}`);
+  };
+  const update = (changes, options) => (place && ["area", "city", "region"].some((key) => key in changes) ? leavePlace(changes) : updateSearch(changes, options));
+  const clear = () => (place ? navigate(basePath) : clearSearch());
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [changingLocation, setChangingLocation] = useState(false);
   const resultsRef = useRef(null);
@@ -231,6 +249,18 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner }) => {
             <p>Page {shownPage} of {shown.pages}</p>
             <div><button type="button" onClick={() => goToPage(page - 1)} disabled={pending || page <= 1} aria-label="Previous page"><ChevronLeft size={17} aria-hidden="true" /></button>{pageNumbers.map((number, index) => <span key={number}>{index > 0 && number - pageNumbers[index - 1] > 1 && <span className="catalogue-page-gap">…</span>}<button type="button" onClick={() => goToPage(number)} aria-label={`Page ${number}`} aria-current={page === number ? "page" : undefined} disabled={pending}>{number}</button></span>)}<button type="button" onClick={() => goToPage(page + 1)} disabled={pending || page >= shown.pages} aria-label="Next page"><ChevronRight size={17} aria-hidden="true" /></button></div>
           </nav>}
+
+          {/* Links to the location pages (/rent/east-legon): how visitors and search engines reach them */}
+          {fixedListingType && facets.data?.areas?.some((area) => area.name !== place?.area) && (
+            <nav aria-label="Browse by area" className="catalogue-areas">
+              <h2>{`Homes ${fixedListingType === "Sale" ? "for sale" : "for rent"} by area`}</h2>
+              <ul>
+                {facets.data.areas.filter((area) => area.name !== place?.area).slice(0, 24).map((area) => (
+                  <li key={area.name}><Link to={placePath(fixedListingType, area.name)}><MapPin size={14} aria-hidden="true" />{area.name}<span>{area.count}</span></Link></li>
+                ))}
+              </ul>
+            </nav>
+          )}
 
           <div className="catalogue-help"><div><span className="catalogue-eyebrow">A LITTLE LOCAL KNOWLEDGE</span><p>Find the home. Get to know the neighbourhood.</p></div><Link to={paths.agents}>Talk to an agent<ArrowUpRight size={17} aria-hidden="true" /></Link></div>
         </section>

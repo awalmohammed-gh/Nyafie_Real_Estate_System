@@ -5,12 +5,13 @@ import { CheckCircle2, Clock3, Loader2, MessageCircle, RotateCcw, XCircle } from
 import { paymentApi, rentalApi } from "../frontApi";
 import { formatDate } from "../utils/date";
 import { usePlatform } from "../context/usePlatform";
+import { AskAgentToUpdate } from "../components/reports/PaymentSafety";
 import { formatGhs } from "../utils/property";
 
 // /payment/success?reference=... (Paystack's callback). The backend verifies the
 // transaction with Paystack before anything is shown as paid.
 const PaymentResult = () => {
-  const { paths } = usePlatform();
+  const { paths, siteName } = usePlatform();
   const [params] = useSearchParams();
   const reference = params.get("reference");
   const [attempt, setAttempt] = useState(0);
@@ -85,6 +86,7 @@ const PaymentResult = () => {
             </span>
             <h1 className="mt-6 text-2xl font-extrabold text-gray-900">Payment Successful</h1>
             <p className="mt-2 text-gray-600">Your rental payment was received and verified. {rental.owner?.name || "The owner"} has been notified and will confirm your rental.</p>
+            <AskAgentToUpdate kind={rental.hotelId ? "booking" : "rent"} siteName={siteName} className="mt-5" />
             <dl className="mt-6 divide-y divide-gray-100 rounded-2xl px-4 text-left text-sm ring-1 ring-gray-200">
               <div className="flex justify-between gap-4 py-3">
                 <dt className="text-gray-500">Property</dt>

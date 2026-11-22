@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { schemaOptions } from "../utils/schemaOptions.js";
 import { roomTypeSchema } from "./roomTypeSchema.js";
+import { placeSlug } from "../utils/seo.js";
 
 // GeoJSON point for nearby search. Coordinates are always [longitude, latitude].
 const pointSchema = new mongoose.Schema({
@@ -53,6 +54,11 @@ const propertySchema = new mongoose.Schema(
       // How the coordinates were set: "map" = placed by a person (exact), "address" = found from the
       // neighbourhood and city (approximate, shown as "About … away"). Unset on older pins = exact.
       pinSource: { type: String, enum: ["map", "address"], default: undefined },
+      // The place's address-style key, set on every save (hook below), never by clients: "East Legon",
+      // "east legon" and "East-Legon" are all "east-legon". Area search and the location pages
+      // (/rent/east-legon) match on it through an index, so every spelling counts as the same place.
+      areaKey: { type: String, default: undefined },
+      cityKey: { type: String, default: undefined },
     },
     // Derived from location.latitude/longitude on every save (see the hook below); never written by clients.
     // Absent when the listing has no map pin, so it is left out of nearby search instead of guessed.
@@ -122,6 +128,14 @@ propertySchema.pre("validate", function syncGeo() {
   if (current?.[0] !== point.coordinates[0] || current?.[1] !== point.coordinates[1]) this.geo = point;
 });
 
+propertySchema.pre("validate", function syncPlaceKeys() {
+  if (!this.location) return;
+  const areaKey = placeSlug(this.location.neighbourhood) || undefined;
+  const cityKey = placeSlug(this.location.city) || undefined;
+  if (this.location.areaKey !== areaKey) this.location.areaKey = areaKey;
+  if (this.location.cityKey !== cityKey) this.location.cityKey = cityKey;
+});
+
 propertySchema.index({ geo: "2dsphere" });
 
 // Public browsing (listings, rent and sale pages, sitemap): published and not stale, then sorted
@@ -129,6 +143,9 @@ propertySchema.index({ status: 1, staleSince: 1, createdAt: -1 });
 propertySchema.index({ status: 1, staleSince: 1, listingType: 1, createdAt: -1 });
 propertySchema.index({ status: 1, staleSince: 1, price: 1, createdAt: -1 }); // price, low to high
 propertySchema.index({ status: 1, staleSince: 1, price: -1, createdAt: -1 }); // price, high to low
+// One place's listings (area search, location pages such as /rent/east-legon), newest first
+propertySchema.index({ status: 1, staleSince: 1, listingType: 1, "location.areaKey": 1, createdAt: -1 });
+propertySchema.index({ status: 1, staleSince: 1, listingType: 1, "location.cityKey": 1, createdAt: -1 });
 // An owner's or agency's listings, and the admin list, newest first
 propertySchema.index({ owner: 1, createdAt: -1 });
 propertySchema.index({ createdAt: -1 });

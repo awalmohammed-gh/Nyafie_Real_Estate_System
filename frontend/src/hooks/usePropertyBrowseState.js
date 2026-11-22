@@ -27,7 +27,8 @@ const priceLabel = (min, max) => max === null
   : min === null ? `Up to ₵${max.toLocaleString()}` : `₵${min.toLocaleString()} – ₵${max.toLocaleString()}`;
 
 // The URL is the source of truth: refresh, shared links and Back restore the same search.
-export const usePropertyBrowseState = (fixedListingType) => {
+// place: a location page's fixed neighbourhood/city ({ area?, city }), which the URL cannot change
+export const usePropertyBrowseState = (fixedListingType, place = null) => {
   const [params, setParams] = useSearchParams();
   const min = numberParam(params, "minPrice");
   const max = numberParam(params, "maxPrice");
@@ -37,8 +38,8 @@ export const usePropertyBrowseState = (fixedListingType) => {
   const filters = {
     listingType: fixedListingType || (["Sale", "Rent"].includes(params.get("status")) ? params.get("status") : ({ rent: "Rent", sale: "Sale" })[params.get("purpose")] || ""),
     types: [...new Set((params.get("type") || "").split(",").map((value) => value.trim()).filter(Boolean))],
-    area: params.get("area") || "",
-    city: params.get("city") || "",
+    area: place ? place.area || "" : params.get("area") || "",
+    city: place ? place.city || "" : params.get("city") || "",
     region: params.get("region") || "",
     price,
     beds: Math.floor(numberParam(params, "bedrooms") || 0),

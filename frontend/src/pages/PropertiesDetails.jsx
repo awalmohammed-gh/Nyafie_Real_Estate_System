@@ -34,6 +34,7 @@ import {
   Navigation,
   Phone,
   Share2,
+  ShieldAlert,
   ShieldCheck,
   Star,
   Tag,
@@ -74,6 +75,7 @@ import { amenityIcon } from "../utils/amenityIcons";
 import { moveInCosts } from "../utils/moveIn";
 import { propertyUrl } from "../utils/siteUrl";
 import PageMetadata from "../components/brand/PageMetadata";
+import { placeLabel, placePath, propertyHeadline } from "../utils/places";
 import {
   formatType,
   getInitials,
@@ -379,7 +381,8 @@ const PropertiesDetails = () => {
 
   return (
     <div className="property-detail-page pb-32 lg:pb-16">
-      <PageMetadata title={`${title} | ${siteName}`} description={description.replace(/\s+/g, " ").slice(0, 160)} image={images[0]} />
+      {/* Search-style title ("3-Bedroom House for Rent in East Legon, Accra"), the same as the server's */}
+      <PageMetadata title={`${propertyHeadline({ propertyType: details.type, listingType: details.status, bedrooms: details.bedrooms })} in ${placeLabel({ neighbourhood: place?.name, city: place?.city })} | ${siteName}`} description={`${title}: ${description}`.replace(/\s+/g, " ").slice(0, 160)} image={images[0]} />
       <div className="container-page property-detail-container">
         <nav aria-label="Breadcrumb" className="mb-5 flex min-w-0 items-center gap-1.5 text-xs text-gray-500 sm:text-sm">
           <Link to="/" className="inline-flex shrink-0 items-center gap-1 hover:text-brand-600">
@@ -391,6 +394,15 @@ const PropertiesDetails = () => {
             Properties
           </Link>
           <ChevronRight aria-hidden="true" className="h-3 w-3 shrink-0" />
+          {/* The area's location page (/rent/east-legon): more homes nearby, and a path for search engines */}
+          {(place?.name || place?.city) && (
+            <>
+              <Link to={placePath(details.status, place.name || place.city)} className="shrink-0 text-brand-600 hover:text-brand-700">
+                {place.name || place.city}
+              </Link>
+              <ChevronRight aria-hidden="true" className="h-3 w-3 shrink-0" />
+            </>
+          )}
           <span className="truncate text-gray-700">{title}</span>
         </nav>
 
@@ -611,7 +623,10 @@ const PropertiesDetails = () => {
                 </div> : <SignInPrompt returnTo={location.pathname + location.search} message="Sign in to view this agent's profile and contact details." />}
               </div>
               <div className="property-reference"><p className="property-sidebar-label">Property Reference</p><div><strong>{reference}</strong><button type="button" onClick={copyReference} aria-label={copied === "reference" ? "Reference copied" : "Copy property reference"}>{copied === "reference" ? <Check size={19} /> : <Copy size={19} />}</button></div></div>
-              <div className="property-confidence"><h3><ShieldCheck size={22} />{isForSale ? "Buy" : "Browse"} with Confidence</h3><ul><li><Check size={20} />Connect with the listing owner</li><li><Check size={20} />Arrange a property viewing</li><li><Check size={20} />Keep your conversations together</li></ul></div>
+              <div className="property-confidence"><h3><ShieldCheck size={22} />{isForSale ? "Buy" : "Browse"} with Confidence</h3><ul><li><Check size={20} />Connect with the listing owner</li><li><Check size={20} />Arrange a property viewing</li><li><Check size={20} />Keep your conversations together</li>
+                {/* Always visible (the full safety advice is under "More options"): see it before paying, then get it marked */}
+                {!hotel && <li className="property-pay-warning"><ShieldAlert size={20} />Don't pay anything, online or in cash, until you've seen the property in person</li>}
+                {!hotel && <li className="property-pay-warning"><ShieldAlert size={20} />After paying, ask the agent to mark it as {isForSale ? "sold" : "rented"} on {siteName}</li>}</ul></div>
               <details className="property-contact-more"><summary>More options & safety advice</summary><div>
                 {!hotel && <CompareButton propertyId={id} className={outlineButton} />}
                 {!isOwnListing && <><button type="button" onClick={() => requireAuth(chatAction)} className={outlineButton}><MessageSquare size={17} />Send a message</button>{!hotel && <button type="button" onClick={() => startFlow("offer")} disabled={!canMakeOffer} className={outlineButton}><HandCoins size={17} />Make an offer</button>}</>}

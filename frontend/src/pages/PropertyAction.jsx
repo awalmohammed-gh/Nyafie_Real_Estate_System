@@ -14,6 +14,7 @@ import RentalCheckout from "../components/offer/RentalCheckout";
 import HotelCheckout from "../components/offer/HotelCheckout";
 import { isHotel } from "../utils/hotel";
 import BuyNowPanel from "../components/offer/BuyNowPanel";
+import { SeeBeforeYouPay } from "../components/reports/PaymentSafety";
 import NotFound from "./NotFound";
 import { formatType, getPriceParts, statusLabel } from "../utils/property";
 import { buildWhatsAppLink, ownerWhatsAppNumber } from "../utils/whatsapp";
@@ -36,7 +37,7 @@ const PropertyAction = ({ mode }) => {
   const { propertyId } = useParams();
   const location = useLocation();
   const { ready, user } = useAuth();
-  const { settings } = usePlatform();
+  const { settings, siteName } = usePlatform();
   const [property, setProperty] = useState(undefined); // undefined = loading, null = not found
   const [chatOpen, setChatOpen] = useState(false);
 
@@ -112,6 +113,7 @@ const PropertyAction = ({ mode }) => {
         </Link>
         <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">{hotel ? "Book your hotel stay" : COPY[mode].title}</h1>
         <p className="mt-2 text-gray-600">{hotel ? "Choose your room, review what's included, and confirm your dates and guests, then choose how you'd like to pay." : mode === "rent" && property.paymentOptions ? "Confirm your dates and details, review the total, then choose to pay online or reserve and pay on arrival." : COPY[mode].intro}</p>
+        <div className="mt-5 max-w-3xl"><SeeBeforeYouPay propertyId={property.id} forSale={isForSale} hotel={hotel} siteName={siteName} /></div>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-5 lg:gap-8">
           {/* Property summary */}

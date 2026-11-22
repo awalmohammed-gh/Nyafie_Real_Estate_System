@@ -70,7 +70,7 @@ const AgentPromo = ({ paused = false }) => {
             <div className="min-w-0">
               <p className="text-[11px] font-semibold tracking-[0.14em] text-brand-700 uppercase">For agents &amp; agencies</p>
               <h2 id={titleId} className="mt-0.5 text-base font-semibold text-gray-900">Want to become an agent?</h2>
-              <p className="mt-1 text-sm leading-relaxed text-gray-600">List your properties on {siteName} and reach buyers and renters across Ghana.</p>
+              <p className="mt-1 text-sm leading-relaxed text-gray-600">Agents and property owners can post properties on {siteName} and reach buyers and renters across Ghana, after a quick verification.</p>
             </div>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">

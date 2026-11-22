@@ -6,7 +6,8 @@ import { getSettings, siteName } from "../models/Setting.js";
 import { stayPaymentOptions, takesStayBookings, payoutAccountFor } from "../utils/hotelPayout.js";
 import { notifyAdmins, notifyUser } from "../utils/notify.js";
 import { COUNTED_STATES, withinImageLimit } from "../utils/permissions.js";
-import { PUBLIC_AGENT_FIELDS, publicAgent, presentProperties, publicQuery, visibleAgentIds, isPubliclyVisible, guestWhatsApp } from "../utils/marketplace.js";
+import { PUBLIC_AGENT_FIELDS, publicAgent, presentProperties, publicQuery, visibleAgentIds, isPubliclyVisible, guestWhatsApp, placeFilter, placePattern } from "../utils/marketplace.js";
+import { placeSlug } from "../utils/seo.js";
 import { claimView, isCrawler, viewerHash } from "../utils/propertyViews.js";
 export { publicQuery, visibleAgentIds } from "../utils/marketplace.js";
 import { resolveImages } from "../utils/uploadImages.js";
@@ -161,8 +162,9 @@ export const buildPublicFilter = (q, base) => {
   const listingType = q.listingType || ({ rent: "Rent", sale: "Sale" })[q.purpose];
   if (["Sale", "Rent"].includes(listingType)) and.push({ listingType });
   if (list(q.type).length) and.push({ propertyType: { $in: list(q.type).map(exact) } });
-  if (q.area) and.push({ "location.neighbourhood": exact(String(q.area)) });
-  if (q.city) and.push({ "location.city": exact(String(q.city)) });
+  // Any spelling of the place ("East-Legon", "east legon") finds its listings, through the place-key index
+  if (q.area) and.push(placeFilter("area", placeSlug(String(q.area)), [placePattern(placeSlug(String(q.area)))]));
+  if (q.city) and.push(placeFilter("city", placeSlug(String(q.city)), [placePattern(placeSlug(String(q.city)))]));
   if (q.region) and.push({ "location.region": exact(String(q.region)) });
   const availability = list(q.availability).filter((a) => ["Available", "Under Offer", "Sold", "Rented"].includes(a));
   if (availability.length) and.push({ availability: { $in: availability } });
@@ -296,6 +298,23 @@ const nearbyQuery = ({ filter, center, radius, sort, page, limit, markers }) =>
     ]),
   ]);
 
+// Filter options for one place that the database grouped apart (listings saved before place keys
+// existed group by their lower-cased name): one option per place key, counts added together
+const mergeSpellings = (places) => {
+  const byKey = new Map();
+  for (const place of places) {
+    const key = placeSlug(place.name) || place.name;
+    const merged = byKey.get(key);
+    if (!merged) byKey.set(key, { ...place });
+    else {
+      if (place.count > merged.count) Object.assign(merged, { name: place.name, image: place.image || merged.image });
+      merged.count += place.count;
+      if (place.views !== undefined) merged.views = (merged.views || 0) + (place.views || 0);
+    }
+  }
+  return [...byKey.values()];
+};
+
 /**
  * GET /api/properties/facets (public): filter options and headline numbers,
  * computed from the public listings in MongoDB (optionally for one listingType).
@@ -310,12 +329,13 @@ export const propertyFacets = async (req, res) => {
       $facet: {
         types: [{ $group: { _id: "$propertyType", count: { $sum: 1 } } }, { $sort: { _id: 1 } }],
         regions: [{ $match: { "location.region": { $nin: ["", null] } } }, { $group: { _id: "$location.region", count: { $sum: 1 } } }, { $sort: { _id: 1 } }],
-        cities: [{ $match: { "location.city": { $nin: ["", null] } } }, { $group: { _id: { city: "$location.city", region: "$location.region" }, count: { $sum: 1 } } }, { $sort: { "_id.city": 1 } }],
+        // Places are grouped by their key, so "East Legon" and "East-Legon" are one option with one count
+        cities: [{ $match: { "location.city": { $nin: ["", null] } } }, { $group: { _id: { $ifNull: ["$location.cityKey", { $toLower: { $trim: { input: "$location.city" } } }] }, city: { $first: "$location.city" }, region: { $first: "$location.region" }, count: { $sum: 1 } } }, { $sort: { city: 1 } }],
         areas: [
           { $match: { "location.neighbourhood": { $ne: "" } } },
           { $sort: { views: -1 } },
-          { $group: { _id: "$location.neighbourhood", city: { $first: "$location.city" }, region: { $first: "$location.region" }, image: { $first: { $arrayElemAt: ["$images", 0] } }, count: { $sum: 1 }, views: { $sum: "$views" } } },
-          { $sort: { count: -1, views: -1, _id: 1 } },
+          { $group: { _id: { $ifNull: ["$location.areaKey", { $toLower: { $trim: { input: "$location.neighbourhood" } } }] }, name: { $first: "$location.neighbourhood" }, city: { $first: "$location.city" }, region: { $first: "$location.region" }, image: { $first: { $arrayElemAt: ["$images", 0] } }, count: { $sum: 1 }, views: { $sum: "$views" } } },
+          { $sort: { count: -1, views: -1, name: 1 } },
         ],
         listingTypes: [{ $group: { _id: "$listingType", count: { $sum: 1 }, minPrice: { $min: "$price" }, maxPrice: { $max: "$price" } } }],
         totals: [{ $group: { _id: null, total: { $sum: 1 }, avgRating: { $avg: { $cond: [{ $gt: ["$ratingCount", 0] }, "$ratingAverage", null] } }, agents: { $addToSet: { $cond: [{ $eq: ["$ownerType", "agent"] }, "$owner", null] } } } }],
@@ -333,8 +353,9 @@ export const propertyFacets = async (req, res) => {
     avgRating: totals.avgRating ? Math.round(totals.avgRating * 10) / 10 : null,
     types: facet.types.map((t) => ({ value: t._id, count: t.count })),
     regions: facet.regions.map((r) => ({ name: r._id, count: r.count })),
-    cities: facet.cities.map((c) => ({ name: c._id.city, region: c._id.region, count: c.count })),
-    areas: facet.areas.map((a) => ({ name: a._id, city: a.city, region: a.region, image: a.image || "", count: a.count, views: a.views })),
+    cities: mergeSpellings(facet.cities.map((c) => ({ name: c.city, region: c.region, count: c.count }))).sort((a, b) => a.name.localeCompare(b.name)),
+    areas: mergeSpellings(facet.areas.map((a) => ({ name: a.name, city: a.city, region: a.region, image: a.image || "", count: a.count, views: a.views })))
+      .sort((a, b) => b.count - a.count || (b.views || 0) - (a.views || 0) || a.name.localeCompare(b.name)),
   });
 };
 

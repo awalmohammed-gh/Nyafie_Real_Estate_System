@@ -19,6 +19,7 @@
     "views:clean-seed": "node seed/removeSeedViews.js",
     "geo:backfill": "node seed/backfillGeo.js",
     "geo:locate": "node seed/locateFromAddress.js",
+    "places:backfill": "node seed/backfillPlaceKeys.js",
     "indexes:sync": "node seed/syncIndexes.js"
   },
   "dependencies": {
