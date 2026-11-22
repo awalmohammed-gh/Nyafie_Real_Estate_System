@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowUpRight, LocateFixed, MapPinOff } from "lucide-react";
 import { usePlatform } from "../../context/usePlatform";
+import { CORNER_CARD } from "../ui/cornerCard";
 import { useVisitorLocation } from "../../hooks/useVisitorLocation";
 import { DEFAULT_RADIUS_KM, DEVICE } from "../../utils/geo";
 import { LOCATION_PROBLEMS, LOCATION_PROMPT_DELAY_MS, getSnapshot, locationPromptAction, locationPromptAllowedOn, permissionState } from "../../utils/visitorLocation";
@@ -12,9 +13,10 @@ import { LOCATION_PROBLEMS, LOCATION_PROMPT_DELAY_MS, getSnapshot, locationPromp
  * It says why before the browser asks: the browser's own prompt opens only after "Allow location".
  * Once per page load, a few seconds after arriving. "Not now" is remembered on this device; the
  * "Use my current location" search option stays available either way.
- * onOpenChange lets the layout hold back other pop-ups while this one is on screen.
+ * onOpenChange lets the layout hold back other pop-ups while this one is on screen (or waiting).
+ * paused: something else has the screen (the phone menu); the card waits and returns when it closes.
  */
-const LocationPrompt = ({ onOpenChange }) => {
+const LocationPrompt = ({ onOpenChange, paused = false }) => {
   const titleId = useId();
   const { pathname } = useLocation();
   const { paths } = usePlatform();
@@ -24,7 +26,8 @@ const LocationPrompt = ({ onOpenChange }) => {
   const [checked, setChecked] = useState(false);
   const allowedHere = locationPromptAllowedOn(pathname);
   // Answered somewhere else meanwhile (e.g. "Near me" in the search box): the question is gone
-  const shown = allowedHere && Boolean(step) && !(step === "ask" && choice !== null);
+  const waiting = allowedHere && Boolean(step) && !(step === "ask" && choice !== null);
+  const shown = waiting && !paused;
 
   useEffect(() => {
     if (checked || !allowedHere || choice !== null) return undefined;
@@ -40,7 +43,8 @@ const LocationPrompt = ({ onOpenChange }) => {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [checked, allowedHere, choice, requestDevicePosition]);
 
-  useEffect(() => { onOpenChange?.(shown); }, [shown, onOpenChange]);
+  // Reported while waiting too, so another pop-up doesn't take its place behind an open menu
+  useEffect(() => { onOpenChange?.(waiting); }, [waiting, onOpenChange]);
 
   const allow = async () => {
     setStep("locating");
@@ -66,7 +70,7 @@ const LocationPrompt = ({ onOpenChange }) => {
           role="dialog" aria-modal="false" aria-labelledby={titleId} aria-live="polite"
           initial={{ opacity: 0, y: 16, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, transition: { duration: 0.15 } }}
           transition={{ type: "spring", damping: 26, stiffness: 320 }}
-          className="fixed inset-x-4 bottom-4 z-[90] mx-auto max-w-md rounded-2xl bg-white p-5 shadow-2xl ring-1 shadow-gray-900/15 ring-gray-100 sm:inset-x-auto sm:bottom-6 sm:left-6 sm:mx-0 sm:w-[26.5rem]"
+          className={CORNER_CARD}
         >
           <div className="flex items-start gap-3.5">
             <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${problem ? "bg-amber-50 text-amber-700" : "bg-brand-50 text-brand-700"}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>

@@ -11,7 +11,7 @@ const CompareBar = () => {
   // Listing pages have a sticky action bar at the bottom on phones: sit above it
   const raised = pathname.startsWith("/house/");
   return (
-    <div className={`fixed left-1/2 z-40 -translate-x-1/2 ${raised ? "bottom-28 lg:bottom-6" : "bottom-4 sm:bottom-6"}`} role="region" aria-label="Homes to compare">
+    <div className={`fixed left-1/2 z-40 -translate-x-1/2 ${raised ? "bottom-28 lg:bottom-6" : "above-bottom-nav"}`} role="region" aria-label="Homes to compare">
       <div className="flex items-center gap-1 rounded-full bg-gray-950 py-1.5 pr-1.5 pl-4 text-sm text-white shadow-xl">
         <GitCompareArrows className="h-4 w-4 text-brand-300" aria-hidden="true" />
         <span className="mr-2 ml-1.5 whitespace-nowrap">{ids.length} of {COMPARE_LIMIT} homes</span>

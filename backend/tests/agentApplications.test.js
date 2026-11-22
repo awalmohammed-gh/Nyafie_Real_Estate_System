@@ -20,6 +20,9 @@ import { activateSubscription } from "../controllers/subscriptionController.js";
 import { approvedAgent, validateAgentProfile } from "../utils/agentApplication.js";
 import { canAccessAgent, agentDestination, sessionDestination } from "../../frontend/src/utils/sessionDomain.js";
 import { fakeListedAgents } from "./support/listedAgents.js";
+import PendingRegistration from "../models/PendingRegistration.js";
+import { verificationMailer } from "../utils/email.js";
+import { memoryModel } from "./support/memoryModels.js";
 
 test("agent permission and return navigation fail closed", () => {
   for (const status of [undefined, "incomplete", "pending", "rejected", "suspended"]) {
@@ -82,6 +85,21 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
   replace(Property, "aggregate", async () => []);
   replace(Property, "countDocuments", async () => 0);
   replace(Inquiry, "find", () => query([]));
+  // Sign-ups wait for their emailed code (controllers/registrationController.js); the codes are caught here
+  const codes = [];
+  t.mock.method(verificationMailer, "send", async (email, code) => { codes.push({ email, code }); });
+  const smtp = { SMTP_USER: process.env.SMTP_USER, SMTP_APP_PASSWORD: process.env.SMTP_APP_PASSWORD };
+  Object.assign(process.env, { SMTP_USER: "sender@gmail.com", SMTP_APP_PASSWORD: "test-app-password" });
+  t.after(() => { for (const [name, value] of Object.entries(smtp)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } });
+  memoryModel(t, PendingRegistration);
+  // A finished sign-up saves a new User: it joins the same in-memory list
+  replace(User.prototype, "save", async function save() {
+    await User.schema.s.hooks.execPre("save", this, []);
+    this.unmarkModified("password");
+    await this.validate();
+    if (!users.includes(this)) users.push(this);
+    return this;
+  });
   const app = express();
   app.use(express.json(), cookieParser());
   app.use("/api/auth", authRoutes);
@@ -99,6 +117,13 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
     for (const cookie of response.headers.getSetCookie()) { const [name, token] = cookie.split(";")[0].split("="); jar[name] = token; }
     return response;
   };
+  // Registers, then enters the emailed code: the account exists only after that
+  const signUp = async (path, domain, details) => {
+    const started = await call(path, domain, details);
+    if (started.status !== 202) return started;
+    const { challenge } = (await started.json()).data;
+    return call(path.replace(/register$/, "verify-email"), domain, { challenge, code: codes.at(-1).code });
+  };
   const signup = { fullName: "Akua Mensah", email: "agent@example.test", phone: "+233 24 123 4567", password: "StrongFixturePassword123", confirmPassword: "StrongFixturePassword123" };
   const profile = { firstName: "Akua", lastName: "Mensah", phone: signup.phone, agentType: "individual", region: "Greater Accra", city: "East Legon", yearsExperience: 4, bio: "Helping buyers and renters find their next home." };
   let agent;
@@ -106,7 +131,16 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
     await call("/api/auth/admin/login", "admin", { email: admin.email, password: "StrongFixturePassword123" });
     await call("/api/auth/customer/login", "customer", { email: customer.email, password: "StrongFixturePassword123" });
     await t.test("registration hashes passwords, isolates cookies and ignores forged privileges", async () => {
-      const response = await call("/api/auth/agent/register", "agent", { ...signup, role: "admin", isActive: false, agentId: id(admin), approvalStatus: "approved", agentApplication: { status: "approved", approvedBy: id(admin) } });
+      const started = await call("/api/auth/agent/register", "agent", { ...signup, role: "admin", isActive: false, agentId: id(admin), approvalStatus: "approved", agentApplication: { status: "approved", approvedBy: id(admin) } });
+      assert.equal(started.status, 202);
+      assert.ok(started.headers.getSetCookie().every((cookie) => !cookie.includes("agent_token=ey")), "no session before the code");
+      const pending = (await started.json()).data;
+      assert.equal(pending.verificationRequired, true);
+      assert.equal(users.some((user) => user.email === signup.email), false, "no account before the code");
+      assert.equal(codes.at(-1).email, signup.email);
+      assert.equal((await call("/api/auth/agent/verify-email", "agent", { challenge: pending.challenge, code: "000000" })).status, 400);
+      assert.equal(users.some((user) => user.email === signup.email), false);
+      const response = await call("/api/auth/agent/verify-email", "agent", { challenge: pending.challenge, code: codes.at(-1).code });
       assert.equal(response.status, 201);
       assert.equal(response.headers.getSetCookie().length, 1);
       assert.match(response.headers.getSetCookie()[0], /^agent_token=.*HttpOnly/);
@@ -116,6 +150,8 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
       assert.equal(body.password, undefined); assert.notEqual(agent.password, signup.password);
       assert.equal(await agent.matchPassword(signup.password), true);
       assert.equal(agent.isActive, true); assert.equal(agent.agentApplication.approvedBy, null);
+      assert.ok(agent.emailVerifiedAt, "the code proved the email");
+      assert.equal((await call("/api/auth/agent/verify-email", "agent", { challenge: pending.challenge, code: codes.at(-1).code })).status, 409, "a code works once");
       assert.equal((await call("/api/agents/dashboard")).status, 403);
       assert.equal((await call("/owner")).status, 403);
       assert.equal((await call("/api/agents/profile", "agent", profile, "PUT")).status, 403);
@@ -209,7 +245,7 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
     });
     await t.test("waived subscriptions submit for review, and rejected agents can correct and resubmit", async () => {
       requireSubscription = false;
-      await call("/api/auth/agent/register", "agent", { ...signup, email: "second@example.test" });
+      assert.equal((await signUp("/api/auth/agent/register", "agent", { ...signup, email: "second@example.test" })).status, 201);
       const second = users.find((user) => user.email === "second@example.test");
       await call("/api/agents/application", "agent", profile, "PUT");
       assert.equal((await call("/api/agents/application/submit", "agent", {})).status, 200);
@@ -236,12 +272,17 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
     await t.test("customer registration remains customer-only even with forged agent fields", async () => {
       const response = await call("/api/auth/customer/register", "customer", { firstName: "New", lastName: "Customer", email: "new-customer@example.test", password: "StrongFixturePassword123", role: "agent", isActive: false, agentApplication: { status: "approved" } });
       assert.equal(response.status, 202);
-      assert.equal((await response.json()).data.verificationRequired, true);
+      const pending = (await response.json()).data;
+      assert.equal(pending.verificationRequired, true);
+      assert.ok(response.headers.getSetCookie().every((cookie) => !cookie.includes("customer_token=ey")));
+      assert.equal(users.some((user) => user.email === "new-customer@example.test"), false, "no account until the code is entered");
+      // A customer code can't finish an agent sign-up, and the reverse
+      assert.equal((await call("/api/auth/agent/verify-email", "agent", { challenge: pending.challenge, code: codes.at(-1).code })).status, 401);
+      assert.equal((await call("/api/auth/customer/verify-email", "customer", { challenge: pending.challenge, code: codes.at(-1).code })).status, 201);
       const account = users.find((user) => user.email === "new-customer@example.test");
       assert.equal(account.role, "user"); assert.equal(account.isActive, true);
       assert.equal(account.agentApplication, undefined);
-      assert.equal(account.emailVerifiedAt, null);
-      assert.ok(response.headers.getSetCookie().every((cookie) => !cookie.includes("customer_token=ey")));
+      assert.ok(account.emailVerifiedAt);
     });
   } finally {
     await new Promise((resolve) => server.close(resolve));

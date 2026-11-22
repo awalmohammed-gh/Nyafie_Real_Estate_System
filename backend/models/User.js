@@ -90,7 +90,8 @@ const userSchema = new mongoose.Schema(
 
 userSchema.pre("save", async function hashPassword() {
   if (!this.isModified("password")) return;
-  this.password = await bcrypt.hash(this.password, 10);
+  // A finished sign-up arrives already hashed (utils/registration.js): never hash it twice
+  if (!this.$locals.passwordHashed) this.password = await bcrypt.hash(this.password, 10);
   // Persist the password hash and revocation marker in the same database write.
   // Random versions also distinguish changes made within the same second.
   if (!this.isNew) this.sessionVersion = randomUUID();

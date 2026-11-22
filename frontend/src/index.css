@@ -310,6 +310,29 @@
 }
 
 /*
+ * Phone tab bar (layout/BottomNav.jsx). While it shows, below the desktop breakpoint, the page reserves
+ * its height so the footer ends above it, and --bottom-nav tells floating cards how high to sit.
+ * .above-bottom-nav: the usual 1rem (1.5rem from 640px) gap from the bottom, plus the tab bar if present.
+ */
+@media (max-width: 1023.98px) {
+  .has-bottom-nav {
+    --bottom-nav: calc(4rem + env(safe-area-inset-bottom));
+    /* Floating cards are centred, over the raised Menu button that rises 1.25rem above the bar */
+    --bottom-nav-float: calc(var(--bottom-nav) + 1.25rem);
+    padding-bottom: var(--bottom-nav);
+  }
+}
+.above-bottom-nav { bottom: calc(var(--bottom-nav-float, 0px) + 1rem); }
+@media (min-width: 640px) {
+  .above-bottom-nav { bottom: calc(var(--bottom-nav-float, 0px) + 1.5rem); }
+}
+/* Back-to-top (layout/Footer.jsx): clear of a property page's action bar (6rem) and of the tab bar */
+.scroll-top-button { bottom: max(6rem, calc(var(--bottom-nav, 0px) + 1rem)); }
+@media (min-width: 1024px) {
+  .scroll-top-button { bottom: 2rem; }
+}
+
+/*
  * App loader (components/ui/PageLoader): the NyaFie mark breathes gently while a soft
  * brand-purple (#b45cfd) glow pulses behind it. It fades in after a short delay so quick
  * loads never flash. Reduced motion: a still mark.

@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import EmailVerification from "../models/EmailVerification.js";
+import PendingRegistration from "../models/PendingRegistration.js";
 import Setting from "../models/Setting.js";
 import Property from "../models/Property.js";
 import Inquiry from "../models/Inquiry.js";
 import { createApp } from "../app.js";
 import { verificationMailer } from "../utils/email.js";
 import { verificationChallenge } from "../utils/emailVerification.js";
-import { adminEntryHeaders, customerTabClaims, customerTabHeaders } from "./support/customerTab.js";
+import { adminEntryHeaders, customerTabHeaders } from "./support/customerTab.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
 
 test("customer email verification requires inbox ownership before every customer entry point", {
@@ -36,25 +37,76 @@ test("customer email verification requires inbox ownership before every customer
   assert.ok(signup.headers.getSetCookie().every((cookie) => !cookie.includes("customer_token=ey")));
   const pending = (await signup.json()).data;
   assert.equal(pending.verificationRequired, true);
+  assert.equal(pending.registration, true);
   assert.equal(deliveries[0].email, "customer@example.test");
-  let user = await User.findOne({ email: "customer@example.test" }).select("+sessionVersion");
-  assert.equal(user.emailVerifiedAt, null);
-  assert.equal(user.role, "user");
-  const oldCookie = "customer_token=" + jwt.sign({ id: user.id, role: "user", session: "customer", ...customerTabClaims("customer") }, process.env.JWT_KEY, { expiresIn: "1h" });
-  assert.equal((await request("/auth/customer/me", undefined, oldCookie)).status, 401);
-  assert.equal((await request("/users/saved", undefined, oldCookie)).status, 401);
+  // Until the code is entered there is no account at all: only the waiting sign-up
+  assert.equal(await User.exists({ email: "customer@example.test" }), null);
+  const waiting = await PendingRegistration.findOne({ email: "customer@example.test" }).select("+codeHash +passwordHash");
+  assert.equal(waiting.account, "user");
+  assert.equal(waiting.codeHash.includes(deliveries[0].code), false, "the code is never stored in plain text");
+  assert.ok(waiting.passwordHash.startsWith("$2"), "the password waits hashed");
+  assert.ok(waiting.deleteAt > new Date(), "unfinished sign-ups expire");
+  // Signing in before finishing: back to the code (no new email within the minute), never a session
+  const early = await request("/auth/customer/login", { email: details.email, password: details.password });
+  assert.equal(early.status, 202);
+  assert.equal((await early.json()).data.registration, true);
+  assert.ok(early.headers.getSetCookie().every((cookie) => !cookie.includes("customer_token=ey")));
+  assert.equal((await request("/auth/customer/login", { email: details.email, password: "WrongPassword12345" })).status, 401);
   assert.equal((await request("/auth/customer/verify-email", { challenge: pending.challenge, code: deliveries[0].code }, undefined, false)).status, 400);
   assert.equal((await request("/auth/customer/resend-verification", { challenge: pending.challenge })).status, 429);
   assert.equal((await request("/auth/customer/verify-email", { challenge: pending.challenge, code: "000000" })).status, 400);
-  assert.equal((await EmailVerification.findById(user.id)).attempts, 1);
-  assert.equal((await EmailVerification.findById(user.id).select("+codeHash")).codeHash.includes(deliveries[0].code), false);
+  assert.equal((await PendingRegistration.findById(waiting.id)).attempts, 1);
+  assert.equal(await User.exists({ email: "customer@example.test" }), null, "a wrong code creates nothing");
   const success = await request("/auth/customer/verify-email", { challenge: pending.challenge, code: deliveries[0].code });
-  assert.equal(success.status, 200);
+  assert.equal(success.status, 201);
   const cookie = success.headers.getSetCookie().find((v) => v.startsWith("customer_token="))?.split(";")[0];
   assert.ok(cookie);
   assert.equal((await request("/auth/customer/me", undefined, cookie)).status, 200);
+  const user = await User.findOne({ email: "customer@example.test" }).select("+password +sessionVersion");
+  assert.equal(user.role, "user", "forged fields are ignored");
+  assert.ok(user.emailVerifiedAt);
+  assert.equal(await user.matchPassword(details.password), true, "the password is hashed once, not twice");
+  assert.equal(await PendingRegistration.exists({ email: "customer@example.test" }), null);
   assert.equal((await request("/auth/customer/verify-email", { challenge: pending.challenge, code: deliveries[0].code })).status, 409);
   assert.equal((await request("/auth/customer/login", { email: details.email, password: details.password })).status, 200);
+  assert.equal((await request("/auth/customer/register", details)).status, 409, "an existing account can't sign up again");
+  assert.ok(PendingRegistration.schema.indexes().some(([fields, options]) => fields.deleteAt === 1 && options.expireAfterSeconds === 0));
+
+  await t.test("signing up again with different details replaces the sign-up and voids its code", async () => {
+    const email = "replace@example.test";
+    const first = (await (await request("/auth/customer/register", { ...details, email })).json()).data;
+    const firstCode = deliveries.at(-1).code;
+    const second = await request("/auth/customer/register", { ...details, email, password: "AnotherPassword123" });
+    assert.equal(second.status, 202);
+    const replaced = (await second.json()).data;
+    assert.equal((await request("/auth/customer/verify-email", { challenge: first.challenge, code: firstCode })).status, 401, "the earlier sign-up is gone");
+    await PendingRegistration.updateOne({ email }, { nextSendAt: new Date(0) });
+    assert.equal((await request("/auth/customer/resend-verification", { challenge: replaced.challenge })).status, 200);
+    const secondCode = deliveries.at(-1).code;
+    if (secondCode !== firstCode) assert.equal((await request("/auth/customer/verify-email", { challenge: replaced.challenge, code: firstCode })).status, 400, "the earlier code no longer works");
+    assert.equal((await request("/auth/customer/verify-email", { challenge: replaced.challenge, code: secondCode })).status, 201);
+    const account = await User.findOne({ email }).select("+password");
+    assert.equal(await account.matchPassword("AnotherPassword123"), true);
+  });
+
+  await t.test("agents sign up the same way: the account appears only after the code", async () => {
+    const agentRequest = (path, body) => fetch(base + "/api/auth/agent" + path, { method: "POST", headers: { "Content-Type": "application/json", "X-Session-Domain": "agent" }, body: JSON.stringify(body) });
+    const password = "AgentPassword12345";
+    const started = await agentRequest("/register", { fullName: "Kofi Agent", email: "kofi@example.test", phone: "+233 24 765 4321", password, confirmPassword: password });
+    assert.equal(started.status, 202);
+    assert.ok(started.headers.getSetCookie().every((value) => !value.includes("agent_token=ey")));
+    const verification = (await started.json()).data;
+    assert.equal(await User.exists({ email: "kofi@example.test" }), null);
+    // A customer sign-in can't finish an agent sign-up
+    assert.equal((await request("/auth/customer/login", { email: "kofi@example.test", password })).status, 401);
+    const done = await agentRequest("/verify-email", { challenge: verification.challenge, code: deliveries.at(-1).code });
+    assert.equal(done.status, 201);
+    assert.ok(done.headers.getSetCookie().some((value) => value.startsWith("agent_token=ey")));
+    const agent = await User.findOne({ email: "kofi@example.test" });
+    assert.equal(agent.role, "agent");
+    assert.equal(agent.agentApplication.status, "incomplete");
+    assert.ok(agent.emailVerifiedAt);
+  });
 
   await t.test("booking, purchase and inquiry emails come from the verified account", async () => {
     const owner = await User.create({ firstName: "Platform", lastName: "Owner", email: "owner@example.test", password: details.password, role: "admin" });
@@ -89,21 +141,23 @@ test("customer email verification requires inbox ownership before every customer
     assert.equal((await request("/auth/customer/verify-email", { challenge: verification.challenge, code: newCode })).status, 400);
     await EmailVerification.updateOne({ _id: legacy.id }, { nextSendAt: new Date(0), sendCount: 5 });
     assert.equal((await request("/auth/customer/resend-verification", { challenge: verification.challenge })).status, 429);
+    // A password change ends the verification session
+    const changed = await User.findById(legacy.id).select("+password");
+    changed.password = "ChangedPassword123";
+    await changed.save();
+    assert.equal((await request("/auth/customer/verify-email", { challenge: verification.challenge, code: newCode })).status, 401);
   });
 
-  await t.test("delivery failure stays recoverable; password changes invalidate verification challenges", async () => {
+  await t.test("delivery failure stays recoverable", async () => {
     failDelivery = true;
     const response = await request("/auth/customer/register", { ...details, email: "delivery@example.test" });
     assert.equal(response.status, 202);
     const verification = (await response.json()).data;
     assert.match(verification.deliveryError, /couldn't send/);
-    const customer = await User.findOne({ email: "delivery@example.test" }).select("+password +sessionVersion");
-    assert.equal((await EmailVerification.findById(customer.id).select("+codeHash")).codeHash, undefined);
+    assert.equal((await PendingRegistration.findOne({ email: "delivery@example.test" }).select("+codeHash")).codeHash, undefined, "a failed email leaves no usable code");
     failDelivery = false;
     assert.equal((await request("/auth/customer/resend-verification", { challenge: verification.challenge })).status, 200);
-    customer.password = "ChangedPassword123";
-    await customer.save();
-    assert.equal((await request("/auth/customer/verify-email", { challenge: verification.challenge, code: deliveries.at(-1).code })).status, 401);
+    assert.equal((await request("/auth/customer/verify-email", { challenge: verification.challenge, code: deliveries.at(-1).code })).status, 201);
   });
 
   await t.test("ordinary session tokens and inactive accounts cannot verify", async () => {

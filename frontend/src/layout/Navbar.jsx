@@ -16,6 +16,7 @@ import { usePropertyCategories } from '../hooks/usePropertyCategories';
 import { useNavPropertyPreviews } from '../hooks/useNavPropertyPreviews';
 import { FindPropertyLinks, FindPropertyMegaMenu, HomeCategoryMenu } from '../components/nav/FindPropertyMenu';
 import { useCategoryPreviews } from '../hooks/useCategoryPreviews';
+import MobileMenu from '../components/nav/MobileMenu';
 import { buildFindPropertyLinks } from '../utils/findPropertyNavigation';
 
 // Find Property links share the unified catalogue and its existing query schema.
@@ -57,30 +58,16 @@ const pillClass = (active, onDark = false) =>
       : active ? "bg-brand-50 text-brand-600" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
   }`;
 
-// Mobile sheet rows: 48px touch targets; the active page gets brand text and a slim left bar
-const sheetRowClass = (active) =>
-  `relative flex min-h-12 w-full items-center justify-between gap-3 rounded-lg px-3 text-[0.9375rem] font-medium transition-colors ${
-    active
-      ? "text-brand-700 before:absolute before:inset-y-3 before:left-0 before:w-0.5 before:rounded-full before:bg-brand-500"
-      : "text-gray-800 hover:bg-gray-50 active:bg-gray-100"
-  }`;
-
-// The sheet slides down out of the header; reduced motion gets a plain fade
+// The phone menu slides down out of the header, or up from the tab bar; reduced motion gets a plain fade
 const SHEET_EASE = [0.22, 1, 0.36, 1];
-const sheetMotion = (reduce) =>
+const sheetMotion = (reduce, fromBottom = false) =>
   reduce
     ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.15 } }
     : {
-        initial: { y: "-100%", opacity: 0 },
+        initial: { y: fromBottom ? "100%" : "-100%", opacity: 0 },
         animate: { y: 0, opacity: 1, transition: { duration: 0.32, ease: SHEET_EASE } },
-        exit: { y: "-100%", opacity: 0, transition: { duration: 0.24, ease: [0.4, 0, 1, 1] } },
+        exit: { y: fromBottom ? "100%" : "-100%", opacity: 0, transition: { duration: 0.24, ease: [0.4, 0, 1, 1] } },
       };
-const accordionMotion = (reduce) => ({
-  initial: { height: 0, opacity: 0 },
-  animate: { height: "auto", opacity: 1 },
-  exit: { height: 0, opacity: 0 },
-  transition: { duration: reduce ? 0 : 0.24, ease: SHEET_EASE },
-});
 
 // Saved properties, with the same count the heart buttons on cards update
 const WishlistLink = ({ count, onClick, className = "", onDark = false }) => (
@@ -102,11 +89,12 @@ const WishlistLink = ({ count, onClick, className = "", onDark = false }) => (
 
 // overHero: the page starts with a dark hero. The navbar then overlays it with no background
 // until the visitor scrolls; on other pages it is solid from the start.
-const NavbarContent = ({ onAuth, overHero = false }) => {
-  const [isOpen, setIsOpen] = useState(false);
+// The phone menu is opened by the layout (menuOpen / onMenuOpenChange), so the bottom tab bar can open it too.
+// bottomNav: the tab bar is showing. Its centre Menu button (menuTriggerRef) replaces the header's
+// menu button, and the menu rises from above the tab bar instead of dropping from the header.
+const NavbarContent = ({ onAuth, overHero = false, bottomNav = false, menuOpen: isOpen, onMenuOpenChange: setIsOpen, menuTriggerRef }) => {
   const [scrolled, setScrolled] = useState(false);
   const [openMenu, setOpenMenu] = useState(null); // desktop: "listings" | "properties" | null
-  const [expanded, setExpanded] = useState(null); // mobile drawer section
   const { isAuthenticated } = useAuth();
   const { favorites } = useRealEstate();
   const { paths, settings } = usePlatform();
@@ -143,6 +131,8 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
   const navRef = useRef(null);
   const drawerRef = useRef(null);
   const mobileTriggerRef = useRef(null);
+  // Where focus returns when the menu closes: the header's button, or the tab bar's
+  const triggerRef = bottomNav ? menuTriggerRef : mobileTriggerRef;
   const closeTimer = useRef(null);
   const openTimer = useRef(null);
 
@@ -153,8 +143,7 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
   // tapping the blurred page closes it
   useScrim(isOpen, () => {
     setIsOpen(false);
-    setExpanded(null);
-    mobileTriggerRef.current?.focus();
+    triggerRef?.current?.focus();
   });
 
   // The sheet only exists below the desktop breakpoint: growing the window closes it
@@ -162,10 +151,10 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
   useEffect(() => {
     if (!isOpen) return undefined;
     const desktop = window.matchMedia("(min-width: 64rem)");
-    const onChange = (e) => e.matches && (setIsOpen(false), setExpanded(null));
+    const onChange = (e) => e.matches && setIsOpen(false);
     desktop.addEventListener("change", onChange);
     return () => desktop.removeEventListener("change", onChange);
-  }, [isOpen]);
+  }, [isOpen, setIsOpen]);
   // Blur the page behind an open desktop menu; clicking the blurred page closes it
   useScrim(Boolean(openMenu), () => {
     clearTimeout(closeTimer.current);
@@ -175,16 +164,16 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
 
   // Transparent while a hero is behind the navbar and the page is at the top
   const overlaysHero = referenceHome || overHero;
-  const onDark = overlaysHero && !scrolled && !isOpen;
+  // A menu dropping from the header turns it solid; one rising from the tab bar leaves it as it is
+  const headerSheetOpen = isOpen && !bottomNav;
+  const onDark = overlaysHero && !scrolled && !headerSheetOpen;
 
-  // Any navigation (including back/forward) closes open menus
+  // Any navigation (including back/forward) closes open menus (the layout closes the phone menu itself)
   const routeKey = pathname + search;
   const [lastRoute, setLastRoute] = useState(routeKey);
   if (lastRoute !== routeKey) {
     setLastRoute(routeKey);
     setOpenMenu(null);
-    setIsOpen(false);
-    setExpanded(null);
   }
 
   useEffect(() => {
@@ -226,11 +215,10 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
     const handleKey = (e) => {
       if (e.key === "Escape") {
         setIsOpen(false);
-        setExpanded(null);
-        mobileTriggerRef.current?.focus();
+        triggerRef?.current?.focus();
       }
       if (e.key === "Tab") {
-        const links = [mobileTriggerRef.current, ...(drawerRef.current?.querySelectorAll('a[href], button:not([disabled])') || [])].filter(Boolean);
+        const links = [triggerRef?.current, ...(drawerRef.current?.querySelectorAll('a[href], button:not([disabled])') || [])].filter(Boolean);
         const first = links[0];
         const last = links[links.length - 1];
         if (e.shiftKey && document.activeElement === first) {
@@ -247,7 +235,7 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
       cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [isOpen]);
+  }, [isOpen, setIsOpen, triggerRef]);
 
   useEffect(() => () => {
     clearTimeout(closeTimer.current);
@@ -277,10 +265,9 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
   const closeAll = () => {
     clearTimeout(closeTimer.current);
     clearTimeout(openTimer.current);
-    if (isOpen) mobileTriggerRef.current?.focus();
+    if (isOpen) triggerRef?.current?.focus();
     setOpenMenu(null);
     setIsOpen(false);
-    setExpanded(null);
   };
 
   // Hover opens menus for mouse users only; touch and keyboard use click
@@ -303,16 +290,12 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
     },
   });
 
-  const toggleSection = (menu) => {
-    setExpanded((prev) => (prev === menu ? null : menu));
-  };
-
   const isSectionActive = (link) => link.matches.some((p) => (p.endsWith("/") ? pathname.startsWith(p) : pathname === p));
 
   return (
     <header
       className={`${referenceHome ? "reference-header " : ""}${onDark ? "is-over-hero " : ""}${overlaysHero ? "fixed inset-x-0" : "sticky"} top-0 z-50 w-full border-b transition-[background-color,border-color,box-shadow] duration-300 ease-out ${
-        onDark ? "border-transparent bg-transparent" : isOpen ? "border-gray-100 bg-white" : scrolled ? "border-gray-200/80 bg-white shadow-sm shadow-gray-900/5" : "border-transparent bg-white"
+        onDark ? "border-transparent bg-transparent" : headerSheetOpen ? "border-gray-100 bg-white" : scrolled ? "border-gray-200/80 bg-white shadow-sm shadow-gray-900/5" : "border-transparent bg-white"
       }`}
     >
       <nav ref={navRef} className="container-page relative flex h-16 items-center justify-between gap-4 lg:h-20">
@@ -390,7 +373,8 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
           {isAuthenticated && <NotificationBell onDark={onDark} />}
           <WishlistLink count={favorites.length} className="hidden h-10 w-10 sm:grid" onDark={onDark} />
           <AccountMenu onAuth={onAuth} compact onDark={onDark} />
-          <button
+          {/* With the tab bar showing, its centre Menu button opens the menu instead */}
+          {!bottomNav && <button
             ref={mobileTriggerRef}
             type="button"
             onClick={() => (isOpen ? closeAll() : setIsOpen(true))}
@@ -403,100 +387,34 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
               <Menu className={`absolute inset-0 h-6 w-6 transition duration-200 ease-out ${isOpen ? "scale-75 rotate-90 opacity-0" : ""}`} />
               <X className={`absolute inset-0 h-6 w-6 transition duration-200 ease-out ${isOpen ? "" : "scale-75 -rotate-90 opacity-0"}`} />
             </span>
-          </button>
+          </button>}
         </div>
       </nav>
 
       {/*
-        Mobile navigation: a sheet that slides down out of the header. The clip box starts at
-        the header's bottom edge, so the sheet appears from underneath the bar and never
-        extends past the viewport (100dvh avoids the mobile address-bar jump).
+        Mobile menu sheet (contents: components/nav/MobileMenu.jsx). The clip box keeps it inside the
+        viewport (100dvh avoids the mobile address-bar jump):
+         - with the tab bar: a sheet rising from just above it, only as tall as its contents, with a
+           title and close button; the page stays visible (blurred) above it, and the tab bar below
+           (its Menu button now "Close")
+         - otherwise: slides down out of the header, from its bottom edge
       */}
-      <div className="pointer-events-none absolute inset-x-0 top-[calc(100%+1px)] h-[calc(100dvh-4rem-1px)] overflow-hidden lg:hidden">
+      <div className={bottomNav
+        ? "pointer-events-none fixed inset-x-0 top-16 bottom-(--bottom-nav) flex flex-col justify-end overflow-hidden lg:hidden"
+        : "pointer-events-none absolute inset-x-0 top-[calc(100%+1px)] h-[calc(100dvh-4rem-1px)] overflow-hidden lg:hidden"}>
         <AnimatePresence>
           {isOpen && (
-            <motion.div
+            <motion.nav
               id="mobile-nav"
+              aria-label="Main navigation"
               ref={drawerRef}
-              {...sheetMotion(reduceMotion)}
-              className="pointer-events-auto max-h-full overflow-y-auto overscroll-contain border-b border-gray-200/80 bg-white shadow-[0_18px_36px_-18px_rgb(15_23_42/0.25)]"
+              {...sheetMotion(reduceMotion, bottomNav)}
+              className={`pointer-events-auto max-h-full overflow-y-auto overscroll-contain bg-white ${bottomNav
+                ? "rounded-t-3xl shadow-[0_-18px_36px_-18px_rgb(15_23_42/0.3)]"
+                : "border-b border-gray-200/80 pb-[env(safe-area-inset-bottom)] shadow-[0_18px_36px_-18px_rgb(15_23_42/0.25)]"}`}
             >
-              <nav aria-label="Main navigation" className="container-page pt-2 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-                <ul className="-mx-3 divide-y divide-gray-100">
-                  {navLinks.map((link) => {
-                    if (!link.menu) {
-                      return (
-                        <li key={link.name} className="py-1">
-                          <NavLink to={link.path} end={link.path === "/"} onClick={closeAll} className={({ isActive }) => sheetRowClass(isActive)}>
-                            {link.name}
-                          </NavLink>
-                        </li>
-                      );
-                    }
-
-                    // Tapping a section only expands it; the sheet stays open
-                    const open = expanded === link.menu;
-                    return (
-                      <li
-                        key={link.name}
-                        className="py-1"
-                        onKeyDown={(e) => {
-                          if (e.key === "Escape" && open) {
-                            e.stopPropagation();
-                            setExpanded(null);
-                            e.currentTarget.querySelector('button')?.focus();
-                          }
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggleSection(link.menu)}
-                          aria-expanded={open}
-                          aria-controls={`mobile-nav-menu-${link.menu}`}
-                          className={sheetRowClass(isSectionActive(link))}
-                        >
-                          {link.name}
-                          <ChevronDown aria-hidden="true" className={`h-5 w-5 text-gray-400 transition-transform duration-200 ease-out ${open ? "rotate-180 text-gray-600" : ""}`} />
-                        </button>
-                        <AnimatePresence initial={false}>
-                          {open && (
-                            <motion.div id={`mobile-nav-menu-${link.menu}`} {...accordionMotion(reduceMotion)} className="overflow-hidden">
-                              <div className="ml-3 border-l border-gray-100 pt-1 pb-2 pl-2">
-                                {referenceHome ? <FindPropertyLinks links={homeMenuLinks(link.menu)} onNavigate={closeAll} compact /> : link.menu === "properties" ? (
-                                  <PropertyCategoryMenu categories={categories} onNavigate={closeAll} compact />
-                                ) : (
-                                  <FindPropertyLinks links={listingLinks} onNavigate={closeAll} compact />
-                                )}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </li>
-                    );
-                  })}
-                  <li className="py-1">
-                    <NavLink to="/account/saved" onClick={closeAll} className={({ isActive }) => sheetRowClass(isActive)}>
-                      <span className="flex items-center gap-3">
-                        <Heart aria-hidden="true" className="h-5 w-5 text-gray-400" />
-                        Wishlist
-                      </span>
-                      {favorites.length > 0 && <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700 tabular-nums">{favorites.length}</span>}
-                    </NavLink>
-                  </li>
-                </ul>
-
-                {!isAuthenticated && (
-                  <div className="mt-3 grid grid-cols-2 gap-3 border-t border-gray-100 pt-4">
-                    <button type="button" onClick={() => { closeAll(); onAuth("login"); }} className="btn btn-primary w-full py-3 shadow-none">
-                      Sign In
-                    </button>
-                    <button type="button" onClick={() => { closeAll(); onAuth("signup"); }} className="btn btn-light w-full py-3">
-                      Create Account
-                    </button>
-                  </div>
-                )}
-              </nav>
-            </motion.div>
+              <MobileMenu showHeader={bottomNav} onClose={closeAll} onNavigate={closeAll} wishlistCount={favorites.length} />
+            </motion.nav>
           )}
         </AnimatePresence>
       </div>

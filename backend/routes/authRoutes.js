@@ -7,6 +7,7 @@ import { rateLimit } from "../middleware/security.js";
 import { verifyCustomerEmail, resendEmailVerification } from "../controllers/emailVerificationController.js";
 import { requestPasswordReset, resetCustomerPassword } from "../controllers/passwordResetController.js";
 import { createGoogleChallenge, googleCustomerLogin } from "../controllers/googleAuthController.js";
+import { completeRegistration, resendRegistrationCode } from "../controllers/registrationController.js";
 
 const router = Router();
 // A stolen session or distributed IPs must not provide unlimited current-password guesses.
@@ -24,6 +25,7 @@ for (const [session, guard] of [["customer", protectCustomer], ["agent", protect
   router.put('/' + session + '/me', guard, updateMe);
   router.put('/' + session + '/me/password', guard, passwordChangeLimit, changePassword);
 }
+// Sign-ups are limited per network in app.js (limits.register); codes per email in utils/emailVerification.js
 router.post("/customer/register", register);
 const googleLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
 router.post("/customer/google/challenge", googleLimit, createGoogleChallenge);
@@ -35,6 +37,8 @@ const recoveryLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
 router.post("/customer/forgot-password", recoveryLimit, requestPasswordReset);
 router.post("/customer/reset-password", recoveryLimit, resetCustomerPassword);
 router.post("/agent/register", registerAgent);
+router.post("/agent/verify-email", verificationLimit, completeRegistration("agent"));
+router.post("/agent/resend-verification", verificationLimit, resendRegistrationCode("agent"));
 router.post("/customer/become-agent", protectCustomer, rateLimit({ windowMs: 15 * 60 * 1000, max: 10, key: (req) => String(req.user._id) }), becomeAgent);
 router.post("/customer/me/photo", protectCustomer, rateLimit({ windowMs: 15 * 60 * 1000, max: 20, key: (req) => String(req.user._id) }), uploadCustomerPhoto);
 router.delete("/customer/me/photo", protectCustomer, removeCustomerPhoto);
