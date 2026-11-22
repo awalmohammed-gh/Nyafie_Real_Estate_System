@@ -33,7 +33,7 @@ const safetyReportSchema = new mongoose.Schema(
     targetTitle: { type: String, required: true, maxlength: 200 }, // kept even if the listing is deleted later
     reason: { type: String, required: true },
     details: { type: String, default: "", maxlength: 1000 },
-    status: { type: String, enum: REPORT_STATUSES, default: "open", index: true },
+    status: { type: String, enum: REPORT_STATUSES, default: "open" },
     adminNote: { type: String, default: "", maxlength: 1000 }, // internal, never shown to the reporter or the reported side
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     reviewedAt: { type: Date, default: null },
@@ -43,5 +43,7 @@ const safetyReportSchema = new mongoose.Schema(
   schemaOptions
 );
 safetyReportSchema.index({ openKey: 1 }, { unique: true, sparse: true });
+
+safetyReportSchema.index({ status: 1, createdAt: -1 }); // admin reports list by status, newest first
 
 export default mongoose.models.SafetyReport || mongoose.model("SafetyReport", safetyReportSchema);

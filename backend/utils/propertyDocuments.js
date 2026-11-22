@@ -51,16 +51,18 @@ export const destroyDocument = (document) =>
   cloudinary.uploader.destroy(document.publicId, { type: "private", resource_type: "image", invalidate: true }).catch((error) => console.error("Document delete failed:", error.message));
 
 /**
- * Deletes the document checks matching `filter` and their files (e.g. a deleted listing, or an
- * agent's listings when the agent is permanently deleted). Files are removed best-effort.
+ * Deletes the document checks matching `filter` (e.g. a deleted listing, or an agent's listings
+ * when the agent is permanently deleted) and returns their files. Inside a transaction, pass its
+ * `session`, and delete the returned files with destroyDocuments() only after it commits: a file
+ * deleted for a change that then rolled back could never be brought back.
  */
-export const deleteDocumentChecks = async (filter) => {
-  const checks = await DocumentCheck.find(filter).select("property documents");
-  if (!checks.length) return 0;
-  await Promise.all(checks.flatMap((check) => check.documents.map(destroyDocument)));
-  await Promise.all([
-    DocumentCheck.deleteMany({ _id: { $in: checks.map((c) => c._id) } }),
-    Property.updateMany({ _id: { $in: checks.map((c) => c.property) } }, { $set: { documentsVerifiedAt: null } }),
-  ]);
-  return checks.length;
+export const deleteDocumentChecks = async (filter, session = null) => {
+  const checks = await DocumentCheck.find(filter).select("property documents").session(session);
+  if (!checks.length) return [];
+  await DocumentCheck.deleteMany({ _id: { $in: checks.map((c) => c._id) } }, { session });
+  await Property.updateMany({ _id: { $in: checks.map((c) => c.property) } }, { $set: { documentsVerifiedAt: null } }, { session });
+  return checks.flatMap((check) => check.documents);
 };
+
+// Removes files returned by deleteDocumentChecks (best-effort: a failure is logged, never thrown)
+export const destroyDocuments = (documents) => Promise.all(documents.map(destroyDocument));

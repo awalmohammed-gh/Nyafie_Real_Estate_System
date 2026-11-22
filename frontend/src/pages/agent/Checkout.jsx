@@ -7,7 +7,7 @@ import { usePlatform } from "../../context/usePlatform";
 import { useAuth } from "../../context/useAuth";
 import { useToast } from "../../context/useToast";
 import { addDays, formatDate } from "../../utils/date";
-import { getSubscriptionState } from "../../utils/subscription";
+import { CHECKOUT_RETURN_KEY as RETURN_KEY, getSubscriptionState } from "../../utils/subscription";
 import { subscriptionApi } from "../../frontApi";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import PageLoader from "../../components/ui/PageLoader";
@@ -41,8 +41,6 @@ const Stepper = ({ current }) => (
     })}
   </ol>
 );
-
-const RETURN_KEY = "nyafie:checkout";
 
 const Checkout = () => {
   const [searchParams] = useSearchParams();

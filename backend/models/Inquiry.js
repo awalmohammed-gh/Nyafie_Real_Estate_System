@@ -5,7 +5,7 @@ const inquirySchema = new mongoose.Schema(
   {
     customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null }, // null for guests
     property: { type: mongoose.Schema.Types.ObjectId, ref: "Property", required: true, index: true },
-    agent: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // owner when an agent
+    agent: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null }, // owner when an agent
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // agency staff member handling it (null: the owner)
     ownerType: { type: String, enum: ["admin", "agent"], required: true },
     name: { type: String, required: true, trim: true, maxlength: 120 },
@@ -17,5 +17,11 @@ const inquirySchema = new mongoose.Schema(
   },
   schemaOptions
 );
+
+// Inboxes: the customer's enquiries, the agent's leads and the admin list, newest first
+inquirySchema.index({ customer: 1, createdAt: -1 });
+inquirySchema.index({ agent: 1, createdAt: -1 });
+inquirySchema.index({ createdAt: -1 });
+inquirySchema.index({ status: 1 }); // new-enquiry counts
 
 export default mongoose.models.Inquiry || mongoose.model("Inquiry", inquirySchema);

@@ -23,21 +23,24 @@ export const createInquiry = async (req, res) => {
 
   const property = await loadPublishedProperty(req.body.propertyId);
   if (!property) return fail(res, 404, "This property is not available.");
-  const conversation = req.user ? await postSystemNote(property, req.user._id, req.user, "customer", `Property inquiry: ${message}`) : null;
-
-  // The owner comes from the property, never from the request
-  const inquiry = await Inquiry.create({
-    customer: req.user?._id || null,
-    property: property._id,
-    agent: property.ownerType === "agent" ? property.owner : null,
-    assignedTo: property.ownerType === "agent" ? property.assignedTo || null : null,
-    ownerType: property.ownerType,
-    name,
-    email,
-    phone,
-    message,
-    conversation: conversation?._id || null,
-    status: "new",
+  // One transaction: the enquiry and its chat note are saved together
+  const inquiry = await mongoose.connection.transaction(async (session) => {
+    const conversation = req.user ? await postSystemNote(property, req.user._id, req.user, "customer", `Property inquiry: ${message}`, session) : null;
+    // The owner comes from the property, never from the request
+    const [created] = await Inquiry.create([{
+      customer: req.user?._id || null,
+      property: property._id,
+      agent: property.ownerType === "agent" ? property.owner : null,
+      assignedTo: property.ownerType === "agent" ? property.assignedTo || null : null,
+      ownerType: property.ownerType,
+      name,
+      email,
+      phone,
+      message,
+      conversation: conversation?._id || null,
+      status: "new",
+    }], { session });
+    return created;
   });
   await notifyOwner({ owner: property.owner, ownerType: property.ownerType, assignedTo: property.assignedTo }, { type: "inquiry", title: "New property inquiry", message: `${name} asked about "${property.title}".`, path: "inquiries" });
   ok(res, inquiry, "Inquiry sent", 201);

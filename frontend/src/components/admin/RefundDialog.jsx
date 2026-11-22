@@ -5,8 +5,8 @@ import StatusBadge from "../ui/StatusBadge";
 import { useToast } from "../../context/useToast";
 import { paymentApi } from "../../frontApi";
 import { formatDate } from "../../utils/date";
+import { formatGhs } from "../../utils/property";
 
-const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 // Paystack never confirmed these, so an admin settles them after checking the dashboard
 const UNCONFIRMED = ["submitting", "unconfirmed"];
 const FINAL = ["processed", "failed"];
@@ -51,7 +51,7 @@ const RefundDialog = ({ payment, onClose, onChanged }) => {
       {startNew ? (
         <button type="button" onClick={submit} disabled={!canSubmit} className="btn btn-primary">
           {busy ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <RotateCcw size={16} aria-hidden="true" />}
-          {manual ? "Record refund" : `Refund ${ghs(payment.amount)}`}
+          {manual ? "Record refund" : `Refund ${formatGhs(payment.amount)}`}
         </button>
       ) : UNCONFIRMED.includes(refund.status) ? (
         <button type="button" onClick={settle} disabled={busy || !note.trim()} className="btn btn-primary">Save Paystack outcome</button>
@@ -68,7 +68,7 @@ const RefundDialog = ({ payment, onClose, onChanged }) => {
       {payment && (
         <div className="space-y-5 text-sm">
           <dl className="grid gap-3 rounded-xl bg-gray-50 p-4 sm:grid-cols-2">
-            {[["Paid by", payment.payer], ["Amount", ghs(payment.amount)], ["Why it needs a refund", payment.note || "Flagged for review"]].map(([label, value]) => (
+            {[["Paid by", payment.payer], ["Amount", formatGhs(payment.amount)], ["Why it needs a refund", payment.note || "Flagged for review"]].map(([label, value]) => (
               <div key={label} className={label.startsWith("Why") ? "sm:col-span-2" : ""}><dt className="text-gray-500">{label}</dt><dd className="font-medium break-words text-gray-900">{value}</dd></div>
             ))}
           </dl>
@@ -110,7 +110,7 @@ const RefundDialog = ({ payment, onClose, onChanged }) => {
               <label className="block font-medium text-gray-900">{manual ? "How the money was returned" : "Note (optional)"}
                 <textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} rows={3} placeholder={manual ? "Who sent it, to which account, and when" : "Shown to Paystack as the merchant note"} className="field mt-2 font-normal" />
               </label>
-              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">This refunds the whole {ghs(payment.amount)}. It cannot be undone, and the booking or plan it paid for is not restored.</p>
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">This refunds the whole {formatGhs(payment.amount)}. It cannot be undone, and the booking or plan it paid for is not restored.</p>
             </>
           )}
 

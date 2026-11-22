@@ -69,7 +69,7 @@ const propertySchema = new mongoose.Schema(
     roomTypes: [roomTypeSchema],
     stayBooking: { type: stayBookingSchema, default: undefined },
     moveIn: { type: moveInSchema, default: undefined },
-    owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // agency staff member handling it (null: the owner)
     ownerType: { type: String, enum: ["admin", "agent"], required: true },
     // Public contact shown on the listing (the agent, or a NyaFie staff member)
@@ -80,7 +80,7 @@ const propertySchema = new mongoose.Schema(
       email: String,
     },
     // draft -> pending (review) -> published | rejected; suspended = hidden by admin
-    status: { type: String, enum: ["draft", "pending", "published", "rejected", "suspended"], default: "draft", index: true },
+    status: { type: String, enum: ["draft", "pending", "published", "rejected", "suspended"], default: "draft" },
     availability: { type: String, enum: ["Available", "Under Offer", "Sold", "Rented"], default: "Available" },
     // Listing freshness (utils/listingFreshness.js): when the owner last confirmed it is still
     // available, when they were asked again, and since when it is hidden for not answering
@@ -123,5 +123,14 @@ propertySchema.pre("validate", function syncGeo() {
 });
 
 propertySchema.index({ geo: "2dsphere" });
+
+// Public browsing (listings, rent and sale pages, sitemap): published and not stale, then sorted
+propertySchema.index({ status: 1, staleSince: 1, createdAt: -1 });
+propertySchema.index({ status: 1, staleSince: 1, listingType: 1, createdAt: -1 });
+propertySchema.index({ status: 1, staleSince: 1, price: 1, createdAt: -1 }); // price, low to high
+propertySchema.index({ status: 1, staleSince: 1, price: -1, createdAt: -1 }); // price, high to low
+// An owner's or agency's listings, and the admin list, newest first
+propertySchema.index({ owner: 1, createdAt: -1 });
+propertySchema.index({ createdAt: -1 });
 
 export default mongoose.models.Property || mongoose.model("Property", propertySchema);

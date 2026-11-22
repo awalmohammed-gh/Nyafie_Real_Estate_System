@@ -21,7 +21,7 @@ import { fakeListedAgents } from "./support/listedAgents.js";
 const query = (value) => ({
   then: (resolve, reject) => Promise.resolve(value).then(resolve, reject),
   catch: (reject) => Promise.resolve(value).catch(reject),
-  select: () => query(value), sort: () => query(value), populate: () => query(value), lean: () => Promise.resolve(value),
+  select: () => query(value), sort: () => query(value), populate: () => query(value), session: () => query(value), lean: () => Promise.resolve(value),
 });
 const response = () => ({ code: 200, status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } });
 const agent = new User({ emailVerifiedAt: new Date(), firstName: "Akua", lastName: "Mensah", phone: "+233241234567", email: "akua@example.test", role: "agent", password: "password123", agentApplication: { status: "approved", companyName: "Akua Homes", whatsapp: "+233209876543", approvedBy: new mongoose.Types.ObjectId(), rejectionReason: "Private note" }, savedProperties: [new mongoose.Types.ObjectId()] });
@@ -115,9 +115,10 @@ test("inquiries route to the property's agent and customer inboxes never match a
   let created, notice, inboxFilter;
   const conversationId = new mongoose.Types.ObjectId();
   t.mock.method(Conversation, "findOne", () => query(null));
-  t.mock.method(Conversation, "create", async (data) => ({ ...data, _id: conversationId, ownerUnread: 0, customerUnread: 0, save: async () => {} }));
-  t.mock.method(Message, "create", async (data) => ({ ...data, createdAt: new Date() }));
-  t.mock.method(Inquiry, "create", async (data) => { created = data; return data; });
+  t.mock.method(Conversation, "create", async ([data]) => [{ ...data, _id: conversationId, ownerUnread: 0, customerUnread: 0, save: async () => {} }]);
+  t.mock.method(Message, "create", async ([data]) => [{ ...data, createdAt: new Date() }]);
+  t.mock.method(mongoose.connection, "transaction", async (work) => work(null)); // no database here
+  t.mock.method(Inquiry, "create", async ([data]) => { created = data; return [data]; });
   t.mock.method(Notification, "create", async (data) => { notice = data; });
   t.mock.method(Inquiry, "find", (filter) => { inboxFilter = filter; return query([]); });
   const res = response();

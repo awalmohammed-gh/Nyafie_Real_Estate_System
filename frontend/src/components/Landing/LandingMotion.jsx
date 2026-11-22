@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 
 /**
  * Scroll reveals for the landing page. Each helper renders the same tag and class it replaces,
@@ -19,13 +19,21 @@ const ITEMS = {
 };
 const group = (gap, delay) => ({ hidden: {}, visible: { transition: { staggerChildren: gap, delayChildren: delay } } });
 // Every element the landing page reveals, created once (`as` picks one by name)
-const TAGS = { div: motion.div, ul: motion.ul, ol: motion.ol, li: motion.li, p: motion.p, h2: motion.h2, link: motion.create(Link) };
+const TAGS = { div: motion.div, section: motion.section, header: motion.header, footer: motion.footer, ul: motion.ul, ol: motion.ol, li: motion.li, p: motion.p, h2: motion.h2, link: motion.create(Link) };
+
+// Animate the existing element so section widths and grid relationships stay intact.
+export const RevealBlock = ({ as = "div", children, ...props }) => {
+  const reducedMotion = useReducedMotion();
+  const Component = TAGS[as];
+  return <Component initial={reducedMotion ? false : { opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.12 }} transition={{ duration: 0.75, ease: EASE }} {...props}>{children}</Component>;
+};
 
 // A block whose RevealItem children appear one after another when it scrolls into view
 export const RevealGroup = ({ as = "div", gap = 0.09, delay = 0, amount = 0.15, children, ...props }) => {
+  const reducedMotion = useReducedMotion();
   const Component = TAGS[as];
   return (
-    <Component initial="hidden" whileInView="visible" viewport={{ once: true, amount }} variants={group(gap, delay)} {...props}>
+    <Component initial={reducedMotion ? false : "hidden"} whileInView="visible" viewport={{ once: true, amount }} variants={group(reducedMotion ? 0 : gap, reducedMotion ? 0 : delay)} {...props}>
       {children}
     </Component>
   );
@@ -35,17 +43,6 @@ export const RevealGroup = ({ as = "div", gap = 0.09, delay = 0, amount = 0.15, 
 export const RevealItem = ({ as = "div", variant = "up", children, ...props }) => {
   const Component = TAGS[as];
   return <Component variants={ITEMS[variant]} {...props}>{children}</Component>;
-};
-
-// A whole element that reveals by itself (no group needed)
-export const Reveal = ({ as = "div", variant = "up", amount = 0.15, delay = 0, children, ...props }) => {
-  const Component = TAGS[as];
-  const item = ITEMS[variant];
-  return (
-    <Component initial="hidden" whileInView="visible" viewport={{ once: true, amount }} variants={{ hidden: item.hidden, visible: { ...item.visible, transition: { ...item.visible.transition, delay } } }} {...props}>
-      {children}
-    </Component>
-  );
 };
 
 // The standard section header: its <div> blocks (title, then aside) rise in turn, keeping their classes

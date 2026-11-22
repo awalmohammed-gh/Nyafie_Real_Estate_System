@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
-import L, { addTiles } from "../../utils/leaflet";
+import L, { addTiles, propertyPinIcon } from "../../utils/leaflet";
 import "./location.css";
 
-const pinIcon = L.divIcon({ className: "", html: '<span class="map-search-pin is-property" aria-hidden="true"></span>', iconSize: [26, 26], iconAnchor: [13, 26] });
 const AREA_RADIUS = 700; // metres: roughly a neighbourhood centre
 
 /**
@@ -15,14 +14,15 @@ const PropertyMap = ({ latitude, longitude, title, approximate = false, action =
 
   useEffect(() => {
     const point = [latitude, longitude];
-    const map = L.map(element.current, { scrollWheelZoom: false, zoomControl: true });
+    const map = L.map(element.current, { scrollWheelZoom: false, zoomControl: false });
+    L.control.zoom({ position: "topright" }).addTo(map);
     addTiles(map);
     if (approximate) {
       L.circle(point, { radius: AREA_RADIUS, className: "property-map-area", interactive: false }).addTo(map);
       // Bounds from the point (the circle's own bounds need a map that already has a view)
       map.fitBounds(L.latLng(point).toBounds(AREA_RADIUS * 3), { animate: false });
     } else {
-      L.marker(point, { icon: pinIcon, title, alt: title, keyboard: false }).addTo(map);
+      L.marker(point, { icon: propertyPinIcon, title, alt: title, keyboard: false }).addTo(map);
       map.setView(point, 16);
     }
     map.on("click focus", () => map.scrollWheelZoom.enable());

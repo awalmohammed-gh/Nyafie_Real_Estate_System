@@ -3,17 +3,13 @@ import Offer from "../models/Offer.js";
 import Property from "../models/Property.js";
 import SaleRequest from "../models/SaleRequest.js";
 import { postSystemNote } from "./chatController.js";
-import { canManageRecord, formatGHS, isOwnListing, loadPublishedProperty, ownerFilter, ownerName, same } from "../utils/ownership.js";
+import { canManageRecord, formatGHS, isOwnListing, loadPublishedProperty, ownerFilter, ownerName, populateRequest as populate, same } from "../utils/ownership.js";
 import { notifyOwner, notifyUser } from "../utils/notify.js";
-import { ok, fail } from "../utils/response.js";
+import { HttpError, ok, fail } from "../utils/response.js";
 import { openRequestLimitProblem } from "../utils/openRequestLimits.js";
 
-const PROPERTY_FIELDS = "title images location price pricePeriod listingType status availability owner ownerType contact";
 const OPEN = ["pending", "countered"];
 const PERIOD = { month: " per month", night: " per night", total: "" };
-
-const populate = (query) =>
-  query.populate("property", PROPERTY_FIELDS).populate("customer", "firstName lastName email phone").populate("owner", "firstName lastName");
 
 // Shapes an offer for the viewer: customer contact details are only shown to the owner side
 const present = (offer, user) => {
@@ -41,8 +37,9 @@ const loadAuthorized = async (req, res) => {
 };
 
 // Posts a note into the customer/owner conversation and remembers it on the offer
-const note = async (offer, property, user, side, text) => {
-  const conversation = await postSystemNote(property, offer.customer._id || offer.customer, user, side, text);
+// (inside a transaction, pass its `session` so the note commits with the change)
+const note = async (offer, property, user, side, text, session = null) => {
+  const conversation = await postSystemNote(property, offer.customer._id || offer.customer, user, side, text, session);
   offer.conversation = conversation._id;
 };
 
@@ -62,27 +59,32 @@ export const createOffer = async (req, res) => {
   const tooMany = await openRequestLimitProblem("offers", req.user._id, property._id);
   if (tooMany) return fail(res, 429, tooMany);
 
-  const offer = new Offer({
-    customer: req.user._id,
-    property: property._id,
-    owner: property.owner, // the real owner, from the database
-    assignedTo: property.assignedTo || null, // the agency staff member handling the listing
-    ownerType: property.ownerType,
-    askingPrice: property.price,
-    amount,
-    message,
-  });
-
   const period = property.listingType === "Rent" ? PERIOD[property.pricePeriod] || "" : "";
   const text = [`New offer: ${formatGHS(amount)}${period} (listed at ${formatGHS(property.price)}${period}).`, message].filter(Boolean).join("\n\n");
-  await note(offer, property, req.user, "customer", text);
-  await offer.save();
+  // One transaction: the offer, its chat note and the buyer's purchase requests moving to
+  // "offer received" are saved together (the chat never mentions an offer that wasn't saved)
+  const offer = await mongoose.connection.transaction(async (session) => {
+    const created = new Offer({
+      customer: req.user._id,
+      property: property._id,
+      owner: property.owner, // the real owner, from the database
+      assignedTo: property.assignedTo || null, // the agency staff member handling the listing
+      ownerType: property.ownerType,
+      askingPrice: property.price,
+      amount,
+      message,
+    });
+    await note(created, property, req.user, "customer", text, session);
+    await created.save({ session });
 
-  // A customer who already asked to buy is now negotiating on price
-  await SaleRequest.updateMany(
-    { customer: req.user._id, property: property._id, status: { $in: ["pending", "contacted"] } },
-    { $set: { status: "offer_received" }, $push: { history: { status: "offer_received", note: `Offer of ${formatGHS(amount)} made`, by: req.user._id } } }
-  );
+    // A customer who already asked to buy is now negotiating on price
+    await SaleRequest.updateMany(
+      { customer: req.user._id, property: property._id, status: { $in: ["pending", "contacted"] } },
+      { $set: { status: "offer_received" }, $push: { history: { status: "offer_received", note: `Offer of ${formatGHS(amount)} made`, by: req.user._id } } },
+      { session },
+    );
+    return created;
+  });
 
   await Promise.all([
     notifyOwner(offer, { type: "offer", title: "New offer received", message: `${req.user.firstName} offered ${formatGHS(amount)}${period} for "${property.title}".`, path: "offers" }),
@@ -118,39 +120,43 @@ export const respondToOffer = async (req, res) => {
 
   const { action } = req.body;
   const response = String(req.body.message || "").trim().slice(0, 1000);
-  let text;
+  let changes, text;
   if (action === "accept") {
-    offer.status = "accepted";
+    changes = { status: "accepted" };
     text = `Offer of ${formatGHS(offer.amount)} accepted.`;
   } else if (action === "reject") {
-    offer.status = "rejected";
+    changes = { status: "rejected" };
     text = `Offer of ${formatGHS(offer.amount)} declined.`;
   } else if (action === "counter") {
     const counter = Math.round(Number(req.body.counterAmount));
     if (!Number.isFinite(counter) || counter < 1) return fail(res, 400, "Enter a valid counter offer amount.");
-    offer.status = "countered";
-    offer.counterAmount = counter;
+    changes = { status: "countered", counterAmount: counter };
     text = `Counter offer: ${formatGHS(counter)} (you offered ${formatGHS(offer.amount)}).`;
   } else {
     return fail(res, 400, "Choose accept, reject or counter.");
   }
-  offer.response = response;
-  offer.respondedAt = new Date();
 
-  // Accepting a sale offer reserves the property; it is only marked sold when the sale completes
-  if (action === "accept" && offer.property?.listingType === "Sale") {
-    await Property.updateOne({ _id: offer.property._id, availability: "Available" }, { availability: "Under Offer" });
-  }
+  // One transaction: the answer, the property reservation and the chat note are saved together.
+  // The offer is reloaded inside it, so two answers at once can't both apply.
+  await mongoose.connection.transaction(async (session) => {
+    const current = await Offer.findOne({ _id: offer._id, status: { $in: OPEN } }).session(session);
+    if (!current) throw new HttpError(409, "This offer was just answered or withdrawn. Refresh it.");
+    current.set({ ...changes, response, respondedAt: new Date() });
+    // Accepting a sale offer reserves the property; it is only marked sold when the sale completes
+    if (action === "accept" && offer.property?.listingType === "Sale") {
+      await Property.updateOne({ _id: offer.property._id, availability: "Available" }, { availability: "Under Offer" }, { session });
+    }
+    if (offer.property?._id) await note(current, offer.property, req.user, "owner", [text, response].filter(Boolean).join("\n\n"), session);
+    await current.save({ session });
+  });
 
-  if (offer.property?._id) await note(offer, offer.property, req.user, "owner", [text, response].filter(Boolean).join("\n\n"));
-  await offer.save();
   await notifyUser(offer.customer._id || offer.customer, {
     type: "offer",
     title: { accept: "Your offer was accepted", reject: "Your offer was declined", counter: "You received a counter offer" }[action],
     message: `${text} (${offer.property?.title || "property"})`,
     link: "/account/offers",
   });
-  ok(res, present(offer, req.user), "Offer updated");
+  ok(res, present(await populate(Offer.findById(offer._id)), req.user), "Offer updated");
 };
 
 // PATCH /api/offers/:id/withdraw -> the customer takes back their own offer
@@ -159,9 +165,14 @@ export const withdrawOffer = async (req, res) => {
   if (!offer) return;
   if (!same(offer.customer, req.user)) return fail(res, 403, "Only the customer who made this offer can withdraw it.");
   if (!OPEN.includes(offer.status)) return fail(res, 400, `This offer is already ${offer.status}.`);
-  offer.status = "withdrawn";
-  if (offer.property?._id) await note(offer, offer.property, req.user, "customer", `Offer of ${formatGHS(offer.amount)} withdrawn.`);
-  await offer.save();
+  // The withdrawal and its chat note are saved together; an offer answered meanwhile can't be withdrawn
+  await mongoose.connection.transaction(async (session) => {
+    const current = await Offer.findOne({ _id: offer._id, status: { $in: OPEN } }).session(session);
+    if (!current) throw new HttpError(409, "The owner just answered this offer. Refresh it.");
+    current.status = "withdrawn";
+    if (offer.property?._id) await note(current, offer.property, req.user, "customer", `Offer of ${formatGHS(offer.amount)} withdrawn.`, session);
+    await current.save({ session });
+  });
   await notifyOwner(offer, { type: "offer", title: "Offer withdrawn", message: `${req.user.firstName} withdrew their ${formatGHS(offer.amount)} offer on "${offer.property?.title}".`, path: "offers" });
-  ok(res, present(offer, req.user), "Offer withdrawn");
+  ok(res, present(await populate(Offer.findById(offer._id)), req.user), "Offer withdrawn");
 };

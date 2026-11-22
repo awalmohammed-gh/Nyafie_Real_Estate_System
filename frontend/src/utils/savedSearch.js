@@ -1,6 +1,5 @@
+import { formatGhs } from "./property.js";
 // Saved searches: the listings page's filters <-> what the server stores <-> a link back to the results
-
-const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
 // From usePropertyBrowseState (filters, search) and parseNear (near) to the saved form
 export const toSavedFilters = ({ filters, search = "", near = null }) => ({
@@ -58,7 +57,7 @@ export const describeFilters = (saved) => [
   saved.bathrooms ? `${saved.bathrooms}+ baths` : "",
   saved.area, saved.city, saved.region,
   saved.near ? `Within ${saved.near.radius} km of ${saved.near.label || "a place"}` : "",
-  saved.minPrice !== null && saved.maxPrice !== null ? `${ghs(saved.minPrice)} – ${ghs(saved.maxPrice)}` : saved.maxPrice !== null ? `Up to ${ghs(saved.maxPrice)}` : saved.minPrice !== null ? `From ${ghs(saved.minPrice)}` : "",
+  saved.minPrice !== null && saved.maxPrice !== null ? `${formatGhs(saved.minPrice)} – ${formatGhs(saved.maxPrice)}` : saved.maxPrice !== null ? `Up to ${formatGhs(saved.maxPrice)}` : saved.minPrice !== null ? `From ${formatGhs(saved.minPrice)}` : "",
   saved.availability,
   ...(saved.amenities || []),
   saved.search ? `“${saved.search}”` : "",

@@ -13,8 +13,7 @@ import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { arrivalText, bookingHeadline, guestCanCancel, payPlace } from "../../utils/hotelPayments";
 import { cloudImage } from "../../utils/cloudImage";
-
-const ghs = (value) => `₵${Number(value).toLocaleString()}`;
+import { formatGhs } from "../../utils/property";
 
 // What each rental status means for the customer
 const statusHelp = {
@@ -104,7 +103,7 @@ const MyRentals = () => {
                       </div>
                       <div>
                         <dt className="text-xs text-gray-500">Amount</dt>
-                        <dd className="font-extrabold text-gray-900">{ghs(rental.amount)}</dd>
+                        <dd className="font-extrabold text-gray-900">{formatGhs(rental.amount)}</dd>
                       </div>
                       <div>
                         <dt className="text-xs text-gray-500">Payment</dt>
@@ -112,10 +111,10 @@ const MyRentals = () => {
                       </div>
                     </dl>
                     {headline && <p className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-700"><CircleCheck className="h-4 w-4" aria-hidden="true" />{headline}</p>}
-                    {dueOnArrival && rental.statusKey === "confirmed" && <p className="mt-1 text-sm text-gray-600">Pay {ghs(rental.amount)} {payPlace(rental)}. Please {rental.hotelId ? "check in" : "arrive"} {arrivalText(rental)}.</p>}
+                    {dueOnArrival && rental.statusKey === "confirmed" && <p className="mt-1 text-sm text-gray-600">Pay {formatGhs(rental.amount)} {payPlace(rental)}. Please {rental.hotelId ? "check in" : "arrive"} {arrivalText(rental)}.</p>}
                     {dueOnArrival && rental.cancellationPolicy && ["confirmed", "active"].includes(rental.statusKey) && <p className="mt-1 text-xs whitespace-pre-line text-gray-500">{rental.hotelId ? "Hotel" : "Owner’s"} policy: {rental.cancellationPolicy}</p>}
                     {!headline && !(dueOnArrival && rental.statusKey === "confirmed") && <p className="mt-3 text-sm text-gray-600">{rental.hotelId ? ({ Pending: "Choose how to pay to reserve your rooms.", "Payment Pending": "Your secure checkout is in progress. Room holds last 30 minutes.", Paid: "Payment verified. The hotel will confirm your stay.", Confirmed: "Your hotel stay is confirmed.", Active: "You have checked in. Enjoy your stay!", Completed: "Your hotel stay has ended.", Cancelled: "This hotel booking was cancelled." })[rental.status] : rental.pricePeriod === "night" && rental.status === "Pending" ? "Choose how to pay to book this stay." : statusHelp[rental.status]}</p>}
-                    {rental.hotelId && <p className="mt-1 text-xs text-gray-500">{ghs(rental.unitPrice)} / night × {rental.units} nights × {rental.numberOfRooms} rooms</p>}
+                    {rental.hotelId && <p className="mt-1 text-xs text-gray-500">{formatGhs(rental.unitPrice)} / night × {rental.units} nights × {rental.numberOfRooms} rooms</p>}
                     {rental.reference && (
                       <p className="mt-1 text-xs text-gray-400">
                         Reference {rental.reference}

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Map as MapIcon } from "lucide-react";
 import PropertyRail from "./PropertyRail";
+import { RevealBlock } from "./LandingMotion";
 import { usePlatform } from "../../context/usePlatform";
 import { useHomeListings } from "../../hooks/useHomeListings";
 import { useVisitorLocation } from "../../hooks/useVisitorLocation";
@@ -20,13 +21,13 @@ const FeatureListings = () => {
   const params = new URLSearchParams({ ...(category === "stay" ? { type: "Hotel,Hotel-Apartment" } : category ? { status: category } : {}), ...(center ? { ...nearToParams(place), radius: String(DEFAULT_RADIUS_KM) } : {}) });
   const browseLink = `${paths.listings}${params.size ? `?${params}` : ""}`;
   return <section id="home-listings" className="home-section home-featured" aria-labelledby="featured-heading"><div className="container-page">
-    <header className="home-feature-heading">
-      <div><p className="home-eyebrow">EXPLORE LISTINGS</p><h2 id="featured-heading" className="home-section-title">Featured properties</h2><p className="home-section-description">Handpicked homes, apartments, and stays across Ghana.</p></div>
+    <RevealBlock as="header" className="home-feature-heading">
+      <div><p className="home-eyebrow">EXPLORE LISTINGS</p><h2 id="featured-heading" className="home-section-title">Featured Properties</h2><p className="home-section-description">Handpicked homes, apartments, and short stays across Ghana.</p></div>
       <div className="home-feature-actions">
         <fieldset className="home-filter-tabs"><legend className="sr-only">Featured property category</legend>{categories.map(({ value, label }) => <label key={label} className={category === value ? "is-active" : ""}><input className="sr-only" type="radio" name="featured-category" checked={category === value} onChange={() => setCategory(value)} />{label}</label>)}</fieldset>
         <Link to={browseLink} className="home-text-link">View all properties <ArrowRight size={19} aria-hidden="true" /></Link>
       </div>
-    </header>
+    </RevealBlock>
     {place && <div className="home-feature-controls"><label className="home-nearby-toggle"><input type="checkbox" checked={nearby} onChange={(event) => setNearby(event.target.checked)} />Within {DEFAULT_RADIUS_KM} km of {visitor.choice === "device" ? "you" : place.label?.split(",")[0]}</label>{center && <Link to={`${browseLink}&view=map`} className="home-text-link"><MapIcon size={17} aria-hidden="true" />View on map</Link>}</div>}
     <div aria-live="polite" aria-busy={query.loading}>
       {query.error ? <div role="alert" className="home-listings-message"><h3>Properties could not load.</h3><p>Please try again to see available listings.</p><button type="button" onClick={query.reload} className="home-button">Try again</button></div>

@@ -54,4 +54,6 @@ const refundSchema = new mongoose.Schema(
 refundSchema.index({ reference: 1 }, { name: "one_open_refund_per_transaction", unique: true, partialFilterExpression: { open: true } });
 refundSchema.index({ method: 1, status: 1, nextReconcileAt: 1, createdAt: 1 });
 
+refundSchema.index({ createdAt: -1 }); // admin refunds list, newest first
+
 export default mongoose.models.Refund || mongoose.model("Refund", refundSchema);

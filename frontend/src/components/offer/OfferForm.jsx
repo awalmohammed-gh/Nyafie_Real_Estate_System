@@ -4,12 +4,10 @@ import { motion } from "motion/react";
 import { CheckCircle2, Info, Loader2, MessageCircle, Send } from "lucide-react";
 import WhatsAppIcon from "../ui/WhatsAppIcon";
 import { offerApi } from "../../frontApi";
-import { getPriceParts } from "../../utils/property";
+import { getPriceParts, formatGhs } from "../../utils/property";
 import { buildWhatsAppLink } from "../../utils/whatsapp";
 import { propertyUrl } from "../../utils/siteUrl";
 import { usePlatform } from "../../context/usePlatform";
-
-const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
 // Make Offer: the customer proposes a price (a sale price, or a rent per period
 // for rentals). Nothing is paid; the owner accepts, declines or counters, and the
@@ -53,11 +51,11 @@ const OfferForm = ({ property, ownerName, whatsappNumber }) => {
         <dl className="mt-5 divide-y divide-gray-100 rounded-2xl px-4 text-left ring-1 ring-gray-200">
           <div className="flex justify-between py-3">
             <dt className="text-sm text-gray-500">Your offer</dt>
-            <dd className="text-lg font-extrabold text-brand-600">{ghs(offer.amount)}{period}</dd>
+            <dd className="text-lg font-extrabold text-brand-600">{formatGhs(offer.amount)}{period}</dd>
           </div>
           <div className="flex justify-between py-3">
             <dt className="text-sm text-gray-500">{isRent ? "Listed rent" : "Asking price"}</dt>
-            <dd className="font-semibold text-gray-900">{ghs(offer.askingPrice)}{period}</dd>
+            <dd className="font-semibold text-gray-900">{formatGhs(offer.askingPrice)}{period}</dd>
           </div>
         </dl>
         <p className="mt-5 text-sm text-gray-600">{ownerName} has been notified. You can now discuss your offer with them.</p>

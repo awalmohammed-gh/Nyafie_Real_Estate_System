@@ -1,6 +1,5 @@
 import { ADVANCE_OPTIONS, moveInCosts } from "../../utils/moveIn";
-
-const ghs = (value) => `₵${Number(value).toLocaleString()}`;
+import { formatGhs } from "../../utils/property";
 
 /**
  * Editor fields for a monthly rental's move-in costs: months of rent in advance, the agent fee and
@@ -43,10 +42,10 @@ const MoveInFields = ({ value, onChange, rent, error }) => {
       {error && <p role="alert" className="mt-3 text-xs text-red-600">{error}</p>}
       {costs && (
         <p className="mt-4 rounded-xl bg-white p-3 text-sm text-gray-700 ring-1 ring-gray-200">
-          Tenants will see a total of <strong className="text-gray-900">{ghs(costs.total)}</strong> to move in
-          {costs.advanceMonths > 0 && <> ({costs.advanceMonths} {costs.advanceMonths === 1 ? "month" : "months"} of rent {ghs(costs.advance)}</>}
-          {costs.fee > 0 && <>{costs.advanceMonths > 0 ? ", " : " ("}agent fee {ghs(costs.fee)}</>}
-          {costs.deposit > 0 && <>{costs.advanceMonths > 0 || costs.fee > 0 ? ", " : " ("}deposit {ghs(costs.deposit)}</>}
+          Tenants will see a total of <strong className="text-gray-900">{formatGhs(costs.total)}</strong> to move in
+          {costs.advanceMonths > 0 && <> ({costs.advanceMonths} {costs.advanceMonths === 1 ? "month" : "months"} of rent {formatGhs(costs.advance)}</>}
+          {costs.fee > 0 && <>{costs.advanceMonths > 0 ? ", " : " ("}agent fee {formatGhs(costs.fee)}</>}
+          {costs.deposit > 0 && <>{costs.advanceMonths > 0 || costs.fee > 0 ? ", " : " ("}deposit {formatGhs(costs.deposit)}</>}
           ).
         </p>
       )}

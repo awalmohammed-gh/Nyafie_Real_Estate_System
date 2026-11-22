@@ -5,7 +5,7 @@ import { ACCOUNT_TYPES } from "../utils/accountTypes.js";
 // One document per purchase, renewal or upgrade, so it doubles as the payment and plan history
 const subscriptionSchema = new mongoose.Schema(
   {
-    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     plan: { type: mongoose.Schema.Types.ObjectId, ref: "Plan", required: true },
     planName: { type: String, required: true },
     accountType: { type: String, enum: ACCOUNT_TYPES, default: "individual" }, // the plan's account type when bought
@@ -45,5 +45,9 @@ subscriptionSchema.index({ paymentMethod: 1, paymentStatus: 1, nextReconcileAt: 
 // A Paystack transaction can be recorded against one subscription payment only
 subscriptionSchema.index({ providerTransactionId: 1 }, { unique: true, partialFilterExpression: { providerTransactionId: { $type: "string" } } });
 subscriptionSchema.index({ status: 1, expiresAt: 1, renewalReminderAt: 1 });
+
+// A provider's latest subscription, and the admin list, newest first
+subscriptionSchema.index({ user: 1, createdAt: -1 });
+subscriptionSchema.index({ createdAt: -1 });
 
 export default mongoose.models.Subscription || mongoose.model("Subscription", subscriptionSchema);

@@ -7,9 +7,9 @@ export const OFFER_STATUSES = ["pending", "accepted", "rejected", "countered", "
 // proposal: it never marks the property as sold.
 const offerSchema = new mongoose.Schema(
   {
-    customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     property: { type: mongoose.Schema.Types.ObjectId, ref: "Property", required: true, index: true },
-    owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true }, // taken from the property
+    owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, // taken from the property
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // agency staff member handling it (null: the owner)
     ownerType: { type: String, enum: ["admin", "agent"], required: true, index: true },
     askingPrice: { type: Number, required: true }, // property price when the offer was made
@@ -23,5 +23,10 @@ const offerSchema = new mongoose.Schema(
   },
   schemaOptions
 );
+
+// Inboxes: "my requests" (customer), the owner's list and the admin list, newest first
+offerSchema.index({ customer: 1, createdAt: -1 });
+offerSchema.index({ owner: 1, createdAt: -1 });
+offerSchema.index({ createdAt: -1 });
 
 export default mongoose.models.Offer || mongoose.model("Offer", offerSchema);

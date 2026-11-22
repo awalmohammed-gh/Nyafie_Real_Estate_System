@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Crosshair, Loader2, MapPin, Search, Trash2 } from "lucide-react";
-import L, { addTiles, GHANA_VIEW } from "../../utils/leaflet";
+import L, { addTiles, GHANA_VIEW, propertyPinIcon } from "../../utils/leaflet";
 import { geoApi } from "../../frontApi";
 import { isCoordinate } from "../../utils/geo";
 import "./location.css";
 
-const pinIcon = L.divIcon({ className: "", html: '<span class="map-search-pin is-property" aria-hidden="true"></span>', iconSize: [26, 26], iconAnchor: [13, 26] });
 const round = (value) => Math.round(value * 1e6) / 1e6; // about 10 cm: plenty for a front door
 
 /**
@@ -49,7 +48,7 @@ const LocationPicker = ({ latitude, longitude, onChange, addressQuery, approxima
     if (!hasPin) { marker.current?.remove(); marker.current = null; return; }
     const point = [latitude, longitude];
     if (!marker.current) {
-      marker.current = L.marker(point, { icon: pinIcon, draggable: true, autoPan: true, title: "Property location (drag to adjust)", alt: "Property location" }).addTo(instance);
+      marker.current = L.marker(point, { icon: propertyPinIcon, draggable: true, autoPan: true, title: "Property location (drag to adjust)", alt: "Property location" }).addTo(instance);
       marker.current.on("dragend", () => {
         const { lat, lng } = marker.current.getLatLng();
         setMessage({ text: "", tone: "" });

@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import Rental from "../models/Rental.js";
 import { postSystemNote } from "./chatController.js";
-import { canManageRecord, formatGHS, isOwnListing, loadPublishedProperty, ownerFilter, ownerName, same } from "../utils/ownership.js";
+import { canManageRecord, formatGHS, isOwnListing, loadPublishedProperty, ownerFilter, ownerName, REQUEST_PROPERTY_FIELDS, same } from "../utils/ownership.js";
 import { notifyOwner, notifyUser } from "../utils/notify.js";
 import { cleanText, validateContact } from "../utils/validation.js";
 import { HttpError, ok, fail } from "../utils/response.js";
@@ -19,7 +19,7 @@ export { PAYMENT_HOLD } from "../utils/rentalAvailability.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 const MAX_DAYS = 3 * 366;
-const PROPERTY_FIELDS = "title images location price pricePeriod propertyType listingType status availability owner ownerType contact";
+const PROPERTY_FIELDS = `${REQUEST_PROPERTY_FIELDS} propertyType`;
 
 // What the owner side may move a rental to, from each status
 const TRANSITIONS = {

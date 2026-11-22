@@ -13,9 +13,9 @@ export const OPEN_VIEWING_STATUSES = ["requested", "confirmed"];
 // A customer's appointment to see a property that is for sale or for long-term rent
 const viewingSchema = new mongoose.Schema(
   {
-    customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     property: { type: mongoose.Schema.Types.ObjectId, ref: "Property", required: true, index: true },
-    owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true }, // taken from the property
+    owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, // taken from the property
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // agency staff member handling it (null: the owner)
     ownerType: { type: String, enum: ["admin", "agent"], required: true, index: true },
     scheduledAt: { type: Date, required: true, index: true }, // the agreed time, or the one waiting for an answer
@@ -38,5 +38,9 @@ const viewingSchema = new mongoose.Schema(
 viewingSchema.index({ openKey: 1 }, { unique: true, sparse: true });
 
 export const openKeyFor = (customer, property) => `${customer?._id || customer}:${property?._id || property}`;
+
+// Inboxes: "my requests" (customer), the owner's list and the admin list, newest first
+viewingSchema.index({ customer: 1, scheduledAt: -1 });
+viewingSchema.index({ owner: 1, scheduledAt: -1 });
 
 export default mongoose.models.Viewing || mongoose.model("Viewing", viewingSchema);

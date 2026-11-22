@@ -96,9 +96,13 @@ export const submitDocuments = async (req, res) => {
 // POST /api/properties/:id/documents/reopen -> a verified check can be changed again (the badge is removed)
 export const reopenDocuments = async (req, res) => {
   const property = await loadOwnSaleListing(req);
-  const updated = await DocumentCheck.findOneAndUpdate({ property: property._id, status: "verified" }, { $set: { status: "draft" } }, { returnDocument: "after" });
-  if (!updated) return fail(res, 409, "Only verified documents need reopening.");
-  await Property.updateOne({ _id: property._id }, { $set: { documentsVerifiedAt: null } });
+  // The check reopens and the badge comes off together
+  const updated = await mongoose.connection.transaction(async (session) => {
+    const reopened = await DocumentCheck.findOneAndUpdate({ property: property._id, status: "verified" }, { $set: { status: "draft" } }, { returnDocument: "after", session });
+    if (!reopened) throw new HttpError(409, "Only verified documents need reopening.");
+    await Property.updateOne({ _id: property._id }, { $set: { documentsVerifiedAt: null } }, { session });
+    return reopened;
+  });
   property.documentsVerifiedAt = null;
   ok(res, present(updated, property), "You can change the documents now");
 };
@@ -152,11 +156,14 @@ export const reviewDocumentCheck = async (req, res) => {
   if (!["verify", "reject"].includes(decision)) return fail(res, 400, "Choose verify or reject.");
   if (decision === "reject" && note.length < 10) return fail(res, 400, "Tell the owner what's missing or wrong (at least 10 characters).");
   const now = new Date();
-  const check = mongoose.isValidObjectId(req.params.id)
-    ? await DocumentCheck.findOneAndUpdate({ _id: req.params.id, status: "pending" }, { $set: { status: decision === "verify" ? "verified" : "rejected", note, reviewedAt: now, reviewedBy: req.user._id } }, { returnDocument: "after" })
-    : null;
-  if (!check) return fail(res, 409, "This check was already reviewed, or it doesn't exist. Refresh the list.");
-  const property = await Property.findByIdAndUpdate(check.property, { $set: { documentsVerifiedAt: decision === "verify" ? now : null } }, { returnDocument: "after" });
+  if (!mongoose.isValidObjectId(req.params.id)) return fail(res, 409, "This check was already reviewed, or it doesn't exist. Refresh the list.");
+  // One transaction: the decision and the listing's "Documents checked" badge always agree
+  const { check, property } = await mongoose.connection.transaction(async (session) => {
+    const reviewed = await DocumentCheck.findOneAndUpdate({ _id: req.params.id, status: "pending" }, { $set: { status: decision === "verify" ? "verified" : "rejected", note, reviewedAt: now, reviewedBy: req.user._id } }, { returnDocument: "after", session });
+    if (!reviewed) throw new HttpError(409, "This check was already reviewed, or it doesn't exist. Refresh the list.");
+    const listing = await Property.findByIdAndUpdate(reviewed.property, { $set: { documentsVerifiedAt: decision === "verify" ? now : null } }, { returnDocument: "after", session });
+    return { check: reviewed, property: listing };
+  });
   await notifyUser(check.owner, decision === "verify"
     ? { type: "documents", title: "Documents verified", message: `"${property?.title}" now shows “Documents checked” to buyers.`, link: `/agent/properties/${check.property}` }
     : { type: "documents", title: "Documents need attention", message: `We couldn't verify the documents for "${property?.title}": ${note}`, link: `/agent/properties/${check.property}` });

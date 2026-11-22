@@ -12,7 +12,7 @@ import { propertyApi } from "../../frontApi";
 import StatusBadge from "../../components/ui/StatusBadge";
 import EmptyState from "../../components/ui/EmptyState";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
-import { formatPrice, formatType, getListingStatus, statusLabel } from "../../utils/property";
+import { formatPrice, formatType, getListingStatus, statusLabel, formatGhs } from "../../utils/property";
 import { formatDate, formatRelative } from "../../utils/date";
 import { usePlatform } from "../../context/usePlatform";
 import WorkspaceStats from "../../components/agent/WorkspaceStats";
@@ -21,8 +21,6 @@ import { isHotel } from "../../utils/hotel";
 import { cloudImage } from "../../utils/cloudImage";
 import PropertyDocuments from "../../components/agent/PropertyDocuments";
 import ListingInsights from "../../components/agent/ListingInsights";
-
-const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
 const Notice = ({ tone, children }) => (
   <p className={`mb-6 flex items-start gap-2 rounded-lg border p-3 text-sm ${tone === "red" ? "border-red-200 bg-red-50 text-red-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
@@ -100,7 +98,7 @@ const PropertyManage = () => {
     },
     offers: {
       label: "Offers",
-      rows: propertyOffers.map((o) => ({ id: o.id, name: o.customer.name, detail: `Offered ${ghs(o.amount)}`, at: o.createdAt, status: o.status })),
+      rows: propertyOffers.map((o) => ({ id: o.id, name: o.customer.name, detail: `Offered ${formatGhs(o.amount)}`, at: o.createdAt, status: o.status })),
       empty: "No offers on this property yet.",
       to: `/agent/offers?property=${property.id}`,
       toLabel: "Respond to offers",
@@ -110,7 +108,7 @@ const PropertyManage = () => {
       rows: requests.map((r) =>
         isSale
           ? { id: r.id, name: r.contactName, detail: `${r.paymentStatus} payment`, at: r.createdAt, status: r.status }
-          : { id: r.id, name: r.contactName, detail: `${ghs(r.amount)} · move-in ${formatDate(r.startDate)}`, at: r.createdAt, status: r.status }
+          : { id: r.id, name: r.contactName, detail: `${formatGhs(r.amount)} · move-in ${formatDate(r.startDate)}`, at: r.createdAt, status: r.status }
       ),
       empty: isSale ? "No purchase requests yet." : "No rental requests yet.",
       to: `${isSale ? "/agent/sale-requests" : "/agent/rentals"}?property=${property.id}`,

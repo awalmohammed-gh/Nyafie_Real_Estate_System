@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
 import User from "../models/User.js";
 import Property from "../models/Property.js";
 import Inquiry from "../models/Inquiry.js";
@@ -19,7 +20,7 @@ import { notifyUser } from "./notify.js";
 import { accountTypeOf, subscriptionState } from "./permissions.js";
 import { isOrganization, ACCOUNT_LABELS } from "./accountTypes.js";
 import { isRemoved } from "./agentApplication.js";
-import { deleteDocumentChecks } from "./propertyDocuments.js";
+import { deleteDocumentChecks, destroyDocuments } from "./propertyDocuments.js";
 
 /**
  * Taking a provider (individual agent, agency or company, or one of their staff) off NyaFie.
@@ -50,24 +51,25 @@ const loadProvider = async (id) => {
   return user;
 };
 
-// A staff member's assigned work goes back to the organisation owner
-const unassign = (ownerId, memberId) => Promise.all([
-  ...STAFF_WORK.map((Model) => Model.updateMany({ owner: ownerId, assignedTo: memberId }, { $set: { assignedTo: null } })),
-  Inquiry.updateMany({ agent: ownerId, assignedTo: memberId }, { $set: { assignedTo: null } }),
-]);
+// A staff member's assigned work goes back to the organisation owner (one step at a time, so it
+// can run inside a transaction: pass its `session`)
+export const unassign = async (ownerId, memberId, session = null) => {
+  for (const Model of STAFF_WORK) await Model.updateMany({ owner: ownerId, assignedTo: memberId }, { $set: { assignedTo: null } }, { session });
+  await Inquiry.updateMany({ agent: ownerId, assignedTo: memberId }, { $set: { assignedTo: null } }, { session });
+};
 
 /**
  * Ends a live organisation membership. The member keeps their own NyaFie account; the membership
  * moves to their history and they become an individual applicant again (a new plan or invite brings
  * them back). `extra` adds to the update, e.g. removing the member's account too.
  */
-export const endMembership = (member, reason, now = new Date(), extra = {}) => {
+export const endMembership = (member, reason, now = new Date(), extra = {}, session = null) => {
   const ownerId = idOf(member.agency.owner);
   return User.updateOne({ _id: member._id, "agency.owner": ownerId }, {
     $unset: { agency: 1 },
     $push: { pastMemberships: { owner: ownerId, role: member.agency.role, joinedAt: member.agency.joinedAt, endedAt: now, reason } },
     $set: { "agentApplication.status": "incomplete", "agentApplication.agentType": "individual", "agentApplication.companyName": "", "agentApplication.approvedAt": null, "agentApplication.approvedBy": null, ...extra },
-  });
+  }, { session });
 };
 
 // GET: what removing this provider will do, for the admin's confirmation dialog
@@ -117,47 +119,60 @@ export const removeProvider = async (id, admin, { reason, note } = {}) => {
   const staffOf = user.agency?.owner ? idOf(user.agency.owner) : null;
   const removal = { removedAt: now, removedBy: admin._id, reason, note: (note || "").trim(), statusBefore: user.agentApplication?.status || "incomplete", wasStaffOf: staffOf };
 
-  const locked = await User.findOneAndUpdate(
-    { _id: user._id, role: "agent", "agentApplication.status": { $ne: "removed" } },
-    {
-      $set: { isActive: false, "agentApplication.status": "removed", removal, ...(staffOf ? { "agentApplication.agentType": "individual", "agentApplication.companyName": "" } : {}) },
-      ...(staffOf ? {
-        $unset: { agency: 1 },
-        $push: { pastMemberships: { owner: staffOf, role: user.agency.role, joinedAt: user.agency.joinedAt, endedAt: now, reason: "member-removed" } },
-      } : {}),
-    },
-    { returnDocument: "after" },
-  );
-  if (!locked) throw new HttpError(409, "This provider has already been removed.");
+  // One transaction: the account, its listings, team, invites, chats and plan change together, so a
+  // failure never leaves a removed provider with listings still live (or the reverse)
+  const outcome = await mongoose.connection.transaction(async (session) => {
+    const locked = await User.findOneAndUpdate(
+      { _id: user._id, role: "agent", "agentApplication.status": { $ne: "removed" } },
+      {
+        $set: { isActive: false, "agentApplication.status": "removed", removal, ...(staffOf ? { "agentApplication.agentType": "individual", "agentApplication.companyName": "" } : {}) },
+        ...(staffOf ? {
+          $unset: { agency: 1 },
+          $push: { pastMemberships: { owner: staffOf, role: user.agency.role, joinedAt: user.agency.joinedAt, endedAt: now, reason: "member-removed" } },
+        } : {}),
+      },
+      { returnDocument: "after", session },
+    );
+    if (!locked) throw new HttpError(409, "This provider has already been removed.");
 
-  // A staff member: the organisation carries on; their assigned work goes back to its owner
+    // A staff member: the organisation carries on; their assigned work goes back to its owner
+    if (staffOf) {
+      await unassign(staffOf, user._id, session);
+      return { summary: { kind: "staff", name: providerName(user) }, released: [] };
+    }
+
+    // An individual, agency or company: listings off the marketplace, team released, plan stopped
+    let listingsHidden = 0;
+    for (const status of HIDDEN_STATES) {
+      listingsHidden += (await Property.updateMany({ owner: user._id, ownerType: "agent", status }, { $set: { status: "suspended", providerRemoval: { hiddenAt: now, statusBefore: status } } }, { session })).modifiedCount || 0;
+    }
+    const invites = await TeamInvite.updateMany({ agency: user._id, usedAt: null, revokedAt: null }, { $set: { revokedAt: now } }, { session });
+    const conversations = await Conversation.updateMany({ owner: user._id, status: "open" }, { $set: { status: "closed", closedAt: now } }, { session });
+    const subscriptions = await Subscription.updateMany({ user: user._id, status: "active" }, { $set: { status: "cancelled", cancelledAt: now } }, { session });
+    const staff = await User.find({ "agency.owner": user._id }).session(session);
+    for (const member of staff) await endMembership(member, "organisation-removed", now, {}, session);
+    return {
+      summary: {
+        kind: isOrganization(accountTypeOf(user)) ? "organisation" : "individual",
+        name: providerName(user),
+        listingsHidden,
+        staffReleased: staff.length,
+        invitesRevoked: invites.modifiedCount || 0,
+        conversationsClosed: conversations.modifiedCount || 0,
+        subscriptionCancelled: (subscriptions.modifiedCount || 0) > 0,
+      },
+      released: staff.map((member) => member._id),
+    };
+  });
+
+  // People are told only once the removal is saved
   if (staffOf) {
-    await unassign(staffOf, user._id);
     await notifyUser(staffOf, { type: "user", title: "A team member was removed", message: `NyaFie removed ${providerName(user)} from your team. Their assigned listings and leads are back with you.`, link: "/agent/team" });
-    return { kind: "staff", name: providerName(user) };
   }
-
-  // An individual, agency or company: listings off the marketplace, team released, plan stopped
-  const [hidden, invites, conversations, subscriptions] = await Promise.all([
-    Promise.all(HIDDEN_STATES.map((status) => Property.updateMany({ owner: user._id, ownerType: "agent", status }, { $set: { status: "suspended", providerRemoval: { hiddenAt: now, statusBefore: status } } }))),
-    TeamInvite.updateMany({ agency: user._id, usedAt: null, revokedAt: null }, { $set: { revokedAt: now } }),
-    Conversation.updateMany({ owner: user._id, status: "open" }, { $set: { status: "closed", closedAt: now } }),
-    Subscription.updateMany({ user: user._id, status: "active" }, { $set: { status: "cancelled", cancelledAt: now } }),
-  ]);
-  const staff = await User.find({ "agency.owner": user._id });
-  for (const member of staff) {
-    await endMembership(member, "organisation-removed", now);
-    await notifyUser(member._id, { type: "status", title: "You no longer have access to this organisation", message: `${providerName(user)} is no longer on NyaFie. Your own account is still yours: choose a plan to keep listing, or join another team.`, link: "/agent/status" });
+  for (const memberId of outcome.released) {
+    await notifyUser(memberId, { type: "status", title: "You no longer have access to this organisation", message: `${providerName(user)} is no longer on NyaFie. Your own account is still yours: choose a plan to keep listing, or join another team.`, link: "/agent/status" });
   }
-  return {
-    kind: isOrganization(accountTypeOf(user)) ? "organisation" : "individual",
-    name: providerName(user),
-    listingsHidden: hidden.reduce((sum, result) => sum + (result.modifiedCount || 0), 0),
-    staffReleased: staff.length,
-    invitesRevoked: invites.modifiedCount || 0,
-    conversationsClosed: conversations.modifiedCount || 0,
-    subscriptionCancelled: (subscriptions.modifiedCount || 0) > 0,
-  };
+  return outcome.summary;
 };
 
 /**
@@ -171,18 +186,22 @@ export const restoreProvider = async (id, admin, { republish = false } = {}) => 
   const before = user.removal?.statusBefore;
   // Former staff come back as individual applicants; others return to where they were
   const status = user.removal?.wasStaffOf || !before || before === "removed" ? "incomplete" : before;
-  const restored = await User.findOneAndUpdate(
-    { _id: user._id, "agentApplication.status": "removed" },
-    { $set: { "agentApplication.status": status, isActive: status !== "suspended", "removal.restoredAt": new Date(), "removal.restoredBy": admin._id } },
-    { returnDocument: "after" },
-  );
-  if (!restored) throw new HttpError(409, "This provider isn't removed.");
-  let republished = 0;
-  if (republish === true) {
-    const results = await Promise.all(HIDDEN_STATES.map((state) => Property.updateMany({ owner: user._id, status: "suspended", "providerRemoval.statusBefore": state }, { $set: { status: state }, $unset: { providerRemoval: 1 } })));
-    republished = results.reduce((sum, result) => sum + (result.modifiedCount || 0), 0);
-  }
-  return { name: providerName(restored), status, republished };
+  // The account and (when asked) its listings come back together
+  return mongoose.connection.transaction(async (session) => {
+    const restored = await User.findOneAndUpdate(
+      { _id: user._id, "agentApplication.status": "removed" },
+      { $set: { "agentApplication.status": status, isActive: status !== "suspended", "removal.restoredAt": new Date(), "removal.restoredBy": admin._id } },
+      { returnDocument: "after", session },
+    );
+    if (!restored) throw new HttpError(409, "This provider isn't removed.");
+    let republished = 0;
+    if (republish === true) {
+      for (const state of HIDDEN_STATES) {
+        republished += (await Property.updateMany({ owner: user._id, status: "suspended", "providerRemoval.statusBefore": state }, { $set: { status: state }, $unset: { providerRemoval: 1 } }, { session })).modifiedCount || 0;
+      }
+    }
+    return { name: providerName(restored), status, republished };
+  });
 };
 
 // Who else's records point at this account, and the listings that customers or payments depend on
@@ -248,39 +267,44 @@ export const deletionPlan = async (id) => {
 export const permanentlyDeleteProvider = async (id, admin, confirm) => {
   const plan = await deletionPlan(id);
   if (normalise(confirm) !== plan.confirmText) throw new HttpError(400, `Type ${plan.confirmText} to confirm.`);
-  const userId = (await loadProvider(id))._id;
+  const provider = await loadProvider(id);
+  const userId = provider._id;
   const { keep, drop } = plan.references;
-
-  await Promise.all([
-    Property.deleteMany({ _id: { $in: drop }, owner: userId }),
-    User.updateMany({ savedProperties: { $in: drop } }, { $pull: { savedProperties: { $in: drop } } }),
-    Property.updateMany({ _id: { $in: keep } }, { $set: { contact: { id: String(userId), name: "Deleted agent", phone: "", email: "" } } }),
-    Subscription.deleteMany({ user: userId, paymentStatus: "failed" }),
-    TeamInvite.deleteMany({ agency: userId }),
-    TeamInvite.updateMany({ usedBy: userId }, { $set: { usedBy: null } }),
-    Notification.deleteMany({ recipient: userId }),
-    deleteDocumentChecks({ owner: userId }), // their private ownership documents, files included
-  ]);
-
   const now = new Date();
-  if (plan.mode === "erase") {
-    await User.deleteOne({ _id: userId, "agentApplication.status": "removed" });
-  } else {
-    const user = await User.findById(userId);
-    await User.updateOne({ _id: userId, "agentApplication.status": "removed" }, {
-      $set: {
-        ...DELETED_NAME,
-        email: `deleted-${userId}@deleted.nyafie.invalid`,
-        phone: "",
-        profileImage: "",
-        password: await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10), // nobody can sign in
-        preferences: {},
-        savedProperties: [],
-        agentApplication: { status: "removed", agentType: accountTypeOf(user) },
-        "removal.deletedAt": now,
-        "removal.deletedBy": admin._id,
-      },
-    });
-  }
+  // Hashed before the transaction starts: transactions should stay short
+  const unusablePassword = plan.mode === "erase" ? null : await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10); // nobody can sign in
+
+  // One transaction: every delete and the account itself go together, or nothing is deleted
+  const documents = await mongoose.connection.transaction(async (session) => {
+    await Property.deleteMany({ _id: { $in: drop }, owner: userId }, { session });
+    await User.updateMany({ savedProperties: { $in: drop } }, { $pull: { savedProperties: { $in: drop } } }, { session });
+    await Property.updateMany({ _id: { $in: keep } }, { $set: { contact: { id: String(userId), name: "Deleted agent", phone: "", email: "" } } }, { session });
+    await Subscription.deleteMany({ user: userId, paymentStatus: "failed" }, { session });
+    await TeamInvite.deleteMany({ agency: userId }, { session });
+    await TeamInvite.updateMany({ usedBy: userId }, { $set: { usedBy: null } }, { session });
+    await Notification.deleteMany({ recipient: userId }, { session });
+    const files = await deleteDocumentChecks({ owner: userId }, session); // their private ownership documents
+
+    const removed = { _id: userId, "agentApplication.status": "removed" };
+    const done = plan.mode === "erase"
+      ? (await User.deleteOne(removed, { session })).deletedCount
+      : (await User.updateOne(removed, {
+        $set: {
+          ...DELETED_NAME,
+          email: `deleted-${userId}@deleted.nyafie.invalid`,
+          phone: "",
+          profileImage: "",
+          password: unusablePassword,
+          preferences: {},
+          savedProperties: [],
+          agentApplication: { status: "removed", agentType: accountTypeOf(provider) },
+          "removal.deletedAt": now,
+          "removal.deletedBy": admin._id,
+        },
+      }, { session })).matchedCount;
+    if (!done) throw new HttpError(409, "This provider was restored or changed meanwhile. Refresh and try again.");
+    return files;
+  });
+  await destroyDocuments(documents); // the files go only once the delete is saved
   return { name: plan.name, mode: plan.mode, listingsDeleted: drop.length, listingsKept: keep.length };
 };

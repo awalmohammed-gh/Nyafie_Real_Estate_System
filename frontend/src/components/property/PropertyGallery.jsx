@@ -51,7 +51,7 @@ const PropertyGallery = ({ images, title }) => {
   }
 
   return (
-    <section aria-label="Property photos">
+    <section className="property-detail-gallery" aria-label="Property photos">
       <div className={`grid gap-2.5 ${tiled ? "sm:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]" : ""}`}>
         <div className="group relative min-w-0 overflow-hidden rounded-2xl bg-gray-100">
           <button type="button" onClick={() => showPhoto(photoIndex)} aria-label="Open property photos" className="block aspect-[4/3] max-h-[28rem] w-full sm:aspect-[16/10]">
@@ -67,8 +67,8 @@ const PropertyGallery = ({ images, title }) => {
               </button>
             </div>
           )}
-          {photos.length > 1 && <span aria-live="polite" className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-gray-950/70 px-3 py-1 text-xs font-semibold text-white tabular-nums">{photoIndex + 1} / {photos.length}</span>}
-          <button type="button" onClick={() => showPhoto(photoIndex)} className="absolute right-3 bottom-3 inline-flex min-h-10 items-center gap-2 rounded-full bg-white/95 px-3.5 text-xs font-semibold text-gray-800 shadow-sm hover:bg-white">
+          {photos.length > 1 && <span className="property-gallery-count"><Images size={14} aria-hidden="true" />{photos.length} Photos</span>}
+          <button type="button" onClick={() => showPhoto(photoIndex)} className="property-gallery-open absolute right-3 bottom-3 inline-flex min-h-10 items-center gap-2 rounded-full bg-white/95 px-3.5 text-xs font-semibold text-gray-800 shadow-sm hover:bg-white">
             <Images aria-hidden="true" className="h-4 w-4" />
             {photos.length > 1 ? "View all photos" : "View photo"}
           </button>
@@ -80,9 +80,9 @@ const PropertyGallery = ({ images, title }) => {
               return (
                 <button type="button" key={`${src}:${index}`} onClick={() => showPhoto(index + 1)} aria-label={last ? `Open all ${photos.length} property photos` : `Open property photo ${index + 2}`} className="relative min-h-0 overflow-hidden rounded-2xl bg-gray-100">
                   <PropertyImage src={src} alt="" sizes="(min-width: 1280px) 300px, 25vw" className="absolute inset-0 h-full w-full object-cover transition duration-500 hover:scale-105" />
-                  {last && (
-                    <span className="absolute inset-0 grid place-items-center bg-gray-950/55 text-white">
-                      <span className="flex flex-col items-center gap-1 text-sm font-semibold"><Images aria-hidden="true" className="h-5 w-5" />+{hidden} {hidden === 1 ? "Photo" : "Photos"}</span>
+                  {index === tiles.length - 1 && (
+                    <span className="property-gallery-more absolute inset-0 text-white">
+                      <span className="flex items-center justify-center gap-1 text-sm font-semibold">View all photos <ChevronRight size={17} aria-hidden="true" /></span>
                     </span>
                   )}
                 </button>

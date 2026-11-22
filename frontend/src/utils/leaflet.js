@@ -20,4 +20,7 @@ export const addTiles = (map) => L.tileLayer(TILE_URL, { maxZoom: 19, attributio
 // Ghana, for maps with nothing to centre on yet
 export const GHANA_VIEW = { center: [7.95, -1.03], zoom: 6 };
 
+// The property's own pin (listing editor and details page)
+export const propertyPinIcon = L.divIcon({ className: "", html: '<span class="map-search-pin is-property" aria-hidden="true"></span>', iconSize: [26, 26], iconAnchor: [13, 26] });
+
 export default L;

@@ -40,3 +40,10 @@ export const ownerName = (record) =>
       : record.property?.contact?.name || "Agent";
 
 export const formatGHS = (amount) => `GHS ${Number(amount).toLocaleString("en-GH")}`;
+
+// The listing fields shown with each customer request (offers, sale requests, viewings, rentals)
+export const REQUEST_PROPERTY_FIELDS = "title images location price pricePeriod listingType status availability owner ownerType contact";
+
+// A request with its listing, the customer's contact details and the owner's name
+export const populateRequest = (query, propertyFields = REQUEST_PROPERTY_FIELDS) =>
+  query.populate("property", propertyFields).populate("customer", "firstName lastName email phone").populate("owner", "firstName lastName");

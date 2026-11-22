@@ -3,19 +3,14 @@ import mongoose from "mongoose";
 import User from "../models/User.js";
 import Property from "../models/Property.js";
 import Inquiry from "../models/Inquiry.js";
-import Conversation from "../models/Conversation.js";
-import Offer from "../models/Offer.js";
-import Rental from "../models/Rental.js";
-import SaleRequest from "../models/SaleRequest.js";
-import Viewing from "../models/Viewing.js";
 import Subscription from "../models/Subscription.js";
 import TeamInvite from "../models/TeamInvite.js";
 import { paymentReturnUrl } from "../config/runtime.js";
 import { getAgentAccess, subscriptionState } from "../utils/permissions.js";
 import { canSeeAllAgencyWork } from "../utils/team.js";
-import { endMembership } from "../utils/providerRemoval.js";
+import { endMembership, unassign } from "../utils/providerRemoval.js";
 import { notifyUser } from "../utils/notify.js";
-import { ok, fail } from "../utils/response.js";
+import { HttpError, ok, fail } from "../utils/response.js";
 import { loadUser } from "./authController.js";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -101,18 +96,12 @@ export const updateMember = async (req, res) => {
 export const removeMember = async (req, res) => {
   const member = await loadMember(req);
   if (!member) return fail(res, 404, "Team member not found.");
-  const back = { $set: { assignedTo: null } };
-  const scope = { owner: req.access.ownerId, assignedTo: member._id };
-  await Promise.all([
-    Property.updateMany(scope, back),
-    Inquiry.updateMany({ agent: req.access.ownerId, assignedTo: member._id }, back),
-    Conversation.updateMany(scope, back),
-    Offer.updateMany(scope, back),
-    Rental.updateMany(scope, back),
-    SaleRequest.updateMany(scope, back),
-    Viewing.updateMany(scope, back),
-  ]);
-  await endMembership(member, "removed-by-owner"); // kept in the member's history
+  // One transaction: the member's work comes back and the membership ends together
+  await mongoose.connection.transaction(async (session) => {
+    await unassign(req.access.ownerId, member._id, session);
+    const ended = await endMembership(member, "removed-by-owner", new Date(), {}, session); // kept in the member's history
+    if (!ended.matchedCount) throw new HttpError(409, "This member already left the team. Refresh the list.");
+  });
   await notifyUser(member._id, { type: "status", title: "You left the agency team", message: "Your account no longer has access to the agency's listings and leads.", link: "/agent/status" });
   ok(res, null, "Team member removed. Their listings and leads are back with you.");
 };
@@ -153,22 +142,28 @@ export const acceptInvite = async (req, res) => {
   if (user.agency?.owner) return fail(res, 409, "Your account is already part of an agency team.");
   const [listings, subscription] = await Promise.all([Property.exists({ owner: user._id }), user.subscription ? Subscription.findById(user.subscription) : null]);
   if (listings || subscription && subscriptionState(subscription).isActive) return fail(res, 409, "This account has its own listings or plan. Use a separate agent account to join an agency team.");
-  if ((await User.countDocuments({ "agency.owner": owner._id })) >= access.teamMemberLimit) return fail(res, 403, "This agency's team is full. Ask the agency owner to upgrade their plan.");
-
-  const claimed = await TeamInvite.findOneAndUpdate({ _id: invite._id, usedAt: null, revokedAt: null, expiresAt: { $gt: new Date() } }, { usedAt: new Date(), usedBy: user._id }, { returnDocument: "after" });
-  if (!claimed) return fail(res, 404, "This invite link was already used.");
   const now = new Date();
-  await User.updateOne({ _id: user._id, role: "agent", agency: { $exists: false } }, {
-    $set: {
-      agency: { owner: owner._id, role: invite.role, joinedAt: now },
-      // Joining is approved by the agency owner; the agency's admin approval and plan cover the member
-      "agentApplication.status": "approved",
-      "agentApplication.agentType": access.accountType, // agency or company, like the organisation they join
-      "agentApplication.companyName": owner.agentApplication?.companyName || "",
-      "agentApplication.approvedAt": now,
-      "agentApplication.approvedBy": owner._id,
-      "agentApplication.profileCompletedAt": user.agentApplication?.profileCompletedAt || now,
-    },
+  // One transaction: the invite is used and the account joins together (a failure never burns the
+  // invite without the join). Every join first writes to the agency owner's account, so two joins
+  // at the same moment conflict and the team limit is checked again with the other one counted.
+  await mongoose.connection.transaction(async (session) => {
+    await User.updateOne({ _id: owner._id }, { $set: { teamChangedAt: now } }, { session, timestamps: false });
+    if ((await User.countDocuments({ "agency.owner": owner._id }).session(session)) >= access.teamMemberLimit) throw new HttpError(403, "This agency's team is full. Ask the agency owner to upgrade their plan.");
+    const claimed = await TeamInvite.findOneAndUpdate({ _id: invite._id, usedAt: null, revokedAt: null, expiresAt: { $gt: now } }, { usedAt: now, usedBy: user._id }, { returnDocument: "after", session });
+    if (!claimed) throw new HttpError(404, "This invite link was already used.");
+    const joined = await User.updateOne({ _id: user._id, role: "agent", agency: { $exists: false } }, {
+      $set: {
+        agency: { owner: owner._id, role: invite.role, joinedAt: now },
+        // Joining is approved by the agency owner; the agency's admin approval and plan cover the member
+        "agentApplication.status": "approved",
+        "agentApplication.agentType": access.accountType, // agency or company, like the organisation they join
+        "agentApplication.companyName": owner.agentApplication?.companyName || "",
+        "agentApplication.approvedAt": now,
+        "agentApplication.approvedBy": owner._id,
+        "agentApplication.profileCompletedAt": user.agentApplication?.profileCompletedAt || now,
+      },
+    }, { session });
+    if (!joined.matchedCount) throw new HttpError(409, "Your account is already part of an agency team.");
   });
   await notifyUser(owner._id, { type: "user", title: "New team member", message: `${user.firstName} ${user.lastName} joined your agency as ${invite.role === "manager" ? "a manager" : "an agent"}.`, link: "/agent/team" });
   ok(res, await loadUser(user._id), "Welcome to the team");

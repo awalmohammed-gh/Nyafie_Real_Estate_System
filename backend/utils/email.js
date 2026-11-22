@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import { HttpError } from "./response.js";
 import { siteName } from "../models/Setting.js";
+import { escapeHtml } from "./seo.js";
 
 const ADDRESS = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/;
 const UNAVAILABLE = "Email delivery is temporarily unavailable. Please try again later.";
@@ -35,7 +36,6 @@ export const smtpOptions = () => {
   return { host: "smtp.gmail.com", port: 465, secure: true, auth: { user, pass }, from: user, ...SAFETY };
 };
 
-const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 // A short, plain HTML version alongside the text: better delivery and readability in mail apps
 const codeEmailHtml = ({ name, heading, intro, code, note }) => `<!doctype html><html><body style="margin:0;background:#f6f5f9;font-family:Arial,Helvetica,sans-serif;color:#1f2937">

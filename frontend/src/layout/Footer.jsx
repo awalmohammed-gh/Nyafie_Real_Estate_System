@@ -57,6 +57,23 @@ const Footer = () => {
 
   if (pathname === '/') return <HomeFooter />;
 
+  if (pathname.startsWith('/house/')) return (
+    <footer className="property-detail-footer"><div className="container-page">
+      <div className="property-footer-grid">
+        <div className="property-footer-brand"><Link to="/" aria-label={`${siteName} home`}><BrandLogo tone="dark" variant="reference" /></Link><p>{settings.general.description}</p></div>
+        <LinkColumn title="Explore" links={explore} />
+        <LinkColumn title="Services" links={serviceLinks} />
+        <div className="property-footer-contact"><h3>CONTACT</h3><ul>{contactItems.filter(item => item.kind !== 'hours').map(({ kind, lines, href }) => {
+          const Icon = CONTACT_ICONS[kind];
+          const text = lines.map(line => <span className="block" key={line}>{line}</span>);
+          return <li key={kind}><Icon aria-hidden="true" />{href ? <a href={href} target={kind === 'address' ? '_blank' : undefined} rel={kind === 'address' ? 'noopener noreferrer' : undefined}>{text}</a> : <span>{text}</span>}</li>;
+        })}</ul></div>
+        <div className="property-footer-shortlist"><h3>Keep the places you love.</h3><p>Your favourites, together in one shortlist.</p><Link to="/account/saved">Open your shortlist <ArrowUpRight size={16} aria-hidden="true" /></Link></div>
+      </div>
+      <div className="property-footer-bottom"><span>&copy; {new Date().getFullYear()} {siteName}. All rights reserved.</span><InstallAppButton className="inline-flex items-center gap-2 text-white" /></div>
+    </div></footer>
+  );
+
   return (
     <footer className="bg-gray-950 text-white">
       <div className="container-page pt-16 pb-8 sm:pt-20">

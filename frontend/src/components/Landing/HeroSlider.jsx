@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { usePlatform } from "../../context/usePlatform";
@@ -8,6 +8,7 @@ import { heroImageSources, resolveHeroLink, splitAccent } from "../../utils/hero
 const SLIDE_MS = 6000; // time on each slide before it slides to the next
 const SWIPE_DISTANCE = 50;
 const pad = (n) => String(n).padStart(2, "0");
+const SLIDE_EASE = [0.22, 1, 0.36, 1];
 
 const HeroLink = ({ link, className, children }) => {
   const { paths } = usePlatform();
@@ -27,48 +28,62 @@ const HeroSlider = ({ slides, children, marketplace = false }) => {
   const [{ index, previous, direction }, setPosition] = useState({ index: 0, previous: null, direction: 1 });
   // Only the slides about to be seen are downloaded: the first, then the neighbours of each one shown
   const [loaded, setLoaded] = useState(() => new Set([0]));
+  const [ready, setReady] = useState(() => new Set());
+  const pendingSlide = useRef(null);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const swipeStart = useRef(null);
   const count = slides.length;
   const slide = slides[index];
-  const { siteName } = usePlatform();
   // The opening slide says what the platform is; later images use their own saved copy.
   const content = marketplace && index === 0 ? {
-    label: `${siteName.toUpperCase()} · GHANA'S PROPERTY MARKETPLACE`,
-    title: "Buy, rent or book a stay, *all in one place.*",
-    description: `${siteName} brings homes for sale, rentals and short stays across Ghana together, with approved agents and secure payments.`,
+    label: "GHANA’S PROPERTY MARKETPLACE",
+    title: "Find a place you’ll love to call *home.*",
+    description: "Buy, rent or book short stays from verified listings across Ghana with trusted agents.",
   } : slide;
-  const Heading = marketplace ? "h1" : "h2";
+  const Heading = marketplace ? motion.h1 : motion.h2;
+  const copyItem = {
+    hidden: { opacity: 0, y: reducedMotion ? 0 : 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: reducedMotion ? 0.15 : 0.7, ease: SLIDE_EASE } },
+  };
   const paused = hovered || focused;
   const sliding = count > 1;
   const wrap = (i) => (i + count) % count;
 
   useEffect(() => {
-    if (!sliding || paused || reducedMotion) return undefined;
+    if (!sliding || paused || reducedMotion || !ready.has((index + 1) % count)) return undefined;
     const timer = setTimeout(() => {
       const next = (index + 1) % count;
       setPosition({ index: next, previous: index, direction: 1 });
       setLoaded((current) => new Set([...current, next, (next + 1) % count, (next + count - 1) % count]));
     }, SLIDE_MS);
     return () => clearTimeout(timer);
-  }, [index, count, sliding, paused, reducedMotion]);
+  }, [index, count, sliding, paused, reducedMotion, ready]);
 
   const load = (...indexes) => setLoaded((prev) => (indexes.every((i) => prev.has(i)) ? prev : new Set([...prev, ...indexes])));
   const go = (next, step = next > index ? 1 : -1) => {
     const target = wrap(next);
     if (target === index) return;
-    setPosition({ index: target, previous: index, direction: step });
     load(target, wrap(target + 1), wrap(target - 1));
+    // Keep the current photograph in place until the requested image is decoded.
+    if (!ready.has(target)) {
+      pendingSlide.current = { target, step };
+      return;
+    }
+    pendingSlide.current = null;
+    setPosition({ index: target, previous: index, direction: step });
+  };
+  const imageReady = (i) => {
+    setReady((current) => current.has(i) ? current : new Set([...current, i]));
+    if (i === 0 && sliding) load(1, count - 1);
+    if (pendingSlide.current?.target === i) {
+      const { target, step } = pendingSlide.current;
+      pendingSlide.current = null;
+      setPosition((current) => ({ index: target, previous: current.index, direction: step }));
+    }
   };
   const goNext = () => go(index + 1, 1);
   const goPrevious = () => go(index - 1, -1);
-  const slideClass = (i) => {
-    const way = direction > 0 ? "next" : "prev";
-    if (i === index) return previous === null ? "is-active" : `is-active enter-${way}`;
-    if (i === previous) return `is-leaving leave-${way}`;
-    return "";
-  };
 
   const handlePointerDown = (event) => {
     swipeStart.current = sliding && event.isPrimary && !event.target.closest(".home-search") ? event.clientX : null;
@@ -101,7 +116,17 @@ const HeroSlider = ({ slides, children, marketplace = false }) => {
         {slides.map((item, i) => {
           const sources = heroImageSources(item.image);
           return (
-            <div key={item.id} className={`home-hero-slide ${slideClass(i)}`}>
+            <motion.div
+              key={item.id}
+              className={`home-hero-slide ${i === index ? "is-active" : i === previous ? "is-leaving" : ""}`}
+              initial={false}
+              animate={{
+                opacity: i === index || i === previous ? 1 : 0,
+                x: reducedMotion || i === index ? "0%" : `${(i === previous ? -1 : 1) * direction * 8}%`,
+                scale: reducedMotion || i === index ? 1 : 1.035,
+              }}
+              transition={{ duration: reducedMotion ? 0 : 1.1, ease: SLIDE_EASE }}
+            >
               {loaded.has(i) && item.image && (
                 <img
                   {...sources}
@@ -111,10 +136,13 @@ const HeroSlider = ({ slides, children, marketplace = false }) => {
                   decoding="async"
                   fetchPriority={i === 0 ? "high" : "low"}
                   style={{ objectPosition: item.position }}
-                  onLoad={i === 0 && sliding ? () => load(1, count - 1) : undefined}
+                  onLoad={async (event) => {
+                    try { await event.currentTarget.decode(); } catch { /* Loaded images can still render if decoding rejects. */ }
+                    imageReady(i);
+                  }}
                 />
               )}
-            </div>
+            </motion.div>
           );
         })}
       </div>
@@ -123,19 +151,28 @@ const HeroSlider = ({ slides, children, marketplace = false }) => {
         <div className="home-hero-main">
           <div className="home-hero-copy" aria-live={sliding && !paused && !reducedMotion ? "off" : "polite"}>
             {/* Keyed by slide: label, title, text and buttons always change together with the photo */}
-            <div key={slide.id} className={`home-hero-content ${marketplace || previous === null ? "" : direction > 0 ? "from-next" : "from-prev"}`} role={sliding ? "group" : undefined} aria-roledescription={sliding ? "slide" : undefined} aria-label={sliding ? `${index + 1} of ${count}` : undefined}>
-              {content.label && <p className="home-eyebrow home-hero-label"><span className="home-live-dot" aria-hidden="true" />{content.label}</p>}
-              <Heading id={marketplace ? "home-heading" : undefined} className={`home-hero-title ${marketplace && index === 0 ? "is-introduction" : ""}`}>
+            <AnimatePresence mode="wait">
+            <motion.div key={slide.id} className="home-hero-content"
+              initial="hidden" animate="visible" exit="exit"
+              variants={{
+                hidden: { opacity: 1 },
+                visible: { opacity: 1, transition: { staggerChildren: reducedMotion ? 0 : 0.1, delayChildren: reducedMotion ? 0 : 0.08 } },
+                exit: { opacity: 0, y: reducedMotion ? 0 : -12, transition: { duration: reducedMotion ? 0.1 : 0.22, ease: SLIDE_EASE } },
+              }}
+              role={sliding ? "group" : undefined} aria-roledescription={sliding ? "slide" : undefined} aria-label={sliding ? `${index + 1} of ${count}` : undefined}>
+              {content.label && <motion.p variants={copyItem} className="home-eyebrow home-hero-label"><span className="home-live-dot" aria-hidden="true" />{content.label}</motion.p>}
+              <Heading variants={copyItem} id={marketplace ? "home-heading" : undefined} className={`home-hero-title ${marketplace && index === 0 ? "is-introduction" : ""}`}>
                 {splitAccent(content.title).map((part, i) => (part.accent ? <span key={i} className="home-serif">{part.text}</span> : part.text))}
               </Heading>
-              {content.description && <p className="home-hero-description">{content.description}</p>}
+              {content.description && <motion.p variants={copyItem} className="home-hero-description">{content.description}</motion.p>}
               {!marketplace && (slide.primaryText || slide.secondaryText) && (
-                <div className="home-hero-actions">
+                <motion.div variants={copyItem} className="home-hero-actions">
                   {slide.primaryText && <HeroLink link={slide.primaryLink} className="home-hero-cta">{slide.primaryText} <ArrowUpRight size={18} aria-hidden="true" /></HeroLink>}
                   {slide.secondaryText && <HeroLink link={slide.secondaryLink} className="home-hero-cta is-ghost">{slide.secondaryText}</HeroLink>}
-                </div>
+                </motion.div>
               )}
-            </div>
+            </motion.div>
+            </AnimatePresence>
           </div>
 
           {sliding && (

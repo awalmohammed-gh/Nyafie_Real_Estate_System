@@ -11,7 +11,8 @@ const contactMessageSchema = new mongoose.Schema({
   message: { type: String, required: true, trim: true, maxlength: 4000 },
   status: { type: String, enum: CONTACT_STATUSES, default: "new" },
 }, schemaOptions);
-contactMessageSchema.index({ status: 1, createdAt: -1 });
-contactMessageSchema.index({ createdAt: -1 });
+// Admin inbox, newest first (id breaks ties so pages never overlap), with or without a status filter
+contactMessageSchema.index({ status: 1, createdAt: -1, _id: -1 });
+contactMessageSchema.index({ createdAt: -1, _id: -1 });
 
 export default mongoose.models.ContactMessage || mongoose.model("ContactMessage", contactMessageSchema);

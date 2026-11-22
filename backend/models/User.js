@@ -78,6 +78,9 @@ const userSchema = new mongoose.Schema(
       default: undefined,
     },
     pastMemberships: { type: [pastMembershipSchema], default: undefined },
+    // Agency owners: when someone last joined the team. Each join writes it inside its transaction,
+    // so two joins at the same moment conflict and the team's member limit always holds.
+    teamChangedAt: { type: Date, default: undefined },
     removal: { type: removalSchema, default: undefined },
     savedProperties: [{ type: mongoose.Schema.Types.ObjectId, ref: "Property" }],
     preferences: { type: mongoose.Schema.Types.Mixed, default: {} },
@@ -97,5 +100,10 @@ userSchema.methods.matchPassword = function matchPassword(plain) {
   if (!validPasswordInput(plain)) return Promise.resolve(false);
   return bcrypt.compare(plain, this.password);
 };
+
+// Agent and customer lists and counts in the admin console, newest first
+userSchema.index({ role: 1, createdAt: -1 });
+// How many customers saved a listing (listing insights)
+userSchema.index({ savedProperties: 1 });
 
 export default mongoose.models.User || mongoose.model("User", userSchema);

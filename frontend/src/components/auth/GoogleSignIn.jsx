@@ -21,6 +21,7 @@ export default function GoogleSignIn({ onCredential, disabled }) {
       setError("");
       try {
         const config = await customerAuth.googleChallenge();
+        if (!active) return;
         const google = await loadGoogleIdentity();
         if (!active) return;
         google.initialize({
@@ -31,8 +32,8 @@ export default function GoogleSignIn({ onCredential, disabled }) {
         });
         google.renderButton(container, { type: "standard", theme: "outline", size: "large", text: "continue_with", shape: "rectangular", width: Math.min(400, Math.max(200, Math.floor(container.getBoundingClientRect().width))) });
         setLoading(false);
-      } catch {
-        if (active) { setError("Google sign-in is currently unavailable. Please try again or use email and password."); setLoading(false); }
+      } catch (error) {
+        if (active) { setError(error.message || "Google sign-in is currently unavailable. Please try again or use email and password."); setLoading(false); }
       }
     };
     start();

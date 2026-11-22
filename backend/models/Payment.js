@@ -42,4 +42,7 @@ paymentSchema.index({ kind: 1, method: 1, status: 1, nextReconcileAt: 1, created
 // A Paystack transaction can be recorded against one payment only
 paymentSchema.index({ providerTransactionId: 1 }, { unique: true, partialFilterExpression: { providerTransactionId: { $type: "string" } } });
 
+paymentSchema.index({ createdAt: -1 }); // admin payments list, newest first
+paymentSchema.index({ property: 1 }); // whether a listing has payments (before deleting it)
+
 export default mongoose.models.Payment || mongoose.model("Payment", paymentSchema);

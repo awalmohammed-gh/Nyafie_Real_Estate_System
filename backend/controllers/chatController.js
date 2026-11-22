@@ -5,7 +5,7 @@ import Offer from "../models/Offer.js";
 import { notifyOwner, notifyUser } from "../utils/notify.js";
 import { ok, fail } from "../utils/response.js";
 import { siteName } from "../models/Setting.js";
-import { isOwnListing, loadPublishedProperty } from "../utils/ownership.js";
+import { isOwnListing, loadPublishedProperty, populateRequest } from "../utils/ownership.js";
 import { canHandleTeamRecord, teamFilter } from "../utils/team.js";
 import User from "../models/User.js";
 import { chatEnabledAgents } from "../utils/permissions.js";
@@ -47,6 +47,7 @@ const CHAT_LOCKED = {
   owner: "Upgrade your subscription to message customers through NyaFie.",
 };
 
+// No owner id here: present() returns the conversation as stored, and customers only see public owner details
 const PROPERTY_FIELDS = "title images location price pricePeriod listingType status availability ownerType contact";
 
 // Shapes a conversation for the viewer (customers only see public owner details)
@@ -74,8 +75,7 @@ const present = (conversation, user, enabled = new Set()) => {
   };
 };
 
-const populate = (query) =>
-  query.populate("property", PROPERTY_FIELDS).populate("customer", "firstName lastName email phone").populate("owner", "firstName lastName");
+const populate = (query) => populateRequest(query, PROPERTY_FIELDS);
 
 // Loads a conversation and verifies the signed-in account may access it
 const loadAuthorized = async (req, res) => {
@@ -100,14 +100,16 @@ const validateText = (text) => {
 
 // Saves a message from the signed-in account and updates the conversation summary
 // System notes from offers, rentals and sale requests pass { notify: false } because those send their own notification.
-export const addMessage = async (conversation, user, side, text, { notify = true } = {}) => {
-  const message = await Message.create({ conversation: conversation._id, sender: user._id, message: text });
+// With a transaction `session`, the message and the summary commit together (callers inside a
+// transaction pass notify: false and send their notifications after it commits).
+export const addMessage = async (conversation, user, side, text, { notify = true, session = null } = {}) => {
+  const [message] = await Message.create([{ conversation: conversation._id, sender: user._id, message: text }], { session });
   conversation.lastMessage = text.length > 140 ? `${text.slice(0, 137)}...` : text;
   conversation.lastMessageAt = message.createdAt;
   conversation.lastSender = user._id;
   if (side === "customer") conversation.ownerUnread += 1;
   else conversation.customerUnread += 1;
-  await conversation.save();
+  await conversation.save({ session });
 
   if (notify) {
     const preview = conversation.lastMessage;
@@ -123,23 +125,25 @@ export const addMessage = async (conversation, user, side, text, { notify = true
 
 // One open conversation per customer and property keeps chats easy to follow.
 // Also used by offers and rentals so the owner hears about them in their inbox.
-export const openConversation = async (property, customerId) => {
-  const existing = await Conversation.findOne({ customer: customerId, property: property._id, status: "open" });
+export const openConversation = async (property, customerId, session = null) => {
+  const existing = await Conversation.findOne({ customer: customerId, property: property._id, status: "open" }).session(session);
   if (existing) return existing;
-  return Conversation.create({
+  const [created] = await Conversation.create([{
     customer: customerId,
     owner: property.owner, // the real owner, taken from the property
     assignedTo: property.assignedTo || null, // the agency staff member handling the listing
     ownerType: property.ownerType,
     property: property._id,
-  });
+  }], { session });
+  return created;
 };
 
 // Posts an automatic note (offer made, rental paid, status changed...) into the
-// customer/owner conversation for a property and returns the conversation
-export const postSystemNote = async (property, customerId, user, side, text) => {
-  const conversation = await openConversation(property, customerId);
-  await addMessage(conversation, user, side, text, { notify: false });
+// customer/owner conversation for a property and returns the conversation.
+// Pass the transaction's `session` to make the note part of the change it describes.
+export const postSystemNote = async (property, customerId, user, side, text, session = null) => {
+  const conversation = await openConversation(property, customerId, session);
+  await addMessage(conversation, user, side, text, { notify: false, session });
   return conversation;
 };
 
