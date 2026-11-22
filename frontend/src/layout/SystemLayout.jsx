@@ -9,16 +9,19 @@ import AgentPromo from '../components/ui/AgentPromo'
 import LocationPrompt from '../components/location/LocationPrompt'
 import SmoothScroll from '../components/ui/SmoothScroll'
 import { NavOverlayContext } from '../context/navOverlay'
-import { PageLoaderCoverContext } from '../context/pageLoaderCover'
 import BottomNav from './BottomNav'
 import { useAuth } from '../context/useAuth'
 import { bottomNavAllowedOn } from '../utils/bottomNav'
+// The navbar and footer use the homepage and property-page styles (reference header, both footers).
+// Loaded with the layout, so they are styled from the first paint, even while a page is still loading.
+import '../components/Landing/home.css'
+import '../pages/property-details.css'
 
 const SystemLayout = () => {
   const { pathname, search } = useLocation()
   const navigate = useNavigate()
   const { domain } = useAuth()
-  // Phone tab bar: customer pages only, never over a page's own bottom action bar (utils/bottomNav.js)
+  // Phone tab bar: on every customer page (utils/bottomNav.js); a page's own bottom bar sits above it
   const bottomNav = domain === 'customer' && bottomNavAllowedOn(pathname)
   // Number of dark heroes on screen (home hero, page headers); while > 0 the navbar overlays them
   const [heroes, setHeroes] = useState(0)
@@ -44,8 +47,6 @@ const SystemLayout = () => {
     navigate(mode === 'signup' ? '/register' : '/login', { state: { from: pathname + search, voluntary: true } })
 
   return (
-    // While a page loads (its code, or its data), the loader covers the screen: no navbar, footer or half-styled page
-    <PageLoaderCoverContext.Provider value={true}>
     <NavOverlayContext.Provider value={registerHero}>
       <div className={`flex min-h-dvh flex-col ${bottomNav ? 'has-bottom-nav' : ''}`}>
         <SmoothScroll />
@@ -58,7 +59,7 @@ const SystemLayout = () => {
           transition={{ duration: 0.25, ease: 'easeOut' }}
           className="flex-1"
         >
-          {/* Page code loads inside the content area (shown as a full-screen loader: components/ui/PageLoader.jsx) */}
+          {/* Page code loads inside the content area: the navbar, footer and tab bar stay in place */}
           <Suspense fallback={<PageLoader label="Loading page..." />}><Outlet /></Suspense>
         </motion.main>
         <Footer />
@@ -71,7 +72,6 @@ const SystemLayout = () => {
         {bottomNav && <BottomNav menuOpen={menuOpen} onMenuToggle={() => setMenuOpen((open) => !open)} onNavigate={() => setMenuOpen(false)} menuButtonRef={menuTriggerRef} />}
       </div>
     </NavOverlayContext.Provider>
-    </PageLoaderCoverContext.Provider>
   )
 }
 

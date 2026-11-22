@@ -5,7 +5,8 @@ import { RealEstateProvider } from "../context/RealEstateProvider";
 import { sessionDomainForPath } from "../utils/sessionDomain";
 import SiteHead from "../components/brand/SiteHead";
 import { PageSeoProvider } from "../context/PageSeoProvider";
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
+import { applyAppManifest } from "../utils/appManifest";
 import PageLoader from "../components/ui/PageLoader";
 
 // Changing areas mounts a fresh, role-bound context and drops the previous
@@ -13,6 +14,8 @@ import PageLoader from "../components/ui/PageLoader";
 const SessionLayout = () => {
   const { pathname, search } = useLocation();
   const domain = sessionDomainForPath(pathname, search);
+  // The site, the agent workspace and the admin console each install as their own app (utils/appManifest.js)
+  useEffect(() => { applyAppManifest(pathname); }, [pathname]);
   return (
     <PageSeoProvider><AuthProvider key={domain} domain={domain}>
       <PlatformProvider>

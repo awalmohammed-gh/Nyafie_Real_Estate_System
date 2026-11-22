@@ -7,7 +7,7 @@
  *  - the API, other sites (images, fonts, payments) and anything else: untouched
  * To switch this off after a bad release, ship a sw.js that unregisters itself.
  */
-const VERSION = "v1";
+const VERSION = "v2"; // v2: new app icon
 const SHELL = `nyafie-shell-${VERSION}`;
 const ASSETS = "nyafie-assets"; // hashed files are valid forever, so this cache survives versions
 const OFFLINE_URL = "/offline.html";

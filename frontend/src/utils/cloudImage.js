@@ -22,6 +22,18 @@ export const cloudinaryAt = (url, width) => {
 };
 
 /**
+ * An uploaded logo with any empty (transparent or plain) margins trimmed off (e_trim), so every logo
+ * fills its height and lines up with the page edge whatever canvas it was exported on. One fixed
+ * height (144px: sharp up to 48px on 3x screens) keeps it to a single cached copy per logo.
+ */
+export const cloudLogo = (url) => {
+  if (typeof url !== "string") return url;
+  const cloud = CLOUDINARY_UPLOAD.exec(url);
+  if (!cloud || /^(e_trim\/|f_auto,)/.test(cloud[2]) || AS_STORED.test(url)) return url;
+  return `${cloud[1]}e_trim/f_auto,q_auto,c_limit,h_144/${cloud[2]}`;
+};
+
+/**
  * For an image shown at most `displayWidth` CSS pixels wide: a copy sharp on 2x (retina) screens.
  * e.g. <img src={cloudImage(user.profileImage, 48)} className="h-12 w-12" />
  */

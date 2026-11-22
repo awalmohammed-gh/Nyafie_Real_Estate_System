@@ -1,4 +1,5 @@
 import { usePlatform } from "../../context/usePlatform";
+import { cloudLogo } from "../../utils/cloudImage";
 
 // The built-in logo (public/brand): transparent artwork, purple for light backgrounds and white for
 // dark ones, so it never needs a box behind it. A logo uploaded in Admin Settings > Branding replaces it.
@@ -22,7 +23,9 @@ const BrandLogo = ({ tone = "light", size = "md", compact = false, subtitle, cla
   const uploaded = inverse ? logoDark || logo : logo;
   const builtIn = !uploaded || uploaded.split(/[?#]/)[0].endsWith(LEGACY_BUILT_IN);
   const dimensions = SIZES[size] || SIZES.md;
-  const src = compact ? favicon || MARK : builtIn ? BUILT_IN[inverse ? "dark" : "light"] : uploaded;
+  // Uploaded logos are trimmed of empty margins (utils/cloudImage.js), so the light and dark versions
+  // show at the same size and sit as close to the page edge as the account button on the other side
+  const src = compact ? favicon || MARK : builtIn ? BUILT_IN[inverse ? "dark" : "light"] : cloudLogo(uploaded);
 
   return (
     <span className={`flex min-w-0 items-center gap-2.5 ${className}`}>

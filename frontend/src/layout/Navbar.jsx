@@ -162,8 +162,9 @@ const NavbarContent = ({ onAuth, overHero = false, bottomNav = false, menuOpen: 
     setOpenMenu(null);
   });
 
-  // Transparent while a hero is behind the navbar and the page is at the top
-  const overlaysHero = referenceHome || overHero;
+  // Transparent while a hero is behind the navbar and the page is at the top. Heroes say so themselves
+  // (components/nav/NavOverlay.jsx), so a page that is still loading keeps a solid, readable navbar.
+  const overlaysHero = overHero;
   // A menu dropping from the header turns it solid; one rising from the tab bar leaves it as it is
   const headerSheetOpen = isOpen && !bottomNav;
   const onDark = overlaysHero && !scrolled && !headerSheetOpen;

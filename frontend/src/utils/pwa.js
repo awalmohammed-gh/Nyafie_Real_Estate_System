@@ -26,6 +26,14 @@ export const watchInstallPrompt = () => {
   });
 };
 
+// The page now belongs to a different app (utils/appManifest.js): an earlier prompt would install the
+// previous one, so it is dropped; the browser offers the new app with a fresh beforeinstallprompt
+export const forgetInstallPrompt = () => {
+  if (!deferred) return;
+  deferred = null;
+  notify();
+};
+
 export const canInstall = () => Boolean(deferred);
 export const onInstallChange = (listener) => {
   listeners.add(listener);

@@ -52,7 +52,7 @@ const SiteHead = () => {
 
     const icon = document.head.querySelector('link[rel="icon"]');
     if (icon) {
-      icon.href = branding.favicon || "/favicon-nyafie.png";
+      icon.href = branding.favicon || "/favicon-nyafie.png?v=2";
       if (branding.favicon) {
         icon.removeAttribute("type");
         icon.removeAttribute("sizes");

@@ -23,6 +23,7 @@ import { DEFAULT_RADIUS_KM, DEVICE, nearToParams } from "../../utils/geo";
 import { useVisitorLocation } from "../../hooks/useVisitorLocation";
 import { geoApi } from "../../frontApi";
 import { PRICE_RANGES } from "../../hooks/usePropertyBrowseState";
+import NavOverlay from "../nav/NavOverlay";
 
 const NEAR_ME = "__near_me__"; // an option value no neighbourhood can have
 export const WHERE_TRIGGER_ID = "home-where";
@@ -174,6 +175,8 @@ const Hero = () => {
 
   return (
     <section className="home-hero" aria-labelledby="home-heading">
+      {/* The navbar is transparent over the hero photo (solid while the page is still loading) */}
+      <NavOverlay />
       {/* Keyed by the slide set so it starts again at slide 1 when an admin changes the slides */}
       <HeroSlider
         key={slides.map((slide) => slide.id).join()}

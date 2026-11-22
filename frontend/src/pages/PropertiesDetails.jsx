@@ -751,7 +751,7 @@ const PropertiesDetails = () => {
         }
       />
       {!isOwnListing && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:hidden">
+        <div className="page-action-bar fixed inset-x-0 z-40 border-t border-gray-200 bg-white px-4 pt-3 lg:hidden">
           <div className="mb-2 flex items-baseline justify-between gap-3">
             <p className={`text-lg font-bold tracking-tight text-gray-900 ${unavailable ? "line-through opacity-60" : ""}`}>
               {value}

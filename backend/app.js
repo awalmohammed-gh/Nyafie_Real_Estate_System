@@ -33,6 +33,7 @@ import { allowedOrigins, cspReport, limits, originCheck, rejectOperatorKeys, sec
 import { authenticatePaystackWebhook, authenticatePaymentRecovery } from "./middleware/paymentCallbacks.js";
 import { paystackWebhook, reconcilePayments } from "./controllers/paymentCallbackController.js";
 import { requireAdminEntry } from "./utils/adminEntry.js";
+import { adminAppManifest } from "./controllers/appManifestController.js";
 import { initMonitoring, reportError } from "./utils/monitoring.js";
 
 
@@ -114,6 +115,8 @@ export const createApp = ({ initialize = initializeBackend } = {}) => {
   app.use("/api/reports", safetyReportRoutes);
   app.use("/api/uploads", uploadRoutes);
   app.get("/api/messages", protectCustomer, listConversations("customer")); // conversations the user started
+  // The admin console as an installable app: only at a URL containing its private address
+  app.get("/api/apps/:entry/manifest.webmanifest", adminAppManifest);
 
   app.use("/api", (req, res) => res.status(404).json({ success: false, message: "Endpoint not found." }));
 

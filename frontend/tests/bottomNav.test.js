@@ -4,10 +4,10 @@ import { bottomNavAllowedOn, bottomNavTab } from "../src/utils/bottomNav.js";
 
 const paths = { listings: "/listings", properties: "/properties", agents: "/agents" };
 
-test("the phone tab bar stays off pages with their own bottom action bar and the agent area", () => {
-  for (const path of ["/", "/listings", "/sale", "/rent", "/about", "/account/saved", "/account/messages", "/compare", "/agents/abc"]) assert.equal(bottomNavAllowedOn(path), true, path);
-  for (const path of ["/house/abc", "/checkout/rent/1", "/checkout/buy/1", "/payment/success", "/make-offer/1", "/agent/plans", "/agent/join/token"]) assert.equal(bottomNavAllowedOn(path), false, path);
-  assert.equal(bottomNavAllowedOn("/housing-guide"), true, "only whole path segments count");
+test("the phone tab bar is on every customer page, and off the agent area", () => {
+  for (const path of ["/", "/listings", "/sale", "/rent", "/about", "/account/saved", "/account/messages", "/compare", "/agents/abc", "/house/abc", "/checkout/rent/1", "/checkout/buy/1", "/payment/success", "/make-offer/1"]) assert.equal(bottomNavAllowedOn(path), true, path);
+  for (const path of ["/agent", "/agent/plans", "/agent/join/token"]) assert.equal(bottomNavAllowedOn(path), false, path);
+  assert.equal(bottomNavAllowedOn("/agents"), true, "only the whole /agent segment counts");
 });
 
 test("each page highlights the tab it belongs to", () => {

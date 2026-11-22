@@ -149,7 +149,7 @@ const Footer = () => {
             exit={{ opacity: 0, scale: 0.6 }}
             onClick={() => window.scrollTo({ top: 0, behavior: reducedMotion ? 'instant' : 'smooth' })}
             aria-label="Scroll to top"
-            className="scroll-top-button fixed right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-brand-500 text-white shadow-lg shadow-brand-500/30 transition-colors hover:bg-brand-700 sm:right-8"
+            className={`${pathname.startsWith("/house/") ? "above-page-bar" : "scroll-top-button"} fixed right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-brand-500 text-white shadow-lg shadow-brand-500/30 transition-colors hover:bg-brand-700 sm:right-8`}
           >
             <ArrowUp className="h-5 w-5" />
           </motion.button>

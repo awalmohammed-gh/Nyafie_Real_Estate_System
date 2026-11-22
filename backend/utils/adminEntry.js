@@ -26,12 +26,14 @@ export const adminEntryPath = () => {
 
 const digest = (value) => crypto.createHash("sha256").update(value).digest();
 
-// Constant-time comparison of what the browser sent with the configured address
-export const hasAdminEntry = (req) => {
+// Constant-time comparison of a supplied value with the configured address
+export const matchesAdminEntry = (received) => {
   const expected = adminEntryPath();
-  const received = req.get(ADMIN_ENTRY_HEADER);
   return Boolean(expected && typeof received === "string" && crypto.timingSafeEqual(digest(expected), digest(received)));
 };
+
+// The address the browser sent with an admin request
+export const hasAdminEntry = (req) => matchesAdminEntry(req.get(ADMIN_ENTRY_HEADER));
 
 // Same response as any unknown API path, so probing reveals nothing
 export const hideAdmin = (res) => res.status(404).json({ success: false, message: "Endpoint not found." });

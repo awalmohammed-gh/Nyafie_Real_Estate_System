@@ -51,7 +51,7 @@ test("production configuration, metadata, uploads and marketplace security", asy
     buckets.set(_id, hits);
     return { hits };
   });
-  const frontend = http.createServer((_req, res) => res.end('<!doctype html><html><head><title>Old title</title><meta name="description" content="Old description"></head><body><div id="root"></div><script type="module" src="/assets/app.js"></script></body></html>'));
+  const frontend = http.createServer((_req, res) => res.end('<!doctype html><html><head><title>Old title</title><meta name="description" content="Old description"><link rel="manifest" href="/manifest.webmanifest" /></head><body><div id="root"></div><script type="module" src="/assets/app.js"></script></body></html>'));
   process.env.FRONTEND_INTERNAL_URL = await listen(frontend);
   let initializations = 0;
   const app = createApp({ initialize: async () => { initializations++; } });
@@ -135,6 +135,31 @@ test("production configuration, metadata, uploads and marketplace security", asy
         const response = await call(path);
         assert.equal(response.status, 404, path);
         assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow', path);
+      }
+    });
+    await t.test('the agent workspace and the admin console install as their own apps; the admin app only at its private address', async () => {
+      const manifestOf = (html) => html.match(/<link rel="manifest" href="([^"]+)"/)?.[1];
+      assert.equal(manifestOf(await (await call('/agent/dashboard')).text()), '/agent.webmanifest');
+      assert.equal(manifestOf(await (await call('/agent/login')).text()), '/agent.webmanifest');
+      assert.equal(manifestOf(await (await call('/agents/123')).text()), '/manifest.webmanifest', 'public agent profiles are part of the site');
+      assert.equal(manifestOf(await (await call('/listings')).text()), '/manifest.webmanifest');
+      // The console's page names no app: it stays identical to any missing page
+      assert.equal(manifestOf(await (await call('/hb-production-fixture-entry/dashboard')).text()), '/manifest.webmanifest');
+      const admin = await call('/api/apps/hb-production-fixture-entry/manifest.webmanifest');
+      assert.equal(admin.status, 200);
+      assert.match(admin.headers.get('content-type'), /application\/manifest\+json/);
+      assert.match(admin.headers.get('cache-control'), /no-store/);
+      const manifest = await admin.json();
+      assert.equal(manifest.scope, '/hb-production-fixture-entry/');
+      assert.equal(manifest.id, '/hb-production-fixture-entry/');
+      assert.equal(manifest.start_url, '/hb-production-fixture-entry/dashboard?source=app');
+      assert.match(manifest.name, /Admin$/);
+      // Any other address: exactly the unknown-endpoint answer, so guesses learn nothing
+      const unknown = await call('/api/no-such-endpoint');
+      for (const guess of ['admin', 'hb-production-fixture-entrx', 'hb-production-fixture-entry-2']) {
+        const response = await call(`/api/apps/${guess}/manifest.webmanifest`);
+        assert.equal(response.status, 404, guess);
+        assert.deepEqual(await response.json(), await unknown.clone().json(), guess);
       }
     });
     await t.test('robots and sitemap contain canonical public pages and visible properties, never private profiles', async () => {

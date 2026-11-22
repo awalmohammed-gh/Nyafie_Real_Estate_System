@@ -36,8 +36,9 @@ export const pageMetadata = (path, settings, property) => {
   return metadata;
 };
 
-export const injectMetadata = (template, metadata) => {
-  const clean = template.replace(/<title>[\s\S]*?<\/title>/gi, '').replace(/<meta\s+[^>]*(?:name=["'](?:description|robots|twitter:[^"']+)["']|property=["']og:[^"']+["'])[^>]*>/gi, '').replace(/<link\s+[^>]*rel=["']canonical["'][^>]*>/gi, '');
+// manifest: the installable app this page belongs to (the agent workspace has its own); default: the site's
+export const injectMetadata = (template, metadata, { manifest } = {}) => {
+  let clean = template.replace(/<title>[\s\S]*?<\/title>/gi, '').replace(/<meta\s+[^>]*(?:name=["'](?:description|robots|twitter:[^"']+)["']|property=["']og:[^"']+["'])[^>]*>/gi, '').replace(/<link\s+[^>]*rel=["']canonical["'][^>]*>/gi, '');
   const tag = (name, content, property = false) => `<meta ${property ? 'property' : 'name'}="${name}" content="${escapeHtml(content)}" />`;
   const head = [
     `<title>${escapeHtml(metadata.title)}</title>`,
@@ -47,5 +48,6 @@ export const injectMetadata = (template, metadata) => {
     tag('twitter:card', 'summary_large_image'), tag('twitter:title', metadata.title), tag('twitter:description', metadata.description), tag('twitter:image', metadata.image),
     `<script id="page-metadata" type="application/json">${JSON.stringify(metadata).replace(/</g, '\\u003c')}</script>`,
   ].join('\n');
+  if (manifest) clean = clean.replace(/<link\s+[^>]*rel=["']manifest["'][^>]*>/i, `<link rel="manifest" href="${escapeHtml(manifest)}" />`);
   return clean.replace(/<\/head>/i, `${head}\n</head>`);
 };
