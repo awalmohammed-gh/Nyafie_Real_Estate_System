@@ -31,7 +31,7 @@ const HomeFooter = () => {
   ];
   return <RevealBlock as="footer" className="home-reference-footer"><div className="container-page">
     <div className="home-footer-grid">
-      <div className="home-footer-brand"><Link to="/" aria-label={`${siteName} home`}><BrandLogo tone="dark" variant="reference" /></Link><p>{settings.general.description}</p><SocialLinks social={settings.social} className="home-footer-socials" /></div>
+      <div className="home-footer-brand"><Link to="/" aria-label={`${siteName} home`}><BrandLogo tone="dark" /></Link><p>{settings.general.description}</p><SocialLinks social={settings.social} className="home-footer-socials" /></div>
       {groups.map(({ title, links }) => <nav key={title} aria-label={title}><h2>{title}</h2><ul>{links.map(([name, to]) => <li key={name}><Link to={to}>{name}</Link></li>)}</ul></nav>)}
       <div className="home-footer-updates"><h2>Stay in the loop</h2><p>Get the latest property updates and opportunities.</p><form onSubmit={submitUpdates} aria-busy={busy}><label className="sr-only" htmlFor="home-updates-email">Email address for property updates</label><input id="home-updates-email" type="email" name="email" maxLength={254} required autoComplete="email" placeholder="Enter your email" value={email} onChange={event => setEmail(event.target.value)} disabled={busy} /><button type="submit" disabled={busy} aria-label="Request property updates">{busy ? <Loader2 size={17} className="animate-spin" aria-hidden="true" /> : <ArrowRight size={19} aria-hidden="true" />}</button></form>{feedback && <p className={`home-footer-feedback ${failed ? "is-error" : ""}`} role={failed ? "alert" : "status"}>{feedback}</p>}</div>
     </div>

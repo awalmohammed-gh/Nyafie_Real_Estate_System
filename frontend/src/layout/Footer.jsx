@@ -60,7 +60,7 @@ const Footer = () => {
   if (pathname.startsWith('/house/')) return (
     <footer className="property-detail-footer"><div className="container-page">
       <div className="property-footer-grid">
-        <div className="property-footer-brand"><Link to="/" aria-label={`${siteName} home`}><BrandLogo tone="dark" variant="reference" /></Link><p>{settings.general.description}</p></div>
+        <div className="property-footer-brand"><Link to="/" aria-label={`${siteName} home`}><BrandLogo tone="dark" /></Link><p>{settings.general.description}</p></div>
         <LinkColumn title="Explore" links={explore} />
         <LinkColumn title="Services" links={serviceLinks} />
         <div className="property-footer-contact"><h3>CONTACT</h3><ul>{contactItems.filter(item => item.kind !== 'hours').map(({ kind, lines, href }) => {
