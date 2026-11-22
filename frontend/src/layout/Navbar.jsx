@@ -44,9 +44,9 @@ const panelMotion = {
   transition: { duration: 0.22, ease: "easeOut" },
 };
 
-const Logo = ({ onDark = false, reference = false }) => (
+const Logo = ({ onDark = false }) => (
   <Link to="/" className="min-w-0">
-    <BrandLogo tone={onDark ? "dark" : "light"} variant={reference ? "reference" : undefined} />
+    <BrandLogo tone={onDark ? "dark" : "light"} />
   </Link>
 );
 
@@ -299,7 +299,7 @@ const NavbarContent = ({ onAuth, overHero = false, bottomNav = false, menuOpen: 
       }`}
     >
       <nav ref={navRef} className="container-page relative flex h-16 items-center justify-between gap-4 lg:h-20">
-        <Logo onDark={onDark} reference={referenceHome} />
+        <Logo onDark={onDark} />
 
         {/* Desktop links */}
         <ul className="hidden h-full items-center gap-1 lg:flex">
