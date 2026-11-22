@@ -11,7 +11,7 @@ export const getAdminCounts = async () => (await client.get("/admin/counts")).da
 export const getUsers = async () => (await client.get("/admin/users")).data.map(mapUser);
 export const getAgents = async () => (await client.get("/admin/agents")).data.map(mapUser);
 export const getAgentApplications = async () => (await client.get("/admin/agent-applications")).data.map(mapUser);
-export const reviewAgentApplication = async (id, action, rejectionReason = "") => mapUser((await client.patch(`/admin/agent-applications/${id}`, { action, rejectionReason })).data);
+export const reviewAgentApplication = async (id, action, rejectionReason = "", reviewSubmittedAt) => mapUser((await client.patch(`/admin/agent-applications/${id}`, { action, rejectionReason, ...(action === "approve" ? { proofReviewed: true, reviewSubmittedAt } : {}) })).data);
 export const updateUser = async (id, changes) => mapUser((await client.put(`/admin/users/${id}`, changes)).data);
 export const setUserStatus = (id, status) => client.patch(`/admin/users/${id}/status`, { status });
 export const deleteUser = (id) => client.delete(`/admin/users/${id}`);

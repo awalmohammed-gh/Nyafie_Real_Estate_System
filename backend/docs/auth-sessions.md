@@ -49,6 +49,57 @@ accounts are linked by Google subject ID after authoritative email matching.
 Role/status checks still apply, and the challenge is bound to its issuing tab.
 See [Google client setup](../../DEPLOYMENT.md#google-customer-sign-in).
 
+## Free agent access and paid subscriptions
+
+In **Admin Settings > Agents & Plans**, **Enable agent subscriptions** controls
+the requirement for the whole platform. Save the section after changing it.
+
+- **Off:** applicants supply their profile and professional proof, then wait for
+  admin approval. They do not choose or buy a subscription. Approved agents use
+  the selected **Free workspace plan** for features and limits at no charge.
+  Automatic selection uses the lowest-priced active plan for their account type,
+  with the lowest-priced active plan overall as fallback. Keep an active plan
+  available, even during the free launch.
+- **On:** subscription requirements apply again. New applicants need a current
+  paid or waived subscription as well as proof and approval. Previously approved
+  agents without an active subscription keep their dashboard and stored work,
+  with publishing and editing restricted until they subscribe.
+
+Free mode blocks new quotes, purchases and upgrades on the API and replaces
+the public plan selection page with the free application flow. Existing active
+subscriptions retain their features until expiry. In-flight payments can still
+be verified; plan definitions, prices, records and saved listings are preserved.
+The separate **Payment Settings > Agent subscription payments** switch only
+pauses online checkout; it does not grant free agent access.
+
+## Agent proof and approval
+
+New agent applicants must provide a complete profile and at least one professional
+proof document before submission. Accepted categories are professional registration
+or licence, an agency authorization or employment letter, and business registration.
+Admins assess whether the evidence supports the application; uploading is not approval.
+Any configured subscription requirement still applies. Agency invitations share the
+agency plan but do not approve a new member's application.
+
+Applicants manage up to four PDF, JPG, PNG or WebP files (3 MB each) through
+`GET/POST /api/agents/application/documents`,
+`DELETE /api/agents/application/documents/:docId`, and
+`GET /api/agents/application/documents/:docId/link`. Uploads use private storage.
+Normal user/profile responses omit file identifiers. Only the applicant and authorized
+admins can request a signed download link, which expires after ten minutes.
+Files are locked during review and after approval; rejection permits corrections.
+
+Admins view proof metadata and request file links at
+`/api/admin/agent-applications/:agentId/documents` and its `/:docId/link` child.
+Approval requires `proofReviewed: true` and `reviewSubmittedAt` matching the
+submission the reviewer inspected. Reviewer identity and review time are recorded;
+a resubmission invalidates an earlier approval attempt. Existing approved accounts
+retain their current access. Permanent account deletion also removes private proof files.
+
+Run `RUN_AGENT_PROOF_INTEGRATION=1 node --test tests/agentProof.integration.test.js`
+with the isolated MongoDB test helper to verify the complete upload and review flow.
+The test uses a temporary database and mocked storage, never real applicant files.
+
 JWT verification checks HS256 signature, expiry, account ID, signed session
 domain, signed role and current database role. Customer/admin identities also
 require an active account. Agent identities can restore a suspended session to

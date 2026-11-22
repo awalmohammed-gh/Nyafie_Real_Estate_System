@@ -2,11 +2,11 @@ import { Check } from "lucide-react";
 
 // Account -> Profile -> Subscription -> Review, from the server's onboarding state (user.onboarding)
 const onboardingSteps = (onboarding = {}) => {
-  const profile = { label: "Profile", done: onboarding.profile === "complete" };
+  const profile = { label: "Profile & proof", done: onboarding.profile === "complete" && onboarding.documents === "provided" };
   const subscription = { label: "Subscription", done: ["active", "not_required"].includes(onboarding.subscription) };
   return [
     { label: "Account", done: true },
-    ...(onboarding.paymentFirst ? [subscription, profile] : [profile, subscription]),
+    ...(onboarding.requireSubscription === false ? [profile] : onboarding.paymentFirst ? [subscription, profile] : [profile, subscription]),
     { label: "Review", done: onboarding.application === "approved" },
   ];
 };

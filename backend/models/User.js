@@ -5,6 +5,15 @@ import { randomUUID } from "node:crypto";
 import { schemaOptions } from "../utils/schemaOptions.js";
 import { validPasswordInput } from "../utils/passwordPolicy.js";
 
+const agentProofSchema = new mongoose.Schema({
+  kind: { type: String, required: true },
+  name: { type: String, required: true, maxlength: 120 },
+  publicId: { type: String, required: true },
+  format: { type: String, required: true },
+  bytes: { type: Number, required: true },
+  uploadedAt: { type: Date, default: Date.now },
+});
+
 const applicationSchema = new mongoose.Schema({
   // removed: taken off NyaFie by an admin (no sign-in, listings hidden); only an admin can restore it
   status: { type: String, enum: ["incomplete", "pending", "approved", "rejected", "suspended", "removed"], default: "incomplete", index: true },
@@ -18,6 +27,10 @@ const applicationSchema = new mongoose.Schema({
   bio: { type: String, trim: true, maxlength: 1500, default: "" },
   whatsapp: { type: String, trim: true, default: "" },
   agencyLogo: { type: String, default: "" },
+  proofCount: { type: Number, min: 0, max: 4, default: 0 },
+  proofDocuments: { type: [agentProofSchema], default: [], select: false },
+  proofReviewedAt: { type: Date, default: null },
+  proofReviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   profileCompletedAt: { type: Date, default: null },
   submittedAt: { type: Date, default: null },
   approvedAt: { type: Date, default: null },

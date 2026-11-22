@@ -9,6 +9,7 @@ export const schemaOptions = {
       delete ret.password;
       delete ret.sessionVersion;
       delete ret.googleId;
+      if (ret.agentApplication) delete ret.agentApplication.proofDocuments;
       return ret;
     },
   },

@@ -43,12 +43,13 @@ const UpgradePlan = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const sub = user.subscription;
-  const options = useApiQuery(`upgrades:${sub?.id || "none"}:${sub?.planId || ""}`, () => subscriptionApi.getUpgrades());
+  const options = useApiQuery(perms.subscriptionsEnabled ? `upgrades:${sub?.id || "none"}:${sub?.planId || ""}` : null, () => subscriptionApi.getUpgrades());
   const team = useApiQuery(perms.canManageTeam ? "upgrade-team" : "upgrade-team:none", () => (perms.canManageTeam ? teamApi.getTeam() : Promise.resolve(null)));
   const [processing, setProcessing] = useState(null); // the plan whose payment is starting
 
   // Organisation staff work under the owner's plan; only the owner upgrades it (the server refuses too)
   if (perms.isTeamMember) return <Navigate to="/agent/dashboard" replace />;
+  if (!perms.subscriptionsEnabled) return <Navigate to="/agent/subscription" replace />;
 
   const type = ACCOUNT_TYPES[perms.accountType];
   const current = perms.plan;

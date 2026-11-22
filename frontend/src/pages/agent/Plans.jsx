@@ -28,6 +28,7 @@ import OnboardingProgress from "../../components/agent/OnboardingProgress";
 import PageTitle from "../../components/agent/PageTitle";
 import EmptyState from "../../components/ui/EmptyState";
 import { adminPath } from "../../utils/adminEntry";
+import FreeAgentAccess from "../../components/agent/FreeAgentAccess";
 
 const benefits = [
   { icon: Users, title: "Reach serious buyers", text: "Put your listings in front of buyers and renters searching across Ghana." },
@@ -54,7 +55,7 @@ const faqs = [
 
 const Plans = () => {
   const { isAuthenticated, isAgent, isAdmin, user, isActive, isExpired } = useAuth();
-  const { plans: allPlans, plansLoading, siteName } = usePlatform();
+  const { plans: allPlans, plansLoading, siteName, settings, settingsReady } = usePlatform();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -91,6 +92,11 @@ const Plans = () => {
   };
 
   // Agency staff work under the agency plan, which the owner manages
+  if (!settingsReady) return <PageLoader label="Loading agent access..." />;
+  if (!settings.agent.requireSubscription) {
+    if (focusedMode) return <Navigate to={canAccessAgent(user) ? "/agent/subscription" : "/agent/status"} replace />;
+    return <FreeAgentAccess />;
+  }
   if (isAgent && user?.agency && focusedMode) return <Navigate to="/agent/dashboard" replace />;
   // Active subscribers upgrade from the upgrade view, which only lists higher plans
   if (onActivePlan && focusedMode && !onboardingMode) return <Navigate to="/agent/subscription/upgrade" replace />;

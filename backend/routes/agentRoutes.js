@@ -11,6 +11,7 @@ import { ownerRentals } from "../controllers/rentalController.js";
 import { ownerSaleRequests } from "../controllers/saleRequestController.js";
 import { ownerViewings } from "../controllers/viewingController.js";
 import { listPublicAgents } from "../controllers/propertyController.js";
+import { getAgentProofs, addAgentProof, removeAgentProof, agentProofLink } from "../controllers/agentProofController.js";
 
 const router = Router();
 
@@ -19,6 +20,10 @@ router.get("/public", protect, listPublicAgents);
 router.get("/application", protectAgentSession, getApplication);
 router.put("/application", protectAgentSession, limits.listingSaves, saveApplication);
 router.post("/application/submit", protectAgentSession, submitApplication);
+router.get("/application/documents", protectAgentSession, getAgentProofs);
+router.post("/application/documents", protectAgentSession, limits.listingSaves, addAgentProof);
+router.delete("/application/documents/:docId", protectAgentSession, removeAgentProof);
+router.get("/application/documents/:docId/link", protectAgentSession, agentProofLink);
 
 // Agents with an inactive subscription can still read their data (to renew)
 router.use(protectAgent, agentOnly);

@@ -16,7 +16,7 @@ const STEPS = {
   subscription: { icon: Clock3, title: "Choose a subscription plan", text: "Your profile is saved. An active subscription is required before your application is reviewed and your dashboard opens.", action: { label: "Choose plan", to: "/agent/onboarding/subscription" } },
   payment_pending: { icon: Clock3, title: "Payment Pending", text: "We are waiting for confirmation of your subscription payment. Your dashboard stays locked until Paystack confirms it.", action: "recheck" },
   payment_failed: { icon: AlertCircle, title: "Payment not completed", text: "Your last payment didn’t go through. Your account and profile are saved, so you can try again without starting over.", action: { label: "Try payment again", to: "/agent/onboarding/subscription" } },
-  review: { icon: Clock3, title: "Your application is under review", text: "Your profile and subscription are complete. Our team is reviewing your application, and we’ll notify you as soon as it’s approved.", action: "refresh" },
+  review: { icon: Clock3, title: "Your application is under review", text: "Your profile, proof documents and any required subscription are complete. Our team is reviewing your professional proof, and we’ll notify you when a decision is made.", action: "refresh" },
   rejected: { icon: AlertCircle, title: "Your application was not approved", text: "Review the feedback below, update your profile and we’ll look at it again. Your subscription and payment are kept.", action: { label: "Update application", to: "/agent/onboarding/profile" } },
   suspended: { icon: ShieldAlert, title: "Your agent account is suspended", text: "Dashboard access is blocked until an admin reactivates your account. Please contact support.", action: { label: "Contact support", to: "/contact" } },
   complete: { icon: ShieldCheck, title: "You’re all set", text: "Your agent account is approved. Add your first property from the dashboard.", action: { label: "Go to Dashboard", to: "/agent/dashboard" } },
@@ -27,6 +27,7 @@ const LABELS = {
   payment: { paid: ["Paid", "green"], waived: ["Waived", "gray"], pending: ["Pending", "amber"], failed: ["Failed", "red"], none: ["Not started", "gray"], not_required: ["Not required", "gray"] },
   subscription: { active: ["Active", "green"], pending: ["Pending", "amber"], expired: ["Expired", "red"], cancelled: ["Cancelled", "gray"], none: ["Not started", "gray"], not_required: ["Not required", "gray"] },
   application: { incomplete: ["Not submitted", "gray"], pending: ["Pending review", "amber"], approved: ["Approved", "green"], rejected: ["Rejected", "red"], suspended: ["Suspended", "red"] },
+  documents: { provided: ["Uploaded for review", "green"], missing: ["Required", "amber"] },
 };
 
 const ApplicationStatus = () => {
@@ -47,9 +48,9 @@ const ApplicationStatus = () => {
   const onboarding = fresh.onboarding || {};
   const step = STEPS[onboarding.step] || STEPS.review;
   const description = onboarding.step === "profile" && onboarding.payment === "paid"
-    ? "Your payment is confirmed. Complete the remaining professional details using your existing account, then submit your profile for admin review."
+    ? "Your payment is confirmed. Complete your professional details and upload proof that you work as an agent, then submit your application for admin review."
     : onboarding.step === "profile" && !onboarding.requireSubscription
-      ? "Complete your professional details to submit your application for review. A subscription is not currently required."
+      ? "Complete your professional details and upload agent proof to submit your application for review. A subscription is not currently required."
       : onboarding.step === "subscription" && onboarding.paymentFirst
         ? "Choose a plan and complete payment. You can fill in your remaining professional details on the agent side next."
         : step.text;
@@ -61,8 +62,11 @@ const ApplicationStatus = () => {
   const retryTo = onboarding.planId ? `${step.action?.to}?plan=${onboarding.planId}` : step.action?.to;
   const rows = [
     { key: "profile", label: "Profile", value: onboarding.profile },
-    { key: "payment", label: "Payment", value: onboarding.payment },
-    { key: "subscription", label: "Subscription", value: onboarding.subscription, note: onboarding.expiresAt ? `Until ${formatDate(onboarding.expiresAt)}` : "" },
+    { key: "documents", label: "Professional proof", value: onboarding.documents },
+    ...(onboarding.requireSubscription ? [
+      { key: "payment", label: "Payment", value: onboarding.payment },
+      { key: "subscription", label: "Subscription", value: onboarding.subscription, note: onboarding.expiresAt ? `Until ${formatDate(onboarding.expiresAt)}` : "" },
+    ] : []),
     { key: "application", label: "Application", value: onboarding.application, note: fresh.agentApplication?.submittedAt && onboarding.application === "pending" ? `Submitted ${formatDate(fresh.agentApplication.submittedAt)}` : "" },
   ];
 
@@ -119,7 +123,7 @@ const ApplicationStatus = () => {
             {onboarding.step === "payment_pending" && <Link to="/agent/onboarding/subscription" className="btn btn-light">Choose a different plan</Link>}
           </div>
         </div>
-        <p className="mt-5 text-center text-xs leading-relaxed text-gray-500">Your dashboard opens after your profile{onboarding.requireSubscription ? ", required subscription payment," : ""} and admin approval are complete.</p>
+        <p className="mt-5 text-center text-xs leading-relaxed text-gray-500">Your dashboard opens after your profile, professional proof{onboarding.requireSubscription ? ", required subscription payment," : ""} and admin approval are complete.</p>
       </div>
     </div>
   );

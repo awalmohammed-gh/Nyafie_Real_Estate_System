@@ -28,9 +28,9 @@ const JoinAgency = () => {
     setJoining(true);
     setError("");
     try {
-      await teamApi.acceptInvite(token);
+      const joined = await teamApi.acceptInvite(token);
       await refreshUser();
-      navigate("/agent/dashboard", { replace: true });
+      navigate(joined.onboarding?.nextPath || "/agent/status", { replace: true });
     } catch (err) {
       setError(err.message);
       setJoining(false);

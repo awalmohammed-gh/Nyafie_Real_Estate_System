@@ -130,6 +130,7 @@ export const mapUser = (u, domain) =>
     createdAt: u.createdAt,
     preferences: u.preferences || {},
     agentApplication: u.agentApplication || null,
+    applicationRequirements: u.applicationRequirements || null,
     // Agents only: next onboarding step and statuses, computed by the server
     onboarding: u.onboarding || null,
     savedProperties: (u.savedProperties || []).map(String),

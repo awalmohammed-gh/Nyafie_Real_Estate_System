@@ -327,6 +327,26 @@
   .above-bottom-nav { bottom: calc(var(--bottom-nav-float, 0px) + 1.5rem); }
 }
 /*
+ * Pop-up cards (components/ui/cornerCard.js): in the middle of the screen on phones, bottom-left from
+ * 640px (above the tab bar). Centred with auto margins between top and bottom rather than a transform,
+ * which the cards' entrance animation already uses.
+ */
+.pop-up-card {
+  top: 0;
+  bottom: 0;
+  height: fit-content;
+  max-height: calc(100dvh - 2rem);
+  margin-block: auto;
+  overflow-y: auto;
+}
+@media (min-width: 640px) {
+  .pop-up-card {
+    top: auto;
+    bottom: calc(var(--bottom-nav-float, 0px) + 1.5rem);
+    margin-block: 0;
+  }
+}
+/*
  * A page's own bottom action bar on phones (property pages: price, Book, Contact). It sits just above
  * the tab bar, with room at its bottom for the tab bar's raised Menu button.
  * .above-page-bar: floating buttons on such pages (compare bar, back-to-top) clear both bars.
