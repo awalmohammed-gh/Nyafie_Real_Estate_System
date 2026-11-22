@@ -5,8 +5,7 @@ import { CheckCircle2, Clock3, Loader2, MessageCircle, RotateCcw, XCircle } from
 import { paymentApi, rentalApi } from "../frontApi";
 import { formatDate } from "../utils/date";
 import { usePlatform } from "../context/usePlatform";
-
-const ghs = (value) => `₵${Number(value).toLocaleString()}`;
+import { formatGhs } from "../utils/property";
 
 // /payment/success?reference=... (Paystack's callback). The backend verifies the
 // transaction with Paystack before anything is shown as paid.
@@ -98,7 +97,7 @@ const PaymentResult = () => {
               </div>
               <div className="flex justify-between gap-4 py-3">
                 <dt className="text-gray-500">Amount paid</dt>
-                <dd className="font-extrabold text-gray-900">{ghs(rental.amount)}</dd>
+                <dd className="font-extrabold text-gray-900">{formatGhs(rental.amount)}</dd>
               </div>
               <div className="flex justify-between gap-4 py-3">
                 <dt className="text-gray-500">Reference</dt>

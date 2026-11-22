@@ -14,6 +14,7 @@ import { documentApi } from "../../frontApi";
 import { adminPath } from "../../utils/adminEntry";
 import { formatDate, formatRelative } from "../../utils/date";
 import { openDocument } from "../../utils/openDocument";
+import { formatGhs } from "../../utils/property";
 
 const TABS = [
   { id: "pending", label: "To check" },
@@ -22,7 +23,6 @@ const TABS = [
   { id: "all", label: "All" },
 ];
 const STATUS = { pending: "Pending", verified: "Verified", rejected: "Sent back", draft: "Draft" };
-const ghs = (value) => (value != null ? `₵${Number(value).toLocaleString()}` : "");
 
 // What to compare before verifying (the badge tells buyers these checks were made)
 const CHECKLIST = [
@@ -53,7 +53,7 @@ const CheckCard = ({ check, onReviewed }) => {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-lg font-bold text-gray-900">{check.propertyTitle}</p>
-          <p className="text-sm text-gray-500">{[check.location, ghs(check.price)].filter(Boolean).join(" · ")}</p>
+          <p className="text-sm text-gray-500">{[check.location, check.price != null && formatGhs(check.price)].filter(Boolean).join(" · ")}</p>
           {check.owner && <p className="mt-1 text-sm text-gray-600">Owner: <span className="font-medium text-gray-900">{check.owner.name}</span>{check.owner.company ? ` (${check.owner.company})` : ""} · {check.owner.email}{check.owner.phone ? ` · ${check.owner.phone}` : ""}</p>}
         </div>
         <StatusBadge status={STATUS[check.status]} />

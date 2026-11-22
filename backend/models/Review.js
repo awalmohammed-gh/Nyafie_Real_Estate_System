@@ -25,4 +25,7 @@ const reviewSchema = new mongoose.Schema(
 reviewSchema.index({ property: 1, user: 1 }, { unique: true });
 reviewSchema.index({ property: 1, status: 1, createdAt: -1 });
 
+reviewSchema.index({ adminSeenAt: 1 }); // admin sidebar badge (polled): reviews not seen yet
+reviewSchema.index({ createdAt: -1, _id: -1 }); // admin review list, newest first
+
 export default mongoose.models.Review || mongoose.model("Review", reviewSchema);

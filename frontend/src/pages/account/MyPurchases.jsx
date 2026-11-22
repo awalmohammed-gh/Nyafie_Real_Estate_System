@@ -12,8 +12,8 @@ import { saleRequestApi } from "../../frontApi";
 import { formatDate } from "../../utils/date";
 import { usePlatform } from "../../context/usePlatform";
 import { cloudImage } from "../../utils/cloudImage";
+import { formatGhs } from "../../utils/property";
 
-const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 const CLOSED = ["completed", "cancelled", "rejected"];
 
 // What each purchase status means for the customer
@@ -98,12 +98,12 @@ const MyPurchases = () => {
                     <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                       <div>
                         <dt className="text-xs text-gray-500">Asking price</dt>
-                        <dd className="font-semibold text-gray-900">{ghs(req.askingPrice)}</dd>
+                        <dd className="font-semibold text-gray-900">{formatGhs(req.askingPrice)}</dd>
                       </div>
                       {req.offer && (
                         <div>
                           <dt className="text-xs text-gray-500">Your offer</dt>
-                          <dd className="font-bold text-brand-600">{ghs(req.offer.amount)}</dd>
+                          <dd className="font-bold text-brand-600">{formatGhs(req.offer.amount)}</dd>
                         </div>
                       )}
                       <div>
@@ -126,7 +126,7 @@ const MyPurchases = () => {
                     )}
                     {req.paymentConfirmedAt && (
                       <p className="mt-1 text-xs text-gray-400">
-                        {ghs(req.amountPaid)} confirmed {formatDate(req.paymentConfirmedAt)}
+                        {formatGhs(req.amountPaid)} confirmed {formatDate(req.paymentConfirmedAt)}
                         {req.paymentConfirmedBy && ` by ${req.paymentConfirmedBy.name}`}
                       </p>
                     )}

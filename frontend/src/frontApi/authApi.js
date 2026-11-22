@@ -1,6 +1,7 @@
 import client from "./client";
 import { mapUser } from "./mappers";
 import { prepareCustomerTab, clearCustomerTab } from "../utils/customerTabSession";
+import { loadGoogleChallenge } from "../utils/googleIdentity";
 
 export const forSession = (domain) => {
   const base = '/auth/' + domain;
@@ -24,7 +25,7 @@ export const forSession = (domain) => {
     resetPassword: (email, code, newPassword) => client.post(base + "/reset-password", { email, code, newPassword }, config),
     googleChallenge: async () => {
       prepareCustomerTab();
-      return (await client.post(base + "/google/challenge", {}, config)).data;
+      return loadGoogleChallenge(async () => (await client.post(base + "/google/challenge", {}, config)).data);
     },
     googleLogin: async (credential, challenge) => {
       prepareCustomerTab();

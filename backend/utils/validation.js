@@ -12,3 +12,6 @@ export const validateContact = (body, { requireAddress = false } = {}) => {
 };
 
 export const cleanText = (value, max = 1000) => String(value || "").trim().slice(0, max);
+
+// Text matched literally inside a RegExp (search boxes)
+export const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

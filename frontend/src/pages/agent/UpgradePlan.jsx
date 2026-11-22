@@ -10,9 +10,8 @@ import PageLoader from "../../components/ui/PageLoader";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { ACCOUNT_TYPES, durationLabel, planFeatureList } from "../../data/plans";
 import { formatDate } from "../../utils/date";
+import { CHECKOUT_RETURN_KEY as RETURN_KEY } from "../../utils/subscription";
 
-// Paystack brings the provider back to the checkout page, which reads this to say "Plan upgraded"
-const RETURN_KEY = "nyafie:checkout";
 const money = (value) => `₵${Number(value || 0).toLocaleString()}`;
 
 // One limit of a higher plan, next to what the provider has now

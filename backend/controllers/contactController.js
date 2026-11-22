@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import ContactMessage, { CONTACT_STATUSES } from "../models/ContactMessage.js";
 import { notifyAdmins } from "../utils/notify.js";
 import { ok, fail } from "../utils/response.js";
+import { escapeRegex } from "../utils/validation.js";
 
 const trim = (value) => typeof value === "string" ? value.trim() : "";
 const present = (message) => ({ id: String(message._id), name: message.name, email: message.email, phone: message.phone, subject: message.subject, message: message.message, status: message.status, createdAt: message.createdAt });
@@ -26,7 +27,7 @@ export const listContactMessages = async (req, res) => {
   if (typeof search !== "string" || search.length > 200) return fail(res, 400, "Keep the search under 200 characters.");
   const page = Number(requestedPage);
   if (!Number.isSafeInteger(page) || page < 1 || page > 100000) return fail(res, 400, "Invalid page.");
-  const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = escapeRegex(search.trim());
   const scope = escaped ? { $or: ["name", "email", "subject", "message"].map((key) => ({ [key]: new RegExp(escaped, "i") })) } : {};
   const filter = { ...scope, ...(status === "all" ? {} : { status }) };
   const limit = 20;

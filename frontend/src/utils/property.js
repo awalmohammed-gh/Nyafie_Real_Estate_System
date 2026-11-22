@@ -1,3 +1,6 @@
+// An amount in Ghana cedis, e.g. ₵12,500
+export const formatGhs = (value) => `₵${Number(value).toLocaleString()}`;
+
 export const getPrice = (property) =>
   property.pricing.amount || property.pricing.perMonth || property.pricing.perNight || 0;
 

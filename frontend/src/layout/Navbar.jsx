@@ -115,6 +115,7 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
   const standardLinks = buildLinks(paths, settings.property.propertyTypes);
   const listingLinks = standardLinks.listingLinks;
   const navLinks = referenceHome ? [
+    { name: "Home", path: "/" },
     { name: "Buy", menu: "buy", matches: ["/sale"] },
     { name: "Rent", menu: "rent", matches: ["/rent"] },
     { name: "Short Stays", menu: "stays", matches: [] },
@@ -173,7 +174,8 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
   });
 
   // Transparent while a hero is behind the navbar and the page is at the top
-  const onDark = overHero && !scrolled && !isOpen;
+  const overlaysHero = referenceHome || overHero;
+  const onDark = overlaysHero && !scrolled && !isOpen;
 
   // Any navigation (including back/forward) closes open menus
   const routeKey = pathname + search;
@@ -309,7 +311,7 @@ const NavbarContent = ({ onAuth, overHero = false }) => {
 
   return (
     <header
-      className={`${referenceHome ? "reference-header " : ""}${onDark ? "is-over-hero " : ""}${overHero ? "fixed inset-x-0" : "sticky"} top-0 z-50 w-full border-b transition-[background-color,border-color,box-shadow] duration-300 ease-out ${
+      className={`${referenceHome ? "reference-header " : ""}${onDark ? "is-over-hero " : ""}${overlaysHero ? "fixed inset-x-0" : "sticky"} top-0 z-50 w-full border-b transition-[background-color,border-color,box-shadow] duration-300 ease-out ${
         onDark ? "border-transparent bg-transparent" : isOpen ? "border-gray-100 bg-white" : scrolled ? "border-gray-200/80 bg-white shadow-sm shadow-gray-900/5" : "border-transparent bg-white"
       }`}
     >

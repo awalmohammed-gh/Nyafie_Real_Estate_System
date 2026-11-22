@@ -11,17 +11,16 @@ import {
   loadPublishedProperty,
   ownerFilter,
   ownerName,
+  REQUEST_PROPERTY_FIELDS,
   same,
 } from "../utils/ownership.js";
 import { notifyOwner, notifyUser } from "../utils/notify.js";
 import { newReference } from "../utils/paystack.js";
 import { cleanText, validateContact } from "../utils/validation.js";
-import { ok, fail } from "../utils/response.js";
+import { HttpError, ok, fail } from "../utils/response.js";
 import { siteName } from "../models/Setting.js";
 import { openRequestLimitProblem } from "../utils/openRequestLimits.js";
 
-const PROPERTY_FIELDS =
-  "title images location price pricePeriod listingType status availability owner ownerType contact";
 const LABELS = {
   pending: "pending",
   contacted: "contacted",
@@ -47,7 +46,7 @@ const SETTABLE = [
 
 const populate = (query) =>
   query
-    .populate("property", PROPERTY_FIELDS)
+    .populate("property", REQUEST_PROPERTY_FIELDS)
     .populate("customer", "firstName lastName")
     .populate("owner", "firstName lastName")
     .populate("paymentConfirmedBy", "firstName lastName role")
@@ -133,7 +132,8 @@ const addHistory = (doc, user, note) =>
 
 // Posts the change into the customer/owner chat so the conversation shows the whole story
 // (property defaults to the populated one; a new request passes the property it just loaded)
-const note = async (request, user, side, text, property = request.property) => {
+// Inside a transaction, pass its `session` so the note commits (or rolls back) with the change.
+const note = async (request, user, side, text, property = request.property, session = null) => {
   if (!property?.owner) return;
   const conversation = await postSystemNote(
     property,
@@ -141,6 +141,7 @@ const note = async (request, user, side, text, property = request.property) => {
     user,
     side,
     text,
+    session,
   );
   request.conversation = conversation._id;
 };
@@ -194,32 +195,37 @@ export const createSaleRequest = async (req, res) => {
     );
 
   const { contactName, contactEmail, contactPhone } = contact;
-  const request = new SaleRequest({
-    customer: req.user._id,
-    property: property._id,
-    owner: property.owner, // from the database, never the request
-    assignedTo: property.assignedTo || null, // the agency staff member handling the listing
-    ownerType: property.ownerType,
-    askingPrice: property.price,
-    contactName,
-    contactEmail,
-    contactPhone,
-    message: cleanText(req.body.message),
+  // The request and its chat note are saved together (the chat never mentions an unsaved request)
+  const request = await mongoose.connection.transaction(async (session) => {
+    const created = new SaleRequest({
+      customer: req.user._id,
+      property: property._id,
+      owner: property.owner, // from the database, never the request
+      assignedTo: property.assignedTo || null, // the agency staff member handling the listing
+      ownerType: property.ownerType,
+      askingPrice: property.price,
+      contactName,
+      contactEmail,
+      contactPhone,
+      message: cleanText(req.body.message),
+    });
+    addHistory(created, req.user, "Purchase request submitted");
+    await note(
+      created,
+      req.user,
+      "customer",
+      [
+        `Purchase request submitted for ${formatGHS(property.price)}.`,
+        created.message,
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+      property,
+      session,
+    );
+    await created.save({ session });
+    return created;
   });
-  addHistory(request, req.user, "Purchase request submitted");
-  await note(
-    request,
-    req.user,
-    "customer",
-    [
-      `Purchase request submitted for ${formatGHS(property.price)}.`,
-      request.message,
-    ]
-      .filter(Boolean)
-      .join("\n\n"),
-    property,
-  );
-  await request.save();
 
   await Promise.all([
     notifyUser(req.user._id, {
@@ -348,55 +354,48 @@ export const confirmOfficePayment = async (req, res) => {
   const reason = cleanText(req.body.note, 300);
 
   const now = new Date();
-  // Claim the confirmation atomically first: only one request can move it to "confirmed", so a double
-  // click or two staff members confirming together record exactly one payment
-  const claimed = await SaleRequest.findOneAndUpdate(
-    { _id: request._id, paymentStatus: { $ne: "confirmed" }, status: { $nin: CLOSED_SALE_STATUSES } },
-    { $set: { paymentStatus: "confirmed", paymentConfirmedAt: now, paymentConfirmedBy: req.user._id } },
-    { returnDocument: "after" },
-  );
-  if (!claimed) return fail(res, 409, "This payment was just confirmed, or the request changed. Refresh it.");
-  try {
-    await Payment.create({
-    kind: "sale",
-    saleRequest: request._id,
-    customer: request.customer._id,
-    property: request.property?._id || request.property,
-    owner: request.owner?._id || request.owner,
-    ownerType: request.ownerType,
-    amount,
-    method: "Direct", // paid to the owner as agreed with the buyer
-    reference: newReference("HBS"),
-    status: "paid",
-    paidAt: now,
-    confirmedBy: req.user._id,
-    note: reason,
-  });
-  } catch (error) {
-    // Nothing was recorded: release the claim so the payment can be confirmed again
-    await SaleRequest.updateOne({ _id: request._id, paymentConfirmedAt: now }, { $set: { paymentStatus: request.paymentStatus }, $unset: { paymentConfirmedAt: "", paymentConfirmedBy: "" } });
-    throw error;
-  }
+  // One transaction: the request is confirmed, the payment recorded and the chat noted together, or
+  // nothing changes. The claim comes first so a double click or two staff members confirming at once
+  // conflict on it: one commits, the other retries, finds it confirmed and gets the 409.
+  await mongoose.connection.transaction(async (session) => {
+    const claimed = await SaleRequest.findOneAndUpdate(
+      { _id: request._id, paymentStatus: { $ne: "confirmed" }, status: { $nin: CLOSED_SALE_STATUSES } },
+      { $set: { paymentStatus: "confirmed", paymentConfirmedAt: now, paymentConfirmedBy: req.user._id } },
+      { returnDocument: "after", session },
+    );
+    if (!claimed) throw new HttpError(409, "This payment was just confirmed, or the request changed. Refresh it.");
+    await Payment.create([{
+      kind: "sale",
+      saleRequest: request._id,
+      customer: request.customer._id,
+      property: request.property?._id || request.property,
+      owner: request.owner?._id || request.owner,
+      ownerType: request.ownerType,
+      amount,
+      method: "Direct", // paid to the owner as agreed with the buyer
+      reference: newReference("HBS"),
+      status: "paid",
+      paidAt: now,
+      confirmedBy: req.user._id,
+      note: reason,
+    }], { session });
 
-  request.set({
-    status: "paid_at_office",
-    paymentStatus: "confirmed",
-    amountPaid: amount,
-    paymentConfirmedBy: req.user._id,
-    paymentConfirmedAt: now,
+    claimed.set({ status: "paid_at_office", amountPaid: amount });
+    addHistory(
+      claimed,
+      req.user,
+      `Payment of ${formatGHS(amount)} confirmed by the owner${reason ? ` – ${reason}` : ""}`,
+    );
+    await note(
+      claimed,
+      req.user,
+      "owner",
+      `Payment of ${formatGHS(amount)} received and confirmed by the owner.`,
+      request.property,
+      session,
+    );
+    await claimed.save({ session });
   });
-  addHistory(
-    request,
-    req.user,
-    `Payment of ${formatGHS(amount)} confirmed by the owner${reason ? ` – ${reason}` : ""}`,
-  );
-  await note(
-    request,
-    req.user,
-    "owner",
-    `Payment of ${formatGHS(amount)} received and confirmed by the owner.`,
-  );
-  await request.save();
 
   await notifyUser(request.customer._id, {
     type: "payment",
@@ -418,43 +417,57 @@ export const completeSale = async (req, res) => {
       "Confirm the buyer's payment before completing the sale.",
     );
 
-  request.status = "completed";
-  addHistory(request, req.user, "Sale completed; property marked as sold");
-  await note(
-    request,
-    req.user,
-    "owner",
-    "Sale completed. Congratulations on your new property!",
-  );
-  await request.save();
-
-  // The property stays listed (with its history) but is marked sold, which blocks new requests and offers
   const propertyId = request.property?._id || request.property;
-  await Property.updateOne({ _id: propertyId }, { availability: "Sold" });
+  // One transaction: the sale is completed, the property marked sold and the other buyers' requests
+  // and offers closed together. Reloaded inside it, so completing twice (a double click) is refused.
+  const cancelledBuyers = await mongoose.connection.transaction(async (session) => {
+    const current = await SaleRequest.findOne({ _id: request._id, paymentStatus: "confirmed", status: { $nin: CLOSED_SALE_STATUSES } }).session(session);
+    if (!current) throw new HttpError(409, "This sale was already completed, or the request changed. Refresh it.");
+    current.status = "completed";
+    addHistory(current, req.user, "Sale completed; property marked as sold");
+    await note(
+      current,
+      req.user,
+      "owner",
+      "Sale completed. Congratulations on your new property!",
+      request.property,
+      session,
+    );
+    await current.save({ session });
 
-  // Other buyers' open requests and offers on this property are closed
-  const others = await SaleRequest.find({
-    property: propertyId,
-    _id: { $ne: request._id },
-    status: { $nin: CLOSED_SALE_STATUSES },
+    // The property stays listed (with its history) but is marked sold, which blocks new requests and offers
+    await Property.updateOne({ _id: propertyId }, { availability: "Sold" }, { session });
+
+    // Other buyers' open requests and offers on this property are closed
+    const others = await SaleRequest.find({
+      property: propertyId,
+      _id: { $ne: request._id },
+      status: { $nin: CLOSED_SALE_STATUSES },
+    }).session(session);
+    for (const other of others) {
+      other.status = "cancelled";
+      if (other.paymentStatus === "payment_requested")
+        other.paymentStatus = "failed";
+      addHistory(other, req.user, "Property sold to another buyer");
+      await other.save({ session });
+    }
+    await Offer.updateMany(
+      { property: propertyId, status: { $in: ["pending", "countered"] } },
+      { status: "rejected", response: "Property sold", respondedAt: new Date() },
+      { session },
+    );
+    return others.map((other) => other.customer);
   });
-  for (const other of others) {
-    other.status = "cancelled";
-    if (other.paymentStatus === "payment_requested")
-      other.paymentStatus = "failed";
-    addHistory(other, req.user, "Property sold to another buyer");
-    await other.save();
-    await notifyUser(other.customer, {
+
+  // Told only once everything above is saved
+  for (const buyer of cancelledBuyers) {
+    await notifyUser(buyer, {
       type: "status",
       title: "Property no longer available",
       message: `"${request.property?.title}" has been sold.`,
       link: "/account/purchases",
     });
   }
-  await Offer.updateMany(
-    { property: propertyId, status: { $in: ["pending", "countered"] } },
-    { status: "rejected", response: "Property sold", respondedAt: new Date() },
-  );
 
   await notifyUser(request.customer._id, {
     type: "status",

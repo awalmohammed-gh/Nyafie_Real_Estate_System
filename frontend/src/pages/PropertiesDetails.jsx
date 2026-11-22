@@ -10,6 +10,7 @@ import {
   AlertCircle,
   ArrowRight,
   BadgeCheck,
+  Bookmark,
   PlayCircle,
   Bath,
   Bed,
@@ -54,7 +55,6 @@ import ReportModal from "../components/reports/ReportModal";
 import SafetyNote from "../components/reports/SafetyNote";
 import PropertyTours from "../components/property/PropertyTours";
 import CompareButton from "../components/property/CompareButton";
-import AffordabilityCalculator from "../components/property/AffordabilityCalculator";
 import { embedUrl } from "../utils/mediaLinks";
 import { addRecentlyViewed } from "../utils/browsingLists";
 import WhatsAppIcon from "../components/ui/WhatsAppIcon";
@@ -70,7 +70,6 @@ import {
   ownerWhatsAppNumber,
 } from "../utils/whatsapp";
 import { formatDate, formatRelative } from "../utils/date";
-import { listedAgo } from "../utils/listedAgo";
 import { amenityIcon } from "../utils/amenityIcons";
 import { moveInCosts } from "../utils/moveIn";
 import { propertyUrl } from "../utils/siteUrl";
@@ -82,13 +81,14 @@ import {
   statusLabel,
 } from "../utils/property";
 import { cloudImage } from "../utils/cloudImage";
+import "./property-details.css";
 
 // The map (and Leaflet) loads only when a listing has a location to show
 const PropertyMap = lazy(() => import("../components/location/PropertyMap"));
 
 // A section of the main column, with the mockup's heading style
 const Section = ({ id, title, action, children, className = "" }) => (
-  <section aria-labelledby={id} className={`py-7 ${className}`}>
+  <section aria-labelledby={id} className={`property-section py-7 ${className}`}>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <h2 id={id} className="text-xl font-bold tracking-tight text-gray-900">{title}</h2>
       {action}
@@ -125,8 +125,8 @@ const PropertiesDetails = () => {
   const property = detail.data;
   const agentOwnerId =
     user && property?.owner.type === "agent" ? property.ownerUserId : null;
-  const related = useApiQuery(`related:${id}:${sessionKey}:4`, () =>
-    propertyApi.getRelatedProperties(id, 4),
+  const related = useApiQuery(`related:${id}:${sessionKey}:3`, () =>
+    propertyApi.getRelatedProperties(id, 3),
   );
   // How many public listings the agent has (counted on the server)
   const agentListings = useApiQuery(`agent-count:${agentOwnerId}`, () =>
@@ -280,7 +280,7 @@ const PropertiesDetails = () => {
   const ratingAverage = reviewSummary ? reviewSummary.average : meta?.rating;
   const views = liveViews?.id === id ? liveViews.views : meta?.views || 0;
   const reference = id.slice(-8).toUpperCase();
-  const listed = property.listing.createdAt ? listedAgo(property.listing.createdAt) : "";
+  const listed = property.listing.createdAt ? `Listed ${formatDate(property.listing.createdAt)}` : "";
   // Listing freshness: when the owner last confirmed it is still available (not repeated on the day it was listed)
   const confirmedAt = !hotel && property.listing.confirmedAt;
   const confirmedLater = confirmedAt && new Date(confirmedAt) - new Date(property.listing.createdAt) > 24 * 60 * 60 * 1000;
@@ -378,9 +378,9 @@ const PropertiesDetails = () => {
   );
 
   return (
-    <div className="bg-gray-50/60 pb-32 lg:pb-16">
+    <div className="property-detail-page pb-32 lg:pb-16">
       <PageMetadata title={`${title} | ${siteName}`} description={description.replace(/\s+/g, " ").slice(0, 160)} image={images[0]} />
-      <div className="container-page pt-5 sm:pt-7">
+      <div className="container-page property-detail-container">
         <nav aria-label="Breadcrumb" className="mb-5 flex min-w-0 items-center gap-1.5 text-xs text-gray-500 sm:text-sm">
           <Link to="/" className="inline-flex shrink-0 items-center gap-1 hover:text-brand-600">
             <HomeIcon aria-hidden="true" className="h-3.5 w-3.5" />
@@ -394,9 +394,9 @@ const PropertiesDetails = () => {
           <span className="truncate text-gray-700">{title}</span>
         </nav>
 
-        <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <header className="property-detail-heading mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+            <div className="property-status-badges flex flex-wrap items-center gap-2 text-xs font-semibold">
               <span className="rounded-full bg-brand-600 px-3 py-1 text-white">{statusLabel(details.status)}</span>
               <span className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-brand-700 capitalize">{formatType(details.type)}</span>
               {hasTours && (
@@ -457,15 +457,15 @@ const PropertiesDetails = () => {
                   <span aria-hidden="true" className="h-1 w-1 rounded-full bg-gray-300" />
                   <a href="#reviews" className="flex items-center gap-1.5 hover:text-brand-700">
                     <Star aria-hidden="true" className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                    <span className="font-medium text-gray-700">{ratingAverage.toFixed(1)}</span>
+                  <span className="font-medium text-gray-700">{ratingAverage.toFixed(1)}</span>
                     ({ratingCount})
                   </a>
                 </>
               )}
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            {!hotel && <CompareButton propertyId={id} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:border-brand-200 hover:bg-brand-50/40" />}
+          <div className="property-heading-actions flex shrink-0 flex-wrap gap-2">
+            <button type="button" onClick={() => toggleFavorite(id)} aria-pressed={liked} aria-label={liked ? "Remove from favorites" : "Save to favorites"} className="property-icon-button"><Heart size={20} fill={liked ? "currentColor" : "none"} /></button>
             <button
               type="button"
               onClick={handleShare}
@@ -473,7 +473,7 @@ const PropertiesDetails = () => {
               className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
             >
               {copied === "link" ? <Check aria-hidden="true" className="h-4 w-4 text-emerald-600" /> : <Share2 aria-hidden="true" className="h-4 w-4" />}
-              {copied === "link" ? "Copied" : "Share"}
+              <span className="sr-only">{copied === "link" ? "Copied" : "Share"}</span>
             </button>
             <button
               type="button"
@@ -482,7 +482,7 @@ const PropertiesDetails = () => {
               aria-label={liked ? "Remove from saved" : "Save property"}
               className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
             >
-              <Heart aria-hidden="true" className={`h-4 w-4 ${liked ? "fill-brand-500 text-brand-500" : ""}`} />
+              <Bookmark aria-hidden="true" className={`h-4 w-4 ${liked ? "fill-brand-500 text-brand-500" : ""}`} />
               {liked ? "Saved" : "Save"}
             </button>
           </div>
@@ -500,32 +500,11 @@ const PropertiesDetails = () => {
           </p>
         )}
 
-        <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_21rem] xl:grid-cols-[minmax(0,1fr)_23rem] xl:gap-10">
-          <div className="min-w-0">
+        <div className="property-top-grid">
+          <div className="property-main-column min-w-0">
             <PropertyGallery key={`gallery-${property.id}`} images={images} title={title} />
 
-            <section aria-labelledby="property-specs-heading" className="mt-5 rounded-2xl border border-gray-200 bg-white px-2 py-3 shadow-sm shadow-gray-900/3">
-              <h2 id="property-specs-heading" className="sr-only">Property at a glance</h2>
-              <dl className="grid grid-cols-2 gap-y-3 sm:flex sm:divide-x sm:divide-gray-100">
-                {specs.map((spec) => (
-                  <div key={spec.label} className="flex min-w-0 flex-1 items-center justify-center gap-2.5 px-3 py-1">
-                    <spec.icon aria-hidden="true" className="h-5 w-5 shrink-0 text-brand-600" />
-                    <div className="flex min-w-0 items-baseline gap-1.5 text-sm">
-                      <dd className="font-semibold text-gray-900 capitalize">{spec.value}</dd>
-                      <dt className="truncate text-gray-500">{spec.label}</dt>
-                    </div>
-                  </div>
-                ))}
-              </dl>
-            </section>
-
-            {hasTours && (
-              <Section id="property-tours-heading" title={embedUrl(media.video) && embedUrl(media.virtualTour) ? "Video & 3D tour" : embedUrl(media.video) ? "Video tour" : "3D virtual tour"}>
-                <PropertyTours video={media.video} virtualTour={media.virtualTour} title={title} poster={images[0]} />
-              </Section>
-            )}
-
-            <Section id="property-description-heading" title="About this property">
+            <Section id="property-description-heading" title="Overview">
               <p
                 id="property-description"
                 className={`text-sm leading-7 whitespace-pre-line text-gray-600 sm:text-base ${expanded || !canExpandDescription ? "" : "line-clamp-4"}`}
@@ -546,9 +525,31 @@ const PropertiesDetails = () => {
               )}
             </Section>
 
+            <section aria-labelledby="property-specs-heading" className="property-spec-strip mt-5 rounded-2xl border border-gray-200 bg-white px-2 py-3 shadow-sm shadow-gray-900/3">
+              <h2 id="property-specs-heading" className="sr-only">Property at a glance</h2>
+              <dl className="grid grid-cols-2 gap-y-3 sm:flex sm:divide-x sm:divide-gray-100">
+                {specs.map((spec) => (
+                  <div key={spec.label} className="flex min-w-0 flex-1 items-center justify-center gap-2.5 px-3 py-1">
+                    <spec.icon aria-hidden="true" className="h-5 w-5 shrink-0 text-brand-600" />
+                    <div className="flex min-w-0 items-baseline gap-1.5 text-sm">
+                      <dd className="font-semibold text-gray-900 capitalize">{spec.value}</dd>
+                      <dt className="truncate text-gray-500">{spec.label}</dt>
+                    </div>
+                  </div>
+                ))}
+              </dl>
+            </section>
+
+            {hasTours && (
+              <Section id="property-tours-heading" title={embedUrl(media.video) && embedUrl(media.virtualTour) ? "Video & 3D tour" : embedUrl(media.video) ? "Video tour" : "3D virtual tour"}>
+                <PropertyTours video={media.video} virtualTour={media.virtualTour} title={title} poster={images[0]} />
+              </Section>
+            )}
+
+
             {features?.length > 0 && (
               <Section id="property-amenities-heading" title={hotel ? "Hotel amenities" : "Amenities & Features"} className="border-t border-gray-200">
-                <ul className="grid grid-cols-1 gap-2.5 min-[420px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+                <ul className="property-amenities-grid">
                   {features.map((feature) => {
                     const Icon = amenityIcon(feature);
                     return (
@@ -565,7 +566,7 @@ const PropertiesDetails = () => {
             )}
 
             <Section id="property-details-heading" title="Property Details" className="border-t border-gray-200">
-              <dl className="grid rounded-2xl border border-gray-200 bg-white px-5 py-2 text-sm sm:grid-cols-2 sm:gap-x-10">
+              <dl className="property-facts grid rounded-2xl border border-gray-200 bg-white px-5 py-2 text-sm sm:grid-cols-2 sm:gap-x-10">
                 {detailRows.map(([label, text]) => (
                   <div key={label} className="flex items-center justify-between gap-4 border-b border-gray-100 py-2.5 last:border-b-0 sm:[&:nth-last-child(2):nth-child(odd)]:border-b-0">
                     <dt className="text-gray-500">{label}</dt>
@@ -577,14 +578,53 @@ const PropertiesDetails = () => {
 
             {hotel && <HotelRooms key={`rooms-${property.id}`} property={property} canBook={!isOwnListing && availability === "Available"} />}
 
-            {/* Homes for sale priced in cedis: what a bank loan could cost each month (an estimate) */}
-            {isForSale && property.pricing.amount > 0 && (property.pricing.currency || "GHS") === "GHS" && (
-              <Section id="property-affordability-heading" title="Affordability" className="border-t border-gray-200">
-                <AffordabilityCalculator price={property.pricing.amount} />
-              </Section>
-            )}
 
-            <Section id="property-location-heading" title="Location" className="border-t border-gray-200">
+          </div>
+
+          <aside className="property-sidebar">
+            <section id="property-contact" tabIndex={-1} aria-labelledby="property-contact-heading" className="property-contact-card">
+              <h2 id="property-contact-heading">{hotel ? "Room rates from" : isForSale ? "Price" : "Rent"}</h2>
+              <p className={`property-asking-price ${unavailable ? "line-through opacity-60" : ""}`}>{value}{period && <span>{period}</span>}</p>
+              {moveIn && (
+                <div className="mt-4 rounded-xl bg-brand-50/60 p-4 text-sm ring-1 ring-brand-100">
+                  <p className="font-semibold text-gray-900">To move in</p>
+                  <dl className="mt-2 space-y-1.5 text-gray-600">
+                    {moveIn.advanceMonths > 0 && <div className="flex justify-between gap-3"><dt>{moveIn.advanceMonths} {moveIn.advanceMonths === 1 ? "month" : "months"} of rent in advance</dt><dd className="font-medium text-gray-900">{cedis(moveIn.advance)}</dd></div>}
+                    {moveIn.fee > 0 && <div className="flex justify-between gap-3"><dt>{moveIn.feeLabel}</dt><dd className="font-medium text-gray-900">{cedis(moveIn.fee)}</dd></div>}
+                    {moveIn.deposit > 0 && <div className="flex justify-between gap-3"><dt>Security deposit</dt><dd className="font-medium text-gray-900">{cedis(moveIn.deposit)}</dd></div>}
+                    <div className="flex justify-between gap-3 border-t border-brand-100 pt-2 text-base"><dt className="font-semibold text-gray-900">Total to move in</dt><dd className="font-bold text-gray-900">{cedis(moveIn.total)}</dd></div>
+                  </dl>
+                  <p className="mt-2 text-xs leading-5 text-gray-500">As stated by the owner. Confirm the amounts with them before paying.</p>
+                </div>
+              )}
+              {isOwnListing ? <p className="mt-6 text-sm text-gray-600">This is your listing. Manage enquiries and viewings in your dashboard.</p> : <div className="property-contact-actions">
+                {!isForSale && <button type="button" onClick={startPrimary} disabled={!canPrimary} className={`${filledButton} w-full`}><KeyRound size={20} />{primaryLabel}</button>}
+                {!stay && <button type="button" onClick={() => requireAuth("viewing")} disabled={!canBookViewing} className={`${filledButton} w-full`}><CalendarDays size={20} />Book a Viewing</button>}
+                {whatsappLink ? whatsAppAction(`${outlineButton} w-full`, <><WhatsAppIcon className="h-5 w-5" />Chat on WhatsApp</>) : isForSale && <button type="button" onClick={startPrimary} disabled={!canPrimary} className={`${outlineButton} w-full`}><MessageCircle size={20} />{primaryLabel}</button>}
+                {showContacts && ownerPhone && <a href={`tel:${ownerPhone.replace(/\s+/g, "")}`} className={`${outlineButton} w-full`}><Phone size={20} />Call {contactLabel}</a>}
+              </div>}
+              {settings.property.requireApproval && property.listing.state === "published" && <div className="property-verification"><BadgeCheck size={28} /><div><strong>Verified Listing</strong><p>This listing has been reviewed by {siteName}.</p></div></div>}
+              <div className="property-listed-by"><p className="property-sidebar-label">Listed by</p>
+                {showContacts ? <div className="property-owner">
+                  {agent.profileImage && !isAdminListing ? <img src={cloudImage(agent.profileImage, 80)} alt="" /> : <span className="property-owner-avatar">{getInitials(ownerName)}</span>}
+                  <div><strong>{ownerName}{(isAdminListing || agent.verified) && <BadgeCheck size={17} />}</strong><p>{isAdminListing ? `${siteName} Team` : agent.verified ? "Approved agent" : "Listing agent"}</p>{!isAdminListing && listingCount != null && <p>{listingCount} listings on {siteName}</p>}</div>
+                </div> : <SignInPrompt returnTo={location.pathname + location.search} message="Sign in to view this agent's profile and contact details." />}
+              </div>
+              <div className="property-reference"><p className="property-sidebar-label">Property Reference</p><div><strong>{reference}</strong><button type="button" onClick={copyReference} aria-label={copied === "reference" ? "Reference copied" : "Copy property reference"}>{copied === "reference" ? <Check size={19} /> : <Copy size={19} />}</button></div></div>
+              <div className="property-confidence"><h3><ShieldCheck size={22} />{isForSale ? "Buy" : "Browse"} with Confidence</h3><ul><li><Check size={20} />Connect with the listing owner</li><li><Check size={20} />Arrange a property viewing</li><li><Check size={20} />Keep your conversations together</li></ul></div>
+              <details className="property-contact-more"><summary>More options & safety advice</summary><div>
+                {!hotel && <CompareButton propertyId={id} className={outlineButton} />}
+                {!isOwnListing && <><button type="button" onClick={() => requireAuth(chatAction)} className={outlineButton}><MessageSquare size={17} />Send a message</button>{!hotel && <button type="button" onClick={() => startFlow("offer")} disabled={!canMakeOffer} className={outlineButton}><HandCoins size={17} />Make an offer</button>}</>}
+                {showContacts && emailLink && <a href={emailLink} className="property-owner-email"><Mail size={17} />{ownerEmail}</a>}
+                {showContacts && !isAdminListing && <Link to={`/agents/${agent.id}`} className={outlineButton}>View Agent Profile</Link>}
+                <p>{helpText}</p><SafetyNote forSale={isForSale} documentsVerifiedAt={property.listing.documentsVerifiedAt} onReport={isOwnListing ? undefined : () => requireAuth("report")} />
+              </div></details>
+            </section>
+          </aside>
+        </div>
+
+        <div className="property-full-width">
+            <Section id="property-location-heading" title="Location" className="property-full-section">
               {hasCoordinates ? (
                 <Suspense fallback={<div className="grid h-75 place-items-center rounded-2xl border border-gray-200 bg-white text-sm text-gray-500" role="status">Loading the map…</div>}>
                   <PropertyMap
@@ -593,9 +633,8 @@ const PropertiesDetails = () => {
                     title={property.title}
                     approximate={place.approximate}
                     action={mapLink && (
-                      <a href={mapLink} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-white px-3.5 text-sm font-semibold text-gray-800 shadow-md hover:bg-gray-50">
-                        Open in Maps
-                        <ExternalLink aria-hidden="true" className="h-4 w-4" />
+                      <a href={mapLink} target="_blank" rel="noopener noreferrer" aria-label={`Open ${title} in Maps`} className="property-map-card">
+                        <span><MapPin size={24} aria-hidden="true" /></span><div><strong>{title}</strong><small>{areaLabel}</small></div><ExternalLink aria-hidden="true" size={20} />
                       </a>
                     )}
                   />
@@ -624,7 +663,7 @@ const PropertiesDetails = () => {
               </div>
             </Section>
 
-            <div className="border-t border-gray-200">
+            <div className="property-full-section">
               <PropertyReviews
                 key={`reviews-${property.id}`}
                 propertyId={property.id}
@@ -635,167 +674,10 @@ const PropertiesDetails = () => {
                 onSummary={setReviewSummary}
               />
             </div>
-          </div>
-
-          <aside className="min-w-0 space-y-5 lg:sticky lg:top-24">
-            <section
-              id="property-contact"
-              tabIndex={-1}
-              aria-labelledby="property-contact-heading"
-              className="scroll-mt-24 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm shadow-gray-900/5 xl:p-6"
-            >
-              <h2 id="property-contact-heading" className="text-sm text-gray-500">
-                {hotel ? "Room rates from" : isForSale ? "Price" : "Rent"}
-              </h2>
-              <p className={`mt-1 text-3xl font-bold tracking-tight text-gray-900 ${unavailable ? "line-through opacity-60" : ""}`}>
-                {value}
-                {period && <span className="ml-1 text-base font-medium tracking-normal text-gray-500">{period}</span>}
-              </p>
-              {moveIn && (
-                <div className="mt-4 rounded-xl bg-brand-50/60 p-4 text-sm ring-1 ring-brand-100">
-                  <p className="font-semibold text-gray-900">To move in</p>
-                  <dl className="mt-2 space-y-1.5 text-gray-600">
-                    {moveIn.advanceMonths > 0 && <div className="flex justify-between gap-3"><dt>{moveIn.advanceMonths} {moveIn.advanceMonths === 1 ? "month" : "months"} of rent in advance</dt><dd className="font-medium text-gray-900">{cedis(moveIn.advance)}</dd></div>}
-                    {moveIn.fee > 0 && <div className="flex justify-between gap-3"><dt>{moveIn.feeLabel}</dt><dd className="font-medium text-gray-900">{cedis(moveIn.fee)}</dd></div>}
-                    {moveIn.deposit > 0 && <div className="flex justify-between gap-3"><dt>Security deposit</dt><dd className="font-medium text-gray-900">{cedis(moveIn.deposit)}</dd></div>}
-                    <div className="flex justify-between gap-3 border-t border-brand-100 pt-2 text-base"><dt className="font-semibold text-gray-900">Total to move in</dt><dd className="font-bold text-gray-900">{cedis(moveIn.total)}</dd></div>
-                  </dl>
-                  <p className="mt-2 text-xs leading-5 text-gray-500">As stated by the owner. Confirm the amounts with them before paying.</p>
-                </div>
-              )}
-
-              {isOwnListing ? (
-                <p className="mt-5 rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-600">
-                  This is your listing. Customer offers, rentals and messages appear in your dashboard.
-                </p>
-              ) : (
-                <div className="mt-5 space-y-3">
-                  {!isForSale && (
-                    <button type="button" onClick={startPrimary} disabled={!canPrimary} className={`${filledButton} w-full`}>
-                      <KeyRound aria-hidden="true" className="h-4 w-4" />
-                      {primaryLabel}
-                    </button>
-                  )}
-                  {whatsappLink
-                    ? whatsAppAction(`${isForSale ? filledButton : outlineButton} w-full`, <><WhatsAppIcon className="h-4 w-4" />Chat on WhatsApp</>)
-                    : isForSale && (
-                        <button type="button" onClick={startPrimary} disabled={!canPrimary} className={`${filledButton} w-full`}>
-                          <MessageCircle aria-hidden="true" className="h-4 w-4" />
-                          {primaryLabel}
-                        </button>
-                      )}
-                  {showContacts && ownerPhone && (
-                    <a href={`tel:${ownerPhone.replace(/\s+/g, "")}`} className={`${outlineButton} w-full`}>
-                      <Phone aria-hidden="true" className="h-4 w-4" />
-                      Call {isAdminListing ? siteName : "Agent"}
-                    </a>
-                  )}
-                  {!stay && (
-                    <button type="button" onClick={() => requireAuth("viewing")} disabled={!canBookViewing} className={`${outlineButton} w-full`}>
-                      <CalendarDays aria-hidden="true" className="h-4 w-4" />
-                      Book a viewing
-                    </button>
-                  )}
-                  <div className="flex flex-wrap items-center justify-center gap-x-5 text-sm">
-                    {chatAction === "chat" ? (
-                      <button type="button" onClick={() => requireAuth("chat")} className="inline-flex min-h-10 items-center gap-1.5 font-medium text-gray-600 hover:text-brand-700">
-                        <MessageSquare aria-hidden="true" className="h-4 w-4" />
-                        Chat with {contactLabel}
-                      </button>
-                    ) : (
-                      <button type="button" onClick={() => requireAuth("inquiry")} className="inline-flex min-h-10 items-center gap-1.5 font-medium text-gray-600 hover:text-brand-700">
-                        <MessageSquare aria-hidden="true" className="h-4 w-4" />
-                        Send a message
-                      </button>
-                    )}
-                    {!hotel && (
-                      <button type="button" onClick={() => startFlow("offer")} disabled={!canMakeOffer} className="inline-flex min-h-10 items-center gap-1.5 font-medium text-gray-600 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-40">
-                        <HandCoins aria-hidden="true" className="h-4 w-4" />
-                        Make an offer
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-xs leading-5 text-gray-500">{helpText}</p>
-                  <SafetyNote forSale={isForSale} documentsVerifiedAt={property.listing.documentsVerifiedAt} onReport={() => requireAuth("report")} />
-                </div>
-              )}
-
-              <div className="mt-5 border-t border-gray-100 pt-5">
-                {showContacts ? (
-                  <>
-                    <p className="text-xs text-gray-500">Listed by</p>
-                    <div className="mt-2 flex items-center gap-3">
-                      {agent.profileImage && !isAdminListing ? (
-                        <img src={cloudImage(agent.profileImage, 48)} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
-                      ) : (
-                        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand-50 text-sm font-semibold text-brand-700">
-                          {getInitials(ownerName)}
-                        </span>
-                      )}
-                      <div className="min-w-0">
-                        <p className="flex items-center gap-1 text-sm font-bold break-words text-gray-900">
-                          {ownerName}
-                          {(isAdminListing || agent.verified) && <BadgeCheck aria-hidden="true" className="h-4 w-4 shrink-0 text-brand-600" />}
-                        </p>
-                        <p className="mt-0.5 text-xs text-gray-500">
-                          {isAdminListing ? `${siteName} team` : agent.verified ? "Approved agent" : "Listing agent"}
-                          {!isAdminListing && (agent.agency?.name || agent.companyName) ? ` · ${agent.agency?.name || agent.companyName}` : ""}
-                        </p>
-                        {!isAdminListing && listingCount != null && (
-                          <p className="mt-0.5 text-xs text-gray-500">{listingCount} {listingCount === 1 ? "listing" : "listings"} on {siteName}</p>
-                        )}
-                      </div>
-                    </div>
-                    {emailLink && (
-                      <a href={emailLink} className="mt-3 flex min-h-10 items-center gap-2 text-sm break-all text-gray-600 hover:text-brand-700">
-                        <Mail aria-hidden="true" className="h-4 w-4 shrink-0" />
-                        {ownerEmail}
-                      </a>
-                    )}
-                    {!isAdminListing && (
-                      <Link to={`/agents/${agent.id}`} className={`${outlineButton} mt-3 w-full`}>
-                        View Agent Profile
-                      </Link>
-                    )}
-                  </>
-                ) : (
-                  <SignInPrompt returnTo={location.pathname + location.search} message="Sign in or create an account to view this agent's profile and contact details." />
-                )}
-              </div>
-
-              <dl className="mt-5 space-y-3 border-t border-gray-100 pt-5 text-sm">
-                <div>
-                  <dt className="text-xs text-gray-500">Property reference</dt>
-                  <dd className="mt-1 flex items-center justify-between gap-3 font-semibold text-gray-900">
-                    <span className="tabular-nums">{reference}</span>
-                    <button type="button" onClick={copyReference} aria-label={copied === "reference" ? "Reference copied" : "Copy property reference"} className="grid h-9 w-9 place-items-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-800">
-                      {copied === "reference" ? <Check aria-hidden="true" className="h-4 w-4 text-emerald-600" /> : <Copy aria-hidden="true" className="h-4 w-4" />}
-                    </button>
-                  </dd>
-                </div>
-                {[
-                  [Building2, "Property type", formatType(details.type)],
-                  [Tag, "Status", statusLabel(details.status)],
-                  property.listing.createdAt && [CalendarDays, "Listed on", formatDate(property.listing.createdAt)],
-                  [Eye, "Views", views.toLocaleString()],
-                ].filter(Boolean).map(([Icon, label, text]) => (
-                  <div key={label} className="flex items-center justify-between gap-3">
-                    <dt className="flex items-center gap-2 text-gray-500"><Icon aria-hidden="true" className="h-4 w-4" />{label}</dt>
-                    <dd className="font-semibold text-gray-900 capitalize">{text}</dd>
-                  </div>
-                ))}
-              </dl>
-
-              <p className="mt-5 flex items-start gap-2 border-t border-gray-100 pt-4 text-xs leading-5 text-gray-500">
-                <ShieldCheck aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                {isForSale ? "View the property before making any payment." : `Rental payments are verified by ${siteName}.`}
-              </p>
-            </section>
-          </aside>
         </div>
 
         {similar.length > 0 && (
-          <section className="mt-10 border-t border-gray-200 pt-8 sm:mt-12" aria-labelledby="similar-properties-heading">
+          <section className="property-similar" aria-labelledby="similar-properties-heading">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
               <h2 id="similar-properties-heading" className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">Similar properties</h2>
               <Link to={`${paths.listings}?status=${details.status}`} className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-700">
@@ -803,8 +685,8 @@ const PropertiesDetails = () => {
                 <ArrowRight aria-hidden="true" className="h-4 w-4" />
               </Link>
             </div>
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {similar.map((item, index) => (
+            <div className="property-similar-grid">
+              {similar.slice(0, 3).map((item, index) => (
                 <Reveal key={item.id} delay={index * 0.06} className="h-full">
                   <HouseCard house={item} />
                 </Reveal>
@@ -814,13 +696,13 @@ const PropertiesDetails = () => {
         )}
 
         {!isOwnListing && !unavailable && (
-          <section aria-labelledby="property-cta-heading" className="mt-10 flex flex-col gap-5 rounded-3xl bg-linear-to-r from-brand-700 to-brand-500 p-6 text-white shadow-lg shadow-brand-900/20 sm:flex-row sm:items-center sm:justify-between sm:p-7">
+          <section aria-labelledby="property-cta-heading" className="property-bottom-cta mt-10 flex flex-col gap-5 rounded-3xl bg-linear-to-r from-brand-700 to-brand-500 p-6 text-white shadow-lg shadow-brand-900/20 sm:flex-row sm:items-center sm:justify-between sm:p-7">
             <div className="flex items-center gap-4">
               <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/15">
                 <HomeIcon aria-hidden="true" className="h-7 w-7" />
               </span>
               <div>
-                <h2 id="property-cta-heading" className="text-lg font-bold">Like this property?</h2>
+                <h2 id="property-cta-heading" className="text-lg font-bold">Interested in {title}?</h2>
                 <p className="mt-0.5 text-sm text-white/85">
                   {hotel ? "Choose your room and dates to see your stay total." : `Contact ${isAdminListing ? siteName : "the agent"} today to ask questions or schedule a viewing.`}
                 </p>

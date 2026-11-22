@@ -14,8 +14,8 @@ import { useApiQuery } from "../../hooks/useApiQuery";
 import { useAdminData } from "../../hooks/useAdminData";
 import { adminApi, paymentApi } from "../../frontApi";
 import { formatDate } from "../../utils/date";
+import { formatGhs } from "../../utils/property";
 
-const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 const cap = (s = "") => s.charAt(0).toUpperCase() + s.slice(1);
 const TYPE_LABEL = { rental: "Rental", sale: "Sale", subscription: "Subscription" };
 // How a payment was made: sales are paid to the owner (older ones were paid at the office)
@@ -128,7 +128,7 @@ const AdminPayments = () => {
       ),
     },
     { key: "payer", header: "Paid by", render: (p) => <span className="whitespace-nowrap text-gray-700">{p.payer}</span> },
-    { key: "amount", header: "Amount", render: (p) => <span className="font-bold whitespace-nowrap text-gray-900">{ghs(p.amount)}</span> },
+    { key: "amount", header: "Amount", render: (p) => <span className="font-bold whitespace-nowrap text-gray-900">{formatGhs(p.amount)}</span> },
     { key: "reference", header: "Reference", render: (p) => <span className="font-mono text-xs text-gray-500">{p.reference}</span> },
     { key: "date", header: "Date", render: (p) => <span className="whitespace-nowrap text-gray-600">{formatDate(p.date)}</span> },
     {
@@ -158,7 +158,7 @@ const AdminPayments = () => {
       <AdminPageTitle
         title="Payments"
         description="Rental payments verified with Paystack, sale payments confirmed by the owner, and agent subscriptions."
-        action={<p className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm text-gray-500">Paid <span className="font-semibold text-gray-900 tabular-nums">{ghs(paidTotal)}</span></p>}
+        action={<p className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm text-gray-500">Paid <span className="font-semibold text-gray-900 tabular-nums">{formatGhs(paidTotal)}</span></p>}
       />
       <TransactionNav scope="admin" />
       <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -190,7 +190,7 @@ const AdminPayments = () => {
               <StatusBadge status={p.status} />
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="text-sm font-bold text-gray-900">{ghs(p.amount)}</p>
+              <p className="text-sm font-bold text-gray-900">{formatGhs(p.amount)}</p>
               {p.refund && p.refund.status !== "processed" && <StatusBadge status={p.refund.label} dot={false} />}
             </div>
             {refundAction(p) && (

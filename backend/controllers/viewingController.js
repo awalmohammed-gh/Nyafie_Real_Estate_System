@@ -1,18 +1,14 @@
 import mongoose from "mongoose";
 import Viewing, { OPEN_VIEWING_STATUSES, openKeyFor } from "../models/Viewing.js";
 import { postSystemNote } from "./chatController.js";
-import { canManageRecord, isOwnListing, loadPublishedProperty, ownerFilter, ownerName, same } from "../utils/ownership.js";
+import { canManageRecord, isOwnListing, loadPublishedProperty, ownerFilter, ownerName, populateRequest as populate, same } from "../utils/ownership.js";
 import { takesStayBookings } from "../utils/hotelPayout.js";
 import { notifyOwner, notifyUser } from "../utils/notify.js";
 import { openRequestLimitProblem } from "../utils/openRequestLimits.js";
 import { formatViewingTime, parseViewingTime, releasePastViewings } from "../utils/viewings.js";
 import { ok, fail, HttpError } from "../utils/response.js";
 
-const PROPERTY_FIELDS = "title images location price pricePeriod listingType status availability owner ownerType contact";
 const ENDED = { declined: "declined", cancelled: "cancelled", completed: "completed", missed: "missed" };
-
-const populate = (query) =>
-  query.populate("property", PROPERTY_FIELDS).populate("customer", "firstName lastName email phone").populate("owner", "firstName lastName");
 
 // Who is waiting for an answer: the side that did not propose the current time
 const awaiting = (viewing) => (viewing.status === "requested" ? (viewing.proposedBy === "customer" ? "owner" : "customer") : null);
@@ -78,30 +74,34 @@ export const createViewing = async (req, res) => {
   const tooMany = await openRequestLimitProblem("viewings", req.user._id, property._id);
   if (tooMany) return fail(res, 429, tooMany);
 
-  const viewing = new Viewing({
-    customer: req.user._id,
-    property: property._id,
-    owner: property.owner, // the real owner, from the database
-    assignedTo: property.assignedTo || null,
-    ownerType: property.ownerType,
-    scheduledAt,
-    proposedBy: "customer",
-    contactName: `${req.user.firstName} ${req.user.lastName}`.trim(),
-    contactPhone: phone,
-    message,
-    openKey: openKeyFor(req.user._id, property._id),
-    history: [{ status: "requested", note: `Requested for ${formatViewingTime(scheduledAt)}`, by: req.user._id }],
-  });
-  try { await viewing.save(); }
-  catch (error) {
+  const when = formatViewingTime(scheduledAt);
+  // One transaction: the viewing, its chat note and the link between them are saved together
+  let viewing;
+  try {
+    viewing = await mongoose.connection.transaction(async (session) => {
+      const conversation = await postSystemNote(property, req.user._id, req.user, "customer", [`Viewing requested for ${when}.`, message].filter(Boolean).join("\n\n"), session);
+      const created = new Viewing({
+        customer: req.user._id,
+        property: property._id,
+        owner: property.owner, // the real owner, from the database
+        assignedTo: property.assignedTo || null,
+        ownerType: property.ownerType,
+        scheduledAt,
+        proposedBy: "customer",
+        contactName: `${req.user.firstName} ${req.user.lastName}`.trim(),
+        contactPhone: phone,
+        message,
+        openKey: openKeyFor(req.user._id, property._id),
+        conversation: conversation._id,
+        history: [{ status: "requested", note: `Requested for ${when}`, by: req.user._id }],
+      });
+      await created.save({ session });
+      return created;
+    });
+  } catch (error) {
     if (error.code === 11000) return fail(res, 409, "You already have a viewing booked for this property. Change or cancel it in My viewings.");
     throw error;
   }
-
-  const when = formatViewingTime(scheduledAt);
-  viewing.property = property;
-  const conversation = await noteInChat(viewing, req.user, "customer", [`Viewing requested for ${when}.`, message].filter(Boolean).join("\n\n"));
-  if (conversation) await Viewing.updateOne({ _id: viewing._id }, { $set: { conversation } });
   await Promise.all([
     notifyOwner(viewing, { type: "viewing", title: "New viewing request", message: `${req.user.firstName} would like to view "${property.title}" on ${when}.`, path: "viewings" }),
     notifyUser(req.user._id, { type: "viewing", title: "Viewing requested", message: `Your request to view "${property.title}" on ${when} was sent. You'll be notified when the owner answers.`, link: "/account/viewings" }),

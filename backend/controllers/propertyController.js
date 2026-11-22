@@ -10,7 +10,7 @@ import { PUBLIC_AGENT_FIELDS, publicAgent, presentProperties, publicQuery, visib
 import { claimView, isCrawler, viewerHash } from "../utils/propertyViews.js";
 export { publicQuery, visibleAgentIds } from "../utils/marketplace.js";
 import { resolveImages } from "../utils/uploadImages.js";
-import { ok, fail } from "../utils/response.js";
+import { HttpError, ok, fail } from "../utils/response.js";
 import Rental from "../models/Rental.js";
 import Payment from "../models/Payment.js";
 import Inquiry from "../models/Inquiry.js";
@@ -20,7 +20,7 @@ import SaleRequest from "../models/SaleRequest.js";
 import Viewing from "../models/Viewing.js";
 import { formatViewingTime } from "../utils/viewings.js";
 import DocumentCheck from "../models/DocumentCheck.js";
-import { deleteDocumentChecks } from "../utils/propertyDocuments.js";
+import { deleteDocumentChecks, destroyDocuments } from "../utils/propertyDocuments.js";
 import { canHandleTeamRecord, canSeeAllAgencyWork, isTeamMember, teamFilter, teamOf } from "../utils/team.js";
 import { agencyAssignee } from "./agentController.js";
 import { isHotel, prepareHotelFields, saveHotelProperty, validateHotelPublishing } from "../utils/hotel.js";
@@ -30,6 +30,7 @@ import { alertSavedSearches } from "../utils/savedSearches.js";
 import { markConfirmed } from "../utils/listingFreshness.js";
 import { parseMoveIn } from "../utils/moveIn.js";
 import { parseListingMedia } from "../utils/mediaLinks.js";
+import { escapeRegex } from "../utils/validation.js";
 import { countViewToday } from "../models/PropertyViewDay.js";
 
 const TYPES_OF_PRICE = ["total", "month", "night"];
@@ -129,7 +130,6 @@ export const listPublicAgents = async (_req, res) => {
 };
 
 const { ObjectId } = mongoose.Types;
-const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const list = (value) => String(value || "").split(",").map((v) => v.trim()).filter(Boolean);
 const toIds = (values) => values.filter((v) => mongoose.isValidObjectId(v)).map((v) => new ObjectId(v));
 const number = (value) => (value === undefined || value === "" || Number.isNaN(Number(value)) ? null : Number(value));
@@ -563,9 +563,17 @@ export const updateProperty = async (req, res) => {
   // Verified documents were checked against the old address: the badge waits for a new check
   const recheck = property.documentsVerifiedAt && fields.location && addressOf(property.location) !== addressBefore;
   if (recheck) property.documentsVerifiedAt = null;
-  await saveHotelProperty(property);
+  if (recheck && !isHotel(property)) {
+    // The badge comes off and the check goes back to the queue together (documents are for sale
+    // listings only, so this never meets a hotel's own inventory transaction)
+    await mongoose.connection.transaction(async (session) => {
+      await property.save({ session });
+      await DocumentCheck.updateOne({ property: property._id, status: "verified" }, { $set: { status: "pending", submittedAt: new Date(), note: "" } }, { session });
+    });
+  } else {
+    await saveHotelProperty(property);
+  }
   if (recheck) {
-    await DocumentCheck.updateOne({ property: property._id, status: "verified" }, { $set: { status: "pending", submittedAt: new Date(), note: "" } });
     await notifyAdmins({ type: "documents", title: "Documents to check again", message: `The address of "${property.title}" changed after its documents were verified.`, link: "/admin/document-checks" });
   }
   if (!wasPublished && property.status === "published") await alertSavedSearches(property);
@@ -609,25 +617,34 @@ export const deleteProperty = async (req, res) => {
   if (req.user.role !== "admin" && !(req.user.role === "agent" && isOwner(property, req.user) && canSeeAllAgencyWork(req.user))) {
     return fail(res, 403, "You can only delete your own properties.");
   }
-  if (isHotel(property) && (property.roomTypes.length || await Rental.exists({ property: property._id }))) return fail(res, 409, "Archive this hotel by saving it as a draft. Its room types and booking history must be preserved.");
-  // Bookings, payments and sales refer to the listing: deleting it would break customers' bookings,
-  // the payment history and the financial reports. Unanswered requests don't count.
   const id = property._id;
-  const [booked, paid, sold, accepted] = await Promise.all([
-    Rental.exists({ property: id, $or: [{ paymentStatus: { $in: ["paid", "due", "refunded"] } }, { status: { $in: ["payment_pending", "paid", "confirmed", "active", "completed"] } }] }),
-    Payment.exists({ property: id }),
-    SaleRequest.exists({ property: id, status: { $nin: ["cancelled", "rejected"] } }),
-    Offer.exists({ property: id, status: "accepted" }),
-  ]);
-  if (booked || paid || sold || accepted) return fail(res, 409, "This listing has bookings, payments or a sale on record, so it can't be deleted. Mark it as rented or sold, or unpublish it, to take it off the site and keep its history.");
-  // Customers with an upcoming viewing are told it won't happen (the record stays in their history)
-  const viewings = await Viewing.find({ property: id, status: { $in: ["requested", "confirmed"] } }).select("customer scheduledAt");
-  await property.deleteOne();
+  // One transaction: the listing and everything tied to it go together, or nothing changes. It
+  // starts by touching the listing (as bookings do), so a booking made at the same moment conflicts
+  // with the delete instead of slipping past the checks below.
+  const { viewings, documents } = await mongoose.connection.transaction(async (session) => {
+    const locked = await Property.findOneAndUpdate({ _id: id }, { $inc: { __v: 1 } }, { session, returnDocument: "after", timestamps: false });
+    if (!locked) throw new HttpError(404, "Property not found.");
+    if (isHotel(locked) && (locked.roomTypes.length || await Rental.exists({ property: id }).session(session))) throw new HttpError(409, "Archive this hotel by saving it as a draft. Its room types and booking history must be preserved.");
+    // Bookings, payments and sales refer to the listing: deleting it would break customers' bookings,
+    // the payment history and the financial reports. Unanswered requests don't count.
+    const onRecord = await Rental.exists({ property: id, $or: [{ paymentStatus: { $in: ["paid", "due", "refunded"] } }, { status: { $in: ["payment_pending", "paid", "confirmed", "active", "completed"] } }] }).session(session)
+      || await Payment.exists({ property: id }).session(session)
+      || await SaleRequest.exists({ property: id, status: { $nin: ["cancelled", "rejected"] } }).session(session)
+      || await Offer.exists({ property: id, status: "accepted" }).session(session);
+    if (onRecord) throw new HttpError(409, "This listing has bookings, payments or a sale on record, so it can't be deleted. Mark it as rented or sold, or unpublish it, to take it off the site and keep its history.");
+    // Customers with an upcoming viewing are told it won't happen (the record stays in their history)
+    const upcoming = await Viewing.find({ property: id, status: { $in: ["requested", "confirmed"] } }).select("customer scheduledAt").session(session);
+    await Property.deleteOne({ _id: id }, { session });
+    await User.updateMany({ savedProperties: id }, { $pull: { savedProperties: id } }, { session });
+    await Review.deleteMany({ property: id }, { session });
+    const files = await deleteDocumentChecks({ property: id }, session); // the private ownership documents go with it
+    await Viewing.updateMany({ property: id, status: { $in: ["requested", "confirmed"] } }, { $set: { status: "cancelled", cancelledBy: "owner" }, $unset: { openKey: "" }, $push: { history: { status: "cancelled", note: "The listing was removed", by: req.user._id, at: new Date() } } }, { session });
+    return { viewings: upcoming, documents: files };
+  });
+
+  // Only after the delete is saved: the files can't be restored, and customers hear about it once
   await Promise.all([
-    User.updateMany({ savedProperties: property._id }, { $pull: { savedProperties: property._id } }),
-    Review.deleteMany({ property: property._id }),
-    deleteDocumentChecks({ property: property._id }), // the private ownership documents go with it
-    Viewing.updateMany({ property: id, status: { $in: ["requested", "confirmed"] } }, { $set: { status: "cancelled", cancelledBy: "owner" }, $unset: { openKey: "" }, $push: { history: { status: "cancelled", note: "The listing was removed", by: req.user._id, at: new Date() } } }),
+    destroyDocuments(documents),
     ...viewings.map((viewing) => notifyUser(viewing.customer, { type: "viewing", title: "Viewing cancelled", message: `Your viewing on ${formatViewingTime(viewing.scheduledAt)} was cancelled because "${property.title}" is no longer listed.`, link: "/account/viewings" })),
   ]);
   ok(res, null, "Property deleted");
@@ -641,16 +658,16 @@ export const assignProperty = async (req, res) => {
   if (!property) return fail(res, 404, "Property not found.");
   const assignee = await agencyAssignee(req.access.ownerId, req.body.memberId);
   if (assignee === undefined) return fail(res, 400, "Choose a member of your agency.");
-  property.assignedTo = assignee;
-  await property.save();
-  const scope = { property: property._id, owner: req.access.ownerId };
-  await Promise.all([
-    Inquiry.updateMany({ property: property._id, agent: req.access.ownerId }, { $set: { assignedTo: assignee } }),
-    Conversation.updateMany(scope, { $set: { assignedTo: assignee } }),
-    Offer.updateMany(scope, { $set: { assignedTo: assignee } }),
-    Rental.updateMany(scope, { $set: { assignedTo: assignee } }),
-    SaleRequest.updateMany(scope, { $set: { assignedTo: assignee } }),
-    Viewing.updateMany(scope, { $set: { assignedTo: assignee } }),
-  ]);
-  ok(res, (await presentProperties([property]))[0], assignee ? "Listing assigned" : "Listing returned to the agency owner");
+  // One transaction: the listing and all of its leads move to the new person together
+  const assigned = await mongoose.connection.transaction(async (session) => {
+    const current = await Property.findOne({ _id: property._id, owner: req.access.ownerId, ownerType: "agent" }).session(session);
+    if (!current) throw new HttpError(404, "Property not found.");
+    current.assignedTo = assignee;
+    await current.save({ session });
+    const scope = { property: property._id, owner: req.access.ownerId };
+    await Inquiry.updateMany({ property: property._id, agent: req.access.ownerId }, { $set: { assignedTo: assignee } }, { session });
+    for (const Model of [Conversation, Offer, Rental, SaleRequest, Viewing]) await Model.updateMany(scope, { $set: { assignedTo: assignee } }, { session });
+    return current;
+  });
+  ok(res, (await presentProperties([assigned]))[0], assignee ? "Listing assigned" : "Listing returned to the agency owner");
 };

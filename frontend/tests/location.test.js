@@ -171,3 +171,15 @@ test("browsers without geolocation fall back to manual search", async (t) => {
   assert.equal(store.getSnapshot().status, "unsupported");
   assert.equal(await store.permissionState(), "unsupported");
 });
+
+test("the location card explains first, and only asks visitors who haven't answered", async () => {
+  const { locationPromptAction, locationPromptAllowedOn } = await import("../src/utils/visitorLocation.js");
+  const fresh = { choice: null, status: "idle" };
+  assert.equal(locationPromptAction(fresh, "prompt"), "ask");
+  assert.equal(locationPromptAction(fresh, "granted"), "locate", "already allowed: no card, the position is used quietly");
+  for (const permission of ["denied", "unsupported"]) assert.equal(locationPromptAction(fresh, permission), "none");
+  for (const choice of ["device", "manual", "skip", "denied"]) assert.equal(locationPromptAction({ choice, status: "idle" }, "prompt"), "none", `not again after "${choice}"`);
+  assert.equal(locationPromptAction({ choice: null, status: "locating" }, "prompt"), "none", "a search already asking is left alone");
+  for (const path of ["/", "/listings", "/sale", "/house/abc", "/about"]) assert.equal(locationPromptAllowedOn(path), true, path);
+  for (const path of ["/account/profile", "/checkout/rent/1", "/payment/success", "/make-offer/1", "/login", "/agent/join/token"]) assert.equal(locationPromptAllowedOn(path), false, path);
+});

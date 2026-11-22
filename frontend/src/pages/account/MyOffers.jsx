@@ -9,8 +9,7 @@ import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { offerApi } from "../../frontApi";
 import { formatRelative } from "../../utils/date";
 import { cloudImage } from "../../utils/cloudImage";
-
-const ghs = (value) => `₵${Number(value).toLocaleString()}`;
+import { formatGhs } from "../../utils/property";
 
 const statusHelp = {
   Pending: "Waiting for the owner to respond",
@@ -74,16 +73,16 @@ const MyOffers = () => {
                   <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
                     <div>
                       <dt className="text-xs text-gray-500">Asking price</dt>
-                      <dd className="font-semibold text-gray-900">{ghs(offer.askingPrice)}</dd>
+                      <dd className="font-semibold text-gray-900">{formatGhs(offer.askingPrice)}</dd>
                     </div>
                     <div>
                       <dt className="text-xs text-gray-500">Your offer</dt>
-                      <dd className="font-extrabold text-brand-600">{ghs(offer.amount)}</dd>
+                      <dd className="font-extrabold text-brand-600">{formatGhs(offer.amount)}</dd>
                     </div>
                     {offer.counterAmount && (
                       <div>
                         <dt className="text-xs text-gray-500">Counter offer</dt>
-                        <dd className="font-extrabold text-sky-700">{ghs(offer.counterAmount)}</dd>
+                        <dd className="font-extrabold text-sky-700">{formatGhs(offer.counterAmount)}</dd>
                       </div>
                     )}
                   </dl>

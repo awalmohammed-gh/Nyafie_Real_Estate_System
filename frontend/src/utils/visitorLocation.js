@@ -116,6 +116,24 @@ export const requestDevicePosition = () => {
   return pending;
 };
 
+/**
+ * The "Use your location?" card (components/location/LocationPrompt.jsx). It explains why first,
+ * so the browser's own prompt only ever appears after the visitor presses "Allow location".
+ *  - "ask"    never answered, and the browser hasn't decided yet: show the card
+ *  - "locate" never answered here, but this browser already allows the site: use it quietly
+ *  - "none"   they chose already (shared, picked a place, "Not now", refused), or it can't work here
+ * A search already finding their position (e.g. ?near=me) is left to do its own asking.
+ */
+export const LOCATION_PROMPT_DELAY_MS = 4000; // a moment to see the page before being asked anything
+export const locationPromptAction = ({ choice, status }, permission) => {
+  if (choice !== null || status !== "idle") return "none";
+  if (permission === "prompt") return "ask";
+  if (permission === "granted") return "locate";
+  return "none";
+};
+// Not while someone is signing in, paying or making an offer
+export const locationPromptAllowedOn = (pathname) => !/^\/(account|checkout|payment|make-offer|login|register|agent\/join)(\/|$)/.test(pathname);
+
 // What to tell the visitor when the position couldn't be read
 export const LOCATION_PROBLEMS = {
   denied: "Location access is unavailable. Search for a location manually to discover nearby properties.",

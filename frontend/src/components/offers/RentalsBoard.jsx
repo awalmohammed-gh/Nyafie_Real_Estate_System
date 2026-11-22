@@ -23,8 +23,8 @@ import { toWhatsAppNumber } from "../../utils/whatsapp";
 import { adminPath } from "../../utils/adminEntry";
 import { arrivalText, pastArrivalDeadline, payPlace } from "../../utils/hotelPayments";
 import { cloudImage } from "../../utils/cloudImage";
+import { formatGhs } from "../../utils/property";
 
-const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 // Short stays (hotels and rentals priced per night) use check-in words
 const isStay = (r) => Boolean(r.hotelId) || r.pricePeriod === "night";
 // A pay-on-arrival reservation whose payment hasn't been recorded yet
@@ -157,7 +157,7 @@ const RentalsBoard = ({ scope }) => {
         </div>
       ),
     },
-    { key: "amount", header: "Amount", render: (r) => <span className="font-bold whitespace-nowrap text-gray-900">{ghs(r.amount)}</span> },
+    { key: "amount", header: "Amount", render: (r) => <span className="font-bold whitespace-nowrap text-gray-900">{formatGhs(r.amount)}</span> },
     { key: "payment", header: "Payment", render: (r) => <StatusBadge status={r.paymentStatus} dot={false} /> },
     { key: "status", header: "Rental", render: (r) => <StatusBadge status={r.status} /> },
     { key: "paid", header: "Date paid", render: (r) => <span className="whitespace-nowrap text-gray-600">{r.paidAt ? formatDate(r.paidAt) : "—"}</span> },
@@ -213,7 +213,7 @@ const RentalsBoard = ({ scope }) => {
                 <StatusBadge status={r.status} />
               </div>
               <p className="mt-2 text-sm text-gray-600">
-                Move-in {formatDate(r.startDate)} · <span className="font-bold text-gray-900">{ghs(r.amount)}</span>
+                Move-in {formatDate(r.startDate)} · <span className="font-bold text-gray-900">{formatGhs(r.amount)}</span>
               </p>
             </button>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
@@ -252,7 +252,7 @@ const RentalsBoard = ({ scope }) => {
         {open && (
           <div className="space-y-5">
             <StatusSteps kind={open.paymentOption === "on_arrival" && open.paymentMethod !== "Paystack" ? "stayReservation" : "rental"} status={open.statusKey} />
-            <div className="rounded-xl bg-brand-50 p-4"><p className="workspace-eyebrow">Rental summary</p><p className="mt-2 text-2xl font-semibold text-gray-900">{ghs(open.amount)}</p><p className="mt-2 text-sm text-gray-600">Move-in {formatDate(open.startDate)} · Until {formatDate(open.endDate)}</p><div className="mt-3 flex gap-2"><StatusBadge status={open.paymentStatus} /><StatusBadge status={open.status} /></div></div>
+            <div className="rounded-xl bg-brand-50 p-4"><p className="workspace-eyebrow">Rental summary</p><p className="mt-2 text-2xl font-semibold text-gray-900">{formatGhs(open.amount)}</p><p className="mt-2 text-sm text-gray-600">Move-in {formatDate(open.startDate)} · Until {formatDate(open.endDate)}</p><div className="mt-3 flex gap-2"><StatusBadge status={open.paymentStatus} /><StatusBadge status={open.status} /></div></div>
             <Link to={`/house/${open.property.id}`} className="flex items-center gap-3 rounded-lg p-2 ring-1 ring-gray-200 transition hover:ring-brand-200">
               {open.property.image && <img src={cloudImage(open.property.image, 80)} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />}
               <div className="min-w-0">
@@ -263,7 +263,7 @@ const RentalsBoard = ({ scope }) => {
             <dl className="grid grid-cols-2 gap-3 rounded-lg bg-gray-50 p-4 text-sm sm:grid-cols-3">
               {[
                 ["Customer", open.contactName],
-                ...(open.hotelId ? [["Room type", open.roomName], ["Rooms", open.numberOfRooms], ["Nightly price", ghs(open.unitPrice)], ["Nights", open.units]] : []),
+                ...(open.hotelId ? [["Room type", open.roomName], ["Rooms", open.numberOfRooms], ["Nightly price", formatGhs(open.unitPrice)], ["Nights", open.units]] : []),
                 ...(isStay(open) && open.paymentOption ? [["Payment choice", paymentChoice(open)]] : []),
                 ["Phone", open.contactPhone],
                 ["Email", open.contactEmail],
@@ -271,7 +271,7 @@ const RentalsBoard = ({ scope }) => {
                 [open.hotelId ? "Guests" : "Occupants", open.occupants],
                 [open.hotelId ? "Check-in" : "Move-in", formatDate(open.startDate)],
                 [open.hotelId ? "Check-out" : "Until", formatDate(open.endDate)],
-                ["Amount", ghs(open.amount)],
+                ["Amount", formatGhs(open.amount)],
                 ["Reference", open.reference || "—"],
                 ["Date paid", open.paidAt ? formatDate(open.paidAt) : "—"],
               ].map(([label, text]) => (
@@ -290,7 +290,7 @@ const RentalsBoard = ({ scope }) => {
               </div>
             </dl>
             {open.notes && <p className="rounded-lg bg-brand-50/60 p-4 text-sm whitespace-pre-line text-gray-700">“{open.notes}”</p>}
-            {dueOnArrival(open) && ["confirmed", "active"].includes(open.statusKey) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{ghs(open.amount)} is due {payPlace(open)}. The guest should {open.hotelId ? "check in" : "arrive"} {arrivalText(open)}.{open.cancellationPolicy && <span className="mt-1 block text-xs whitespace-pre-line">Policy shown to the guest: {open.cancellationPolicy}</span>}</p>}
+            {dueOnArrival(open) && ["confirmed", "active"].includes(open.statusKey) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{formatGhs(open.amount)} is due {payPlace(open)}. The guest should {open.hotelId ? "check in" : "arrive"} {arrivalText(open)}.{open.cancellationPolicy && <span className="mt-1 block text-xs whitespace-pre-line">Policy shown to the guest: {open.cancellationPolicy}</span>}</p>}
             {actionsFor(open).length > 0 && <div className="flex flex-wrap gap-2">{actionButtons(open, "text-sm")}</div>}
             <div>
               <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
@@ -313,7 +313,7 @@ const RentalsBoard = ({ scope }) => {
         description={
           confirm &&
           (confirm.action.kind === "paid-on-arrival"
-            ? `Record that ${confirm.rental.contactName} paid ${ghs(confirm.rental.amount)} ${payPlace(confirm.rental)}. They'll get a confirmation.`
+            ? `Record that ${confirm.rental.contactName} paid ${formatGhs(confirm.rental.amount)} ${payPlace(confirm.rental)}. They'll get a confirmation.`
             : confirm.action === NO_SHOW
             ? `${confirm.rental.contactName} didn't arrive by the deadline. Their reservation is cancelled, the ${confirm.rental.hotelId ? "rooms are" : "dates are"} released and they're notified.`
             : confirm.action.status === "cancelled" && confirm.rental.paymentStatus === "Paid"

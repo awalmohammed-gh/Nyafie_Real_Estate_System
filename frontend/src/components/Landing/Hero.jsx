@@ -1,7 +1,11 @@
 import { useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowUpRight,
+  BedDouble,
+  Building2,
+  CalendarDays,
   Coins,
   Crosshair,
   House,
@@ -11,7 +15,6 @@ import {
   Search,
 } from "lucide-react";
 import HeroSlider from "./HeroSlider";
-import NavOverlay from "../nav/NavOverlay";
 import HeroSearchSelect from "./HeroSearchSelect";
 import { usePropertyFacets } from "../../hooks/usePropertyFacets";
 import { usePlatform } from "../../context/usePlatform";
@@ -25,9 +28,9 @@ const NEAR_ME = "__near_me__"; // an option value no neighbourhood can have
 export const WHERE_TRIGGER_ID = "home-where";
 
 const statuses = [
-  { label: "Buy", value: "Sale" },
-  { label: "Rent", value: "Rent" },
-  { label: "Short Stay", value: "stay" },
+  { label: "Buy", value: "Sale", Icon: House },
+  { label: "Rent", value: "Rent", Icon: CalendarDays },
+  { label: "Short Stay", value: "stay", Icon: BedDouble },
 ];
 
 // Shown when every slide is switched off in Admin Settings > Homepage Hero
@@ -41,6 +44,7 @@ const fallbackSlide = {
 };
 
 const Hero = () => {
+  const reducedMotion = useReducedMotion();
   const navigate = useNavigate();
   const { paths, settings } = usePlatform();
   const visitor = useVisitorLocation();
@@ -84,8 +88,8 @@ const Hero = () => {
     {
       ...fallbackSlide,
       id: "nyafie-introduction",
-      image: "/hero/nyafie-neighbourhood.jpg",
-      position: "center 60%",
+      image: "/hero/nyafie-modern-villa.jpg",
+      position: "center",
     },
     ...active,
   ];
@@ -170,19 +174,20 @@ const Hero = () => {
 
   return (
     <section className="home-hero" aria-labelledby="home-heading">
-      {/* The navbar sits on the banner (transparent) until the page scrolls */}
-      <NavOverlay />
       {/* Keyed by the slide set so it starts again at slide 1 when an admin changes the slides */}
       <HeroSlider
         key={slides.map((slide) => slide.id).join()}
         slides={slides}
         marketplace
       >
-        <div className="home-search" aria-label="Find a property">
+        <motion.div className="home-search" aria-label="Find a property"
+          initial={reducedMotion ? false : { opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.75, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}>
           <div className="home-search-topline">
             <fieldset className="home-search-tabs">
               <legend className="sr-only">I want to</legend>
-              {statuses.map(({ label, value }) => (
+              {statuses.map(({ label, value, Icon }) => (
                 <label
                   key={label}
                   className={`home-search-tab ${search.status === value ? "is-active" : ""}`}
@@ -206,7 +211,7 @@ const Hero = () => {
                       }))
                     }
                   />
-                  {label}
+                  <Icon size={18} aria-hidden="true" />{label}
                 </label>
               ))}
             </fieldset>
@@ -247,7 +252,7 @@ const Hero = () => {
               footerHint="Your areas first, then places on the map"
             />
             <HeroSearchSelect
-              icon={House}
+              icon={Building2}
               label="Property type"
               title="Choose a property type"
               name="type"
@@ -319,7 +324,7 @@ const Hero = () => {
               </button>
             </p>
           )}
-        </div>
+        </motion.div>
       </HeroSlider>
     </section>
   );

@@ -1,7 +1,6 @@
 // Helpers for the homepage hero slides managed in Admin Settings > Homepage Hero
-import { cloudImageSources } from "./cloudImage.js";
+import { CLOUDINARY_UPLOAD, cloudImageSources } from "./cloudImage.js";
 
-const CLOUDINARY_UPLOAD = /^(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.+)$/;
 const BUILT_IN = /^(\/hero\/[a-z0-9-]+)\.jpg$/;
 
 /**

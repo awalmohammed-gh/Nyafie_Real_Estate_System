@@ -1,5 +1,5 @@
 import { CalendarCheck, Headphones, ShieldCheck, UsersRound } from "lucide-react";
-import { Link } from "react-router-dom";
+import { RevealGroup, RevealItem } from "./LandingMotion";
 import { usePlatform } from "../../context/usePlatform";
 
 const TrustBar = () => {
@@ -10,10 +10,10 @@ const TrustBar = () => {
     { Icon: CalendarCheck, title: "Book viewings online", text: "Pick a time, get a reminder", to: paths.listings },
     { Icon: Headphones, title: "Support when you need it", text: "Get help from our team", to: "/contact" },
   ];
-  return <aside className="home-trust" aria-label="Why find a property with NyaFie"><div className="container-page">{benefits.map(({ Icon, title, text, to }) => {
+  return <aside className="home-trust" aria-label="Why find a property with NyaFie"><RevealGroup className="container-page" gap={0.1}>{benefits.map(({ Icon, title, text, to }) => {
     const body = <><Icon size={32} strokeWidth={1.6} aria-hidden="true" /><span><strong>{title}</strong><small>{text}</small></span></>;
-    return to ? <Link key={title} to={to} className="home-trust-item">{body}</Link> : <div key={title} className="home-trust-item">{body}</div>;
-  })}</div></aside>;
+    return <RevealItem key={title} as={to ? "link" : "div"} to={to} className="home-trust-item">{body}</RevealItem>;
+  })}</RevealGroup></aside>;
 };
 
 export default TrustBar;

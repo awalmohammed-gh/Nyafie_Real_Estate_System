@@ -4,7 +4,7 @@ import { adminPath, isAdminPath } from "./adminEntry.js";
 export const sessionDomainForPath = (pathname, search = "") => {
   if (["/login", "/register"].includes(pathname) && new URLSearchParams(search).get("account") === "agent") return "agent";
   if (isAdminPath(pathname)) return "admin";
-  if (pathname === "/agent" || /^\/agent\/(?:login|register|onboarding|status|checkout|dashboard|properties|inquiries|offers|rentals|sale-requests|messages|subscription|profile|settings|team|join)(?:\/|$)/.test(pathname)) return "agent";
+  if (pathname === "/agent" || /^\/agent\/(?:login|register|onboarding|status|checkout|dashboard|properties|inquiries|offers|viewings|rentals|sale-requests|messages|subscription|profile|settings|team|join)(?:\/|$)/.test(pathname)) return "agent";
   return "customer";
 };
 

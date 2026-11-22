@@ -24,8 +24,8 @@ import { toWhatsAppNumber } from "../../utils/whatsapp";
 import { usePlatform } from "../../context/usePlatform";
 import { adminPath } from "../../utils/adminEntry";
 import { cloudImage } from "../../utils/cloudImage";
+import { formatGhs } from "../../utils/property";
 
-const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 const CLOSED = ["completed", "cancelled", "rejected"];
 // Statuses the owner picks directly; payment confirmation and completion have their own buttons
 const SETTABLE = ["contacted", "offer_received", "negotiating", "approved", "payment_pending", "cancelled", "rejected"];
@@ -141,8 +141,8 @@ const SaleRequestsBoard = ({ scope }) => {
         </div>
       ),
     },
-    { key: "price", header: "Price", render: (r) => <span className="whitespace-nowrap text-gray-700">{ghs(r.askingPrice)}</span> },
-    { key: "offer", header: "Offer", render: (r) => (r.offer ? <span className="font-bold whitespace-nowrap text-brand-600">{ghs(r.offer.amount)}</span> : <span className="text-gray-400">—</span>) },
+    { key: "price", header: "Price", render: (r) => <span className="whitespace-nowrap text-gray-700">{formatGhs(r.askingPrice)}</span> },
+    { key: "offer", header: "Offer", render: (r) => (r.offer ? <span className="font-bold whitespace-nowrap text-brand-600">{formatGhs(r.offer.amount)}</span> : <span className="text-gray-400">—</span>) },
     { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
     { key: "payment", header: "Payment", render: (r) => <StatusBadge status={r.paymentStatus} dot={false} /> },
     { key: "date", header: "Requested", render: (r) => <span className="whitespace-nowrap text-gray-600">{formatRelative(r.createdAt)}</span> },
@@ -163,7 +163,7 @@ const SaleRequestsBoard = ({ scope }) => {
       title: `${NEEDS_CONFIRM[confirm.status]}?`,
       description:
         confirm.status === "payment_pending"
-          ? `${open?.contactName} will be asked to pay ${ghs(open?.askingPrice)} as you agree together (in chat, by phone or in person).`
+          ? `${open?.contactName} will be asked to pay ${formatGhs(open?.askingPrice)} as you agree together (in chat, by phone or in person).`
           : `The request from ${open?.contactName} will be marked as ${SALE_STATUS[confirm.status]?.toLowerCase()} and they'll be notified.`,
       label: NEEDS_CONFIRM[confirm.status],
       tone: ["cancelled", "rejected"].includes(confirm.status) ? "danger" : "primary",
@@ -209,8 +209,8 @@ const SaleRequestsBoard = ({ scope }) => {
               <StatusBadge status={r.status} />
             </div>
             <p className="mt-2 text-sm text-gray-600">
-              {ghs(r.askingPrice)}
-              {r.offer && <span className="font-bold text-brand-600"> · offer {ghs(r.offer.amount)}</span>} · {formatRelative(r.createdAt)}
+              {formatGhs(r.askingPrice)}
+              {r.offer && <span className="font-bold text-brand-600"> · offer {formatGhs(r.offer.amount)}</span>} · {formatRelative(r.createdAt)}
             </p>
           </button>
         )}
@@ -244,7 +244,7 @@ const SaleRequestsBoard = ({ scope }) => {
         {open && (
           <div className="space-y-5">
             <StatusSteps kind="sale" status={open.statusKey} />
-            <div className="rounded-xl bg-brand-50 p-4"><p className="workspace-eyebrow">Purchase summary</p><p className="mt-2 text-2xl font-semibold text-gray-900">{ghs(open.askingPrice)}</p><div className="mt-3 flex flex-wrap gap-2"><StatusBadge status={open.status} /><StatusBadge status={open.paymentStatus} /></div><p className="mt-3 text-xs leading-relaxed text-gray-600">{closed ? "This request is closed. Its history is available below." : paymentConfirmed ? "Payment is confirmed. Complete the sale when the handover is finished." : "Follow up with the buyer and confirm payment only after it is received."}</p></div>
+            <div className="rounded-xl bg-brand-50 p-4"><p className="workspace-eyebrow">Purchase summary</p><p className="mt-2 text-2xl font-semibold text-gray-900">{formatGhs(open.askingPrice)}</p><div className="mt-3 flex flex-wrap gap-2"><StatusBadge status={open.status} /><StatusBadge status={open.paymentStatus} /></div><p className="mt-3 text-xs leading-relaxed text-gray-600">{closed ? "This request is closed. Its history is available below." : paymentConfirmed ? "Payment is confirmed. Complete the sale when the handover is finished." : "Follow up with the buyer and confirm payment only after it is received."}</p></div>
             <Link to={`/house/${open.property.id}`} className="flex items-center gap-3 rounded-lg p-2 ring-1 ring-gray-200 transition hover:ring-brand-200">
               {open.property.image && <img src={cloudImage(open.property.image, 80)} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />}
               <div className="min-w-0">
@@ -268,11 +268,11 @@ const SaleRequestsBoard = ({ scope }) => {
               </div>
               <div>
                 <dt className="text-gray-500">Asking price</dt>
-                <dd className="font-semibold text-gray-900">{ghs(open.askingPrice)}</dd>
+                <dd className="font-semibold text-gray-900">{formatGhs(open.askingPrice)}</dd>
               </div>
               <div>
                 <dt className="text-gray-500">Offer amount</dt>
-                <dd className="font-bold text-brand-600">{open.offer ? `${ghs(open.offer.amount)} (${open.offer.status})` : "No offer"}</dd>
+                <dd className="font-bold text-brand-600">{open.offer ? `${formatGhs(open.offer.amount)} (${open.offer.status})` : "No offer"}</dd>
               </div>
               <div>
                 <dt className="text-gray-500">Assigned to</dt>
@@ -290,7 +290,7 @@ const SaleRequestsBoard = ({ scope }) => {
                 <div>
                   <dt className="text-gray-500">Payment received</dt>
                   <dd className="font-semibold text-gray-900">
-                    {ghs(open.amountPaid)} · {formatDate(open.paymentConfirmedAt)}
+                    {formatGhs(open.amountPaid)} · {formatDate(open.paymentConfirmedAt)}
                     {open.paymentConfirmedBy && <span className="block text-xs font-normal text-gray-500">by {open.paymentConfirmedBy.name}</span>}
                   </dd>
                 </div>

@@ -3,7 +3,7 @@
 // 48px avatar no longer downloads the full photo. Other URLs (site files, data: previews) are returned
 // unchanged.
 
-const CLOUDINARY_UPLOAD = /^(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.+)$/;
+export const CLOUDINARY_UPLOAD = /^(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.+)$/;
 
 // A fixed set of widths: every page asks for the same few copies, so each is made once and then served
 // from the CDN cache (each new copy counts toward the Cloudinary plan's transformations).

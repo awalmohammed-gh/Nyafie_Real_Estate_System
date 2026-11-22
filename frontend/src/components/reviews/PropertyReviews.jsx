@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { EyeOff, Pencil, Star, Trash2 } from "lucide-react";
+import { EyeOff, MessageSquare, Pencil, Star, Trash2 } from "lucide-react";
 import { reviewApi } from "../../frontApi";
 import { useToast } from "../../context/useToast";
 import ConfirmDialog from "../ui/ConfirmDialog";
@@ -194,6 +194,17 @@ const PropertyReviews = ({ propertyId, user, onRequireSignIn, resumeRating, onRe
       toast({ type: "error", title: err.message });
     }
   };
+
+  if (status === "ready" && !summary.count && !mine && !form) return (
+    <section ref={sectionRef} id="reviews" className="property-reviews-empty scroll-mt-24" aria-labelledby="property-reviews-heading">
+      <h2 id="property-reviews-heading">Reviews</h2>
+      <div className="property-review-invitation">
+        <div className="property-review-art" aria-hidden="true"><MessageSquare /><span><Star /><Star /><Star /></span></div>
+        <div><h3>Be the first to review this property</h3><p>Share your experience and help others make informed decisions.</p></div>
+        <button type="button" onClick={() => startReview()}><Pencil size={19} aria-hidden="true" />Write a Review</button>
+      </div>
+    </section>
+  );
 
   return (
     <section ref={sectionRef} id="reviews" className="scroll-mt-24 py-7 sm:py-8" aria-labelledby="property-reviews-heading">

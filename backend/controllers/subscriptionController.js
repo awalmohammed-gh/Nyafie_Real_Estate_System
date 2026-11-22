@@ -65,10 +65,12 @@ const alreadyConfirmed = async (req, res) => {
  * A stale checkout (see below) is recorded as paid money awaiting a refund instead.
  * Returns { user, record, flagged } where `flagged` means this call marked it for a refund.
  */
-const settleSubscription = async (subscription, extra = {}) => {
+const settleSubscription = async (subscription, extra = {}, { create = null } = {}) => {
   // Always reload inside the transaction: request objects can predate another
   // verification. MongoDB retries conflicting writes using a fresh snapshot.
   const result = await mongoose.connection.transaction(async (session) => {
+    // A plan granted without a checkout is created here, so it never exists unless it is also activated
+    if (create) await Subscription.create([create], { session });
     const record = await Subscription.findById(subscription._id).session(session);
     if (!record) throw new Error("Subscription not found.");
     const holder = await User.findById(record.user).session(session);
@@ -141,6 +143,13 @@ const settleSubscription = async (subscription, extra = {}) => {
 };
 
 export const activateSubscription = async (subscription, extra = {}) => (await settleSubscription(subscription, extra)).user;
+
+// Creates and activates a subscription in one transaction (plans an admin grants): if activation
+// fails, no half-made subscription is left behind
+export const createAndActivateSubscription = async (fields, extra = {}) => {
+  const _id = new mongoose.Types.ObjectId();
+  return (await settleSubscription({ _id }, extra, { create: { ...fields, _id } })).user;
+};
 
 /**
  * Asks Paystack about one checkout and records the answer. Shared by browser verification,

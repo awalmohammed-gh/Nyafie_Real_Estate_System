@@ -24,16 +24,12 @@ import { adminPath } from "../../utils/adminEntry";
 import { isCoordinate } from "../../utils/geo";
 import "./propertyEditor.css";
 import { mediaLinkProblem, shareUrl } from "../../utils/mediaLinks";
+import { GHANA_REGIONS as REGIONS } from "../../data/regions";
 
 // Leaflet loads with the editor's map only
 const LocationPicker = lazy(() => import("../../components/location/LocationPicker"));
 
 const RENT_PERIOD_LABELS = { month: "Per month", night: "Per night" };
-
-const REGIONS = [
-  "Ahafo", "Ashanti", "Bono", "Bono East", "Central", "Eastern", "Greater Accra", "North East",
-  "Northern", "Oti", "Savannah", "Upper East", "Upper West", "Volta", "Western", "Western North",
-];
 
 const AMENITIES = [
   "Swimming Pool", "Gym", "24/7 Security", "Parking", "Garage", "Garden", "Balcony", "Borehole",

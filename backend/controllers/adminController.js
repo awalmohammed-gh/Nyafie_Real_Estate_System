@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import mongoose from "mongoose";
 import { isOrganization } from "../utils/accountTypes.js";
 import User from "../models/User.js";
 import Property from "../models/Property.js";
@@ -17,15 +18,15 @@ import Review from "../models/Review.js";
 import { syncPropertyRating } from "../utils/reviews.js";
 import Setting, { getSettings } from "../models/Setting.js";
 import { validateSection } from "../utils/settingsValidation.js";
-import { paymentStatus } from "../utils/paystack.js";
+import { newReference as paystackReference, paymentStatus } from "../utils/paystack.js";
 import { COUNTED_STATES, subscriptionState } from "../utils/permissions.js";
 import { checkPropertyOptions, pickPropertyFields, validateForPublishing } from "./propertyController.js";
 import { locationSnapshot, settleLocation } from "../utils/autoLocate.js";
 import { resolveImages } from "../utils/uploadImages.js";
 import { updateInquiryStatus } from "./inquiryController.js";
-import { activateSubscription, processSubscriptionPayment } from "./subscriptionController.js";
+import { activateSubscription, createAndActivateSubscription, processSubscriptionPayment } from "./subscriptionController.js";
 import { removalImpact, removeProvider, restoreProvider, deletionPlan, permanentlyDeleteProvider } from "../utils/providerRemoval.js";
-import { ok, fail } from "../utils/response.js";
+import { HttpError, ok, fail } from "../utils/response.js";
 import { prepareHotelFields, saveHotelProperty } from "../utils/hotel.js";
 import { REFUND_SUMMARY } from "./refundController.js";
 import { alertSavedSearches } from "../utils/savedSearches.js";
@@ -116,23 +117,29 @@ export const deleteUser = async (req, res) => {
   // Remove the customer's open activity so it no longer shows (or counts) on the admin boards.
   // Money that actually changed hands stays on record: paid rentals, confirmed or completed purchases,
   // successful payments and accepted offers (they appear as "Deleted user").
+  // One transaction: the account and all of this goes together, or nothing is deleted. (Steps run
+  // one after another: a transaction's operations can't run in parallel.)
   const id = user._id;
-  const conversations = await Conversation.find({ customer: id }).select("_id");
-  const reviewed = await Review.distinct("property", { user: id });
-  await Promise.all([
-    Offer.deleteMany({ customer: id, status: { $ne: "accepted" } }),
-    Viewing.deleteMany({ customer: id }),
-    Rental.deleteMany({ customer: id, paymentStatus: { $ne: "paid" } }),
-    SaleRequest.deleteMany({ customer: id, status: { $ne: "completed" }, paymentStatus: { $ne: "confirmed" } }),
-    Payment.deleteMany({ customer: id, status: { $in: ["pending", "failed"] } }),
-    Message.deleteMany({ conversation: { $in: conversations.map((c) => c._id) } }),
-    Conversation.deleteMany({ customer: id }),
-    Inquiry.deleteMany({ customer: id }),
-    Notification.deleteMany({ recipient: id }),
-    Review.deleteMany({ user: id }),
-  ]);
-  await Promise.all(reviewed.map((propertyId) => syncPropertyRating(propertyId)));
-  await user.deleteOne();
+  await mongoose.connection.transaction(async (session) => {
+    const conversations = await Conversation.find({ customer: id }).select("_id").session(session);
+    const reviewed = await Review.distinct("property", { user: id }).session(session);
+    const steps = [
+      () => Offer.deleteMany({ customer: id, status: { $ne: "accepted" } }, { session }),
+      () => Viewing.deleteMany({ customer: id }, { session }),
+      () => Rental.deleteMany({ customer: id, paymentStatus: { $ne: "paid" } }, { session }),
+      () => SaleRequest.deleteMany({ customer: id, status: { $ne: "completed" }, paymentStatus: { $ne: "confirmed" } }, { session }),
+      () => Payment.deleteMany({ customer: id, status: { $in: ["pending", "failed"] } }, { session }),
+      () => Message.deleteMany({ conversation: { $in: conversations.map((c) => c._id) } }, { session }),
+      () => Conversation.deleteMany({ customer: id }, { session }),
+      () => Inquiry.deleteMany({ customer: id }, { session }),
+      () => Notification.deleteMany({ recipient: id }, { session }),
+      () => Review.deleteMany({ user: id }, { session }),
+    ];
+    for (const step of steps) await step();
+    for (const propertyId of reviewed) await syncPropertyRating(propertyId, session);
+    const deleted = await User.deleteOne({ _id: id, role: "user" }, { session });
+    if (!deleted.deletedCount) throw new HttpError(409, "This account changed while it was being deleted. Refresh and try again.");
+  });
   ok(res, null, "User deleted");
 };
 
@@ -167,7 +174,8 @@ export const deleteAgentPermanently = async (req, res) => {
 
 // ---------- Agent subscriptions ----------
 
-const newReference = () => `HB-ADM-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString("hex").toUpperCase()}`;
+// Same format as checkout references (e.g. HB-ADM-LX2K9A-3F9A1C), from the one generator
+const newReference = () => paystackReference("HB-ADM");
 
 // PATCH /api/admin/agents/:id/subscription { action, planId?, days? }
 export const manageSubscription = async (req, res) => {
@@ -181,21 +189,19 @@ export const manageSubscription = async (req, res) => {
     const plan = await Plan.findById(planId).catch(() => null);
     if (!plan) return fail(res, 404, "Plan not found.");
     if (current) {
-      // Keep the paid-up period; the new plan's limits apply immediately
-      current.plan = plan._id;
-      current.planName = plan.name;
-      current.accountType = plan.accountType;
-      await current.save();
-      // An agency or company plan makes the account that type (admins assign plans deliberately)
-      if (isOrganization(plan.accountType) && user.agentApplication?.agentType !== plan.accountType) {
-        user.agentApplication.agentType = plan.accountType;
-        await user.save();
-      }
-    } else {
-      const subscription = await Subscription.create({
-        user: user._id, plan: plan._id, planName: plan.name, accountType: plan.accountType, planPrice: plan.price, durationDays: plan.duration, amount: 0, paymentReference: newReference(), paymentMethod: "Admin",
+      // Keep the paid-up period; the new plan's limits apply immediately. The plan and the account
+      // type change together.
+      await mongoose.connection.transaction(async (session) => {
+        await Subscription.updateOne({ _id: current._id }, { $set: { plan: plan._id, planName: plan.name, accountType: plan.accountType } }, { session });
+        // An agency or company plan makes the account that type (admins assign plans deliberately)
+        if (isOrganization(plan.accountType) && user.agentApplication?.agentType !== plan.accountType) {
+          await User.updateOne({ _id: user._id }, { $set: { "agentApplication.agentType": plan.accountType } }, { session });
+        }
       });
-      await activateSubscription(subscription, { paymentStatus: "waived" });
+    } else {
+      await createAndActivateSubscription({
+        user: user._id, plan: plan._id, planName: plan.name, accountType: plan.accountType, planPrice: plan.price, durationDays: plan.duration, amount: 0, paymentReference: newReference(), paymentMethod: "Admin",
+      }, { paymentStatus: "waived" });
     }
     return ok(res, null, `Plan changed to ${plan.name}`);
   }
@@ -228,11 +234,10 @@ export const manageSubscription = async (req, res) => {
       // checkout is never counted as revenue (if it is paid later, it is processed normally)
       const plan = await Plan.findById(current.plan);
       if (!plan) return fail(res, 404, "This checkout's plan no longer exists. Assign a plan instead.");
-      const grant = await Subscription.create({
+      await createAndActivateSubscription({
         user: user._id, plan: plan._id, planName: plan.name, accountType: plan.accountType, planPrice: plan.price, durationDays: current.durationDays ?? plan.duration,
         amount: 0, paymentReference: newReference(), paymentMethod: "Admin", note: `Complimentary: activated by an admin; checkout ${current.paymentReference} had no verified payment`,
-      });
-      await activateSubscription(grant, { paymentStatus: "waived" });
+      }, { paymentStatus: "waived" });
       return ok(res, null, "Activated as complimentary: Paystack has no completed payment for this checkout.");
     }
     if (current.status === "pending" || current.paymentStatus === "pending") {

@@ -17,14 +17,15 @@ const SAVE_EVERY_MS = 5000;
  *  - "Become an agent": opens agent sign-up and stays quiet for 30 days
  * Only time with the site open and visible counts. It never takes focus from the page.
  */
-const AgentPromo = () => {
+// paused: another pop-up is on screen (the location card); it waits and appears once that closes
+const AgentPromo = ({ paused = false }) => {
   const titleId = useId();
   const { pathname } = useLocation();
   const { user, ready } = useAuth();
   const { siteName } = usePlatform();
   const [open, setOpen] = useState(false);
   const eligible = ready && promoAllowedFor(user);
-  const shown = open && eligible && promoAllowedOn(pathname);
+  const shown = open && eligible && !paused && promoAllowedOn(pathname);
 
   useEffect(() => {
     if (!eligible) return undefined;

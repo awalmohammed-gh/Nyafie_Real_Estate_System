@@ -27,7 +27,7 @@ import { canHandleTeamRecord, teamFilter } from "../utils/team.js";
 const DAY = 24 * 60 * 60 * 1000;
 const q = (value) => {
   const promise = Promise.resolve(value);
-  const self = { then: promise.then.bind(promise), catch: promise.catch.bind(promise), select: () => self, populate: () => self, sort: () => self, limit: () => self, skip: () => self, lean: () => self };
+  const self = { then: promise.then.bind(promise), catch: promise.catch.bind(promise), select: () => self, populate: () => self, sort: () => self, limit: () => self, skip: () => self, lean: () => self, session: () => self };
   return self;
 };
 const id = () => new mongoose.Types.ObjectId();
@@ -55,6 +55,7 @@ test("team visibility: owners and managers see all agency work, agents only what
 
 test("agency invites, joining, roles and removal are enforced on the server", async (t) => {
   process.env.JWT_KEY = "agency-teams-test-key";
+  t.mock.method(mongoose.connection, "transaction", async (work) => work(null)); // no database here
   const plan = new Plan({ name: "Agency Plan", accountType: "agency", price: 600, duration: 30, propertyLimit: 25, imageLimit: 5, teamMemberLimit: 1, internalChat: false });
   const owner = agent({ agentApplication: { status: "approved", agentType: "agency", companyName: "Akwaaba Homes", profileCompletedAt: new Date() } });
   const sub = new Subscription({ user: owner._id, plan, planName: plan.name, accountType: "agency", status: "active", paymentStatus: "paid", amount: 600, paymentReference: "R-TEAM", startDate: new Date(Date.now() - DAY), expiresAt: new Date(Date.now() + 20 * DAY) });
@@ -74,20 +75,20 @@ test("agency invites, joining, roles and removal are enforced on the server", as
   t.mock.method(Setting, "findOneAndUpdate", () => q({ key: "platform", agent: { requireSubscription: true } }));
   t.mock.method(User, "findById", (userId) => q(users.find((u) => String(u._id) === String(userId)) || null));
   t.mock.method(User, "find", (filter) => q(users.filter((u) => matchesUser(u, filter || {}))));
-  t.mock.method(User, "countDocuments", async (filter) => users.filter((u) => matchesUser(u, filter)).length);
+  t.mock.method(User, "countDocuments", (filter) => q(users.filter((u) => matchesUser(u, filter)).length));
   t.mock.method(User, "exists", async (filter) => users.find((u) => matchesUser(u, filter)) || null);
   t.mock.method(User, "findOne", (filter) => q(users.find((u) => matchesUser(u, filter)) || null));
   const userUpdates = [];
   t.mock.method(User, "updateOne", async (filter, update) => {
     userUpdates.push({ filter, update });
     const user = users.find((u) => matchesUser(u, filter));
-    if (!user) return { modifiedCount: 0 };
+    if (!user) return { matchedCount: 0, modifiedCount: 0 };
     for (const [key, value] of Object.entries(update.$set || {})) {
       if (key === "agency") user.agency = value;
       else if (key.startsWith("agentApplication.")) user.agentApplication[key.split(".")[1]] = value;
     }
     if (update.$unset?.agency) user.agency = undefined;
-    return { modifiedCount: 1 };
+    return { matchedCount: 1, modifiedCount: 1 };
   });
   t.mock.method(Subscription, "findById", (subId) => q(String(subId) === String(sub._id) ? sub : null));
   t.mock.method(Subscription, "findOne", () => q(null));

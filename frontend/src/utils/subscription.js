@@ -2,6 +2,9 @@ import { daysUntil } from "./date.js";
 
 export const EXPIRING_SOON_DAYS = 7;
 
+// Session key for the Paystack checkout in progress: the checkout page reads it on return to say what happened
+export const CHECKOUT_RETURN_KEY = "nyafie:checkout";
+
 const labels = {
   none: "No subscription",
   active: "Active",

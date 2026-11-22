@@ -1,7 +1,6 @@
 import { BadgeCheck, Building, Building2, CreditCard, HandCoins, Home, Inbox, KeyRound, UserPlus, Wallet, XCircle } from "lucide-react";
 import { adminPath } from "./adminEntry";
-
-const ghs = (value) => `₵${Number(value).toLocaleString()}`;
+import { formatGhs } from "./property.js";
 
 // Events from a rental's status history (the request itself is added separately)
 const RENTAL_EVENTS = {
@@ -52,7 +51,7 @@ export const buildActivity = ({ base, listings = [], agents = [], offers = [], r
       tone: "amber",
       title: "New offer received",
       subject: o.property.title,
-      detail: `${o.customer.name} · ${ghs(o.amount)}`,
+      detail: `${o.customer.name} · ${formatGhs(o.amount)}`,
       at: o.createdAt,
       status: o.status === "Pending" ? "Pending" : undefined,
       to: `${base}/offers`,
@@ -64,7 +63,7 @@ export const buildActivity = ({ base, listings = [], agents = [], offers = [], r
         tone: o.status === "Accepted" ? "green" : o.status === "Rejected" ? "red" : "sky",
         title: `Offer ${o.status.toLowerCase()}`,
         subject: o.property.title,
-        detail: `${o.customer.name} · ${ghs(o.counterAmount && o.status === "Countered" ? o.counterAmount : o.amount)}`,
+        detail: `${o.customer.name} · ${formatGhs(o.counterAmount && o.status === "Countered" ? o.counterAmount : o.amount)}`,
         at: o.respondedAt,
         status: o.status,
         to: `${base}/offers`,
@@ -76,7 +75,7 @@ export const buildActivity = ({ base, listings = [], agents = [], offers = [], r
     items.push({ id: `rental-${r.id}`, icon: KeyRound, tone: "brand", title: "Rental request submitted", subject: r.property.title, detail: r.contactName, at: r.createdAt, to: `${base}/rentals` });
     r.history.forEach((h, i) => {
       const event = RENTAL_EVENTS[h.status];
-      if (event) items.push({ id: `rental-${r.id}-${i}`, ...event, subject: r.property.title, detail: `${r.contactName} · ${ghs(r.amount)}`, at: h.at, to: `${base}/rentals` });
+      if (event) items.push({ id: `rental-${r.id}-${i}`, ...event, subject: r.property.title, detail: `${r.contactName} · ${formatGhs(r.amount)}`, at: h.at, to: `${base}/rentals` });
     });
   });
 

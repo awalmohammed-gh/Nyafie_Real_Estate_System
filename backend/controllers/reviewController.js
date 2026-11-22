@@ -4,7 +4,7 @@ import Property from "../models/Property.js";
 import { publicQuery } from "./propertyController.js";
 import { reviewerName, syncPropertyRating } from "../utils/reviews.js";
 import { notifyAdmins, notifyUser } from "../utils/notify.js";
-import { cleanText } from "../utils/validation.js";
+import { cleanText, escapeRegex } from "../utils/validation.js";
 import { ok, fail } from "../utils/response.js";
 
 const SORTS = {
@@ -14,7 +14,6 @@ const SORTS = {
 };
 const MAX_LIMIT = 20;
 const same = (a, b) => Boolean(a && b) && String(a._id || a) === String(b._id || b);
-const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // What anyone may see about a review: no email, phone or account id
 const present = (review, viewer) => ({

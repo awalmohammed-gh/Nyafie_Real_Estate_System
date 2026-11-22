@@ -4,12 +4,10 @@ import { ArrowLeft, Banknote, CalendarCheck, CalendarDays, CircleCheck, CreditCa
 import { useAuth } from "../../context/useAuth";
 import { paymentApi, rentalApi } from "../../frontApi";
 import { formatDate } from "../../utils/date";
-import { getPriceParts } from "../../utils/property";
+import { getPriceParts, formatGhs } from "../../utils/property";
 import { usePlatform } from "../../context/usePlatform";
 import { arrivalText, bookingHeadline } from "../../utils/hotelPayments";
 import { cloudImage } from "../../utils/cloudImage";
-
-const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
 // "YYYY-MM-DD" in the viewer's local calendar
 const toDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -257,13 +255,13 @@ const RentalCheckout = ({ property, ownerName }) => {
             <Row label="Rental price">{price}{period || " (fixed)"}</Row>
             <Row label="Move-in date">{formatDate(rental.startDate)}</Row>
             <Row label="Rental duration">{formatDate(rental.startDate)} – {formatDate(rental.endDate)}</Row>
-            {unitLabel && <Row label="Rent for the period">{rental.units} {unitLabel} × {ghs(rental.unitPrice)}</Row>}
-            <Row label="Additional fees">{rental.fees > 0 ? ghs(rental.fees) : "None"}</Row>
+            {unitLabel && <Row label="Rent for the period">{rental.units} {unitLabel} × {formatGhs(rental.unitPrice)}</Row>}
+            <Row label="Additional fees">{rental.fees > 0 ? formatGhs(rental.fees) : "None"}</Row>
             <Row label="Occupants">{rental.occupants}</Row>
             <Row label="Customer">{rental.contactName} · {rental.contactPhone}</Row>
             <Row label="Current address">{rental.currentAddress}</Row>
             <Row label="Owner">{ownerName}</Row>
-            <Row label={choosing ? "Total" : "Total to pay"} strong>{ghs(rental.amount)}</Row>
+            <Row label={choosing ? "Total" : "Total to pay"} strong>{formatGhs(rental.amount)}</Row>
           </dl>
           {choosing ? (
             <StayPayment rental={rental} options={options} headline={headline} ownerName={ownerName} busy={busy} error={error} onPay={pay} onReserve={reserve} onBack={() => setStep(1)} />
@@ -281,7 +279,7 @@ const RentalCheckout = ({ property, ownerName }) => {
           )}
           <button onClick={pay} disabled={Boolean(busy) || paymentsOff} className="btn btn-primary w-full py-4 text-base">
             {busy === "pay" ? <Loader2 className="h-5 w-5 animate-spin" /> : <CreditCard className="h-5 w-5" />}
-            {busy === "pay" ? "Starting secure payment..." : `Pay Online · ${ghs(rental.amount)}`}
+            {busy === "pay" ? "Starting secure payment..." : `Pay Online · ${formatGhs(rental.amount)}`}
           </button>
           <button onClick={() => setStep(1)} disabled={Boolean(busy)} className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-gray-900">
             <ArrowLeft className="h-4 w-4" />
@@ -305,7 +303,7 @@ const StayPayment = ({ rental, options, headline, ownerName, busy, error, onPay,
       <div className="space-y-3 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900" role="status">
         <p className="flex items-center gap-2 text-base font-semibold"><CircleCheck className="h-5 w-5" aria-hidden="true" />{headline}</p>
         {rental.paymentDue && <>
-          <p className="flex items-start gap-2"><CalendarCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />Pay {ownerName} {ghs(rental.amount)} when you arrive. Please arrive {arrivalText(rental)}.</p>
+          <p className="flex items-start gap-2"><CalendarCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />Pay {ownerName} {formatGhs(rental.amount)} when you arrive. Please arrive {arrivalText(rental)}.</p>
           {rental.cancellationPolicy && <p className="whitespace-pre-line text-emerald-800"><span className="font-semibold">Owner's policy:</span> {rental.cancellationPolicy}</p>}
         </>}
         <Link to="/account/rentals" className="btn btn-primary w-full">View your booking</Link>
@@ -325,14 +323,14 @@ const StayPayment = ({ rental, options, headline, ownerName, busy, error, onPay,
           <p className="mt-1 flex items-start gap-2 text-sm leading-6 text-gray-500"><ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-brand-600" aria-hidden="true" />Card or mobile money through Paystack. Your dates are held for 30 minutes while you pay, then {ownerName} confirms your stay.</p>
           <button type="button" onClick={onPay} disabled={Boolean(busy)} className="btn btn-primary mt-3 w-full py-3.5">
             {busy === "pay" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-            {busy === "pay" ? "Starting secure payment..." : `Pay Online · ${ghs(rental.amount)}`}
+            {busy === "pay" ? "Starting secure payment..." : `Pay Online · ${formatGhs(rental.amount)}`}
           </button>
         </div>
       )}
       {options.onArrival && (
         <div className="rounded-2xl border border-gray-200 p-4">
           <p className="flex items-center gap-2 font-semibold text-gray-900"><Banknote className="h-4 w-4 text-brand-600" aria-hidden="true" />Reserve now, pay on arrival</p>
-          <p className="mt-1 text-sm leading-6 text-gray-500">Nothing to pay today. We secure your dates, then you pay {ownerName} {ghs(rental.amount)} when you arrive. Please arrive by {options.arrivalDeadline} on your check-in day.</p>
+          <p className="mt-1 text-sm leading-6 text-gray-500">Nothing to pay today. We secure your dates, then you pay {ownerName} {formatGhs(rental.amount)} when you arrive. Please arrive by {options.arrivalDeadline} on your check-in day.</p>
           {options.cancellationPolicy && <p className="mt-2 whitespace-pre-line rounded-lg bg-gray-50 p-3 text-xs leading-5 text-gray-600"><span className="font-semibold text-gray-800">Cancellation and no-show policy:</span> {options.cancellationPolicy}</p>}
           <button type="button" onClick={onReserve} disabled={Boolean(busy)} className={`btn mt-3 w-full py-3.5 ${options.online ? "btn-light" : "btn-primary"}`}>
             {busy === "reserve" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarCheck className="h-4 w-4" />}

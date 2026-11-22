@@ -23,9 +23,9 @@ export const SALE_PAYMENT_STATUSES = ["pending", "payment_requested", "confirmed
 // (paid_at_office is the stored name of "payment received"; kept so existing records stay valid)
 const saleRequestSchema = new mongoose.Schema(
   {
-    customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     property: { type: mongoose.Schema.Types.ObjectId, ref: "Property", required: true, index: true },
-    owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true }, // taken from the property
+    owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, // taken from the property
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // agency staff member handling it (null: the owner)
     ownerType: { type: String, enum: ["admin", "agent"], required: true, index: true },
     askingPrice: { type: Number, required: true }, // property price when the request was made
@@ -43,5 +43,10 @@ const saleRequestSchema = new mongoose.Schema(
   },
   schemaOptions
 );
+
+// Inboxes: "my requests" (customer), the owner's list and the admin list, newest first
+saleRequestSchema.index({ customer: 1, createdAt: -1 });
+saleRequestSchema.index({ owner: 1, createdAt: -1 });
+saleRequestSchema.index({ createdAt: -1 });
 
 export default mongoose.models.SaleRequest || mongoose.model("SaleRequest", saleRequestSchema);

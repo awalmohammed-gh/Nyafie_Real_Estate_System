@@ -18,7 +18,8 @@
     "views:reset": "node seed/resetViews.js",
     "views:clean-seed": "node seed/removeSeedViews.js",
     "geo:backfill": "node seed/backfillGeo.js",
-    "geo:locate": "node seed/locateFromAddress.js"
+    "geo:locate": "node seed/locateFromAddress.js",
+    "indexes:sync": "node seed/syncIndexes.js"
   },
   "dependencies": {
     "@sentry/node": "11.11.0",

@@ -20,9 +20,9 @@ import { formatDate, formatRelative, isWithinDays } from "../../utils/date";
 import { toWhatsAppNumber } from "../../utils/whatsapp";
 import { adminPath } from "../../utils/adminEntry";
 import { cloudImage } from "../../utils/cloudImage";
+import { formatGhs } from "../../utils/property";
 
 const STATUSES = ["Pending", "Countered", "Accepted", "Rejected", "Withdrawn"];
-const ghs = (value) => `₵${Number(value).toLocaleString()}`;
 
 /**
  * Offers received on listings. scope "agent": the agent's own listings only
@@ -108,8 +108,8 @@ const OffersBoard = ({ scope }) => {
           },
         ]
       : []),
-    { key: "asking", header: "Asking", render: (o) => <span className="whitespace-nowrap text-gray-600">{ghs(o.askingPrice)}</span> },
-    { key: "offer", header: "Offer", render: (o) => <span className="font-bold whitespace-nowrap text-brand-600">{ghs(o.amount)}</span> },
+    { key: "asking", header: "Asking", render: (o) => <span className="whitespace-nowrap text-gray-600">{formatGhs(o.askingPrice)}</span> },
+    { key: "offer", header: "Offer", render: (o) => <span className="font-bold whitespace-nowrap text-brand-600">{formatGhs(o.amount)}</span> },
     { key: "date", header: "Date", render: (o) => <span className="whitespace-nowrap text-gray-600">{formatRelative(o.createdAt)}</span> },
     { key: "status", header: "Status", render: (o) => <StatusBadge status={o.status} /> },
     {
@@ -167,8 +167,8 @@ const OffersBoard = ({ scope }) => {
               <StatusBadge status={o.status} />
             </div>
             <p className="mt-2 text-sm">
-              <span className="font-bold text-brand-600">{ghs(o.amount)}</span>
-              <span className="text-gray-400"> · asking {ghs(o.askingPrice)} · {formatRelative(o.createdAt)}</span>
+              <span className="font-bold text-brand-600">{formatGhs(o.amount)}</span>
+              <span className="text-gray-400"> · asking {formatGhs(o.askingPrice)} · {formatRelative(o.createdAt)}</span>
             </p>
           </button>
         )}
@@ -204,7 +204,7 @@ const OffersBoard = ({ scope }) => {
         {open && (
           <div className="space-y-5">
             <StatusSteps kind="offer" status={open.status.toLowerCase()} />
-            <div className="rounded-xl bg-brand-50 p-4"><p className="workspace-eyebrow">Offer summary</p><p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{ghs(open.amount)}</p><p className="mt-2 text-xs text-gray-500">Asking {ghs(open.askingPrice)}{open.askingPrice > 0 && ` · ${Math.abs(Math.round((open.amount - open.askingPrice) / open.askingPrice * 100))}% ${open.amount >= open.askingPrice ? "above or equal to" : "below"} asking price`}</p></div>
+            <div className="rounded-xl bg-brand-50 p-4"><p className="workspace-eyebrow">Offer summary</p><p className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">{formatGhs(open.amount)}</p><p className="mt-2 text-xs text-gray-500">Asking {formatGhs(open.askingPrice)}{open.askingPrice > 0 && ` · ${Math.abs(Math.round((open.amount - open.askingPrice) / open.askingPrice * 100))}% ${open.amount >= open.askingPrice ? "above or equal to" : "below"} asking price`}</p></div>
             <Link to={`/house/${open.property.id}`} className="flex items-center gap-3 rounded-lg p-2 ring-1 ring-gray-200 transition hover:ring-brand-200">
               {open.property.image && <img src={cloudImage(open.property.image, 80)} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />}
               <div className="min-w-0">
@@ -216,11 +216,11 @@ const OffersBoard = ({ scope }) => {
             <dl className="grid grid-cols-2 gap-3 rounded-lg bg-gray-50 p-4 text-sm sm:grid-cols-3">
               <div>
                 <dt className="text-gray-500">Asking price</dt>
-                <dd className="font-semibold text-gray-900">{ghs(open.askingPrice)}</dd>
+                <dd className="font-semibold text-gray-900">{formatGhs(open.askingPrice)}</dd>
               </div>
               <div>
                 <dt className="text-gray-500">Offer</dt>
-                <dd className="text-lg font-semibold text-brand-600">{ghs(open.amount)}</dd>
+                <dd className="text-lg font-semibold text-brand-600">{formatGhs(open.amount)}</dd>
               </div>
               <div>
                 <dt className="text-gray-500">Status</dt>
@@ -229,7 +229,7 @@ const OffersBoard = ({ scope }) => {
               {open.counterAmount && (
                 <div>
                   <dt className="text-gray-500">Your counter</dt>
-                  <dd className="font-bold text-sky-700">{ghs(open.counterAmount)}</dd>
+                  <dd className="font-bold text-sky-700">{formatGhs(open.counterAmount)}</dd>
                 </div>
               )}
               <div className="col-span-2">

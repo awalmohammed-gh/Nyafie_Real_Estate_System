@@ -13,8 +13,8 @@ const Home = () => (
     <Hero />
     <TrustBar />
     <FeatureListings />
-    <RecentlyViewed />
     <DiscoverCategories />
+    <RecentlyViewed />
     <HowItWorks />
     <BecomeAgent />
     <FinalCta />

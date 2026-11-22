@@ -142,12 +142,12 @@ export const memoryModel = (t, Model, docs = []) => {
   t.mock.method(Model, "updateMany", async (filter, update) => {
     const hit = all(filter);
     hit.forEach((doc) => apply(doc, update));
-    return { modifiedCount: hit.length };
+    return { matchedCount: hit.length, modifiedCount: hit.length }; // as MongoDB reports it
   });
   t.mock.method(Model, "updateOne", async (filter, update) => {
     const doc = all(filter)[0];
     if (doc) apply(doc, update);
-    return { modifiedCount: doc ? 1 : 0 };
+    return { matchedCount: doc ? 1 : 0, modifiedCount: doc ? 1 : 0 };
   });
   t.mock.method(Model, "findOneAndUpdate", async (filter, update) => {
     const doc = all(filter)[0];

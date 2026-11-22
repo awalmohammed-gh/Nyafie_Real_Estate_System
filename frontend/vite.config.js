@@ -44,7 +44,7 @@ export default defineConfig(({ mode, command }) => {
       host: '127.0.0.1',
       port: 5173,
       open: false,
-      proxy: { '/api': { target: env.API_PROXY_TARGET || `http://localhost:${backendPort()}`, changeOrigin: true } },
+      proxy: { '/api': { target: env.API_PROXY_TARGET || `http://127.0.0.1:${backendPort()}`, changeOrigin: true } },
     },
     resolve: {
       alias: {

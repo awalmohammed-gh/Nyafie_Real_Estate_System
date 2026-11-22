@@ -4,8 +4,8 @@ import { Link } from "react-router-dom";
 import { compressImage } from "../../utils/image";
 import { ACCOUNT_TYPES, accountTypeOf, isOrganization } from "../../data/plans";
 import { cloudImage } from "../../utils/cloudImage";
+import { GHANA_REGIONS as REGIONS } from "../../data/regions";
 
-const REGIONS = ["Ahafo", "Ashanti", "Bono", "Bono East", "Central", "Eastern", "Greater Accra", "North East", "Northern", "Oti", "Savannah", "Upper East", "Upper West", "Volta", "Western", "Western North"];
 const Field = ({ label, required, children }) => <label className="block space-y-2 text-sm font-medium text-gray-700"><span>{label}{required && <span className="ml-1 text-brand-600">*</span>}</span>{children}</label>;
 
 // typeLocked: approved agents keep their account type; individuals upgrade to agency through a plan

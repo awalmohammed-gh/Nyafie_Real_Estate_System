@@ -6,6 +6,7 @@ import Footer from './Footer'
 import CompareBar from '../components/property/CompareBar'
 import PageLoader from '../components/ui/PageLoader'
 import AgentPromo from '../components/ui/AgentPromo'
+import LocationPrompt from '../components/location/LocationPrompt'
 import SmoothScroll from '../components/ui/SmoothScroll'
 import { NavOverlayContext } from '../context/navOverlay'
 
@@ -14,6 +15,8 @@ const SystemLayout = () => {
   const navigate = useNavigate()
   // Number of dark heroes on screen (home hero, page headers); while > 0 the navbar overlays them
   const [heroes, setHeroes] = useState(0)
+  // The location card is on screen: the agent pop-up waits so they never stack
+  const [askingLocation, setAskingLocation] = useState(false)
   const registerHero = useCallback(() => {
     setHeroes((n) => n + 1)
     return () => setHeroes((n) => n - 1)
@@ -42,8 +45,10 @@ const SystemLayout = () => {
         <Footer />
         {/* Homes picked for comparison on this device */}
         <CompareBar />
+        {/* "Use your location?" card: explains why before the browser asks (rules: utils/visitorLocation.js) */}
+        <LocationPrompt onOpenChange={setAskingLocation} />
         {/* "Want to become an agent?" pop-up for visitors and customers (timing rules: utils/agentPromo.js) */}
-        <AgentPromo />
+        <AgentPromo paused={askingLocation} />
       </div>
     </NavOverlayContext.Provider>
   )
