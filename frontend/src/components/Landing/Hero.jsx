@@ -180,10 +180,12 @@ const Hero = () => {
         slides={slides}
         marketplace
       >
+        {/* Rises in once the slide's text has appeared (HeroSlider: the text finishes at about 1s),
+            so the eye reads the headline first. Only on the first arrival, not on every slide change. */}
         <motion.div className="home-search" aria-label="Find a property"
-          initial={reducedMotion ? false : { opacity: 0, y: 16 }}
+          initial={reducedMotion ? false : { opacity: 0, y: 28 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.75, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+          transition={{ duration: 0.8, delay: 0.85, ease: [0.22, 1, 0.36, 1] }}>
           <div className="home-search-topline">
             <fieldset className="home-search-tabs">
               <legend className="sr-only">I want to</legend>
