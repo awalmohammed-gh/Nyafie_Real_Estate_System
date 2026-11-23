@@ -3,6 +3,7 @@ import Property from "../models/Property.js";
 import Rental from "../models/Rental.js";
 import { HttpError } from "./response.js";
 import { resolveImages } from "./uploadImages.js";
+import { listingImages } from "./listingMedia.js";
 import { withinImageLimit } from "./permissions.js";
 import { parseStayBooking, takesStayBookings } from "./hotelPayout.js";
 
@@ -93,7 +94,7 @@ export const hotelTransaction = (hotelId, work) => mongoose.connection.transacti
   return work(property, session);
 });
 
-export const prepareHotelFields = async (fields, body, existing = null, imageLimit = 8) => {
+export const prepareHotelFields = async (fields, body, existing = null, imageLimit = 8, uploaderIds = []) => {
   const hotel = isHotel({ propertyType: fields.propertyType ?? existing?.propertyType });
   // Hotels and per-night rentals: how guests may pay (anything else ignores these options)
   const stay = { propertyType: fields.propertyType ?? existing?.propertyType, listingType: hotel ? "Rent" : fields.listingType ?? existing?.listingType, pricePeriod: hotel ? "night" : fields.pricePeriod ?? existing?.pricePeriod, stayBooking: existing?.stayBooking };
@@ -127,7 +128,7 @@ export const prepareHotelFields = async (fields, body, existing = null, imageLim
         quantity: whole(input.quantity, 0, 10000, "Room quantity"),
         maxGuests: whole(input.maxGuests, 1, 50, "Maximum guests"), beds: whole(input.beds, 1, 30, "Beds"),
         size, sizeUnit: input.sizeUnit === "sqft" ? "sqft" : "sqm",
-        active: input.active !== false, images: await resolveImages(input.images), amenities: [...new Set(input.amenities.map((a) => a.trim()))],
+        active: input.active !== false, images: await resolveImages(input.images, { current: listingImages(existing), uploaderIds }), amenities: [...new Set(input.amenities.map((a) => a.trim()))],
       });
     }
     // Persisted room types are archived, never removed or recreated with another ID.

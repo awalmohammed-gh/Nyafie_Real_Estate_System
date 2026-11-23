@@ -1,4 +1,6 @@
+import { randomBytes } from "node:crypto";
 import Property from "../models/Property.js";
+import User from "../models/User.js";
 import { getSettings } from "../models/Setting.js";
 import { cloudinary } from "../config/cloudinary.js";
 import { HttpError } from "./response.js";
@@ -26,12 +28,18 @@ const COMPRESSION = "c_limit,h_1280,w_1280/q_auto:eco,vc_h264,ac_aac";
 const folderOf = (userId) => `nyafie/videos/${userId}`;
 const VIDEO_ID = /^nyafie\/videos\/([a-f\d]{24})\/[\w-]{1,120}$/;
 
-/** POST /api/uploads/video/signature: what the browser sends to Cloudinary with the file */
+/**
+ * POST /api/uploads/video/signature: what the browser sends to Cloudinary with the file.
+ * Each signature names its own file (public_id) and can't replace it (overwrite false): Cloudinary
+ * accepts a signature for an hour, and without these one signature could store any number of videos,
+ * or swap a video for another after verifyVideo checked it.
+ */
 export const videoUploadParams = (userId) => {
   const { cloud_name: cloudName, api_key: apiKey, api_secret: secret } = cloudinary.config();
   const params = {
     timestamp: Math.round(Date.now() / 1000),
-    folder: folderOf(userId),
+    public_id: `${folderOf(userId)}/${randomBytes(12).toString("hex")}`,
+    overwrite: "false",
     tags: PENDING_TAG,
     allowed_formats: VIDEO_FORMATS.join(","),
     format: "mp4",
@@ -124,13 +132,17 @@ export const destroyListingMedia = async ({ images = [], videos = [] }, exceptId
     const videoIds = [...new Set(videos.filter(Boolean))];
     if (!assets.length && !videoIds.length) return;
     const others = exceptId ? { _id: { $ne: exceptId } } : {};
-    const [usedImages, usedRoomImages, usedVideos, protectedImages] = await Promise.all([
-      assets.length ? Property.distinct("images", { ...others, images: { $in: assets.map((item) => item.url) } }) : [],
-      assets.length ? Property.distinct("roomTypes.images", { ...others, "roomTypes.images": { $in: assets.map((item) => item.url) } }) : [],
+    const urls = assets.map((item) => item.url);
+    const [usedImages, usedRoomImages, usedVideos, protectedImages, profileImages, agencyLogos] = await Promise.all([
+      assets.length ? Property.distinct("images", { ...others, images: { $in: urls } }) : [],
+      assets.length ? Property.distinct("roomTypes.images", { ...others, "roomTypes.images": { $in: urls } }) : [],
       videoIds.length ? Property.distinct("videoFile.publicId", { ...others, "videoFile.publicId": { $in: videoIds } }) : [],
       settingsImages(),
+      // Accounts' photos and agency logos are never a listing's to delete
+      assets.length ? User.distinct("profileImage", { profileImage: { $in: urls } }) : [],
+      assets.length ? User.distinct("agentApplication.agencyLogo", { "agentApplication.agencyLogo": { $in: urls } }) : [],
     ]);
-    const inUse = new Set([...usedImages, ...usedRoomImages, ...protectedImages]);
+    const inUse = new Set([...usedImages, ...usedRoomImages, ...protectedImages, ...profileImages, ...agencyLogos]);
     const targets = [
       ...assets.filter((item) => !inUse.has(item.url)).map(({ asset }) => asset),
       ...videoIds.filter((id) => !usedVideos.includes(id)).map((publicId) => ({ publicId, resourceType: "video" })),
@@ -155,12 +167,22 @@ export const removedMedia = (before, after) => ({
  * with are deleted. Videos a listing does use just lose the pending tag.
  */
 export const cleanUpAbandonedVideos = async (now = Date.now()) => {
-  const { resources = [] } = await cloudinary.api.resources_by_tag(PENDING_TAG, { resource_type: "video", max_results: 100 });
+  // Every pending upload, page by page (Cloudinary returns at most 500 per request)
+  const resources = [];
+  let cursor;
+  for (let page = 0; page < 50; page += 1) {
+    const result = await cloudinary.api.resources_by_tag(PENDING_TAG, { resource_type: "video", max_results: 500, ...(cursor ? { next_cursor: cursor } : {}) });
+    resources.push(...(result.resources || []));
+    cursor = result.next_cursor;
+    if (!cursor) break;
+  }
   const old = resources.filter((resource) => now - new Date(resource.created_at).getTime() > ABANDONED_AFTER_MS);
   if (!old.length) return { deleted: 0, kept: 0 };
   const used = new Set(await Property.distinct("videoFile.publicId", { "videoFile.publicId": { $in: old.map((resource) => resource.public_id) } }));
   const abandoned = old.filter((resource) => !used.has(resource.public_id)).map((resource) => resource.public_id);
-  if (abandoned.length) await cloudinary.api.delete_resources(abandoned, { resource_type: "video", invalidate: true });
-  if (used.size) await cloudinary.uploader.remove_tag(PENDING_TAG, [...used], { resource_type: "video" });
+  // Cloudinary takes up to 100 ids per delete and 1,000 per tag change
+  for (let i = 0; i < abandoned.length; i += 100) await cloudinary.api.delete_resources(abandoned.slice(i, i + 100), { resource_type: "video", invalidate: true });
+  const kept = [...used];
+  for (let i = 0; i < kept.length; i += 1000) await cloudinary.uploader.remove_tag(PENDING_TAG, kept.slice(i, i + 1000), { resource_type: "video" });
   return { deleted: abandoned.length, kept: used.size };
 };

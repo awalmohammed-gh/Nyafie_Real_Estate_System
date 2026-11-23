@@ -304,8 +304,8 @@ router.get(
       "X-Content-Type-Options": "nosniff",
       "X-Frame-Options": "DENY",
       "Referrer-Policy": "strict-origin-when-cross-origin",
-      // Report-only until production logs confirm nothing legitimate is caught (middleware/security.js)
-      "Content-Security-Policy-Report-Only": PAGE_CSP,
+      // Enforced: what it allows and why is listed in middleware/security.js; violations are still reported
+      "Content-Security-Policy": PAGE_CSP,
     });
     if (metadata.noindex) res.set("X-Robots-Tag", "noindex, nofollow");
     // The HTML contains no private agent/account data. The SPA performs its usual session guards.

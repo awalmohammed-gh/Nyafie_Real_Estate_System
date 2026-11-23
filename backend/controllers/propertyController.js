@@ -470,7 +470,7 @@ export const createProperty = async (req, res) => {
   const { access } = req;
   const intent = req.body.status === "draft" ? "draft" : "submit";
   const fields = pickPropertyFields(req.body);
-  await prepareHotelFields(fields, req.body, null, access.imageLimit);
+  await prepareHotelFields(fields, req.body, null, access.imageLimit, [req.user._id]);
   if (fields.listingType === "Sale") fields.pricePeriod = "total";
   const images = Array.isArray(req.body.images) ? req.body.images : [];
 
@@ -490,7 +490,7 @@ export const createProperty = async (req, res) => {
     price: 0,
     ...fields,
     contact: { ...contact, id: String(req.user._id) },
-    images: await resolveImages(images),
+    images: await resolveImages(images, { uploaderIds: [req.user._id] }),
     owner: teamOf(req.user).ownerId, // the signed-in agent, or their agency's owner; never taken from the request
     assignedTo: isTeamMember(req.user) ? req.user._id : null, // staff listings start assigned to them
     ownerType: "agent",
@@ -542,7 +542,7 @@ export const updateProperty = async (req, res) => {
   if (!property) return;
 
   const fields = pickPropertyFields(req.body);
-  await prepareHotelFields(fields, req.body, property, access.imageLimit);
+  await prepareHotelFields(fields, req.body, property, access.imageLimit, [req.user._id]);
   fields.contact = { id: String(req.user._id), name: `${req.user.firstName} ${req.user.lastName}`, phone: req.user.phone, email: req.user.email };
   if ((fields.listingType ?? property.listingType) === "Sale") fields.pricePeriod = "total";
   const optionProblem = checkPropertyOptions(fields, access.settings, property);
@@ -573,7 +573,7 @@ export const updateProperty = async (req, res) => {
   property.videoFile = video;
   markConfirmed(property); // editing a listing confirms it is current
   if (fields.contact) property.contact = { ...fields.contact, id: String(req.user._id) };
-  if (images) property.images = await resolveImages(images);
+  if (images) property.images = await resolveImages(images, { current: mediaBefore.images, uploaderIds: [req.user._id] });
   if (COUNTED_STATES.includes(status)) {
     const problem = validateForPublishing(property);
     if (problem) return fail(res, 400, problem);

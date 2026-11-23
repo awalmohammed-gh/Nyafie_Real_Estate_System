@@ -28,9 +28,9 @@ export const securityHeaders = (_req, res, next) => {
 };
 
 /**
- * Content Security Policy for the site's pages (routes/seoRoutes.js), sent as Report-Only for now:
- * nothing is blocked; browsers report what would have been to /api/csp-report (written to the logs).
- * Once the logs stay quiet in production, switch the header name to Content-Security-Policy.
+ * Content Security Policy for the site's pages (routes/seoRoutes.js), enforced: anything outside it is
+ * blocked (a script injected into a page never runs), and browsers report each block to
+ * /api/csp-report (written to the logs). A new third-party service the pages use must be added here.
  * What the pages legitimately use:
  *  - scripts: our own bundles and Google sign-in (no inline scripts; page metadata is JSON data)
  *  - styles: our own, inline style attributes (React, animations, maps), Google Fonts and Google sign-in
@@ -62,7 +62,7 @@ export const PAGE_CSP = [
 export const cspReport = (req, res) => {
   const body = Array.isArray(req.body) ? req.body[0]?.body : req.body?.["csp-report"] || req.body;
   const pick = (...keys) => String(keys.map((key) => body?.[key]).find(Boolean) || "").split("?")[0].slice(0, 200);
-  if (body && typeof body === "object") console.warn(`CSP report-only: ${pick("effectiveDirective", "violated-directive", "effective-directive")} blocked ${pick("blockedURL", "blocked-uri")} on ${pick("documentURL", "document-uri")}`);
+  if (body && typeof body === "object") console.warn(`CSP blocked: ${pick("effectiveDirective", "violated-directive", "effective-directive")} blocked ${pick("blockedURL", "blocked-uri")} on ${pick("documentURL", "document-uri")}`);
   res.sendStatus(204);
 };
 
