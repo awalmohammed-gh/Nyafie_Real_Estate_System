@@ -94,6 +94,34 @@ export const hotelTransaction = (hotelId, work) => mongoose.connection.transacti
   return work(property, session);
 });
 
+// "101, 102, 103" or ["101", "102"] -> ["101", "102"]; undefined when none are given
+const parseRoomTypeNumbers = (input, roomName) => {
+  if (input === undefined || input === null || input === "") return undefined;
+  const list = (Array.isArray(input) ? input : String(input).split(/[,\n]/)).map((value) => String(value).trim()).filter(Boolean);
+  if (list.length > 500 || list.some((value) => value.length > 20 || !/^[\w .\-/#]+$/.test(value))) throw new HttpError(400, `Check the room numbers for ${roomName}: up to 500, each under 20 letters or digits.`);
+  if (new Set(list.map((value) => value.toLowerCase())).size !== list.length) throw new HttpError(400, `A room number is listed twice for ${roomName}.`);
+  return list.length ? list : undefined;
+};
+
+// Check-in and check-out times and star rating, keeping what isn't sent
+const HOTEL_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+const parseHotelInfo = (input, current = {}) => {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new HttpError(400, "Invalid hotel details.");
+  const saved = current?.toObject?.() || current || {};
+  const next = { checkInFrom: saved.checkInFrom || "14:00", checkOutBy: saved.checkOutBy || "11:00", starRating: saved.starRating || 0 };
+  for (const key of ["checkInFrom", "checkOutBy"]) {
+    if (input[key] === undefined) continue;
+    if (typeof input[key] !== "string" || !HOTEL_TIME.test(input[key])) throw new HttpError(400, "Enter check-in and check-out as times, e.g. 14:00.");
+    next[key] = input[key];
+  }
+  if (input.starRating !== undefined) {
+    const stars = Number(input.starRating);
+    if (!Number.isInteger(stars) || stars < 0 || stars > 5) throw new HttpError(400, "Choose 0 to 5 stars.");
+    next.starRating = stars;
+  }
+  return next;
+};
+
 export const prepareHotelFields = async (fields, body, existing = null, imageLimit = 8, uploaderIds = []) => {
   const hotel = isHotel({ propertyType: fields.propertyType ?? existing?.propertyType });
   // Hotels and per-night rentals: how guests may pay (anything else ignores these options)
@@ -106,9 +134,11 @@ export const prepareHotelFields = async (fields, body, existing = null, imageLim
   }
   fields.listingType = "Rent";
   fields.pricePeriod = "night";
+  if (body.hotelInfo !== undefined) fields.hotelInfo = parseHotelInfo(body.hotelInfo, existing?.hotelInfo);
   if (body.roomTypes !== undefined) {
     if (!Array.isArray(body.roomTypes) || body.roomTypes.length > 40) throw new HttpError(400, "Add up to 40 room types per hotel.");
     const ids = new Set();
+    const numbersInHotel = new Set(); // a room number belongs to one room type only
     fields.roomTypes = [];
     for (const input of body.roomTypes) {
       if (!input || typeof input !== "object") throw new HttpError(400, "Invalid room type.");
@@ -122,10 +152,18 @@ export const prepareHotelFields = async (fields, body, existing = null, imageLim
       if (input.active !== undefined && typeof input.active !== "boolean") throw new HttpError(400, "Room active state must be true or false.");
       if (!Array.isArray(input.images) || !withinImageLimit(input.images, imageLimit, (id && existing?.roomTypes.id(id)?.images) || [])) throw new HttpError(400, `Your plan supports up to ${imageLimit} photos per room type. Upgrade your plan to add more photos.`);
       if (!Array.isArray(input.amenities) || input.amenities.length > 40 || input.amenities.some((a) => typeof a !== "string" || !a.trim() || a.length > 100)) throw new HttpError(400, "Add up to 40 room amenities, each under 100 characters.");
+      // Optional room numbers: when given, they are the rooms of this type (the quantity follows them)
+      const roomNumbers = parseRoomTypeNumbers(input.roomNumbers, name);
+      for (const number of roomNumbers || []) {
+        const key = number.toLowerCase();
+        if (numbersInHotel.has(key)) throw new HttpError(400, `Room ${number} is listed under two room types. Each room number belongs to one room type.`);
+        numbersInHotel.add(key);
+      }
       fields.roomTypes.push({
         ...(id ? { _id: id } : {}), name, description, bedType,
         pricePerNight: Math.round(price * 100) / 100,
-        quantity: whole(input.quantity, 0, 10000, "Room quantity"),
+        quantity: roomNumbers?.length ? roomNumbers.length : whole(input.quantity, 0, 10000, "Room quantity"),
+        ...(roomNumbers?.length ? { roomNumbers } : {}),
         maxGuests: whole(input.maxGuests, 1, 50, "Maximum guests"), beds: whole(input.beds, 1, 30, "Beds"),
         size, sizeUnit: input.sizeUnit === "sqft" ? "sqft" : "sqm",
         active: input.active !== false, images: await resolveImages(input.images, { current: listingImages(existing), uploaderIds }), amenities: [...new Set(input.amenities.map((a) => a.trim()))],

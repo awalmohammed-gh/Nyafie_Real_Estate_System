@@ -1,6 +1,8 @@
 export const isHotel = (property) => property?.property?.type?.toLowerCase() === "hotel";
-export const roomToForm = (room) => ({ ...room, _key: room.id, images: (room.images || []).map((src, i) => ({ id: `${room.id}-${i}`, src, name: `Room photo ${i + 1}`, status: "done", progress: 100 })) });
-export const roomsToPayload = (rooms) => rooms.map(({ _key: _unused, images, ...room }) => ({ ...room, images: images.filter((img) => img.status === "done").map((img) => img.src) }));
+// Room numbers are edited as text ("101, 102, 103") and sent as text; the server splits and checks them
+export const roomNumberList = (text) => String(text || "").split(/[,\n]/).map((value) => value.trim()).filter(Boolean);
+export const roomToForm = (room) => ({ ...room, roomNumbersText: (room.roomNumbers || []).join(", "), _key: room.id, images: (room.images || []).map((src, i) => ({ id: `${room.id}-${i}`, src, name: `Room photo ${i + 1}`, status: "done", progress: 100 })) });
+export const roomsToPayload = (rooms) => rooms.map(({ _key: _unused, roomNumbersText, roomNumbers: _numbers, images, ...room }) => ({ ...room, roomNumbers: roomNumbersText ?? "", images: images.filter((img) => img.status === "done").map((img) => img.src) }));
 export const roomPrice = (price, currency = "GHS") => new Intl.NumberFormat("en-GH", { style: "currency", currency, maximumFractionDigits: 2 }).format(price);
 export const today = () => new Date().toISOString().slice(0, 10);
 export const tomorrow = (day = today()) => {

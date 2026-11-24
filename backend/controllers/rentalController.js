@@ -234,7 +234,15 @@ export const myRentals = async (req, res) => {
 export const ownerRentals = async (req, res) => {
   await expireUnansweredBookings(ownerFilter(req.user));
   const rentals = await populateRental(Rental.find(ownerFilter(req.user)).sort({ createdAt: -1 }));
-  ok(res, rentals.map((r) => presentRental(r, req.user)));
+  // Hotel bookings waiting for approval: the rooms of their room type, for the hotel to pick from
+  const waiting = rentals.filter((r) => r.hotelId && isAwaitingApproval(r));
+  const hotels = waiting.length ? await Property.find({ _id: { $in: [...new Set(waiting.map((r) => String(r.hotelId)))] } }).select("roomTypes._id roomTypes.roomNumbers").lean() : [];
+  const roomsOf = new Map(hotels.flatMap((hotel) => (hotel.roomTypes || []).map((room) => [`${hotel._id}:${room._id}`, room.roomNumbers || []])));
+  ok(res, rentals.map((r) => {
+    const presented = presentRental(r, req.user);
+    const roomOptions = r.hotelId && isAwaitingApproval(r) ? roomsOf.get(`${r.hotelId}:${r.roomTypeId}`) : null;
+    return roomOptions?.length ? { ...presented, roomOptions } : presented;
+  }));
 };
 
 // GET /api/rentals/:id
@@ -417,9 +425,16 @@ export const approveStayBooking = async (req, res) => {
   const roomNumbers = hotel ? parseRoomNumbers(req.body?.roomNumbers, rental.numberOfRooms || 1) : undefined;
   const note = cleanText(req.body?.note, 300);
   let paymentReceipt = null; // issued with this approval (online payments)
-  const updated = await bookingTransaction({ hotelId: rental.hotelId, property: rental.property?._id || rental.property }, async (_listing, session) => {
+  const updated = await bookingTransaction({ hotelId: rental.hotelId, property: rental.property?._id || rental.property }, async (listing, session) => {
     const current = await Rental.findById(rental._id).session(session);
     paymentReceipt = null;
+    // A room type with its room numbers listed: only those rooms can be given to its guests
+    const listed = hotel ? listing?.roomTypes?.id?.(current.roomTypeId)?.roomNumbers : null;
+    if (listed?.length) {
+      const known = new Set(listed.map((number) => number.toLowerCase()));
+      const unknown = roomNumbers.filter((number) => !known.has(number.toLowerCase()));
+      if (unknown.length) throw new HttpError(400, `Room ${unknown.join(", ")} isn't one of the ${current.roomName} rooms (${listed.join(", ")}).`);
+    }
     if (current.approvedAt) throw new HttpError(409, "This booking is already approved.");
     const waiting = (current.status === "confirmed" && current.paymentOption === "on_arrival") || current.status === "paid";
     if (!waiting || !current.approvalRequired) throw new HttpError(409, `Only a reservation waiting for the ${hotel ? "hotel" : "owner"} can be approved.`);

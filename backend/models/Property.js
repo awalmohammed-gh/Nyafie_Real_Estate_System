@@ -18,6 +18,13 @@ const stayBookingSchema = new mongoose.Schema({
   cancellationPolicy: { type: String, default: "", trim: true, maxlength: 800 }, // includes the no-show policy
 }, { _id: false });
 
+// Hotels only: check-in and check-out times (Ghana time) and the star rating the hotel states
+const hotelInfoSchema = new mongoose.Schema({
+  checkInFrom: { type: String, default: "14:00", match: /^([01]\d|2[0-3]):[0-5]\d$/ },
+  checkOutBy: { type: String, default: "11:00", match: /^([01]\d|2[0-3]):[0-5]\d$/ },
+  starRating: { type: Number, min: 0, max: 5, default: 0, validate: { validator: Number.isInteger, message: "Choose 0 to 5 stars." } },
+}, { _id: false });
+
 // Monthly rentals: what a tenant pays to move in besides the first rent (utils/moveIn.js). Shown
 // to customers as information; online rental payments still cover the booked rent only.
 const moveInSchema = new mongoose.Schema({
@@ -87,6 +94,7 @@ const propertySchema = new mongoose.Schema(
     virtualTour: { type: mediaLinkSchema, default: null },
     roomTypes: [roomTypeSchema],
     stayBooking: { type: stayBookingSchema, default: undefined },
+    hotelInfo: { type: hotelInfoSchema, default: undefined },
     moveIn: { type: moveInSchema, default: undefined },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true }, // agency staff member handling it (null: the owner)

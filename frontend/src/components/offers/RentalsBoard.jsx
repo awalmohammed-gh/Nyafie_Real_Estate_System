@@ -371,7 +371,15 @@ const RentalsBoard = ({ scope }) => {
             {roomNumbers.map((value, index) => (
               <label key={index} className="text-sm font-medium text-gray-700">
                 Room number{roomNumbers.length > 1 ? ` ${index + 1}` : ""}
-                <input required value={value} maxLength={20} onChange={(e) => setRoomNumbers((list) => list.map((item, i) => (i === index ? e.target.value : item)))} placeholder="e.g. 204" className="field mt-1" />
+                {confirm.rental.roomOptions.length ? (
+                  // The hotel listed this room type's rooms: pick one (each room once per booking)
+                  <select required value={value} onChange={(e) => setRoomNumbers((list) => list.map((item, i) => (i === index ? e.target.value : item)))} className="field mt-1">
+                    <option value="">Choose a room</option>
+                    {confirm.rental.roomOptions.filter((number) => number === value || !roomNumbers.includes(number)).map((number) => <option key={number} value={number}>Room {number}</option>)}
+                  </select>
+                ) : (
+                  <input required value={value} maxLength={20} onChange={(e) => setRoomNumbers((list) => list.map((item, i) => (i === index ? e.target.value : item)))} placeholder="e.g. 204" className="field mt-1" />
+                )}
               </label>
             ))}
           </div>

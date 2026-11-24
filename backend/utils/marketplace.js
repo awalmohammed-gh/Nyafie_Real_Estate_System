@@ -110,7 +110,7 @@ export const publicQuery = async () => {
 };
 
 // A single batch lookup supplies live profile data for every card, including aggregated results.
-export const presentProperties = async (properties, { includeAgentDetails = true } = {}) => {
+export const presentProperties = async (properties, { includeAgentDetails = true, includeRoomNumbers = false } = {}) => {
   // Agency listings name the staff member assigned to them, with the agency's name and logo
   const agentListings = includeAgentDetails ? properties.filter((property) => property.ownerType === "agent") : [];
   const ids = [...new Set(agentListings.flatMap((property) => [property.owner, property.assignedTo]).filter(Boolean).map(String))];
@@ -134,6 +134,8 @@ export const presentProperties = async (properties, { includeAgentDetails = true
   const agents = new Map(agentListings.map((property) => [String(property._id), agentFor(property)]));
   return properties.map((property) => {
     const data = property.toJSON();
+    // A hotel's room numbers are for the hotel (approvals) and admins, never public pages
+    if (!includeRoomNumbers && Array.isArray(data.roomTypes)) data.roomTypes = data.roomTypes.map(({ roomNumbers: _numbers, ...room }) => room);
     if (property.ownerType === "agent") {
       if (!includeAgentDetails) {
         delete data.agent;

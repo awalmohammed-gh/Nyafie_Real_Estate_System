@@ -284,3 +284,19 @@ test("reservations made before approvals existed keep working: they check in wit
   assert.equal(res.statusCode, 200, res.body?.message);
   assert.equal(rental.status, "active");
 });
+
+test("hotels: when a room type lists its room numbers, approval can only assign those rooms", async (t) => {
+  const hotelDoc = new Property({ title: "Palm Hotel", propertyType: "Hotel", listingType: "Rent", pricePeriod: "night", price: 300, owner: AGENT._id, ownerType: "agent", roomTypes: [{ name: "Deluxe", pricePerNight: 300, quantity: 2, maxGuests: 2, beds: 1, bedType: "King", roomNumbers: ["101", "102"] }] });
+  const rental = fakeRental({ hotelId: hotelDoc._id, roomTypeId: hotelDoc.roomTypes[0]._id, roomName: "Deluxe", numberOfRooms: 1, pricePeriod: "night", amount: 300, status: "confirmed", paymentOption: "on_arrival", paymentStatus: "due", arrivalTime: "15:00", approvalRequired: true, property: { title: "Palm Hotel", listingType: "Rent", pricePeriod: "night", propertyType: "Hotel" } });
+  world(t, rental);
+  Property.findOneAndUpdate.mock.mockImplementation(() => query(hotelDoc)); // the locked hotel, with its rooms
+  t.mock.method(Rental, "findOne", () => query(null));
+  t.mock.method(bookingConfirmationMailer, "send", async () => {});
+  await assert.rejects(approveHotelBooking(owner({ roomNumbers: ["305"] }), response()), /Room 305 isn't one of the Deluxe rooms \(101, 102\)/);
+  assert.equal(rental.approvedAt, undefined);
+  const res = response();
+  await approveHotelBooking(owner({ roomNumbers: ["102"] }), res);
+  assert.equal(res.statusCode, 200, res.body?.message);
+  assert.deepEqual(rental.roomNumbers, ["102"]);
+});
+

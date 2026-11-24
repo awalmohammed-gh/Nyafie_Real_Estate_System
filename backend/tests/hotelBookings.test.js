@@ -78,3 +78,32 @@ test("existing room IDs cannot be deleted, moved to another hotel or replaced", 
   assert.equal(fields.roomTypes[0].active, false);
   assert.equal(String(fields.roomTypes[0]._id), property.roomTypes[0].id);
 });
+
+test("room numbers: listed per room type, the room count follows them, and no number is in two types", async () => {
+  const fields = { propertyType: "Hotel" };
+  await prepareHotelFields(fields, { roomTypes: [
+    { ...room, name: "Deluxe", quantity: 99, roomNumbers: "101, 102,103" },
+    { ...room, name: "Suite", quantity: 2, roomNumbers: ["201", "202"] },
+    { ...room, name: "Standard", quantity: 4 },
+  ] });
+  assert.deepEqual(fields.roomTypes[0].roomNumbers, ["101", "102", "103"]);
+  assert.equal(fields.roomTypes[0].quantity, 3, "the count follows the listed rooms");
+  assert.deepEqual(fields.roomTypes[1].roomNumbers, ["201", "202"]);
+  assert.equal(fields.roomTypes[2].roomNumbers, undefined, "listing room numbers is optional");
+  assert.equal(fields.roomTypes[2].quantity, 4);
+  await assert.rejects(prepareHotelFields({ propertyType: "Hotel" }, { roomTypes: [{ ...room, name: "A", roomNumbers: ["101"] }, { ...room, name: "B", roomNumbers: ["101"] }] }), /Room 101 is listed under two room types/);
+  await assert.rejects(prepareHotelFields({ propertyType: "Hotel" }, { roomTypes: [{ ...room, roomNumbers: ["101", "101"] }] }), /listed twice/);
+  await assert.rejects(prepareHotelFields({ propertyType: "Hotel" }, { roomTypes: [{ ...room, roomNumbers: ["<script>"] }] }), { status: 400 });
+});
+
+test("hotel details: check-in and check-out times and stars, keeping what isn't sent", async () => {
+  const fields = { propertyType: "Hotel" };
+  await prepareHotelFields(fields, { hotelInfo: { checkInFrom: "13:00", starRating: 4 } });
+  assert.deepEqual(fields.hotelInfo, { checkInFrom: "13:00", checkOutBy: "11:00", starRating: 4 });
+  const again = { propertyType: "Hotel" };
+  await prepareHotelFields(again, { hotelInfo: { checkOutBy: "12:00" } }, { propertyType: "Hotel", roomTypes: [], hotelInfo: fields.hotelInfo });
+  assert.deepEqual(again.hotelInfo, { checkInFrom: "13:00", checkOutBy: "12:00", starRating: 4 });
+  for (const bad of [{ starRating: 6 }, { starRating: 2.5 }, { checkInFrom: "2pm" }, null, []]) {
+    await assert.rejects(prepareHotelFields({ propertyType: "Hotel" }, { hotelInfo: bad }), { status: 400 }, JSON.stringify(bad));
+  }
+});
