@@ -84,7 +84,7 @@ test("hotel marketplace: HTTP ownership, booking, payment, inventory and concurr
   const created = await api("/properties", { user: owner, body: { title: "Test Hotel", description: "A welcoming hotel in Accra with a pool and restaurant.", propertyType: "Hotel", listingType: "Sale", price: 1, status: "published", location: { neighbourhood: "Airport", city: "Accra", address: "1 Airport Road" }, area: 500, images: ["/hero/resort-pool.jpg"], amenities: ["Swimming pool", "Restaurant"], roomTypes: [room], owner: stranger.id, stayBooking: { payOnArrival: true, payOnline: true, arrivalDeadline: "14:00", cancellationPolicy: "Free cancellation until the day before arrival. No-shows are charged one night." } } });
   assert.equal(created.code, 201, JSON.stringify(created));
   const hotelId = created.data.id, roomId = created.data.roomTypes[0].id;
-  const selection = { propertyId: hotelId, roomTypeId: roomId, checkIn: "2030-01-01", checkOut: "2030-01-04", guests: 4, numberOfRooms: 2, fullName: "Test Guest", email: customer.email, phone: customer.phone, amount: 1, pricePerNight: 1, customerId: customer2.id, paymentStatus: "paid" };
+  const selection = { propertyId: hotelId, roomTypeId: roomId, checkIn: "2030-01-01", checkOut: "2030-01-04", guests: 4, numberOfRooms: 2, fullName: "Test Guest", email: customer.email, phone: customer.phone, arrivalTime: "14:00", amount: 1, pricePerNight: 1, customerId: customer2.id, paymentStatus: "paid" };
   const book = async (user = customer, extra = {}) => api("/rentals", { user, body: { ...selection, ...extra } });
   let booking, checkout;
   await t.test("Hotel creation derives its mode, starting price and owner; guest room responses separate amenities", async () => {

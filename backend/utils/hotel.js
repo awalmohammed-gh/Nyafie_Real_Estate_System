@@ -97,7 +97,7 @@ export const hotelTransaction = (hotelId, work) => mongoose.connection.transacti
 export const prepareHotelFields = async (fields, body, existing = null, imageLimit = 8, uploaderIds = []) => {
   const hotel = isHotel({ propertyType: fields.propertyType ?? existing?.propertyType });
   // Hotels and per-night rentals: how guests may pay (anything else ignores these options)
-  const stay = { propertyType: fields.propertyType ?? existing?.propertyType, listingType: hotel ? "Rent" : fields.listingType ?? existing?.listingType, pricePeriod: hotel ? "night" : fields.pricePeriod ?? existing?.pricePeriod, stayBooking: existing?.stayBooking };
+  const stay = { ownerType: existing?.ownerType, propertyType: fields.propertyType ?? existing?.propertyType, listingType: hotel ? "Rent" : fields.listingType ?? existing?.listingType, pricePeriod: hotel ? "night" : fields.pricePeriod ?? existing?.pricePeriod, stayBooking: existing?.stayBooking };
   if (body.stayBooking !== undefined && takesStayBookings(stay)) fields.stayBooking = parseStayBooking(body.stayBooking, stay);
   if (existing?.roomTypes?.length && !hotel) throw new HttpError(400, "A hotel with room types must remain a hotel. Archive its room types instead.");
   if (!hotel) {

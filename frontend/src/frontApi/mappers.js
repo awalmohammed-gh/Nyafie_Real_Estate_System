@@ -417,6 +417,8 @@ export const mapRental = (r) => ({
   paysAtOffice: Boolean(r.paysAtOffice), // monthly and fixed-price rent: never paid online
   receipt: mapReceipt(r.receipt),
   arrivalDeadline: r.arrivalDeadline || null,
+  arrivalTime: r.arrivalTime || "", // stays: when the guest said they'll arrive ("15:30", Ghana time)
+  bookingCode: r.bookingCode || "", // stays: shown at the hotel or to the owner on arrival
   cancellationPolicy: r.cancellationPolicy || "",
   contactName: r.contactName,
   contactPhone: r.contactPhone,

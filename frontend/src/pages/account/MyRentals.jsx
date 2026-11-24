@@ -17,6 +17,7 @@ import { formatGhs } from "../../utils/property";
 import { AskAgentToUpdate } from "../../components/reports/PaymentSafety";
 import { usePlatform } from "../../context/usePlatform";
 import ReceiptCard from "../../components/receipts/ReceiptCard";
+import BookingPass from "../../components/receipts/BookingPass";
 
 // What each rental status means for the customer
 const statusHelp = {
@@ -48,6 +49,13 @@ const MyRentals = () => {
   useEffect(() => {
     rentalApi.getMyRentals().then(setRentals).catch((err) => setError(err.message));
   }, []);
+  // Stays: the guest tells the hotel or owner a new arrival time (the server checks it's allowed)
+  const changeArrival = (rental) => async (time) => {
+    const updated = await rentalApi.updateArrivalTime(rental.id, time);
+    setRentals((list) => list.map((r) => (r.id === updated.id ? updated : r)));
+  };
+  const today = new Date().toISOString().slice(0, 10);
+  const canChangeArrival = (rental) => ["pending", "payment_pending", "paid", "confirmed"].includes(rental.statusKey) && String(rental.startDate).slice(0, 10) >= today;
 
   return (
     <AccountShell title="My Rentals & Hotel Bookings" description="Your rentals and hotel stays, with payment and booking status.">
@@ -125,6 +133,7 @@ const MyRentals = () => {
                     {!office && !headline && !(dueOnArrival && rental.statusKey === "confirmed") && <p className="mt-3 text-sm text-gray-600">{rental.hotelId ? ({ Pending: "Choose how to pay to reserve your rooms.", "Payment Pending": "Your secure checkout is in progress. Room holds last 30 minutes.", Paid: "Payment verified. The hotel will confirm your stay.", Confirmed: "Your hotel stay is confirmed.", Active: "You have checked in. Enjoy your stay!", Completed: "Your hotel stay has ended.", Cancelled: "This hotel booking was cancelled." })[rental.status] : rental.pricePeriod === "night" && rental.status === "Pending" ? "Choose how to pay to book this stay." : statusHelp[rental.status]}</p>}
                     {rental.hotelId && <p className="mt-1 text-xs text-gray-500">{formatGhs(rental.unitPrice)} / night × {rental.units} nights × {rental.numberOfRooms} rooms</p>}
                     {rental.hotelId && rental.paymentStatus === "Paid" && !rental.receipt && rental.statusKey !== "cancelled" && <p className="mt-1 text-xs text-gray-500">The hotel will send you a receipt for this payment.</p>}
+                    {["paid", "confirmed", "active"].includes(rental.statusKey) && <BookingPass booking={rental} onChangeArrival={canChangeArrival(rental) ? changeArrival(rental) : undefined} className="mt-3" />}
                     <ReceiptCard receipt={rental.receipt} className="mt-3" />
                     {rental.reference && (
                       <p className="mt-1 text-xs text-gray-400">

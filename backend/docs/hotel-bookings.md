@@ -37,7 +37,9 @@ The integration test uses a temporary database directory and random loopback por
 
 ## How guests pay (per hotel)
 
-Each hotel chooses, in the listing editor under **How guests pay**, one or both of:
+NyaFie never holds guests' money, so **reserve now, pay at the hotel is always offered** (it can't be switched off). Every booking asks for the guest's **arrival time** on the check-in day (no later than the hotel's arrival deadline; the guest can change it until check-in and the hotel is told) and gets a **booking code** (`NF-7KQ9PX`), emailed with the confirmation and shown in the guest's account, to show at the front desk. An agent hotel may additionally offer online payment, paid straight into its own payout account; the platform's own hotels are paid at the hotel only.
+
+Each hotel's options, in the listing editor under **How guests pay**:
 
 - **Reserve now, pay at the hotel** (default for every hotel, including hotels saved before this option existed). `POST /api/rentals/:id/reserve` runs the same transaction and inventory check as a checkout, then confirms the reservation: `status: confirmed`, `paymentStatus: due`, `paymentOption: on_arrival`. The reservation stores the arrival deadline (check-in day + the hotel's time, Ghana/GMT) and a copy of the hotel's cancellation and no-show policy. No money passes through NyaFie, so this works when online payments are off. Not allowed while an online checkout for the same booking is still inside its 30-minute hold.
   - The hotel records the payment with `PATCH /api/rentals/:id/paid-on-arrival`. A stay with payment still due cannot be marked completed.

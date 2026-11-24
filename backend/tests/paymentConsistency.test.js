@@ -199,31 +199,20 @@ test("failed verification still resets an open unpaid checkout for another attem
   assert.equal(f.stored.rental.history[0].note, "Payment not completed");
 });
 
-test("a failed checkout-start response cannot reopen a rental cancelled while Paystack was responding", async (t) => {
+test("rentals and short stays can't start an online checkout: Paystack is never contacted", async (t) => {
   const f = fixture(t);
-  const property = new Property({
-    _id: f.stored.rental.property, owner: f.stored.rental.owner, ownerType: "agent",
-    title: "Test rental", propertyType: "Apartment", listingType: "Rent",
-    status: "published", availability: "Available", currency: "GHS", price: 100, pricePeriod: "month",
-  });
-  t.mock.method(Setting, "findOneAndUpdate", () => ({ lean: async () => ({ payments: { rentalsEnabled: true }, agent: { requireSubscription: false } }) }));
-  t.mock.method(User, "find", () => ({ select: () => ({ populate: async () => [] }) }));
-  t.mock.method(User, "aggregate", fakeListedAgents([]));
-  t.mock.method(Property, "findOne", () => ({ session: async () => property }));
   t.mock.method(Rental, "findOne", () => f.query("rental", Rental));
-  f.provider("failed", () => { f.stored.rental.status = "cancelled"; }, false);
-  t.mock.method(console, "error", () => {});
+  let contacted = false;
+  t.mock.method(globalThis, "fetch", async () => { contacted = true; throw new Error("Paystack must not be called"); });
   const res = response();
   await initializeRentalPayment({
     body: { rentalId: String(f.stored.rental._id) },
     user: { _id: f.stored.rental.customer, role: "user", email: "guest@example.test" },
     get: () => undefined,
   }, res);
-  assert.equal(res.code, 502);
-  assert.equal(f.stored.rental.status, "cancelled");
-  assert.equal(f.stored.payment.status, "failed");
-  assert.equal(f.stored.payment.note, "Paystack could not start the checkout");
-  assert.equal(f.stored.rental.history.length, 1, "only the checkout-start entry is added before cancellation");
+  assert.equal(res.code, 409);
+  assert.equal(contacted, false);
+  assert.equal(f.stored.rental.status, "payment_pending", "the booking is unchanged");
 });
 
 test("a stale failure cannot overwrite a newer checkout reference", async (t) => {

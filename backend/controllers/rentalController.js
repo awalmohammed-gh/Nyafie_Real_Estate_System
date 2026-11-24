@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import Rental from "../models/Rental.js";
+import Property from "../models/Property.js";
 import { postSystemNote } from "./chatController.js";
 import { canManageRecord, formatGHS, isOwnListing, loadPublishedProperty, ownerFilter, ownerName, REQUEST_PROPERTY_FIELDS, same } from "../utils/ownership.js";
 import { notifyOwner, notifyUser } from "../utils/notify.js";
@@ -13,6 +14,8 @@ import Payment from "../models/Payment.js";
 import { newReference } from "../utils/paystack.js";
 import { OFFICE_METHOD, paysAtOffice } from "../utils/officePayments.js";
 import { buildReceipt, deliverReceipt, presentReceipt } from "../utils/receipts.js";
+import { newBookingCode, parseArrivalTime } from "../utils/stayBooking.js";
+import { takesStayBookings } from "../utils/hotelPayout.js";
 
 // What the customer is told about their money when a paid booking is cancelled
 const refundNotice = (flagged, cancelledPaid, fallback) => {
@@ -145,11 +148,13 @@ export const createRental = async (req, res) => {
   const { property } = quote;
   const tooMany = await openRequestLimitProblem("rentals", req.user._id, property._id);
   if (tooMany) return fail(res, 429, tooMany);
-  if (quote.room) return createHotelRental(req, res, quote, contact);
+  // Stays: the guest says when they're arriving, so the hotel or owner can expect them
+  const arrivalTime = takesStayBookings(property) ? parseArrivalTime(req.body.arrivalTime, property) : undefined;
+  if (quote.room) return createHotelRental(req, res, quote, { ...contact, arrivalTime });
   const addressProblem = validateContact({ ...req.body, email: req.user.email }, { requireAddress: true });
   if (addressProblem.error) return fail(res, 400, addressProblem.error);
 
-  const { rental, isNew } = await saveRegularRentalRequest(req, property, contact);
+  const { rental, isNew } = await saveRegularRentalRequest(req, property, { ...contact, ...(arrivalTime ? { arrivalTime } : {}) });
 
   if (isNew) {
     const office = paysAtOffice(property);
@@ -183,6 +188,8 @@ const saveRegularRentalRequest = (req, initial, contact) => rentalInventoryTrans
   const isNew = !rental;
   if (rental) rental.set({ ...fields, status: "pending" });
   else rental = new Rental({ customer: req.user._id, property: property._id, ...fields });
+  // Per-night stays get a booking code to show on arrival
+  if (fields.arrivalTime && !rental.bookingCode) rental.bookingCode = newBookingCode();
   addHistory(rental, req.user, isNew ? "Rental request submitted" : "Rental details updated");
   await rental.save({ session });
   return { rental, isNew };
@@ -202,12 +209,13 @@ const createHotelRental = async (req, res, quote, contact) => {
       pricePeriod: "night", unitPrice: verified.room.pricePerNight, units: verified.units,
       numberOfRooms: verified.numberOfRooms, occupants: verified.guests,
       amount: verified.amount, fees: 0, ...contact, notes: cleanText(req.body.notes),
+      bookingCode: newBookingCode(), // shown at the hotel on arrival
     });
     addHistory(doc, req.user, `Hotel booking requested: ${verified.room.name}`);
     await doc.save({ session });
     return doc;
   });
-  await notifyOwner(rental, { type: "rental", title: "New hotel booking request", message: `${contact.contactName} requested ${rental.numberOfRooms} ${room.name} room(s) at "${property.title}".`, path: "rentals" });
+  await notifyOwner(rental, { type: "rental", title: "New hotel booking request", message: `${contact.contactName} requested ${rental.numberOfRooms} ${room.name} room(s) at "${property.title}", arriving ${toDay(rental.startDate)} at ${rental.arrivalTime}.`, path: "rentals" });
   return ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), "Hotel booking details saved", 201);
 };
 
@@ -362,6 +370,21 @@ export const sendRentalReceipt = async (req, res) => {
   });
   await deliverReceipt({ customer: rental.customer._id, email: updated.contactEmail, receipt: updated.receipt, link: "/account/rentals" });
   ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), "Receipt sent");
+};
+
+// PATCH /api/rentals/:id/arrival { arrivalTime } -> the guest changes when they'll arrive (stays only,
+// until the check-in day is over). The hotel or owner is told straight away.
+export const updateArrivalTime = async (req, res) => {
+  const rental = mongoose.isValidObjectId(req.params.id) ? await populateRental(Rental.findOne({ _id: req.params.id, customer: req.user._id })) : null;
+  if (!rental || !(rental.hotelId || rental.pricePeriod === "night")) return fail(res, 404, "Booking not found.");
+  if (!["pending", "payment_pending", "paid", "confirmed"].includes(rental.status) || todayUTC() > rental.startDate) return fail(res, 409, "The arrival time can only be changed before you check in.");
+  const listing = await Property.findById(rental.hotelId || rental.property?._id || rental.property).select("propertyType listingType pricePeriod ownerType stayBooking");
+  const arrivalTime = parseArrivalTime(req.body?.arrivalTime, listing);
+  if (arrivalTime === rental.arrivalTime) return ok(res, presentRental(rental, req.user), "Arrival time unchanged");
+  const previous = rental.arrivalTime;
+  await Rental.updateOne({ _id: rental._id, customer: req.user._id }, { $set: { arrivalTime, ...(rental.bookingCode ? {} : { bookingCode: newBookingCode() }) }, $push: { history: { status: rental.status, paymentStatus: rental.paymentStatus, note: `Arrival time ${previous ? `changed from ${previous} ` : ""}set to ${arrivalTime}`, by: req.user._id } } });
+  await notifyOwner(rental, { type: "rental", title: "Guest arrival time changed", message: `${rental.contactName} will now arrive on ${toDay(rental.startDate)} at ${arrivalTime}${previous ? ` (was ${previous})` : ""}${rental.bookingCode ? ` · booking ${rental.bookingCode}` : ""}.`, path: "rentals" });
+  ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), "Arrival time updated");
 };
 
 // PATCH /api/rentals/:id/cancel -> the guest cancels an unpaid hotel request, or a pay-on-arrival
