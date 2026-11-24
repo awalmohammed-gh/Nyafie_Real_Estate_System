@@ -37,7 +37,7 @@ const HotelRooms = ({ property, canBook = true }) => {
       <label className="text-xs font-medium text-gray-700">Guests (total)<input type="number" min="1" max="50" step="1" required value={selection.guests} onChange={set("guests")} className="field mt-1.5" /></label>
       <label className="text-xs font-medium text-gray-700">Number of rooms<input type="number" min="1" max="10000" step="1" required value={selection.numberOfRooms} onChange={set("numberOfRooms")} className="field mt-1.5" /></label>
       <button type="submit" disabled={busy} className="btn btn-primary sm:col-span-2">{busy && <Loader2 className="h-4 w-4 animate-spin" />}Check availability</button>
-      <p aria-live="polite" className="text-xs text-gray-500 sm:col-span-2">{checked ? "Availability checked for your dates. Rooms are reserved when you begin payment." : "Choose your dates to see available rooms for the full stay."}</p>
+      <p aria-live="polite" className="text-xs text-gray-500 sm:col-span-2">{checked ? "Availability checked for your dates. Select a room to reserve it: you can pay at the hotel, and the hotel approves your booking and gives you your room number." : "Choose your dates to see available rooms for the full stay."}</p>
     </form>}
     {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     <div className="mt-6 space-y-5">{rooms.map((room) => <article key={room.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm sm:grid sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
