@@ -9,3 +9,5 @@ export const getPayout = async (hotelId) => (await client.get(`/properties/${hot
 // { type: "bank" | "mobile_money", bankCode, accountNumber, password }
 export const connectPayout = async (hotelId, details) => (await client.put(`/properties/${hotelId}/payout`, details)).data;
 export const disconnectPayout = async (hotelId) => (await client.delete(`/properties/${hotelId}/payout`)).data;
+// Cancel a payout change that is still on its 48-hour security hold
+export const cancelPayoutChange = async (hotelId) => (await client.delete(`/properties/${hotelId}/payout/pending`)).data;

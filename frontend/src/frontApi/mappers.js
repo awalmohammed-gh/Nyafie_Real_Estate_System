@@ -388,6 +388,9 @@ export const RENTAL_STATUS = {
 };
 const PAYMENT_STATUS = { pending: "Pending", paid: "Paid", failed: "Failed", duplicate: "Duplicate", refunded: "Refunded" };
 
+// A receipt the agent, agency or hotel gave the customer (backend utils/receipts.js), or null
+export const mapReceipt = (receipt) => (receipt?.number ? { ...receipt } : null);
+
 export const mapRental = (r) => ({
   id: r.id,
   hotelId: r.hotelId || null,
@@ -407,10 +410,12 @@ export const mapRental = (r) => ({
   amount: r.amount,
   statusKey: r.status,
   status: RENTAL_STATUS[r.status] || r.status,
-  paymentStatus: r.paymentStatus === "due" ? (r.hotelId ? "Due at hotel" : "Due on arrival") : PAYMENT_STATUS[r.paymentStatus] || r.paymentStatus,
-  paymentDue: r.paymentStatus === "due", // reserved; the guest pays the hotel or owner on arrival
+  paymentStatus: r.paymentStatus === "due" ? (r.paymentOption === "office" ? "Due at the office" : r.hotelId ? "Due at hotel" : "Due on arrival") : PAYMENT_STATUS[r.paymentStatus] || r.paymentStatus,
+  paymentDue: r.paymentStatus === "due", // reserved; the guest pays the hotel, the owner on arrival, or at the office
   paymentMethod: r.paymentMethod,
-  paymentOption: r.paymentOption || null, // stays: "online" | "on_arrival"
+  paymentOption: r.paymentOption || null, // "online" | "on_arrival" (stays) | "office" (monthly and fixed-price rent)
+  paysAtOffice: Boolean(r.paysAtOffice), // monthly and fixed-price rent: never paid online
+  receipt: mapReceipt(r.receipt),
   arrivalDeadline: r.arrivalDeadline || null,
   cancellationPolicy: r.cancellationPolicy || "",
   contactName: r.contactName,
@@ -460,6 +465,7 @@ export const mapSaleRequest = (s) => ({
   amountPaid: s.amountPaid,
   paymentConfirmedBy: s.paymentConfirmedBy,
   paymentConfirmedAt: s.paymentConfirmedAt,
+  receipt: mapReceipt(s.receipt),
   offer: s.offer, // the customer's latest offer on this property, if any
   conversationId: s.conversation || null,
   history: mapHistory(s.history).map((h) => ({ ...h, statusLabel: SALE_STATUS[h.status] || h.status })),

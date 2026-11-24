@@ -229,3 +229,25 @@ demo seed. A replica set (including MongoDB Atlas) is required to apply it.
 `views:reset` is a separate destructive reset of all totals and tracking windows;
 it is unnecessary for this cleanup. View records expire for deduplication, so they
 cannot be used to reconstruct historical totals or distinguish older refresh counts.
+
+## Where money is paid, and receipts
+
+- **Office only:** monthly and fixed-price rentals, and every house and land sale, are never paid
+  online (`utils/officePayments.js`). A rental request waits for the owner to confirm it
+  (`pending` → `confirmed`, which takes the dates; payment `due`, option `office`). The tenant pays
+  at the office and the owner records it (`PATCH /api/rentals/:id/paid-at-office`); only then can
+  the tenant be marked as moved in. `/api/payments/initialize` refuses these rentals. Sales record
+  the office payment with `PATCH /api/sale-requests/:id/confirm-payment` as before. Both are written
+  to the payment ledger as method `Office` (never reconciled with Paystack).
+- **Hotels and per-night stays** keep their options: pay online, or pay on arrival.
+- **Receipts** (`utils/receipts.js`): issued once, in the same transaction as the payment they
+  confirm, and sent to the customer in the app and by email (best effort; the receipt stays in
+  their account). Office rent, office sale payments and pay-at-hotel/on-arrival payments get theirs
+  when the owner records the payment. A hotel booking paid online into the hotel's payout account
+  needs the hotel to send it (`POST /api/rentals/:id/receipt`) before the stay can be checked in or
+  completed. Customers download receipts as PDFs from their account.
+- **Reviews** (`utils/reviewEligibility.js`): a new review needs a completed viewing, a rental or
+  stay the customer moved into or checked into, or a purchase paid at the office or completed.
+  Older reviews stay and remain editable.
+- **Admin sign-in** has two steps: the password, then a six-digit code emailed to the admin
+  (`controllers/adminSignInController.js`; `ADMIN_TWO_STEP=off` is an emergency switch only).

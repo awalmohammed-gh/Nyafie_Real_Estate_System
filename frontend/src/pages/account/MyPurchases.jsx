@@ -14,6 +14,7 @@ import { usePlatform } from "../../context/usePlatform";
 import { cloudImage } from "../../utils/cloudImage";
 import { formatGhs } from "../../utils/property";
 import { AskAgentToUpdate } from "../../components/reports/PaymentSafety";
+import ReceiptCard from "../../components/receipts/ReceiptCard";
 
 const CLOSED = ["completed", "cancelled", "rejected"];
 
@@ -24,8 +25,8 @@ const statusHelp = {
   offer_received: "The owner is reviewing your offer.",
   negotiating: "You're negotiating the price with the owner.",
   approved: "Your request was approved. The owner will send payment instructions.",
-  payment_pending: "Agree with the owner how to pay (in chat, by phone or in person). Only pay the owner or agent shown on this page, and keep a receipt.",
-  paid_at_office: "The owner confirmed your payment and is completing the sale.",
+  payment_pending: "Pay at the owner's or agent's office, once you've seen the property and its documents. Never pay online or to a personal or mobile money number. You get a receipt here when the payment is recorded.",
+  paid_at_office: "Your payment at the office was recorded and your receipt sent. The owner is completing the sale.",
   completed: "The sale is complete. Congratulations on your new property!",
   cancelled: "This purchase request was cancelled.",
   rejected: "The owner declined this purchase request.",
@@ -57,7 +58,7 @@ const MyPurchases = () => {
     <AccountShell title="My Purchases" description="Properties you've asked to buy, and where each request stands.">
       <p className="mb-6 flex items-start gap-3 rounded-2xl bg-sky-50 p-4 text-sm text-sky-800">
         <Info className="mt-0.5 h-5 w-5 shrink-0" />
-        Property purchases aren't paid online on {siteName}: you agree the payment directly with the owner. Never pay anything, online or in cash, until you've seen the property in person and the owner has confirmed your request here, and only pay the owner or agent shown on the listing.
+        Houses and land are never paid for online on {siteName}: you pay at the office of the owner or agent shown on the listing, and get a receipt. Never pay anything until you've seen the property in person and checked its documents, and never pay to a personal or mobile money number.
       </p>
       <AskAgentToUpdate kind="sale" siteName={siteName} className="mb-6" />
 
@@ -132,6 +133,7 @@ const MyPurchases = () => {
                         {req.paymentConfirmedBy && ` by ${req.paymentConfirmedBy.name}`}
                       </p>
                     )}
+                    <ReceiptCard receipt={req.receipt} className="mt-3" />
 
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                       {req.conversationId && (

@@ -12,7 +12,8 @@ export const getAdminSaleRequests = async () => (await client.get("/admin/sale-r
 
 // Owner side: status is an API key such as "contacted" or "payment_pending"
 export const updateSaleStatus = async (id, status, note = "") => mapSaleRequest((await client.patch(`/sale-requests/${id}/status`, { status, note })).data);
-export const confirmOfficePayment = async (id, amount, note = "") => mapSaleRequest((await client.patch(`/sale-requests/${id}/confirm-payment`, { amount, note })).data);
+// Owner side: the buyer paid at the office. Their receipt is issued and sent with it.
+export const confirmOfficePayment = async (id, amount, note = "", reference = "") => mapSaleRequest((await client.patch(`/sale-requests/${id}/confirm-payment`, { amount, note, reference })).data);
 export const completeSale = async (id) => mapSaleRequest((await client.patch(`/sale-requests/${id}/complete`)).data);
 
 // Customer: withdraw their own request

@@ -21,7 +21,8 @@ import { approvedAgent, validateAgentProfile } from "../utils/agentApplication.j
 import { canAccessAgent, agentDestination, sessionDestination } from "../../frontend/src/utils/sessionDomain.js";
 import { fakeListedAgents } from "./support/listedAgents.js";
 import PendingRegistration from "../models/PendingRegistration.js";
-import { verificationMailer } from "../utils/email.js";
+import { adminSignInMailer, verificationMailer } from "../utils/email.js";
+import AdminSignInCode from "../models/AdminSignInCode.js";
 import { memoryModel } from "./support/memoryModels.js";
 
 test("agent permission and return navigation fail closed", () => {
@@ -93,6 +94,10 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
   Object.assign(process.env, { SMTP_USER: "sender@gmail.com", SMTP_APP_PASSWORD: "test-app-password" });
   t.after(() => { for (const [name, value] of Object.entries(smtp)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } });
   memoryModel(t, PendingRegistration);
+  // Admin sign-in emails a second-step code (controllers/adminSignInController.js)
+  const adminCodes = [];
+  t.mock.method(adminSignInMailer, "send", async (email, code) => { adminCodes.push({ email, code }); });
+  memoryModel(t, AdminSignInCode);
   // A finished sign-up saves a new User: it joins the same in-memory list
   replace(User.prototype, "save", async function save() {
     await User.schema.s.hooks.execPre("save", this, []);
@@ -129,7 +134,12 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
   const profile = { firstName: "Akua", lastName: "Mensah", phone: signup.phone, agentType: "individual", region: "Greater Accra", city: "East Legon", yearsExperience: 4, bio: "Helping buyers and renters find their next home." };
   let agent;
   try {
-    await call("/api/auth/admin/login", "admin", { email: admin.email, password: "StrongFixturePassword123" });
+    const adminStep = await call("/api/auth/admin/login", "admin", { email: admin.email, password: "StrongFixturePassword123" });
+    assert.equal(adminStep.status, 202, "an admin password alone doesn't sign in");
+    assert.equal(adminStep.headers.getSetCookie().some((cookie) => cookie.startsWith("admin_token=ey")), false);
+    const { challenge: adminChallenge } = (await adminStep.json()).data;
+    assert.equal((await call("/api/auth/admin/verify-email", "admin", { challenge: adminChallenge, code: "000000" })).status, 400);
+    assert.equal((await call("/api/auth/admin/verify-email", "admin", { challenge: adminChallenge, code: adminCodes.at(-1).code })).status, 200);
     await call("/api/auth/customer/login", "customer", { email: customer.email, password: "StrongFixturePassword123" });
     await t.test("registration hashes passwords, isolates cookies and ignores forged privileges", async () => {
       const started = await call("/api/auth/agent/register", "agent", { ...signup, role: "admin", isActive: false, agentId: id(admin), approvalStatus: "approved", agentApplication: { status: "approved", approvedBy: id(admin) } });

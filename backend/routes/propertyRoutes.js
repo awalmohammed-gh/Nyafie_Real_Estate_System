@@ -17,7 +17,7 @@ import { listPropertyReviews, submitReview } from "../controllers/reviewControll
 import { protectAgent, protectCustomer, protectOwner, optionalAuth, viewerSessions } from "../middleware/authMiddleware.js";
 import { agentOnly, activeSubscription } from "../middleware/agentMiddleware.js";
 import { hotelRooms, hotelQuote } from "../controllers/hotelController.js";
-import { payoutBanks, getHotelPayout, connectHotelPayout, disconnectHotelPayout } from "../controllers/hotelPayoutController.js";
+import { payoutBanks, getHotelPayout, connectHotelPayout, disconnectHotelPayout, cancelPayoutChange } from "../controllers/hotelPayoutController.js";
 import { limits } from "../middleware/security.js";
 import { listingInsights } from "../controllers/listingInsightsController.js";
 import { addDocument, getDocuments, ownerDocumentLink, removeDocument, reopenDocuments, submitDocuments } from "../controllers/documentCheckController.js";
@@ -43,6 +43,7 @@ router.get("/:id/payout", protectAgent, agentOnly, getHotelPayout);
 router.get("/:id/insights", protectOwner, listingInsights); // views per day, saves and leads (?days=14|30|90)
 router.put("/:id/payout", protectAgent, agentOnly, limits.payout, connectHotelPayout); // checks the password, calls Paystack
 router.delete("/:id/payout", protectAgent, agentOnly, disconnectHotelPayout);
+router.delete("/:id/payout/pending", protectAgent, agentOnly, cancelPayoutChange); // cancel a change still on its security hold
 router.patch("/:id/feature", protectAgent, agentOnly, activeSubscription, setFeatured);
 // Ownership documents for a sale listing: private files NyaFie checks for the "Documents checked" badge
 router.get("/:id/documents", protectAgent, agentOnly, getDocuments);

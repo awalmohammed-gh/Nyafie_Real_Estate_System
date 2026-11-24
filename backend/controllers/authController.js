@@ -10,6 +10,7 @@ import { loginAttempts, rejectLoginAttempt } from "../utils/loginAttempts.js";
 import { startEmailVerification } from "./emailVerificationController.js";
 import { pendingRegistrationFor, resumeRegistration, startRegistration } from "./registrationController.js";
 import { passwordProblem, validPasswordInput } from "../utils/passwordPolicy.js";
+import { adminTwoStepEnabled, startAdminSignIn } from "./adminSignInController.js";
 import { getSettings, siteName } from "../models/Setting.js";
 
 const isEmail = (value) => typeof value === "string" && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -144,6 +145,8 @@ export const loginFor = (session) => async (req, res) => {
   const cleared = await loginAttempts.success(email);
   if (cleared.retryAfter) return rejectLoginAttempt(res, cleared);
   if (session === "customer" && !user.emailVerifiedAt) return startEmailVerification(req, res, user);
+  // Admins: the password is only the first step; a code sent to their email is the second
+  if (session === "admin" && adminTwoStepEnabled()) return startAdminSignIn(res, user);
   setAuthCookie(res, user._id, session, user.sessionVersion, req.get(CUSTOMER_TAB_HEADER));
   ok(res, await loadUser(user._id), "Signed in");
 };

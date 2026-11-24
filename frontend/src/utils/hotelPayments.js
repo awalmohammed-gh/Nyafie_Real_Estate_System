@@ -42,4 +42,6 @@ export const pastArrivalDeadline = (booking, now = Date.now()) =>
 
 // Guests may cancel a pay-on-arrival reservation online until their check-in day (the server agrees)
 export const guestCanCancel = (booking, now = new Date()) =>
-  dueOnArrival(booking) && booking.statusKey === "confirmed" && now.toISOString().slice(0, 10) < String(booking.startDate).slice(0, 10);
+  // Office rentals (monthly and fixed-price rent) too: a request, or a confirmation not yet paid for
+  (booking.paysAtOffice && booking.statusKey === "pending") ||
+  ((dueOnArrival(booking) || (booking.paymentOption === "office" && booking.paymentDue)) && booking.statusKey === "confirmed" && now.toISOString().slice(0, 10) < String(booking.startDate).slice(0, 10));

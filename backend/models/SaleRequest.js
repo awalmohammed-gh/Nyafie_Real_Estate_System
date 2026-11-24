@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { schemaOptions } from "../utils/schemaOptions.js";
 import { historySchema } from "./historySchema.js";
+import { receiptSchema } from "./receiptSchema.js";
 
 export const SALE_STATUSES = [
   "pending",
@@ -15,7 +16,7 @@ export const SALE_STATUSES = [
   "rejected",
 ];
 export const CLOSED_SALE_STATUSES = ["completed", "cancelled", "rejected"];
-// Sale payments are never made online: the buyer and the owner agree how to pay (in chat, by phone or in person)
+// Sale payments are never made online: houses and land are paid for at the office, and the owner records it
 export const SALE_PAYMENT_STATUSES = ["pending", "payment_requested", "confirmed", "failed"];
 
 // A customer's request to buy a property ("Buy Now"). The owner contacts them,
@@ -38,6 +39,8 @@ const saleRequestSchema = new mongoose.Schema(
     amountPaid: { type: Number, default: null }, // recorded when the owner confirms the payment
     paymentConfirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     paymentConfirmedAt: { type: Date },
+    receipt: { type: receiptSchema, default: undefined }, // given to the buyer when the payment is recorded
+
     conversation: { type: mongoose.Schema.Types.ObjectId, ref: "Conversation" },
     history: [historySchema],
   },
@@ -48,5 +51,6 @@ const saleRequestSchema = new mongoose.Schema(
 saleRequestSchema.index({ customer: 1, createdAt: -1 });
 saleRequestSchema.index({ owner: 1, createdAt: -1 });
 saleRequestSchema.index({ createdAt: -1 });
+saleRequestSchema.index({ "receipt.number": 1 }, { unique: true, partialFilterExpression: { "receipt.number": { $type: "string" } } });
 
 export default mongoose.models.SaleRequest || mongoose.model("SaleRequest", saleRequestSchema);

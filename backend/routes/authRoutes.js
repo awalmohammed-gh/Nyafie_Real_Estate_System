@@ -8,6 +8,7 @@ import { verifyCustomerEmail, resendEmailVerification } from "../controllers/ema
 import { requestPasswordReset, resetCustomerPassword } from "../controllers/passwordResetController.js";
 import { createGoogleChallenge, googleCustomerLogin } from "../controllers/googleAuthController.js";
 import { completeRegistration, resendRegistrationCode } from "../controllers/registrationController.js";
+import { resendAdminSignIn, verifyAdminSignIn } from "../controllers/adminSignInController.js";
 
 const router = Router();
 // A stolen session or distributed IPs must not provide unlimited current-password guesses.
@@ -36,6 +37,10 @@ router.post("/customer/resend-verification", verificationLimit, resendEmailVerif
 const recoveryLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
 router.post("/customer/forgot-password", recoveryLimit, requestPasswordReset);
 router.post("/customer/reset-password", recoveryLimit, resetCustomerPassword);
+// Admin sign-in, second step: the code emailed after the password (shares the admin login flood limit)
+const adminCodeLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
+router.post("/admin/verify-email", adminCodeLimit, verifyAdminSignIn);
+router.post("/admin/resend-verification", adminCodeLimit, resendAdminSignIn);
 router.post("/agent/register", registerAgent);
 router.post("/agent/verify-email", verificationLimit, completeRegistration("agent"));
 router.post("/agent/resend-verification", verificationLimit, resendRegistrationCode("agent"));
