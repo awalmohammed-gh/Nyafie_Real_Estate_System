@@ -15,14 +15,14 @@ export const downloadBookingPass = (booking, siteName) => {
     return lines.length;
   };
   write(siteName, 18, 22, { size: 14, bold: true, color: "#3e0766" });
-  write("BOOKING PASS", 192, 22, { size: 9, color: "#64748b", align: "right" });
-  write("Show this booking code when you arrive", 18, 38, { size: 11, color: "#64748b" });
+  write("BOOKING RECEIPT", 192, 22, { size: 9, color: "#64748b", align: "right" });
+  write("Show this booking receipt when you arrive", 18, 38, { size: 11, color: "#64748b" });
   write(booking.bookingCode, 18, 54, { size: 30, bold: true });
   let y = 72;
   for (const [label, value] of bookingRows(booking)) {
     write(label, 18, y, { size: 9, color: "#64748b" });
     y += 7 * Math.max(1, write(value, 70, y, { size: 10, bold: true, width: 120 }));
   }
-  write("If your arrival time changes, update it in your account so they know when to expect you.", 18, y + 8, { size: 8, color: "#64748b", width: 170 });
-  doc.save(`booking-${safeText(booking.bookingCode)}.pdf`);
+  write("The hotel checks this booking code in its own bookings before you pay, so a changed or copied receipt won't work. If your arrival time changes, update it in your account so they know when to expect you.", 18, y + 8, { size: 8, color: "#64748b", width: 170 });
+  doc.save(`booking-receipt-${safeText(booking.bookingCode)}.pdf`);
 };
