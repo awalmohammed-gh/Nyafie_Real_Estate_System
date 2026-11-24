@@ -11,7 +11,7 @@ import { postSystemNote } from "./chatController.js";
 import { PAYMENT_HOLD, rentalInventoryTransaction } from "../utils/rentalAvailability.js";
 import { getSettings } from "../models/Setting.js";
 import { arrivalDeadlineFor, stayBookingSettings, stayPaymentOptions, payoutAccountFor, takesStayBookings } from "../utils/hotelPayout.js";
-import { newBookingCode, parseArrivalTime, sendBookingConfirmation } from "../utils/stayBooking.js";
+import { parseArrivalTime } from "../utils/stayBooking.js";
 import { notifyOwner, notifyUser } from "../utils/notify.js";
 import { formatGHS } from "../utils/ownership.js";
 
@@ -42,7 +42,7 @@ export const initializeHotelPayment = async (req, res, initial) => {
     if (rental.amount !== hotelPrice(rental.unitPrice, rental.units, rental.numberOfRooms)) throw new HttpError(409, "Booking total needs review. Please contact support.");
     const payment = new Payment({ kind: "rental", rental: rental._id, customer: req.user._id, property: hotel._id, owner: hotel.owner, ownerType: hotel.ownerType, amount: rental.amount, method: "Paystack", environment: paymentEnvironment(), subaccount, reference: newReference("HBH") });
     await payment.save({ session });
-    rental.set({ status: "payment_pending", paymentStatus: "pending", paymentOption: "online", paymentMethod: "Paystack", paymentReference: payment.reference, paymentStartedAt: new Date() });
+    rental.set({ status: "payment_pending", paymentStatus: "pending", paymentOption: "online", paymentMethod: "Paystack", paymentReference: payment.reference, paymentStartedAt: new Date(), approvalRequired: true });
     addHistory(rental, req.user, `Hotel checkout started: ${rental.numberOfRooms} ${rental.roomName} room(s)`);
     await rental.save({ session });
     return { payment, rental };
@@ -92,7 +92,7 @@ export const reserveOnArrival = async (req, res) => {
     rental.set({
       status: "confirmed", paymentStatus: "due", paymentOption: "on_arrival", paymentMethod: "At hotel",
       arrivalDeadline: arrivalDeadlineFor(rental.startDate, settings.arrivalDeadline), cancellationPolicy: settings.cancellationPolicy,
-      arrivalTime,
+      arrivalTime, approvalRequired: true, // the hotel approves it and assigns the rooms
     });
     // The earlier online attempt (if any) stays in the Payment ledger. If it still succeeds late,
     // confirmHotelPayment settles this reservation with it instead of charging twice.
@@ -134,11 +134,11 @@ const reserveRentalOnArrival = async (req, res, initial) => {
       amount: quote.amount, units: quote.units, unitPrice: quote.property.price,
       status: "confirmed", paymentStatus: "due", paymentOption: "on_arrival", paymentMethod: "On arrival",
       arrivalDeadline: arrivalDeadlineFor(rental.startDate, settings.arrivalDeadline), cancellationPolicy: settings.cancellationPolicy,
-      arrivalTime, bookingCode: rental.bookingCode || newBookingCode(),
+      arrivalTime, approvalRequired: true, // the owner approves it; the booking receipt comes then
     });
     // A lapsed online attempt stays in the Payment ledger; if it still succeeds, it settles this reservation
     rental.paymentReference = undefined;
-    addHistory(rental, req.user, "Reservation confirmed — payment due on arrival");
+    addHistory(rental, req.user, "Reserved — waiting for the owner to approve it; payment due on arrival");
     await rental.save({ session });
     return { rental };
   });
@@ -146,13 +146,12 @@ const reserveRentalOnArrival = async (req, res, initial) => {
     const day = toDay(rental.startDate);
     const arrive = `${day} at ${rental.arrivalTime}`;
     try {
-      const conversation = await postSystemNote(published, req.user._id, req.user, "customer", `Reserved ${day} – ${toDay(rental.endDate)}: ${formatGHS(rental.amount)} to pay on arrival. Arriving ${arrive}. Booking code ${rental.bookingCode}.`);
+      const conversation = await postSystemNote(published, req.user._id, req.user, "customer", `Reserved ${day} – ${toDay(rental.endDate)}: ${formatGHS(rental.amount)} to pay on arrival. Arriving ${arrive}. Please approve this booking.`);
       await Rental.updateOne({ _id: rental._id }, { $set: { conversation: conversation._id } });
     } catch (error) { console.error("Reservation chat note failed:", error.message); }
     await Promise.all([
-      notifyUser(req.user._id, { type: "rental", title: `Reservation confirmed · ${rental.bookingCode}`, message: `Your stay at "${published.title}" is reserved, arriving ${arrive}. Show booking code ${rental.bookingCode} and pay ${formatGHS(rental.amount)} when you arrive.`, link: "/account/rentals" }),
-      notifyOwner(rental, { type: "rental", title: "New reservation (pay on arrival)", message: `${rental.contactName} reserved "${published.title}", arriving ${arrive} · booking ${rental.bookingCode}. ${formatGHS(rental.amount)} is due on arrival.`, path: "rentals" }),
-      sendBookingConfirmation(rental, { place: published.title }),
+      notifyUser(req.user._id, { type: "rental", title: "Reservation sent to the owner", message: `Your dates at "${published.title}" are held, arriving ${arrive}. You'll get your booking receipt once the owner approves it. Pay ${formatGHS(rental.amount)} when you arrive.`, link: "/account/rentals" }),
+      notifyOwner(rental, { type: "rental", title: "New reservation to approve (pay on arrival)", message: `${rental.contactName} reserved "${published.title}", arriving ${arrive}. Approve it to send their booking receipt. ${formatGHS(rental.amount)} is due on arrival.`, path: "rentals" }),
     ]);
   }
   ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), repeated ? "Reservation already confirmed" : "Reservation confirmed");

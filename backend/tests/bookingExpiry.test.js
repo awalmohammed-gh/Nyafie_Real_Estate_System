@@ -26,13 +26,16 @@ test("a hotel must approve by 24 hours before check-in; last-minute bookings get
   assert.equal(approvalDeadline({ ...booking, createdAt: new Date("2030-06-10T14:00:00Z") }).toISOString(), "2030-06-10T15:00:00.000Z");
 });
 
-test("only hotel bookings still waiting for the hotel can expire", () => {
+test("only stays booked under the approval rule and still waiting can expire", () => {
   const hotelId = id();
-  assert.equal(isAwaitingApproval({ hotelId, status: "confirmed", paymentOption: "on_arrival" }), true);
-  assert.equal(isAwaitingApproval({ hotelId, status: "paid" }), true);
-  assert.equal(isAwaitingApproval({ hotelId, status: "confirmed", paymentOption: "on_arrival", approvedAt: new Date() }), false);
-  assert.equal(isAwaitingApproval({ hotelId, status: "active" }), false);
-  assert.equal(isAwaitingApproval({ status: "confirmed", paymentOption: "on_arrival" }), false, "not a hotel");
+  const rule = { approvalRequired: true };
+  assert.equal(isAwaitingApproval({ ...rule, hotelId, status: "confirmed", paymentOption: "on_arrival" }), true);
+  assert.equal(isAwaitingApproval({ ...rule, hotelId, status: "paid" }), true);
+  assert.equal(isAwaitingApproval({ ...rule, pricePeriod: "night", status: "confirmed", paymentOption: "on_arrival" }), true, "per-night rentals too");
+  assert.equal(isAwaitingApproval({ ...rule, hotelId, status: "confirmed", paymentOption: "on_arrival", approvedAt: new Date() }), false);
+  assert.equal(isAwaitingApproval({ ...rule, hotelId, status: "active" }), false);
+  // Reservations confirmed before approvals existed are never treated as unapproved
+  assert.equal(isAwaitingApproval({ hotelId, status: "confirmed", paymentOption: "on_arrival" }), false);
 });
 
 // Bookings in memory: what the expiry job reads, cancels and announces
@@ -47,7 +50,7 @@ const world = (t, bookings) => {
   return sent;
 };
 const booking = (fields) => {
-  const doc = { _id: id(), hotelId: id(), customer: id(), owner: id(), ownerType: "agent", roomName: "Deluxe", numberOfRooms: 1, contactName: "Esi", status: "confirmed", paymentOption: "on_arrival", paymentStatus: "due", arrivalTime: "14:00", history: [], ...fields };
+  const doc = { _id: id(), hotelId: id(), customer: id(), owner: id(), ownerType: "agent", roomName: "Deluxe", numberOfRooms: 1, contactName: "Esi", status: "confirmed", paymentOption: "on_arrival", paymentStatus: "due", arrivalTime: "14:00", approvalRequired: true, history: [], ...fields };
   doc.save = async () => doc;
   return doc;
 };
@@ -58,9 +61,14 @@ test("unanswered bookings are cancelled at the deadline: rooms released, both si
   const paid = booking({ startDate: new Date("2030-06-10T00:00:00Z"), status: "paid", paymentStatus: "paid", paymentOption: "online", createdAt: new Date("2030-06-01T00:00:00Z") });
   const notYet = booking({ startDate: new Date("2030-06-11T00:00:00Z"), createdAt: new Date("2030-06-01T00:00:00Z") });
   const approvedMeanwhile = booking({ startDate: new Date("2030-06-10T00:00:00Z"), createdAt: new Date("2030-06-01T00:00:00Z"), approvedAt: new Date("2030-06-09T14:59:00Z") });
-  const sent = world(t, [overdue, paid, notYet, approvedMeanwhile]);
+  const olderReservation = booking({ startDate: new Date("2030-06-10T00:00:00Z"), createdAt: new Date("2030-05-01T00:00:00Z"), approvalRequired: undefined });
+  const nightly = booking({ hotelId: undefined, property: id(), pricePeriod: "night", roomName: undefined, startDate: new Date("2030-06-10T00:00:00Z"), createdAt: new Date("2030-06-01T00:00:00Z") });
+  const sent = world(t, [overdue, paid, notYet, approvedMeanwhile, olderReservation, nightly]);
   t.mock.method(console, "error", () => {});
-  assert.equal(await expireUnansweredBookings({}, now), 2);
+  assert.equal(await expireUnansweredBookings({}, now), 3);
+  assert.equal(olderReservation.status, "confirmed", "made before approvals existed: left alone");
+  assert.equal(nightly.status, "cancelled", "per-night rentals expire too");
+  assert.ok(sent.notifications.some((n) => n.title === "Stay cancelled" && /owner didn't approve your stay/.test(n.message)));
   assert.equal(overdue.status, "cancelled");
   assert.match(overdue.history.at(-1).note, /didn't approve the booking in time/);
   assert.equal(paid.status, "cancelled");

@@ -144,7 +144,7 @@ test("recording an office payment issues the receipt, records the ledger entry a
 
 test("hotels: a paid booking is approved with its room before check-in; the guest gets both receipts once", async (t) => {
   const hotelId = id();
-  const rental = fakeRental({ hotelId, roomName: "Deluxe", numberOfRooms: 2, pricePeriod: "night", units: 3, amount: 1800, status: "paid", paymentStatus: "paid", paymentMethod: "Paystack", paymentReference: "HBH-123", arrivalTime: "14:00", property: { title: "Palm Hotel", listingType: "Rent", pricePeriod: "night", propertyType: "Hotel" } });
+  const rental = fakeRental({ hotelId, roomName: "Deluxe", numberOfRooms: 2, pricePeriod: "night", units: 3, amount: 1800, status: "paid", paymentStatus: "paid", paymentMethod: "Paystack", paymentReference: "HBH-123", arrivalTime: "14:00", approvalRequired: true, property: { title: "Palm Hotel", listingType: "Rent", pricePeriod: "night", propertyType: "Hotel" } });
   const sent = world(t, rental);
   const passes = [];
   t.mock.method(bookingConfirmationMailer, "send", async (email, booking) => { passes.push({ email, booking }); });
@@ -180,7 +180,7 @@ test("hotels: a paid booking is approved with its room before check-in; the gues
 });
 
 test("hotels: a pay-at-hotel reservation waits for approval; the booking receipt comes only with the room", async (t) => {
-  const rental = fakeRental({ hotelId: id(), roomName: "Standard", numberOfRooms: 1, pricePeriod: "night", amount: 500, status: "confirmed", paymentOption: "on_arrival", paymentStatus: "due", paymentMethod: "At hotel", arrivalTime: "16:00", property: { title: "Palm Hotel", listingType: "Rent", pricePeriod: "night", propertyType: "Hotel" } });
+  const rental = fakeRental({ hotelId: id(), roomName: "Standard", numberOfRooms: 1, pricePeriod: "night", amount: 500, status: "confirmed", paymentOption: "on_arrival", paymentStatus: "due", paymentMethod: "At hotel", arrivalTime: "16:00", approvalRequired: true, property: { title: "Palm Hotel", listingType: "Rent", pricePeriod: "night", propertyType: "Hotel" } });
   world(t, rental);
   const passes = [];
   t.mock.method(bookingConfirmationMailer, "send", async (_email, booking) => { passes.push(booking); });
@@ -254,4 +254,33 @@ test("house and land sales: the office payment is recorded once, with the buyer'
   await confirmOfficePayment(owner({ amount: 340000 }), again);
   assert.equal(again.statusCode, 400);
   assert.equal(sent.payments.length, 1);
+});
+
+test("per-night rentals: the owner approves the stay (no room number) and only then is the booking receipt sent", async (t) => {
+  const rental = fakeRental({ pricePeriod: "night", units: 2, amount: 600, status: "confirmed", paymentOption: "on_arrival", paymentStatus: "due", paymentMethod: "On arrival", arrivalTime: "15:00", approvalRequired: true, property: { title: "Sea View Flat", listingType: "Rent", pricePeriod: "night", propertyType: "Apartment" } });
+  world(t, rental);
+  const passes = [];
+  t.mock.method(bookingConfirmationMailer, "send", async (_email, booking) => { passes.push(booking); });
+  await assert.rejects(updateRentalStatus(owner({ status: "active" }), response()), /Approve the booking before the guest checks in/);
+  assert.equal(rental.bookingCode, undefined, "no booking receipt before the owner approves");
+  const res = response();
+  await approveHotelBooking(owner({}), res);
+  assert.equal(res.statusCode, 200, res.body?.message);
+  assert.ok(rental.approvedAt);
+  assert.equal(rental.roomNumbers, undefined, "the whole place: no room number");
+  assert.match(rental.bookingCode, /^NF-/);
+  assert.equal(passes.length, 1);
+  assert.equal(passes[0].roomNumbers, "");
+  const checkIn = response();
+  await updateRentalStatus(owner({ status: "active" }), checkIn);
+  assert.equal(checkIn.statusCode, 200, checkIn.body?.message);
+});
+
+test("reservations made before approvals existed keep working: they check in without approval", async (t) => {
+  const rental = fakeRental({ hotelId: id(), roomName: "Standard", numberOfRooms: 1, pricePeriod: "night", amount: 500, status: "confirmed", paymentOption: "on_arrival", paymentStatus: "due", paymentMethod: "At hotel", property: { title: "Palm Hotel", listingType: "Rent", pricePeriod: "night", propertyType: "Hotel" } });
+  world(t, rental);
+  const res = response();
+  await updateRentalStatus(owner({ status: "active" }), res);
+  assert.equal(res.statusCode, 200, res.body?.message);
+  assert.equal(rental.status, "active");
 });

@@ -6,7 +6,7 @@ import { rentalApi } from "../../frontApi";
 import { formatDate } from "../../utils/date";
 import { getPriceParts, formatGhs } from "../../utils/property";
 import { usePlatform } from "../../context/usePlatform";
-import { arrivalText, bookingHeadline } from "../../utils/hotelPayments";
+import { approvalDeadlineText, arrivalText, bookingHeadline } from "../../utils/hotelPayments";
 import { cloudImage } from "../../utils/cloudImage";
 import BookingPass from "../receipts/BookingPass";
 
@@ -294,6 +294,7 @@ const StayPayment = ({ rental, options, headline, ownerName, busy, error, onRese
           <p className="flex items-start gap-2"><CalendarCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />Pay {ownerName} {formatGhs(rental.amount)} when you arrive{rental.arrivalTime ? ` at ${rental.arrivalTime}` : ` ${arrivalText(rental)}`}, and show your booking code.</p>
           {rental.cancellationPolicy && <p className="whitespace-pre-line text-emerald-800"><span className="font-semibold">Owner's policy:</span> {rental.cancellationPolicy}</p>}
         </>}
+        {rental.awaitingApproval && <p>Your dates are held. Once {ownerName} approves your stay, you'll get your booking receipt here, in your account and by email. Download it and show it when you arrive.{rental.approvalDeadline && ` If it isn't approved by ${approvalDeadlineText(rental)}, it's cancelled automatically.`}</p>}
         <BookingPass booking={rental} className="text-gray-900" />
         <Link to="/account/rentals" className="btn btn-primary w-full">View your booking</Link>
       </div>
