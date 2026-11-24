@@ -3,8 +3,8 @@ import Modal from "../ui/Modal";
 import { useAuth } from "../../context/useAuth";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 
-const EditUserModal = ({ user, onClose }) => {
-  const { admin, users } = useAuth();
+const EditUserModal = ({ user, onClose, onSaved }) => {
+  const { admin } = useAuth();
   const run = useAsyncAction();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone || "" });
@@ -13,14 +13,16 @@ const EditUserModal = ({ user, onClose }) => {
   const save = async () => {
     if (!form.firstName.trim() || !form.lastName.trim()) return setError("First and last name are required.");
     if (!/^\S+@\S+\.\S+$/.test(form.email)) return setError("Enter a valid email address.");
-    if (users.some((u) => u.id !== user.id && u.email.toLowerCase() === form.email.trim().toLowerCase())) return setError("Another account already uses this email.");
     setSaving(true);
     const { ok } = await run(
       admin.updateUser(user.id, { firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim().toLowerCase(), phone: form.phone.trim() }),
       { success: "Account updated", description: `${form.firstName} ${form.lastName}` }
     );
     setSaving(false);
-    if (ok) onClose();
+    if (ok) {
+      onSaved?.();
+      onClose();
+    }
   };
 
   const field = (key, label, type = "text") => (

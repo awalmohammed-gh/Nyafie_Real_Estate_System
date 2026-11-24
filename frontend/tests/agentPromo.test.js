@@ -56,7 +56,8 @@ test("who and where: never agents, admins, applicants, or agent and checkout pag
   assert.equal(promoAllowedFor({ role: "user" }), true, "customers");
   assert.equal(promoAllowedFor({ role: "user", agentApplication: { status: "incomplete" } }), true, "an abandoned start still sees it");
   for (const user of [{ role: "agent" }, { role: "admin" }, { role: "user", agentAccess: true }, { role: "user", agentApplication: { status: "pending" } }]) assert.equal(promoAllowedFor(user), false, JSON.stringify(user));
-  for (const path of ["/", "/listings", "/house/abc", "/contact", "/about", "/agents"]) assert.equal(promoAllowedOn(path), true, path);
+  assert.equal(promoAllowedOn("/"), false, "the home page starts with homes, not an invitation to sell");
+  for (const path of ["/listings", "/house/abc", "/contact", "/about", "/agents"]) assert.equal(promoAllowedOn(path), true, path);
   for (const path of ["/agent/plans", "/agent/join/xyz", "/account/saved", "/checkout/rent/1", "/payment/success", "/make-offer/1"]) assert.equal(promoAllowedOn(path), false, path);
 });
 

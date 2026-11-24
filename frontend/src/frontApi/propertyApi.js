@@ -24,6 +24,13 @@ export const assignProperty = async (id, memberId) => mapProperty((await client.
 // Details page only. The server decides whether this visit counts -> { counted, views }
 export const recordPropertyView = async (id) => (await client.post(`/properties/${id}/view`)).data;
 
+// The home page's rows and counts (one request): { rows: { featured, latest, sale, rent, stays }, newThisWeek, facets }
+export const getHome = async ({ signal } = {}) => {
+  const data = (await client.get("/properties/home", { signal })).data;
+  const byId = new Map(data.items.map((item) => [item.id, mapProperty(item)]));
+  return { ...data, rows: Object.fromEntries(Object.entries(data.rows).map(([name, ids]) => [name, ids.map((id) => byId.get(id)).filter(Boolean)])) };
+};
+
 // Drops empty filters so the query string only carries what the user chose
 const cleanParams = (params) => Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length)).map(([k, v]) => [k, Array.isArray(v) ? v.join(",") : v]));
 

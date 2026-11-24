@@ -1,3 +1,5 @@
+import Property from "../models/Property.js";
+import { choice, fullNameMatch, pageOf, pageResult, searchPattern } from "../utils/listPage.js";
 import mongoose from "mongoose";
 import Conversation from "../models/Conversation.js";
 import Message, { MAX_MESSAGE_LENGTH } from "../models/Message.js";
@@ -147,34 +149,69 @@ export const postSystemNote = async (property, customerId, user, side, text, ses
   return conversation;
 };
 
-// GET /api/conversations?scope=customer|owner (plus the /messages aliases)
+// GET /api/conversations?scope=customer|owner (plus the /messages aliases) -> a page of conversations
 export const listConversations = (scopeOverride) => async (req, res) => {
   const scope = scopeOverride || req.query.scope || "customer";
   let filter;
   if (scope === "customer") filter = { customer: req.user._id };
-  else if (req.sessionDomain === "customer") return ok(res, []);
+  else if (req.sessionDomain === "customer") return ok(res, pageResult([], 0, pageOf(req.query), { counts: { all: 0, unread: 0, closed: 0 }, empty: true }));
   else if (req.user.role === "admin") filter = { ownerType: "admin" };
   else if (req.user.role === "agent") filter = { ownerType: "agent", ...teamFilter(req.user) };
-  else return ok(res, []); // customers own no listings
+  else return ok(res, pageResult([], 0, pageOf(req.query), { counts: { all: 0, unread: 0, closed: 0 }, empty: true })); // customers own no listings
 
-  const conversations = await populate(Conversation.find(filter).sort({ lastMessageAt: -1 }));
+  // Which conversations: ?page, tab=all|unread|closed, search (the other person, the listing or the last message)
+  const paging = pageOf(req.query), pattern = searchPattern(req.query.search);
+  const unread = { [scope === "customer" ? "customerUnread" : "ownerUnread"]: { $gt: 0 } };
+  const tabs = { all: { status: "open" }, unread: { status: "open", ...unread }, closed: { status: "closed" } };
+  const tab = choice(req.query.tab, Object.keys(tabs));
+  const search = [];
+  if (pattern) {
+    const [people, listings] = await Promise.all([
+      User.find({ $expr: fullNameMatch(pattern) }).select("_id").limit(500).lean(),
+      Property.find({ title: pattern }).select("_id").limit(500).lean(),
+    ]);
+    const ids = people.map((user) => user._id);
+    const counterpart = scope !== "customer" ? [{ customer: { $in: ids } }] : [{ ownerType: "agent", owner: { $in: ids } }, ...(pattern.test(siteName()) ? [{ ownerType: "admin" }] : [])];
+    search.push({ $or: [{ lastMessage: pattern }, { property: { $in: listings.map((listing) => listing._id) } }, ...counterpart] });
+  }
+  const shown = { $and: [filter, tabs[tab], ...search] };
+  const [total, conversations, any, ...counted] = await Promise.all([
+    Conversation.countDocuments(shown),
+    populate(Conversation.find(shown).sort({ lastMessageAt: -1, _id: -1 }).skip(paging.skip).limit(paging.limit)),
+    Conversation.exists(filter),
+    ...Object.values(tabs).map((tabFilter) => Conversation.countDocuments({ $and: [filter, tabFilter] })),
+  ]);
   const enabled = await agentsWithChat(conversations.filter((c) => c.ownerType === "agent").map(ownerId));
-  ok(res, conversations.map((c) => present(c, req.user, enabled)));
+  ok(res, pageResult(conversations.map((c) => present(c, req.user, enabled)), total, paging, {
+    counts: Object.fromEntries(Object.keys(tabs).map((name, index) => [name, counted[index]])),
+    empty: !any,
+  }));
 };
 
-// GET /api/conversations/:id -> conversation + messages
+// Messages per request: the latest, then earlier ones on demand (open chats ask for them every few seconds)
+const MESSAGE_PAGE = 100;
+
+// GET /api/conversations/:id?before=<message id> -> conversation + its latest messages (or those before one)
 export const getConversation = async (req, res) => {
   const conversation = await loadAuthorized(req, res);
   if (!conversation) return;
-  const [messages, offer] = await Promise.all([
-    Message.find({ conversation: conversation._id }).sort({ createdAt: 1 }),
+  const { before } = req.query;
+  let earlier = {};
+  if (before !== undefined) {
+    const from = typeof before === "string" && mongoose.isValidObjectId(before) ? await Message.findOne({ _id: before, conversation: conversation._id }).select("createdAt").lean() : null;
+    if (!from) return fail(res, 400, "Unknown message.");
+    earlier = { $or: [{ createdAt: { $lt: from.createdAt } }, { createdAt: from.createdAt, _id: { $lt: from._id } }] };
+  }
+  const [page, offer] = await Promise.all([
+    Message.find({ conversation: conversation._id, ...earlier }).sort({ createdAt: -1, _id: -1 }).limit(MESSAGE_PAGE + 1),
     // The customer's latest live offer on this property, shown above the chat
     Offer.findOne({ customer: conversation.customer?._id || conversation.customer, property: conversation.property?._id || conversation.property, status: { $ne: "withdrawn" } })
       .sort({ createdAt: -1 })
       .select("amount askingPrice status counterAmount"),
   ]);
   const enabled = conversation.ownerType === "agent" ? await agentsWithChat([ownerId(conversation)]) : new Set();
-  ok(res, { conversation: present(conversation, req.user, enabled), messages, offer });
+  const messages = page.slice(0, MESSAGE_PAGE).reverse();
+  ok(res, { conversation: present(conversation, req.user, enabled), messages, hasEarlier: page.length > MESSAGE_PAGE, offer });
 };
 
 // POST /api/conversations { propertyId, message } -> opens (or reuses) a chat with the owner

@@ -3,11 +3,12 @@ import { useApiQuery } from "./useApiQuery";
 
 // Several homepage sections read the same facets; share one request for a minute
 const cache = new Map();
+// kind: "" (everything), "Sale", "Rent" or "stay" (short stays)
 const loadFacets = (listingType) => {
   let entry = cache.get(listingType);
   if (!entry || Date.now() - entry.at > 60000) {
     const promise = propertyApi
-      .getPropertyFacets({ listingType })
+      .getPropertyFacets(listingType === "stay" ? { stay: "true" } : { listingType })
       .catch((err) => {
         if (cache.get(listingType)?.promise === promise)
           cache.delete(listingType);

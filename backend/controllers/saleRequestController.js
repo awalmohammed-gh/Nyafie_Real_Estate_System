@@ -1,3 +1,4 @@
+import { ownerPage } from "../utils/ownerPage.js";
 import mongoose from "mongoose";
 import SaleRequest, { CLOSED_SALE_STATUSES } from "../models/SaleRequest.js";
 import Offer from "../models/Offer.js";
@@ -261,13 +262,32 @@ export const mySaleRequests = async (req, res) => {
 
 // GET /api/agents/sale-requests and /api/admin/sale-requests (admins see all)
 export const ownerSaleRequests = async (req, res) => {
-  const requests = await populate(
-    SaleRequest.find(ownerFilter(req.user)).sort({ createdAt: -1 }),
-  );
-  const offers = await latestOffers(requests);
+  const closed = ["completed", "cancelled", "rejected"];
   ok(
     res,
-    requests.map((r) => present(r, req.user, offers)),
+    await ownerPage(req, {
+      Model: SaleRequest,
+      tab: "open",
+      fields: ["contactName", "contactEmail", "contactPhone"],
+      tabs: {
+        open: { status: { $nin: closed } },
+        payment: { status: "payment_pending" },
+        completed: { status: "completed" },
+        closed: { status: { $in: ["cancelled", "rejected"] } },
+        all: {},
+      },
+      stats: {
+        open: { status: { $nin: closed } },
+        payment: { status: "payment_pending" },
+        received: { paymentStatus: "confirmed", status: { $nin: closed } },
+        completed: { status: "completed" },
+      },
+      load: async (query) => {
+        const requests = await populate(query);
+        const offers = await latestOffers(requests);
+        return requests.map((r) => present(r, req.user, offers));
+      },
+    }),
   );
 };
 

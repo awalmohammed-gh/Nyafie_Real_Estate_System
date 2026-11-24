@@ -4,6 +4,7 @@ import { formatGhs } from "./property.js";
 // From usePropertyBrowseState (filters, search) and parseNear (near) to the saved form
 export const toSavedFilters = ({ filters, search = "", near = null }) => ({
   listingType: filters.listingType || "",
+  stay: Boolean(filters.stay),
   types: filters.types || [],
   area: filters.area || "",
   city: filters.city || "",
@@ -20,7 +21,7 @@ export const toSavedFilters = ({ filters, search = "", near = null }) => ({
 
 // Whether there is anything to save (the server asks for at least one filter too)
 export const hasSearchCriteria = (saved) => Boolean(
-  saved.listingType || saved.types.length || saved.area || saved.city || saved.region || saved.minPrice !== null || saved.maxPrice !== null ||
+  saved.listingType || saved.stay || saved.types.length || saved.area || saved.city || saved.region || saved.minPrice !== null || saved.maxPrice !== null ||
   saved.bedrooms || saved.bathrooms || saved.amenities.length || saved.search || saved.near,
 );
 
@@ -29,6 +30,7 @@ export const savedSearchPath = (saved, listingsPath) => {
   const params = new URLSearchParams();
   const set = (key, value) => value !== null && value !== undefined && value !== "" && value !== 0 && params.set(key, String(value));
   set("status", saved.listingType);
+  set("stay", saved.stay ? "1" : "");
   set("type", (saved.types || []).join(","));
   set("area", saved.area);
   set("city", saved.city);
@@ -52,6 +54,7 @@ export const savedSearchPath = (saved, listingsPath) => {
 // Short labels for the search's filters: ["To rent", "2+ beds", "East Legon", "Up to ₵3,000"]
 export const describeFilters = (saved) => [
   saved.listingType === "Sale" ? "For sale" : saved.listingType === "Rent" ? "To rent" : "",
+  saved.stay ? "Short stays" : "",
   ...(saved.types || []),
   saved.bedrooms ? `${saved.bedrooms}+ beds` : "",
   saved.bathrooms ? `${saved.bathrooms}+ baths` : "",

@@ -1,3 +1,4 @@
+import { getSubscriptionState } from "../utils/subscription.js";
 // Translate between the backend models and the shapes the UI components use,
 // so components don't need to know how the API stores data.
 
@@ -141,11 +142,13 @@ export const mapUser = (u, domain) =>
     lastName: u.lastName,
     name: `${u.firstName} ${u.lastName}`,
     email: u.email,
+    emailVerified: Boolean(u.emailVerifiedAt), // they proved the inbox is theirs (a code, or Google)
+    passwordMissing: Boolean(u.passwordMissing), // your own account only: Google sign-in, no NyaFie password yet
     phone: u.phone || "",
     profileImage: u.profileImage || "",
-    role: domain === "customer" && u.role === "agent" && u.customerAccess ? "user" : u.role,
+    role: domain === "customer" && u.role === "agent" ? "user" : u.role, // every agent is a customer too
     customerAccess: Boolean(u.customerAccess),
-    agentAccess: u.role === "agent" && Boolean(u.customerAccess),
+    agentAccess: u.role === "agent",
     status: u.removal?.deletedAt ? "deleted" : u.agentApplication?.status === "removed" ? "removed" : u.isActive === false ? "suspended" : "active",
     // Admin views only: why and when the provider was removed
     removal: u.removal || null,
@@ -161,7 +164,16 @@ export const mapUser = (u, domain) =>
     agency: u.agency?.owner ? { ownerId: idOf(u.agency.owner), role: u.agency.role, joinedAt: u.agency.joinedAt, name: u.agency.name || "", logo: u.agency.logo || "", subscription: mapSubscription(u.agency.subscription) } : null,
     savedCount: u.savedCount ?? (u.savedProperties || []).length,
     inquiriesCount: u.inquiriesCount ?? 0,
+    activeProperties: u.activeProperties ?? 0, // agents, admin views: listings that count toward the plan
   };
+
+// A customer on the admin Customers page, with what they did (and, for one customer, their latest activity)
+const ACTIVITY_STATUS = { offer: (s) => OFFER_STATUS[s], rental: (s) => RENTAL_STATUS[s], purchase: (s) => SALE_STATUS[s], inquiry: (s) => STATUS_TO_UI[s] };
+export const mapCustomer = (u) => ({
+  ...mapUser(u),
+  activity: u.activity || { inquiries: 0, offers: 0, rentals: 0, purchases: 0 },
+  recent: (u.recent || []).map((entry) => ({ ...entry, status: ACTIVITY_STATUS[entry.kind]?.(entry.status) || entry.status })),
+});
 
 // ---------- Properties ----------
 export const mapProperty = (p) => ({
@@ -239,6 +251,9 @@ export const mapProperty = (p) => ({
     documentsVerifiedAt: p.documentsVerifiedAt || null,
   },
 });
+
+// A listing on the admin pages: with its owner's name and whether customers can see it
+export const mapAdminProperty = (p) => ({ ...mapProperty(p), ownerName: p.ownerName || "Deleted agent", isPublic: Boolean(p.isPublic) });
 
 // Accepts a full or partial property in UI shape and returns API fields
 export const toApiProperty = (p) => {
@@ -526,3 +541,43 @@ export const mapPaymentRecord = (p) => ({
   paidAt: p.paidAt,
   createdAt: p.createdAt,
 });
+
+// ---------- Admin: an inquiry with its listing and who handles it ----------
+export const mapAdminInquiry = (i) => ({ ...mapInquiry(i), property: mapListingSummary(i.property), ownerName: i.ownerName || "Deleted agent" });
+
+// ---------- Admin: an agent with their subscription's state and what they have on the platform ----------
+export const mapProvider = (u) => {
+  const user = mapUser(u);
+  return {
+    ...user,
+    sub: getSubscriptionState(user.subscription),
+    activeCount: user.activeProperties,
+    accountType: ["agency", "company"].includes(user.agentApplication?.agentType) ? user.agentApplication.agentType : "individual",
+    stats: u.stats,
+    teamCount: u.stats?.team || 0,
+    listings: (u.listings || []).map(mapAdminProperty), // one agent only: their latest
+    payments: (u.payments || []).map(mapPayment),
+  };
+};
+
+// ---------- Admin payments: rentals, sales and agent subscriptions as one list ----------
+const capitalise = (s = "") => s.charAt(0).toUpperCase() + s.slice(1);
+const SUBSCRIPTION_PAYMENT_STATUS = { refund_required: "Refund required" };
+export const mapLedgerRow = ({ source, record }) => {
+  if (source === "subscription") {
+    const p = mapPayment(record);
+    return {
+      id: `s-${p.id}`, source, recordId: p.id, type: "subscription", statusKey: p.status, refund: p.refund, dispute: p.dispute, received: p.received,
+      environment: p.environment, reference: p.reference, amount: p.amount, method: p.method, note: p.note, date: p.createdAt,
+      payer: record.user?.firstName ? `${record.user.firstName} ${record.user.lastName}` : "Deleted user",
+      item: "Agent subscription", listing: "", status: SUBSCRIPTION_PAYMENT_STATUS[p.status] || capitalise(p.status),
+    };
+  }
+  const p = mapPaymentRecord(record);
+  return {
+    id: `p-${p.id}`, source, recordId: p.id, type: p.kind, statusKey: p.statusKey, refund: p.refund, dispute: p.dispute, received: p.received,
+    environment: p.environment, reference: p.reference, amount: p.amount, method: p.method, note: p.note, date: p.paidAt || p.createdAt,
+    payer: p.customer, item: p.property, status: p.status,
+    listing: `${p.ownerType === "admin" ? "Admin listing" : `Agent listing · ${p.owner}`}${p.confirmedBy ? ` · confirmed by ${p.confirmedBy}` : ""}`,
+  };
+};

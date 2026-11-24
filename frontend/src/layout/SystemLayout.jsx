@@ -20,7 +20,8 @@ import '../pages/property-details.css'
 const SystemLayout = () => {
   const { pathname, search } = useLocation()
   const navigate = useNavigate()
-  const { domain } = useAuth()
+  // askPassword: the "create your password" dialog after Google sign-in has the screen
+  const { domain, askPassword } = useAuth()
   // Phone tab bar: on every customer page (utils/bottomNav.js); a page's own bottom bar sits above it
   const bottomNav = domain === 'customer' && bottomNavAllowedOn(pathname)
   // Number of dark heroes on screen (home hero, page headers); while > 0 the navbar overlays them
@@ -66,9 +67,9 @@ const SystemLayout = () => {
         {/* Homes picked for comparison on this device */}
         <CompareBar />
         {/* "Use your location?" card: explains why before the browser asks (rules: utils/visitorLocation.js) */}
-        <LocationPrompt onOpenChange={setAskingLocation} paused={menuOpen} />
+        <LocationPrompt onOpenChange={setAskingLocation} paused={menuOpen || askPassword} />
         {/* "Want to become an agent?" pop-up for visitors and customers (timing rules: utils/agentPromo.js) */}
-        <AgentPromo paused={askingLocation || menuOpen} />
+        <AgentPromo paused={askingLocation || menuOpen || askPassword} />
         {bottomNav && <BottomNav menuOpen={menuOpen} onMenuToggle={() => setMenuOpen((open) => !open)} onNavigate={() => setMenuOpen(false)} menuButtonRef={menuTriggerRef} />}
       </div>
     </NavOverlayContext.Provider>

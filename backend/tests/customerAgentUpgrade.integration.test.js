@@ -8,7 +8,8 @@ import Subscription from "../models/Subscription.js";
 import Setting from "../models/Setting.js";
 import { cloudinary } from "../config/cloudinary.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
-import { customerTabHeaders } from "./support/customerTab.js";
+import jwt from "jsonwebtoken";
+import { customerTabClaims, customerTabHeaders } from "./support/customerTab.js";
 
 test("customers become agents on the same account, pay first, and retain customer access", {
   skip: process.env.RUN_CUSTOMER_AGENT_INTEGRATION !== "1",
@@ -148,7 +149,7 @@ test("customers become agents on the same account, pay first, and retain custome
     }
     const ownerMessages = await request("/api/conversations?scope=owner", { cookie: customerCookie });
     assert.equal(ownerMessages.status, 200);
-    assert.deepEqual((await ownerMessages.json()).data, []);
+    assert.deepEqual((await ownerMessages.json()).data.items, []);
     const stranger = new mongoose.Types.ObjectId();
     const record = { owner: account._id, ownerType: "agent", customer: stranger, property: new mongoose.Types.ObjectId(), amount: 100, status: "pending" };
     const offer = await mongoose.connection.db.collection("offers").insertOne(record);
@@ -162,6 +163,42 @@ test("customers become agents on the same account, pay first, and retain custome
     assert.equal(resumed.status, 200);
     assert.equal((await resumed.json()).data.agentApplication.status, "pending");
     assert.equal(await User.countDocuments(), 1);
+    // "List your property": continues the same application without choosing a plan again
+    const continued = await request("/api/auth/customer/become-agent", { cookie: customerCookie, method: "POST", body: {} });
+    assert.equal(continued.status, 200);
+    assert.equal((await continued.json()).data.id, account.id);
+  });
+
+  await t.test("signing out of either area signs the person out of both, and nobody else", async () => {
+    const signIn = async (session, body = credentials) => cookieFrom(await request(`/api/auth/${session}/login`, { session, method: "POST", body }), session);
+    const cleared = (response) => response.headers.getSetCookie().filter((value) => /Expires=Thu, 01 Jan 1970/.test(value)).map((value) => value.split("=")[0]).sort();
+    const both = `${await signIn("customer")}; ${await signIn("agent")}`;
+    const logout = (session, cookie) => request(`/api/auth/${session}/logout`, { session, cookie, method: "POST" });
+    assert.deepEqual(cleared(await logout("customer", both)), ["agent_token", "customer_token"], "from the public site");
+    assert.deepEqual(cleared(await logout("agent", both)), ["agent_token", "customer_token"], "from the agent dashboard");
+    // An expired customer session is still the same person
+    const expired = "customer_token=" + jwt.sign({ id: account.id, role: "user", session: "customer", iat: 1000, exp: 2000, ...customerTabClaims("customer") }, process.env.JWT_KEY);
+    const agentOnly = both.split("; ")[1];
+    assert.deepEqual(cleared(await logout("customer", `${expired}; ${agentOnly}`)), ["agent_token", "customer_token"]);
+    // Someone else's agent account on the same browser, and a forged cookie, are not touched
+    const stranger = await User.create({ emailVerifiedAt: new Date(), firstName: "Other", lastName: "Agent", email: "other-agent@example.test", password: "OriginalPassword123", role: "agent", agentApplication: { status: "approved", agentType: "individual" } });
+    const strangerCookie = await signIn("agent", { email: stranger.email, password: "OriginalPassword123" });
+    assert.deepEqual(cleared(await logout("customer", `${both.split("; ")[0]}; ${strangerCookie}`)), ["customer_token"]);
+    const forged = "customer_token=" + jwt.sign({ id: stranger.id, role: "user", session: "customer" }, "some-other-key");
+    assert.deepEqual(cleared(await logout("customer", `${forged}; ${strangerCookie}`)), ["customer_token"]);
+    assert.deepEqual(cleared(await logout("customer", strangerCookie)), ["customer_token"], "a guest can't sign an agent out");
+    await User.deleteOne({ _id: stranger._id });
+  });
+
+  await t.test("a customer who isn't an agent can't start without a plan, or enter the workspace", async () => {
+    const visitor = await User.create({ emailVerifiedAt: new Date(), firstName: "Only", lastName: "Customer", email: "only@example.test", password: "OriginalPassword123" });
+    const cookie = cookieFrom(await request("/api/auth/customer/login", { method: "POST", body: { email: visitor.email, password: "OriginalPassword123" } }), "customer");
+    const refused = await request("/api/auth/customer/become-agent", { cookie, method: "POST", body: {} });
+    assert.equal(refused.status, 404);
+    assert.equal(cookieFrom(refused, "agent"), undefined, "no agent session");
+    assert.equal((await request("/api/agents/dashboard", { session: "agent", cookie })).status, 401);
+    assert.equal((await User.findById(visitor.id)).role, "user");
+    await User.deleteOne({ _id: visitor._id });
   });
 
   await t.test("returning after closing the payment tab reconciles payment and resumes profile completion", async () => {

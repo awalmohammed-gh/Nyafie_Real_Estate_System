@@ -16,8 +16,8 @@ import { isolatedMongo } from "./support/isolatedMongo.js";
 test("customer email verification requires inbox ownership before every customer entry point", {
   skip: process.env.RUN_EMAIL_INTEGRATION !== "1", timeout: 90000,
 }, async (t) => {
-  const previous = { JWT_KEY: process.env.JWT_KEY, SMTP_USER: process.env.SMTP_USER, SMTP_APP_PASSWORD: process.env.SMTP_APP_PASSWORD, NODE_ENV: process.env.NODE_ENV };
-  Object.assign(process.env, { JWT_KEY: "email-integration-signing-key", SMTP_USER: "sender@gmail.com", SMTP_APP_PASSWORD: "test-app-password", NODE_ENV: "development" });
+  const previous = { JWT_KEY: process.env.JWT_KEY, SMTP_USER: process.env.SMTP_USER, SMTP_APP_PASSWORD: process.env.SMTP_APP_PASSWORD, NODE_ENV: process.env.NODE_ENV, SIGNUP_EMAILS: process.env.SIGNUP_EMAILS };
+  Object.assign(process.env, { JWT_KEY: "email-integration-signing-key", SMTP_USER: "sender@gmail.com", SMTP_APP_PASSWORD: "test-app-password", NODE_ENV: "development", SIGNUP_EMAILS: "any" });
   t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
   await isolatedMongo(t);
   await Setting.create({ key: "platform" });

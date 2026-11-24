@@ -17,8 +17,9 @@ import WhatsAppIcon from "../ui/WhatsAppIcon";
 import HistoryTimeline from "./HistoryTimeline";
 import Filters from "./Filters";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
+import { useDebounced, useOpenRecord, usePagedList } from "../../hooks/usePagedList";
 import { rentalApi } from "../../frontApi";
-import { formatDate, isWithinDays } from "../../utils/date";
+import { formatDate } from "../../utils/date";
 import { toWhatsAppNumber } from "../../utils/whatsapp";
 import { adminPath } from "../../utils/adminEntry";
 import { approvalDeadlineText, arrivalText, pastArrivalDeadline, payPlace } from "../../utils/hotelPayments";
@@ -35,12 +36,12 @@ const dueAtOffice = (r) => r.paymentOption === "office" && r.paymentDue;
 // A hotel booking the guest paid online into the hotel's account: the hotel sends the receipt
 const needsReceipt = (r) => Boolean(r.hotelId) && r.paymentMethod === "Paystack" && r.paymentStatus === "Paid" && !r.receipt && r.statusKey !== "cancelled";
 const FILTERS = [
-  { id: "All", label: "All", match: () => true },
-  { id: "Action", label: "Needs action", match: (r) => r.awaitingApproval || ["Paid", "Confirmed"].includes(r.status) },
-  { id: "Payment", label: "Awaiting payment", match: (r) => ["Pending", "Payment Pending"].includes(r.status) },
-  { id: "Active", label: "Active", match: (r) => r.status === "Active" },
-  { id: "CheckIns", label: "Upcoming check-ins", match: (r) => isStay(r) && ["Paid", "Confirmed"].includes(r.status) && r.startDate.slice(0, 10) >= new Date().toISOString().slice(0, 10) },
-  { id: "Closed", label: "Closed", match: (r) => ["Completed", "Cancelled"].includes(r.status) },
+  { id: "All", label: "All" },
+  { id: "Action", label: "Needs action" },
+  { id: "Payment", label: "Awaiting payment" },
+  { id: "Active", label: "Active" },
+  { id: "CheckIns", label: "Upcoming check-ins" },
+  { id: "Closed", label: "Closed" },
 ];
 
 // The next steps the owner can take from each status (mirrors the server's rules)
@@ -89,7 +90,7 @@ const RentalsBoard = ({ scope }) => {
   const isAdmin = scope === "admin";
   const Detail = isAdmin ? AdminRecordModal : SidePanel;
   const run = useAsyncAction();
-  const { rentals, loading, error: loadError, reload, updateTransaction } = useTransactions();
+  const { reloadCounts } = useTransactions();
   const [params] = useSearchParams();
   const [propertyId, setPropertyId] = useState(params.get("property") || "all");
   const [roomId, setRoomId] = useState(params.get("room") || "all");
@@ -97,32 +98,20 @@ const RentalsBoard = ({ scope }) => {
   const [range, setRange] = useState("all");
   const [status, setStatus] = useState("All");
   const [query, setQuery] = useState("");
-  const [openId, setOpenId] = useState(null);
   const [confirm, setConfirm] = useState(null); // { rental, action }
   const [note, setNote] = useState("");
   const [slip, setSlip] = useState(""); // office payments: an optional bank slip or cheque number
   const [roomNumbers, setRoomNumbers] = useState([]); // hotel approval: one room number per booked room
   const [busy, setBusy] = useState(false);
 
-  const retry = reload;
-  if (loadError) return <ErrorState title="Couldn't load rentals" message={loadError} onRetry={retry} />;
-  if (loading) return <TableSkeleton />;
+  const search = useDebounced(query.trim());
+  const list = usePagedList(`${scope}-rentals`, { tab: status, owner: ownerId, property: propertyId, room: roomId, range, search: search || undefined }, (filters) => rentalApi.getRentalsPage(scope, filters));
+  const rows = list.data?.items || [];
+  const [open, setOpen] = useOpenRecord(rows);
+  if (!list.data) return list.error ? <ErrorState title="Couldn't load rentals" message={list.error} onRetry={list.reload} /> : <TableSkeleton />;
 
-  const owners = [...new Map(rentals.map((r) => [r.owner.id, r.owner])).values()];
-  const propertyOptions = [...new Map(rentals.map((r) => [r.property.id, r.property])).values()];
-  const roomOptions = [...new Map(rentals.filter((r) => r.hotelId && (propertyId === "all" || r.property.id === propertyId)).map((r) => [r.roomTypeId, { id: r.roomTypeId, name: r.roomName, hotel: r.property.title }])).values()];
-  const scoped = rentals
-    .filter((r) => ownerId === "all" || r.owner.id === ownerId)
-    .filter((r) => propertyId === "all" || r.property.id === propertyId)
-    .filter((r) => roomId === "all" || r.roomTypeId === roomId)
-    .filter((r) => range === "all" || isWithinDays(r.createdAt, Number(range)));
-
-  const q = query.trim().toLowerCase();
-  const rows = scoped
-    .filter(FILTERS.find((f) => f.id === status).match)
-    .filter((r) => !q || `${r.contactName} ${r.property.title} ${r.roomName} ${r.reference || ""} ${r.bookingCode || ""}`.toLowerCase().includes(q));
-  const counts = Object.fromEntries(FILTERS.map((f) => [f.id, scoped.filter(f.match).length]));
-  const open = openId && rentals.find((r) => r.id === openId);
+  const { counts, stats, options, rooms: roomOptions, empty } = list.data;
+  const { owners, properties: propertyOptions } = options;
   const chatLink = open?.conversationId && (isAdmin ? open.ownerType === "admin" && adminPath(`/messages?c=${open.conversationId}`) : `/agent/messages?c=${open.conversationId}`);
   const whatsapp = open && toWhatsAppNumber(open.contactPhone);
 
@@ -139,8 +128,9 @@ const RentalsBoard = ({ scope }) => {
       description: `${rental.contactName} has been notified.`,
     });
     if (ok) {
-      updateTransaction("rentals", result);
-      reload(); // refresh dashboard counts and sidebar badges
+      if (open?.id === result.id) setOpen(result);
+      list.reload();
+      reloadCounts(); // sidebar badges
     }
     setBusy(false);
     setConfirm(null);
@@ -192,7 +182,7 @@ const RentalsBoard = ({ scope }) => {
       header: <span className="sr-only">View</span>,
       align: "right",
       render: (r) => (
-        <button onClick={() => setOpenId(r.id)} aria-label={`View rental for ${r.contactName}`} className="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900">
+        <button onClick={() => setOpen(r)} aria-label={`View rental for ${r.contactName}`} className="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900">
           <Eye className="h-4.5 w-4.5" />
         </button>
       ),
@@ -202,10 +192,10 @@ const RentalsBoard = ({ scope }) => {
   return (
     <>
       {!isAdmin && <WorkspaceStats className="mb-6" items={[
-        { label: "Needs action", value: rentals.filter(FILTERS[1].match).length, note: "Confirm or prepare move-in" },
-        { label: "Awaiting payment", value: rentals.filter(FILTERS[2].match).length, note: "Payment not yet completed" },
-        { label: "Active rentals", value: rentals.filter(FILTERS[3].match).length, note: "Customers have moved in" },
-        { label: "Completed", value: rentals.filter((r) => r.status === "Completed").length, note: "Finished rental bookings" },
+        { label: "Needs action", value: stats.action, note: "Confirm or prepare move-in" },
+        { label: "Awaiting payment", value: stats.payment, note: "Payment not yet completed" },
+        { label: "Active rentals", value: stats.active, note: "Customers have moved in" },
+        { label: "Completed", value: stats.completed, note: "Finished rental bookings" },
       ]} />}
       <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <FilterTabs label="Rental status" value={status} onChange={setStatus} tabs={FILTERS.map((f) => ({ id: f.id, label: f.label, count: counts[f.id] }))} />
@@ -217,18 +207,19 @@ const RentalsBoard = ({ scope }) => {
         tableFrom={isAdmin ? "md" : "xl"}
         columns={columns}
         rows={rows}
+        paging={list.paging}
         minWidth={860}
-        onRowClick={(r) => setOpenId(r.id)}
+        onRowClick={(r) => setOpen(r)}
         empty={
           <EmptyState
             icon={KeyRound}
-            title={rentals.length ? "No rentals match" : "No rental requests yet"}
-            description={rentals.length ? "Try a different filter." : "When customers use Rent Now on your properties, their requests and payments appear here."}
+            title={empty ? "No rental requests yet" : "No rentals match"}
+            description={!empty ? "Try a different filter." : "When customers use Rent Now on your properties, their requests and payments appear here."}
           />
         }
         mobileCard={(r) => (
           <div>
-            <button onClick={() => setOpenId(r.id)} className="w-full text-left">
+            <button onClick={() => setOpen(r)} className="w-full text-left">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-gray-900">{r.contactName}</p>
@@ -252,7 +243,7 @@ const RentalsBoard = ({ scope }) => {
 
       <Detail
         open={Boolean(open)}
-        onClose={() => setOpenId(null)}
+        onClose={() => setOpen(null)}
         size="lg"
         title={open ? `Rental for ${open.contactName}` : ""}
         description={open && `Requested ${formatDate(open.createdAt)}`}

@@ -60,9 +60,9 @@ export const resetCustomerPassword = async (req, res) => {
   const versionFilter = user.sessionVersion ? { sessionVersion: user.sessionVersion } : { $or: [{ sessionVersion: "" }, { sessionVersion: { $exists: false } }] };
   // Hash and revocation marker change in one compare-and-set write. Concurrent
   // password changes and consumed codes cannot overwrite a newer password.
-  const changed = await User.findOneAndUpdate({ _id: user._id, email, isActive: true, role: user.role, ...versionFilter }, { $set: { password, sessionVersion: randomUUID(), emailVerifiedAt: now } });
+  const changed = await User.findOneAndUpdate({ _id: user._id, email, isActive: true, role: user.role, ...versionFilter }, { $set: { password, passwordSetAt: now, sessionVersion: randomUUID(), emailVerifiedAt: now } });
   if (!changed) return fail(res, 400, invalidMessage);
   await loginAttempts.resetAfterRecovery(email);
-  clearAuthCookie(res, "customer");
+  for (const session of ["customer", "agent"]) clearAuthCookie(res, session); // every session has ended
   return ok(res, null, "Password reset. Sign in with your new password. All previous sessions have been signed out.");
 };

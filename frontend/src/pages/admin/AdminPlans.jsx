@@ -1,7 +1,10 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ArrowRight, BriefcaseBusiness, Building, Building2, ChartColumn, Check, Crown, Eye, EyeOff, House, Image as ImageIcon, Layers, Pencil, Plus, Power, Search, Settings, Star, Trash2, TrendingDown, TrendingUp, UserRound, Users, UsersRound } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useAdminData } from "../../hooks/useAdminData";
+import { useApiQuery } from "../../hooks/useApiQuery";
+import { useBackgroundRefresh } from "../../hooks/useBackgroundRefresh";
+import { usePlatform } from "../../context/usePlatform";
+import { adminApi } from "../../frontApi";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import Modal from "../../components/ui/Modal";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
@@ -182,22 +185,14 @@ const TYPE_ICONS = { individual: UserRound, agency: UsersRound, company: Buildin
 const TIER_ICONS = { individual: [UserRound, UsersRound, Crown], agency: [Building, Building2, BriefcaseBusiness], company: [Building2, ChartColumn, Crown] };
 const SHORT_TYPE = { individual: "Individual", agency: "Agency", company: "Company" };
 const cedis = (value, decimals = 2) => `GH₵${Number(value || 0).toLocaleString("en-GH", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
-const monthKey = (date) => `${date.getFullYear()}-${date.getMonth()}`;
+const SUBSCRIBERS_SHOWN = 50;
+const NO_SUMMARY = { providers: 0, activeSubscribers: 0, byPlan: {}, revenue: [] };
 
 // Paid subscription payments: this month, the change from last month and the last 8 months for the bars
-const revenueSummary = (payments) => {
-  const totals = new Map();
-  payments.filter((p) => p.status === "paid" && p.amount > 0).forEach((p) => {
-    const key = monthKey(new Date(p.createdAt));
-    totals.set(key, (totals.get(key) || 0) + p.amount);
-  });
-  const now = new Date();
-  const months = Array.from({ length: 8 }, (_, i) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - 7 + i, 1);
-    return { label: date.toLocaleDateString("en-GB", { month: "short" }), value: totals.get(monthKey(date)) || 0 };
-  });
-  const current = months[7].value;
-  const previous = months[6].value;
+const revenueSummary = (revenue) => {
+  const months = revenue.map(({ month, total }) => ({ label: new Date(`${month}-15T00:00:00Z`).toLocaleDateString("en-GB", { month: "short" }), value: total }));
+  const current = months.at(-1)?.value || 0;
+  const previous = months.at(-2)?.value || 0;
   return { current, change: previous > 0 ? Math.round(((current - previous) / previous) * 100) : null, months };
 };
 
@@ -253,7 +248,10 @@ const PlanCard = ({ plan, tierIndex, working, onEdit, onView, onToggle, onDelete
 };
 
 const AdminPlans = () => {
-  const { plans, agents, payments, savePlan, togglePlanActive, deletePlan, plansError, refreshPlans } = useAdminData();
+  const { plans, savePlan, togglePlanActive, deletePlan, plansError, refreshPlans } = usePlatform();
+  const query = useApiQuery("admin-plan-summary", adminApi.getPlanSummary);
+  useBackgroundRefresh(query.reload);
+  const summary = query.data ?? query.previous ?? NO_SUMMARY;
   const run = useAsyncAction();
   const [editing, setEditing] = useState(null); // plan | "new"
   const [deleting, setDeleting] = useState(null);
@@ -263,9 +261,9 @@ const AdminPlans = () => {
   const [availability, setAvailability] = useState("all");
   const [working, setWorking] = useState(false);
 
-  const subscribers = (plan) => agents.filter((a) => a.subscription?.planId === plan.id);
-  const activeSubscribers = (plan) => subscribers(plan).filter((a) => a.sub.isActive);
-  const revenue = useMemo(() => revenueSummary(payments), [payments]);
+  const subscribers = (plan) => summary.byPlan[plan.id] || { total: 0, active: 0 };
+  const listed = useApiQuery(viewing ? `admin-plan-subscribers:${viewing.id}` : null, () => adminApi.getProvidersPage({ plan: viewing.id, limit: SUBSCRIBERS_SHOWN }));
+  const revenue = revenueSummary(summary.revenue);
   const peak = Math.max(...revenue.months.map((m) => m.value), 1);
 
   const term = search.trim().toLowerCase();
@@ -298,7 +296,7 @@ const AdminPlans = () => {
         <div className="plans-overview">
           <div className="plans-stats">
             <SummaryCard icon={Layers} label="Total Plans" value={plans.length} hint={`${plans.filter((p) => p.active).length} open to new subscribers`} />
-            <SummaryCard icon={UsersRound} label="Active Subscribers" value={agents.filter((a) => a.sub.isActive).length} hint={`Of ${agents.length} provider ${agents.length === 1 ? "account" : "accounts"}`} />
+            <SummaryCard icon={UsersRound} label="Active Subscribers" value={summary.activeSubscribers} hint={`Of ${summary.providers} provider ${summary.providers === 1 ? "account" : "accounts"}`} />
             <SummaryCard icon={Building2} label="Account Types" value={new Set(plans.map((p) => p.accountType)).size} hint="Individual, Agency, Company" />
             <SummaryCard icon={EyeOff} label="Hidden Plans" value={plans.filter((p) => !p.active).length} hint="Not visible to new subscribers" />
           </div>
@@ -357,7 +355,7 @@ const AdminPlans = () => {
                     key={plan.id}
                     plan={plan}
                     tierIndex={ladderOf(plans, type).findIndex((p) => p.id === plan.id)}
-                    activeCount={activeSubscribers(plan).length}
+                    activeCount={subscribers(plan).active}
                     working={working}
                     onEdit={() => setEditing(plan)}
                     onView={() => setViewing(plan)}
@@ -399,7 +397,7 @@ const AdminPlans = () => {
         open={Boolean(deleting)}
         onClose={() => setDeleting(null)}
         title="Delete plan?"
-        description={deleting && `${deleting.name} will be removed. It has no active subscribers${subscribers(deleting).length ? `; ${subscribers(deleting).length} past subscriber(s) keep their billing history` : ""}.`}
+        description={deleting && `${deleting.name} will be removed. It has no active subscribers${subscribers(deleting).total ? `; ${subscribers(deleting).total} past subscriber(s) keep their billing history` : ""}.`}
         confirmLabel="Delete plan"
         onConfirm={async () => {
           const plan = deleting;
@@ -416,12 +414,14 @@ const AdminPlans = () => {
             <p className="plan-details-price"><strong>{cedis(viewing.price)}</strong> / {durationLabel(viewing.durationDays)}</p>
             <h3>What's included</h3>
             <ul>{planFeatureList(viewing).map((feature) => <li key={feature}><Check size={15} aria-hidden="true" />{feature}</li>)}</ul>
-            <h3>Subscribers <span>{activeSubscribers(viewing).length} active · {subscribers(viewing).length} total</span></h3>
-            {subscribers(viewing).length === 0 ? (
+            <h3>Subscribers <span>{subscribers(viewing).active} active · {subscribers(viewing).total} total</span></h3>
+            {!listed.data ? (
+              <p className="plan-details-empty" role="status">{listed.error || "Loading subscribers..."}</p>
+            ) : listed.data.items.length === 0 ? (
               <p className="plan-details-empty">No providers on this plan yet.</p>
             ) : (
               <ul className="plan-details-subscribers">
-                {subscribers(viewing).map((a) => (
+                {listed.data.items.map((a) => (
                   <li key={a.id}>
                     <span>
                       <strong>{a.name}</strong>
@@ -430,6 +430,7 @@ const AdminPlans = () => {
                     <StatusBadge status={a.sub.statusLabel} tone={{ active: "green", expiring: "amber", expired: "red", cancelled: "gray", pending: "amber" }[a.sub.status]} />
                   </li>
                 ))}
+                {listed.data.total > listed.data.items.length && <li><small>The first {listed.data.items.length} of {listed.data.total} are shown. See them all on the Agents page.</small></li>}
               </ul>
             )}
           </div>

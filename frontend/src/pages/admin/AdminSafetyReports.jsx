@@ -8,7 +8,7 @@ import StatusBadge from "../../components/ui/StatusBadge";
 import { ErrorState, TableSkeleton } from "../../components/dashboard/States";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
-import { ADMIN_COUNTS_CHANGED } from "../../hooks/useAdminCounts";
+import { ADMIN_COUNTS_CHANGED } from "../../utils/adminCounts";
 import { reportApi } from "../../frontApi";
 import { adminPath } from "../../utils/adminEntry";
 import { formatRelative } from "../../utils/date";

@@ -35,7 +35,7 @@ test("subscription activation commits payment, history and account together exac
   const base = `http://127.0.0.1:${server.address().port}/api`;
   let sequence = 0;
   const plan = (fields = {}) => Plan.create({ name: `Plan ${++sequence}`, price: 100, duration: 30, propertyLimit: 10, imageLimit: 5, ...fields });
-  const agent = (fields = {}) => User.create({ firstName: "Test", lastName: "Agent", email: `agent${++sequence}@subscription.test`, password: "TestPassword123", role: "agent", agentApplication: { status: "approved", agentType: "individual" }, ...fields });
+  const agent = (fields = {}) => User.create({ firstName: "Test", lastName: "Agent", email: `agent${++sequence}@subscription.test`, password: "TestPassword123", emailVerifiedAt: new Date(), role: "agent", agentApplication: { status: "approved", agentType: "individual" }, ...fields });
   const purchase = (user, target, fields = {}) => Subscription.create({ user: user.id, plan: target.id, planName: target.name, accountType: target.accountType, amount: target.price, planPrice: target.price, durationDays: target.duration, paymentReference: `SUB-${++sequence}`, ...fields });
   const verify = (user, record) => realFetch(base + "/subscriptions/verify", { method: "POST", headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", Cookie: "agent_token=" + jwt.sign({ id: user.id, role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" }) }, body: JSON.stringify({ reference: record.paymentReference }) });
   const currentPlan = async (user, target, fields = {}) => {

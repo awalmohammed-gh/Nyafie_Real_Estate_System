@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { dashboard, agentInquiries, agentUpdateInquiry, assignInquiry } from "../controllers/agentController.js";
 import { listTeam, createInvite, revokeInvite, updateMember, removeMember, teamOwnerOnly } from "../controllers/teamController.js";
+import { propertyActivity, workCounts } from "../utils/workCounts.js";
+import { ok } from "../utils/response.js";
 import { protect, protectAgent, protectAgentSession } from "../middleware/authMiddleware.js";
 import { getApplication, saveApplication, submitApplication, updateAgentProfile } from "../controllers/agentApplicationController.js";
 import { agentOnly } from "../middleware/agentMiddleware.js";
@@ -29,6 +31,8 @@ router.get("/application/documents/:docId/link", protectAgentSession, agentProof
 router.use(protectAgent, agentOnly);
 router.put("/profile", limits.listingSaves, updateAgentProfile);
 router.get("/dashboard", dashboard);
+router.get("/counts", async (req, res) => ok(res, { work: await workCounts(req.user) })); // sidebar badges (polled)
+router.get("/property-activity", async (req, res) => ok(res, await propertyActivity(req.user))); // offers and requests per listing
 router.get("/inquiries", agentInquiries);
 router.patch("/inquiries/:id/status", agentUpdateInquiry);
 router.patch("/inquiries/:id/assign", assignInquiry); // agency owner or manager

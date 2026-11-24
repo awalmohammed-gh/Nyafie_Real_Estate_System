@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   listPublicProperties,
   propertyFacets,
+  homeProperties,
   nearbyProperties,
   relatedProperties,
   getProperty,
@@ -26,6 +27,7 @@ const router = Router();
 
 router.get("/", optionalAuth, listPublicProperties); // search pages add ?page, limit, search, listingType, type, area, minPrice, maxPrice, bedrooms, sort...
 router.get("/facets", propertyFacets);
+router.get("/home", optionalAuth, homeProperties); // the home page's rows and counts
 router.get("/nearby", optionalAuth, nearbyProperties); // ?latitude, longitude, radius (km) + the search filters above; nearest first
 router.get("/my", protectAgent, agentOnly, myProperties);
 router.post("/", protectAgent, agentOnly, limits.listingSaves, activeSubscription, createProperty);

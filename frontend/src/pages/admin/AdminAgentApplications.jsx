@@ -11,7 +11,7 @@ import EmptyState from "../../components/ui/EmptyState";
 import SearchInput from "../../components/ui/SearchInput";
 import { ErrorState, TableSkeleton } from "../../components/dashboard/States";
 import { useApiQuery } from "../../hooks/useApiQuery";
-import { useAuth } from "../../context/useAuth";
+import { adminCountsChanged } from "../../utils/adminCounts";
 import { useToast } from "../../context/useToast";
 import { usePlatform } from "../../context/usePlatform";
 import { adminApi } from "../../frontApi";
@@ -81,7 +81,6 @@ const Facts = ({ items }) => (
 );
 
 const AdminAgentApplications = () => {
-  const { refreshUsers } = useAuth();
   const { settings } = usePlatform();
   const { toast } = useToast();
   const [params, setParams] = useSearchParams();
@@ -122,7 +121,7 @@ const AdminAgentApplications = () => {
     setError("");
     try {
       await adminApi.reviewAgentApplication(confirmation.agent.id, confirmation.action, reason, confirmation.agent.agentApplication?.submittedAt);
-      await refreshUsers();
+      adminCountsChanged();
       query.reload();
       toast({ title: `Application ${{ approve: "approved", reject: "rejected", suspend: "suspended", reactivate: "reactivated" }[confirmation.action]}`, description: confirmation.agent.name });
       setConfirmation(null);

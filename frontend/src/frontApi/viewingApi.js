@@ -1,4 +1,5 @@
 import client from "./client";
+import { fetchPage, ownerPath } from "./page";
 import { mapViewing } from "./mappers";
 
 // The backend takes the owner from the property; the customer sends the listing, a Ghana-time slot and contact details
@@ -6,8 +7,7 @@ export const requestViewing = async ({ propertyId, date, time, phone, message })
   mapViewing((await client.post("/viewings", { propertyId, date, time, phone, message })).data);
 
 export const getMyViewings = async () => (await client.get("/viewings/my")).data.map(mapViewing);
-export const getAgentViewings = async () => (await client.get("/agents/viewings")).data.map(mapViewing);
-export const getAdminViewings = async () => (await client.get("/admin/viewings")).data.map(mapViewing);
+export const getViewingsPage = (scope, params) => fetchPage(ownerPath(scope, "viewings"), params, mapViewing);
 
 /**
  * action: owner side confirm | propose | decline | cancel | complete | missed;

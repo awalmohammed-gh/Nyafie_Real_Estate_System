@@ -18,6 +18,8 @@ import { FindPropertyLinks, FindPropertyMegaMenu, HomeCategoryMenu } from '../co
 import { useCategoryPreviews } from '../hooks/useCategoryPreviews';
 import MobileMenu from '../components/nav/MobileMenu';
 import { buildFindPropertyLinks } from '../utils/findPropertyNavigation';
+import { shortStayPath } from '../utils/shortStay';
+import { listPropertyPath } from '../utils/listProperty';
 
 // Find Property links share the unified catalogue and its existing query schema.
 const buildLinks = (paths, propertyTypes) => {
@@ -95,7 +97,7 @@ const WishlistLink = ({ count, onClick, className = "", onDark = false }) => (
 const NavbarContent = ({ onAuth, overHero = false, bottomNav = false, menuOpen: isOpen, onMenuOpenChange: setIsOpen, menuTriggerRef }) => {
   const [scrolled, setScrolled] = useState(false);
   const [openMenu, setOpenMenu] = useState(null); // desktop: "listings" | "properties" | null
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { favorites } = useRealEstate();
   const { paths, settings } = usePlatform();
   const { pathname, search } = useLocation();
@@ -114,7 +116,7 @@ const NavbarContent = ({ onAuth, overHero = false, bottomNav = false, menuOpen: 
     const href = (params) => `${paths.listings}?${new URLSearchParams(params)}`;
     const status = menu === "buy" ? "Sale" : "Rent";
     return menu === "stays" ? [
-      { key: "all-stays", name: "All short stays", path: href({ type: "Hotel,Hotel-Apartment" }), description: "Hotels and serviced apartments" },
+      { key: "all-stays", name: "All short stays", path: shortStayPath(paths.listings), description: "Hotels, apartments and homes by the night" },
       { key: "hotels", name: "Hotels", path: href({ type: "Hotel" }), description: "Find a room for your next stay" },
       { key: "hotel-apartments", name: "Hotel apartments", path: href({ type: "Hotel-Apartment" }), description: "Furnished stays with room to settle in" },
     ] : [
@@ -363,6 +365,7 @@ const NavbarContent = ({ onAuth, overHero = false, bottomNav = false, menuOpen: 
 
         {/* Desktop actions */}
         <div className="hidden items-center gap-1 lg:flex">
+          <Link to={listPropertyPath(user)} className={`mr-1 hidden min-h-10 items-center rounded-full border px-4 text-sm font-semibold whitespace-nowrap transition-colors xl:inline-flex ${onDark ? "border-white/60 text-white hover:bg-white/15" : "border-brand-200 text-brand-700 hover:bg-brand-50"}`}>List your property</Link>
           {isAuthenticated && <NotificationBell onDark={onDark} />}
           <WishlistLink count={favorites.length} className="grid h-10 w-10" onDark={onDark} />
           <span className={`mx-2 h-6 w-px transition-colors duration-300 ${onDark ? "bg-white/25" : "bg-gray-200"}`} aria-hidden="true" />

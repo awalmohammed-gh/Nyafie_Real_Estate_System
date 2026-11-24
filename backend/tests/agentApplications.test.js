@@ -90,8 +90,8 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
   // Sign-ups wait for their emailed code (controllers/registrationController.js); the codes are caught here
   const codes = [];
   t.mock.method(verificationMailer, "send", async (email, code) => { codes.push({ email, code }); });
-  const smtp = { SMTP_USER: process.env.SMTP_USER, SMTP_APP_PASSWORD: process.env.SMTP_APP_PASSWORD };
-  Object.assign(process.env, { SMTP_USER: "sender@gmail.com", SMTP_APP_PASSWORD: "test-app-password" });
+  const smtp = { SMTP_USER: process.env.SMTP_USER, SMTP_APP_PASSWORD: process.env.SMTP_APP_PASSWORD, SIGNUP_EMAILS: process.env.SIGNUP_EMAILS };
+  Object.assign(process.env, { SMTP_USER: "sender@gmail.com", SMTP_APP_PASSWORD: "test-app-password", SIGNUP_EMAILS: "any" });
   t.after(() => { for (const [name, value] of Object.entries(smtp)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } });
   memoryModel(t, PendingRegistration);
   // Admin sign-in emails a second-step code (controllers/adminSignInController.js)

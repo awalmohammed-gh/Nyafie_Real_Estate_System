@@ -58,9 +58,7 @@ const Hero = () => {
   const [mapHint, setMapHint] = useState(false);
   // A place picked from the map: { label, latitude, longitude } (its option value starts with "place:")
   const [place, setPlace] = useState(null);
-  const facets = usePropertyFacets(
-    search.status === "stay" ? "" : search.status,
-  );
+  const facets = usePropertyFacets(search.status);
   const areas = [...(facets.data?.areas || [])]
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((area) => ({
@@ -70,11 +68,6 @@ const Hero = () => {
       count: area.count,
     }));
   const types = [...(facets.data?.types || [])]
-    .filter(
-      (type) =>
-        search.status !== "stay" ||
-        ["hotel", "hotel-apartment"].includes(type.value.toLowerCase()),
-    )
     .sort((a, b) => a.value.localeCompare(b.value))
     .map((type) => ({
       value: type.value,
@@ -161,7 +154,8 @@ const Hero = () => {
     const params = new URLSearchParams(
       Object.entries({
         status: status === "stay" ? "" : status,
-        type: type || (status === "stay" ? "Hotel,Hotel-Apartment" : ""),
+        stay: status === "stay" ? "1" : "",
+        type,
         minPrice: budget?.min,
         maxPrice: budget?.max,
         ...where,

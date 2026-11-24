@@ -61,7 +61,7 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner, place =
   const resultsRef = useRef(null);
   const locationInputRef = useRef(null);
   const allFacets = usePropertyFacets();
-  const facets = usePropertyFacets(filters.listingType);
+  const facets = usePropertyFacets(filters.stay ? "stay" : filters.listingType);
   const visitor = useVisitorLocation();
   // ?near=me (device, approximate) or ?near=lat,lng&place=… ; pending while the device position loads
   const near = parseNear(urlParams, visitor.position);
@@ -70,7 +70,7 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner, place =
   const locationProblem = near?.source === "device" && near.pending ? LOCATION_PROBLEMS[visitor.status] || "" : "";
   const params = {
     page, limit: PAGE_SIZE, search, sort, listingType: filters.listingType,
-    type: filters.types, area: filters.area, city: filters.city, region: filters.region, minPrice: filters.price?.min ?? undefined,
+    stay: filters.stay ? "true" : undefined, type: filters.types, area: filters.area, city: filters.city, region: filters.region, minPrice: filters.price?.min ?? undefined,
     maxPrice: filters.price?.max ?? undefined, bedrooms: filters.beds || undefined,
     bathrooms: filters.baths || undefined, availability: filters.availability, amenities: filters.amenities,
   };
@@ -118,10 +118,11 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner, place =
   const changeIntent = (value) => {
     if (value === filters.listingType) return;
     if (fixedListingType) navigate(value === "Sale" ? "/sale" : value === "Rent" ? "/rent" : paths.listings);
-    else update({ listingType: value, area: "", types: [], price: null });
+    else update({ listingType: value, stay: "", area: "", types: [], price: null });
   };
 
   const activeFilters = [
+    filters.stay && { key: "stay", kind: "stay", value: true, label: "Short stays", clear: () => update({ stay: "", types: [] }) },
     ...filters.types.map((type) => ({ key: `type:${type}`, kind: "type", value: type, label: formatType(type), clear: () => update({ types: filters.types.filter((value) => value !== type) }) })),
     filters.area && { key: "area", kind: "area", value: filters.area, label: filters.area, clear: () => update({ area: "" }) },
     filters.city && { key: "city", kind: "city", value: filters.city, label: filters.city, clear: () => update({ city: "", area: "" }) },

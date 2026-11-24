@@ -1,7 +1,7 @@
 import client from "./client";
 import { mapUser } from "./mappers";
 import { prepareCustomerTab, clearCustomerTab } from "../utils/customerTabSession";
-import { loadGoogleChallenge } from "../utils/googleIdentity";
+import { retryUnreachable } from "../utils/googleIdentity";
 
 export const forSession = (domain) => {
   const base = '/auth/' + domain;
@@ -25,11 +25,12 @@ export const forSession = (domain) => {
     resetPassword: (email, code, newPassword) => client.post(base + "/reset-password", { email, code, newPassword }, config),
     googleChallenge: async () => {
       prepareCustomerTab();
-      return loadGoogleChallenge(async () => (await client.post(base + "/google/challenge", {}, config)).data);
+      return retryUnreachable(async () => (await client.post(base + "/google/challenge", {}, config)).data);
     },
-    googleLogin: async (credential, challenge) => {
+    // accountId: confirms this signed-in account instead of signing in to whichever account is chosen
+    googleLogin: async (credential, challenge, accountId) => {
       prepareCustomerTab();
-      const data = (await client.post(base + "/google", { credential, challenge }, config)).data;
+      const data = await retryUnreachable(async () => (await client.post(base + "/google", { credential, challenge, accountId }, config)).data);
       return { ...present(data.user), createdWithGoogle: data.created };
     },
     logout: async () => {

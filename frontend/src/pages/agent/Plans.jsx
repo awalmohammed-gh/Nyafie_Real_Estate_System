@@ -54,7 +54,7 @@ const faqs = [
 ];
 
 const Plans = () => {
-  const { isAuthenticated, isAgent, isAdmin, user, isActive, isExpired } = useAuth();
+  const { isAuthenticated, isAgent, isAdmin, user, isActive, isExpired, requestPassword } = useAuth();
   const { plans: allPlans, plansLoading, siteName, settings, settingsReady } = usePlatform();
   const navigate = useNavigate();
   const location = useLocation();
@@ -140,6 +140,8 @@ const Plans = () => {
     if (!isAgent) {
       setContinuing(true);
       try {
+        // Signed up with Google: the agent area needs a NyaFie password
+        if (user.passwordMissing && !(await requestPassword("agent"))) return;
         const agent = await authApi.becomeAgent(selected.id);
         const checkout = `${canAccessAgent(agent) ? "/agent/subscription/checkout" : "/agent/checkout"}?plan=${selected.id}`;
         // Resume an existing payment/profile instead of asking the customer to pay twice.

@@ -42,6 +42,7 @@ export const PaymentResult = lazyPage(() => import('../pages/PaymentResult'));
 export const AgentMessages = lazyPage(() => import('../pages/agent/Messages'));
 export const AdminMessages = lazyPage(() => import('../pages/admin/AdminMessages'));
 export const Plans = lazyPage(() => import('../pages/agent/Plans'));
+export const AgentStart = lazyPage(() => import('../pages/agent/AgentStart'));
 export const Checkout = lazyPage(() => import('../pages/agent/Checkout'));
 export const Dashboard = lazyPage(() => import('../pages/agent/Dashboard'));
 export const MyProperties = lazyPage(() => import('../pages/agent/MyProperties'));

@@ -1,3 +1,4 @@
+import { workCounts } from "../utils/workCounts.js";
 import User from "../models/User.js";
 import Property from "../models/Property.js";
 import Inquiry from "../models/Inquiry.js";
@@ -412,7 +413,10 @@ export const performance = async (req, res) => {
 };
 
 // GET /api/admin/counts -> small counters for the sidebar badges (polled)
-export const counts = async (_req, res) => {
-  const [pendingApplications, openReports, pendingDocumentChecks] = await Promise.all([pendingApplicationCount(), openReportCount(), pendingDocumentCheckCount()]);
-  ok(res, { pendingApplications, openReports, pendingDocumentChecks });
+export const counts = async (req, res) => {
+  const [pendingApplications, openReports, pendingDocumentChecks, pendingListings, newInquiries, work] = await Promise.all([
+    pendingApplicationCount(), openReportCount(), pendingDocumentCheckCount(),
+    Property.countDocuments({ status: "pending" }), Inquiry.countDocuments({ status: "new" }), workCounts(req.user),
+  ]);
+  ok(res, { pendingApplications, openReports, pendingDocumentChecks, pendingListings, newInquiries, work });
 };

@@ -31,6 +31,7 @@ import { removalImpact, removeProvider, restoreProvider, deletionPlan, permanent
 import { HttpError, ok, fail } from "../utils/response.js";
 import { prepareHotelFields, saveHotelProperty } from "../utils/hotel.js";
 import { REFUND_SUMMARY } from "./refundController.js";
+import { inboxKey, sameInbox } from "../utils/signupEmail.js";
 import { DISPUTE_SUMMARY } from "../utils/disputes.js";
 import { alertSavedSearches } from "../utils/savedSearches.js";
 import { markConfirmed } from "../utils/listingFreshness.js";
@@ -84,9 +85,10 @@ export const updateUser = async (req, res) => {
   if (invalidText(firstName, 80) || invalidText(lastName, 80) || invalidText(phone, 30)) return fail(res, 400, "Check the name and phone fields.");
   if (email !== undefined) {
     if (typeof email !== "string" || email.length > 254 || !/^\S+@\S+\.\S+$/.test(email)) return fail(res, 400, "Enter a valid email address.");
-    if (await User.exists({ email: email.toLowerCase(), _id: { $ne: user._id } })) return fail(res, 409, "Another account already uses this email.");
     const normalizedEmail = email.trim().toLowerCase();
+    if (user.email !== normalizedEmail && await User.exists({ $and: [{ _id: { $ne: user._id } }, sameInbox(normalizedEmail)] })) return fail(res, 409, "Another account already uses this email.");
     if (user.email !== normalizedEmail) {
+      user.emailKey = inboxKey(normalizedEmail);
       user.emailVerifiedAt = null;
       user.sessionVersion = crypto.randomUUID();
     }

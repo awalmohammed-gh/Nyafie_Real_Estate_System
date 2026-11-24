@@ -92,8 +92,8 @@ const Profile = () => {
             <>
               <p className="mt-1 text-xl font-bold text-gray-900">Home seeker</p>
               <p className="mt-3 text-sm text-gray-600">List your own properties and receive inquiries by becoming a {siteName} agent.</p>
-              <Link to="/agent/plans" className="btn btn-primary mt-5 w-full">
-                Become an Agent
+              <Link to="/agent/start" className="btn btn-primary mt-5 w-full">
+                {user.agentAccess ? "Agent area" : "Become an Agent"}
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </>

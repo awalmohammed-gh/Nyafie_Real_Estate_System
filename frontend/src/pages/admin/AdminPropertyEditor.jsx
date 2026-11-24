@@ -1,6 +1,8 @@
 import { Link, useParams } from "react-router-dom";
 import { AlertCircle } from "lucide-react";
-import { useRealEstate } from "../../context/useRealEstate";
+import { useApiQuery } from "../../hooks/useApiQuery";
+import { adminApi } from "../../frontApi";
+import { ErrorState } from "../../components/dashboard/States";
 import { PropertyEditorForm } from "../agent/PropertyEditor";
 import EmptyState from "../../components/ui/EmptyState";
 import PageLoader from "../../components/ui/PageLoader";
@@ -13,10 +15,12 @@ import "./adminPropertyEditor.css";
 const AdminPropertyEditor = () => {
   const { siteName } = usePlatform();
   const { propertyId } = useParams();
-  const { listings, listingsReady } = useRealEstate();
-  if (propertyId && !listingsReady) return <PageLoader label="Loading property..." />;
+  // Loaded once: a refresh would replace what is being typed
+  const query = useApiQuery(propertyId ? `admin-property:${propertyId}` : null, () => adminApi.getAdminProperty(propertyId));
+  if (propertyId && query.loading) return <PageLoader label="Loading property..." />;
+  if (propertyId && query.error) return <ErrorState title="Couldn't load this property" message={query.error} onRetry={query.reload} />;
 
-  const existing = propertyId ? listings.find((p) => p.id === propertyId) : null;
+  const existing = propertyId ? query.data : null;
   if (propertyId && existing?.owner.type !== "admin") {
     return (
       <EmptyState

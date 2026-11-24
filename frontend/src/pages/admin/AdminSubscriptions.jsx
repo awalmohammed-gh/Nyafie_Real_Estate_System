@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { BadgeCheck, CalendarPlus, Clock, CreditCard, Eye, Hourglass, Repeat, Wallet, XCircle, Zap } from "lucide-react";
-import { useAdminData } from "../../hooks/useAdminData";
+import { useApiQuery } from "../../hooks/useApiQuery";
+import { useAdminChange, useDebounced, usePagedList } from "../../hooks/usePagedList";
+import { usePlatform } from "../../context/usePlatform";
+import { adminApi } from "../../frontApi";
 import AdminPageTitle from "../../components/admin/AdminPageTitle";
 import AdminStat from "../../components/admin/AdminStat";
 import SubscriptionDialogs from "../../components/admin/SubscriptionDialogs";
@@ -12,6 +15,7 @@ import StatusBadge from "../../components/ui/StatusBadge";
 import ActionMenu from "../../components/ui/ActionMenu";
 import AdminRecordModal from "../../components/admin/AdminRecordModal";
 import EmptyState from "../../components/ui/EmptyState";
+import { ErrorState, TableSkeleton } from "../../components/dashboard/States";
 import { formatDate } from "../../utils/date";
 import { formatCedis } from "../../utils/reports";
 import { ACCOUNT_TYPES } from "../../data/plans";
@@ -21,7 +25,7 @@ const payTone = { paid: "green", pending: "amber", failed: "red", waived: "gray"
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : "—");
 
 const AdminSubscriptions = () => {
-  const { agents, payments, getPlan } = useAdminData();
+  const { getPlan } = usePlatform();
   const [params] = useSearchParams();
   const [status, setStatus] = useState(params.get("status") || "all");
   const [query, setQuery] = useState("");
@@ -29,18 +33,18 @@ const AdminSubscriptions = () => {
   const [viewingId, setViewingId] = useState(null);
   const [action, setAction] = useState(null);
 
-  const subscribed = agents.filter((a) => a.subscription);
-  const matches = (a) => status === "all" || a.sub.status === status || (status === "active" && a.sub.isActive);
-  const q = query.trim().toLowerCase();
-  const rows = subscribed
-    .filter(matches)
-    .filter((a) => accountType === "all" || a.accountType === accountType)
-    .filter((a) => !q || `${a.name} ${a.email} ${a.subscription.planName} ${a.agentApplication?.companyName || ""}`.toLowerCase().includes(q))
-    .sort((a, b) => new Date(a.subscription.expiryDate) - new Date(b.subscription.expiryDate));
-
-  const count = (fn) => subscribed.filter(fn).length;
-  const thisMonth = payments.filter((p) => p.status === "paid" && new Date(p.createdAt).getMonth() === new Date().getMonth() && new Date(p.createdAt).getFullYear() === new Date().getFullYear());
-  const viewing = viewingId && agents.find((a) => a.id === viewingId);
+  const search = useDebounced(query.trim());
+  const list = usePagedList("admin-subscriptions", { subscribed: 1, sort: "expiry", status, accountType, search: search || undefined }, adminApi.getProvidersPage);
+  const summary = useApiQuery("admin-plan-summary", adminApi.getPlanSummary);
+  const details = useApiQuery(viewingId ? `admin-agent:${viewingId}` : null, () => adminApi.getProvider(viewingId));
+  const { reload } = list;
+  const { reload: reloadSummary } = summary;
+  const { reload: reloadDetails } = details;
+  useAdminChange(useCallback(() => { reload(); reloadSummary(); reloadDetails(); }, [reload, reloadSummary, reloadDetails]));
+  const rows = (list.data?.items || []).map((a) => ({ ...a, plan: getPlan(a.subscription?.planId) }));
+  const counts = list.data?.counts || {};
+  const revenue = (summary.data ?? summary.previous)?.revenue.at(-1)?.total ?? 0;
+  const viewing = viewingId && (details.data || rows.find((a) => a.id === viewingId) || null);
 
   const actionsFor = (a) => [
     { label: "View details", icon: Eye, onClick: () => setViewingId(a.id) },
@@ -86,10 +90,10 @@ const AdminSubscriptions = () => {
       <AdminPageTitle title="Subscriptions" description="Agent plans, renewals and payments." />
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <AdminStat index={0} icon={BadgeCheck} label="Active" value={count((a) => a.sub.isActive)} tone="green" />
-        <AdminStat index={1} icon={Clock} label="Expiring in 7 days" value={count((a) => a.sub.expiringSoon)} tone="amber" />
-        <AdminStat index={2} icon={Hourglass} label="Pending payment" value={count((a) => a.sub.status === "pending")} tone="slate" />
-        <AdminStat index={3} icon={Wallet} label="Revenue this month" value={formatCedis(thisMonth.reduce((s, p) => s + p.received, 0))} />
+        <AdminStat index={0} icon={BadgeCheck} label="Active" value={counts.active ?? 0} tone="green" />
+        <AdminStat index={1} icon={Clock} label="Expiring in 7 days" value={counts.expiring ?? 0} tone="amber" />
+        <AdminStat index={2} icon={Hourglass} label="Pending payment" value={counts.pending ?? 0} tone="slate" />
+        <AdminStat index={3} icon={Wallet} label="Revenue this month" value={formatCedis(revenue)} />
       </div>
 
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -97,12 +101,12 @@ const AdminSubscriptions = () => {
           value={status}
           onChange={setStatus}
           tabs={[
-            { id: "all", label: "All", count: subscribed.length },
-            { id: "active", label: "Active", count: count((a) => a.sub.isActive) },
-            { id: "expiring", label: "Expiring", count: count((a) => a.sub.status === "expiring") },
-            { id: "expired", label: "Expired", count: count((a) => a.sub.status === "expired") },
-            { id: "cancelled", label: "Cancelled", count: count((a) => a.sub.status === "cancelled") },
-            { id: "pending", label: "Pending", count: count((a) => a.sub.status === "pending") },
+            { id: "all", label: "All", count: counts.all },
+            { id: "active", label: "Active", count: counts.active },
+            { id: "expiring", label: "Expiring", count: counts.expiring },
+            { id: "expired", label: "Expired", count: counts.expired },
+            { id: "cancelled", label: "Cancelled", count: counts.cancelled },
+            { id: "pending", label: "Pending", count: counts.pending },
           ]}
         />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -118,9 +122,10 @@ const AdminSubscriptions = () => {
       <DataTable
         columns={columns}
         rows={rows}
+        paging={list.paging}
         rowKey={(a) => a.id}
         minWidth={1180}
-        empty={<EmptyState icon={CreditCard} title="No subscriptions" description="Nothing matches this filter." />}
+        empty={!list.data ? list.error ? <ErrorState title="Couldn't load subscriptions" message={list.error} onRetry={reload} /> : <TableSkeleton /> : <EmptyState icon={CreditCard} title="No subscriptions" description="Nothing matches this filter." />}
         mobileCard={(a) => (
           <div>
             <div className="flex items-start justify-between gap-3">
@@ -176,7 +181,7 @@ const AdminSubscriptions = () => {
             <div>
               <p className="mb-2 text-sm font-semibold text-gray-900">Payment history</p>
               <ul className="divide-y divide-slate-100 rounded-lg ring-1 ring-slate-200">
-                {payments.filter((p) => p.userId === viewing.id).map((p) => (
+                {viewing.payments.map((p) => (
                   <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
                     <span>
                       <span className="block font-medium text-gray-900">{getPlan(p.planId)?.name || p.planId} · {formatCedis(p.amount)}</span>
@@ -185,7 +190,7 @@ const AdminSubscriptions = () => {
                     <StatusBadge status={cap(p.status)} tone={payTone[p.status]} dot={false} />
                   </li>
                 ))}
-                {payments.every((p) => p.userId !== viewing.id) && <li className="px-4 py-3 text-sm text-gray-500">No payments recorded.</li>}
+                {viewing.payments.length === 0 && <li className="px-4 py-3 text-sm text-gray-500">{details.data ? "No payments recorded." : details.error || "Loading payments..."}</li>}
               </ul>
             </div>
           </div>

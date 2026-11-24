@@ -26,7 +26,7 @@ test("private agent proof uploads are required, locked during review, and approv
     return { public_id: `${options.folder}/proof-${uploads.length}`, format: "pdf", secure_url: "https://example.test/never-expose-this-url" };
   });
   t.mock.method(cloudinary.uploader, "destroy", async (id, options) => { destroyed.push({ id, options }); return { result: "ok" }; });
-  const makeUser = (fields) => User.create({ firstName: "Test", lastName: "Agent", password: "test-password-long-enough", phone: "0241234567", ...fields });
+  const makeUser = (fields) => User.create({ firstName: "Test", lastName: "Agent", password: "test-password-long-enough", emailVerifiedAt: new Date(), phone: "0241234567", ...fields });
   const applicant = await makeUser({ email: "applicant@proof.test", role: "agent", agentApplication: { status: "incomplete", profileCompletedAt: new Date() } });
   const other = await makeUser({ email: "other@proof.test", role: "agent", agentApplication: { status: "incomplete" } });
   const admin = await makeUser({ email: "admin@proof.test", role: "admin" });

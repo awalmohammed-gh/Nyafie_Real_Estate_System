@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from "react";
-import { AlertCircle, Loader2, Mail } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
-import { AuthField } from "./AuthField";
+import CodeInput from "./CodeInput";
 
 export default function EmailVerificationForm({ verification, onSuccess, onBack }) {
   const { verifyEmail, resendVerification } = useAuth();
@@ -48,7 +48,7 @@ export default function EmailVerificationForm({ verification, onSuccess, onBack 
       <p>{verification.registration ? "To finish creating your account, enter" : verification.twoStep ? "To finish signing in, enter" : "Enter"} the six-digit code sent to <strong>{verification.email}</strong>. It expires in 10 minutes. Check your spam folder too.</p>
     </div>
     <form className="auth-form" onSubmit={submit} aria-busy={busy} aria-describedby={error ? errorId : undefined}>
-      <AuthField label={verification.twoStep ? "Sign-in code" : "Verification code"} icon={Mail} name="verificationCode" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" minLength={6} maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} disabled={busy} required autoFocus />
+      <CodeInput label={verification.twoStep ? "Sign-in code" : "Verification code"} value={code} onChange={setCode} disabled={busy} invalid={Boolean(error)} describedBy={error ? errorId : undefined} autoFocus />
       {error && <p id={errorId} role="alert" className="auth-error"><AlertCircle size={18} aria-hidden="true" />{error}</p>}
       <p role="status" className="auth-field-hint">{message}</p>
       <button type="submit" className="auth-submit" disabled={busy || code.length !== 6}>{busy ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : null}{verification.registration ? "Verify & create account" : verification.twoStep ? "Verify & sign in" : "Verify email & continue"}</button>

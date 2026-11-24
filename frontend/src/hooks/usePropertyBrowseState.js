@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { isShortStaySearch } from "../utils/shortStay";
 
 export const PRICE_RANGES = [
   { label: "Up to ₵2,000", min: 0, max: 2000 },
@@ -14,7 +15,7 @@ export const PRICE_RANGES = [
 export const FEATURE_OPTIONS = ["Parking", "Furnished", "Swimming Pool", "24/7 Security", "Air Conditioning", "Borehole", "Solar Backup", "Garden"];
 
 // Filters. The search location (near, place, radius) and view (list/map) are kept by "Clear all".
-const URL_KEYS = ["status", "purpose", "type", "region", "city", "area", "minPrice", "maxPrice", "bedrooms", "bathrooms", "availability", "amenities", "search", "sort", "page"];
+const URL_KEYS = ["status", "purpose", "stay", "type", "region", "city", "area", "minPrice", "maxPrice", "bedrooms", "bathrooms", "availability", "amenities", "search", "sort", "page"];
 const SORTS = ["latest", "priceAsc", "priceDesc", "popular", "rating"];
 const numberParam = (params, key) => {
   const raw = params.get(key);
@@ -37,6 +38,7 @@ export const usePropertyBrowseState = (fixedListingType, place = null) => {
   };
   const filters = {
     listingType: fixedListingType || (["Sale", "Rent"].includes(params.get("status")) ? params.get("status") : ({ rent: "Rent", sale: "Sale" })[params.get("purpose")] || ""),
+    stay: !fixedListingType && isShortStaySearch(params),
     types: [...new Set((params.get("type") || "").split(",").map((value) => value.trim()).filter(Boolean))],
     area: place ? place.area || "" : params.get("area") || "",
     city: place ? place.city || "" : params.get("city") || "",

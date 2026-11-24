@@ -3,6 +3,8 @@ import { AuthContext } from "./authContext";
 import { authApi, adminApi } from "../frontApi";
 import { sessionRole } from "../utils/sessionDomain";
 import { getSubscriptionState } from "../utils/subscription";
+import { adminCountsChanged } from "../utils/adminCounts";
+import { passwordPromptDue, postponePasswordPrompt } from "../utils/passwordPrompt";
 import { CUSTOMER_SESSION_ENDED } from "../utils/customerTabSession";
 
 // Authentication state backed by the API. The session itself lives in an
@@ -16,7 +18,10 @@ export const AuthProvider = ({ children, domain }) => {
   }, [domain]);
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false); // true once the session check finished
-  const [users, setUsers] = useState([]); // admin only
+  // Why a Google account is being asked for a NyaFie password: "signin" | "agent" | "settings", or null
+  const [askPassword, setAskPassword] = useState(null);
+  const passwordAnswer = useRef(null);
+  const answerPassword = useCallback((created) => { setAskPassword(null); passwordAnswer.current?.(created); passwordAnswer.current = null; }, []);
   const isAdmin = user?.role === "admin";
 
   const refreshUser = useCallback(async () => {
@@ -50,14 +55,6 @@ export const AuthProvider = ({ children, domain }) => {
     return () => window.removeEventListener(CUSTOMER_SESSION_ENDED, expired);
   }, [domain, refreshUser]);
 
-  const refreshUsers = useCallback(async () => {
-    setUsers(await adminApi.getUsers());
-  }, []);
-
-  useEffect(() => {
-    if (isAdmin) adminApi.getUsers().then(setUsers).catch(() => {});
-  }, [isAdmin]);
-
   const login = useCallback(async (credentials) => {
     ++revision.current;
     const result = await api.login(credentials);
@@ -90,11 +87,12 @@ export const AuthProvider = ({ children, domain }) => {
   }, [api, checkRole]);
   const resendVerification = useCallback((challenge) => api.resendVerification(challenge), [api]);
   const requestPasswordReset = useCallback((email) => api.requestPasswordReset(email), [api]);
-  const googleLogin = useCallback(async (credential, challenge) => {
+  const googleLogin = useCallback(async (credential, challenge, accountId) => {
     ++revision.current;
-    const next = checkRole(await api.googleLogin(credential, challenge));
+    const next = checkRole(await api.googleLogin(credential, challenge, accountId));
     ++revision.current;
     setUser(next);
+    if (!accountId) setAskPassword(passwordPromptDue(next) ? "signin" : null);
     setReady(true);
     return next;
   }, [api, checkRole]);
@@ -113,7 +111,6 @@ export const AuthProvider = ({ children, domain }) => {
     await api.logout();
     ++revision.current;
     setUser(null);
-    setUsers([]);
     setReady(true);
   }, [api]);
 
@@ -122,7 +119,25 @@ export const AuthProvider = ({ children, domain }) => {
     setUser(next);
     return next;
   }, [api, checkRole]);
-  const changePassword = useCallback((currentPassword, newPassword) => api.changePassword(currentPassword, newPassword), [api]);
+  // Google accounts create their first password without a current one
+  const changePassword = useCallback(async (currentPassword, newPassword) => {
+    ++revision.current; // a session check from before the change must not undo it
+    const result = await api.changePassword(currentPassword || undefined, newPassword);
+    ++revision.current;
+    setUser((current) => current ? { ...current, passwordMissing: false } : current);
+    answerPassword(true);
+    return result;
+  }, [api, answerPassword]);
+  const skipPassword = useCallback(() => {
+    if (user && askPassword === "signin") postponePasswordPrompt(user);
+    answerPassword(false);
+  }, [user, askPassword, answerPassword]);
+  // Opens the dialog; resolves to true once the password exists, false if they close it
+  const requestPassword = useCallback((reason) => new Promise((resolve) => {
+    passwordAnswer.current?.(false);
+    passwordAnswer.current = resolve;
+    setAskPassword(reason);
+  }), []);
   const uploadProfilePhoto = useCallback(async (image) => {
     const next = checkRole(await api.uploadProfilePhoto(image));
     ++revision.current;
@@ -136,16 +151,16 @@ export const AuthProvider = ({ children, domain }) => {
     return next;
   }, [api, checkRole]);
 
-  // Admin actions: the backend authorizes each one; the list is refreshed afterwards
+  // Admin actions: the backend authorizes each one; what is on screen reloads afterwards (useAdminChange)
   const admin = useMemo(() => {
     const run = async (request) => {
       const result = await request;
-      await refreshUsers();
+      adminCountsChanged();
       return result;
     };
     return {
       updateUser: (id, changes) => run(adminApi.updateUser(id, changes)),
-      setStatus: (id, status) => run(users.find((account) => account.id === id)?.role === "agent" ? adminApi.reviewAgentApplication(id, status === "suspended" ? "suspend" : "reactivate") : adminApi.setUserStatus(id, status)),
+      setStatus: (id, status, role) => run(role === "agent" ? adminApi.reviewAgentApplication(id, status === "suspended" ? "suspend" : "reactivate") : adminApi.setUserStatus(id, status)),
       deleteUser: (id) => run(adminApi.deleteUser(id)),
       changePlan: (id, planId) => run(adminApi.manageSubscription(id, "changePlan", { planId })),
       extendSubscription: (id, days) => run(adminApi.manageSubscription(id, "extend", { days })),
@@ -155,13 +170,12 @@ export const AuthProvider = ({ children, domain }) => {
       restoreAgent: (id, republish) => run(adminApi.restoreAgent(id, republish)),
       deleteAgentPermanently: (id, confirm) => run(adminApi.deleteAgentPermanently(id, confirm)),
     };
-  }, [refreshUsers, users]);
+  }, []);
 
   const value = useMemo(
     () => ({
       domain,
       user,
-      users,
       ready,
       isAuthenticated: Boolean(user),
       isAgent: user?.role === "agent",
@@ -177,14 +191,16 @@ export const AuthProvider = ({ children, domain }) => {
       googleLogin,
       logout,
       refreshUser,
-      refreshUsers,
       updateProfile,
       changePassword,
+      askPassword: user?.passwordMissing ? askPassword : null,
+      requestPassword,
+      skipPassword,
       uploadProfilePhoto,
       removeProfilePhoto,
       admin,
     }),
-    [domain, user, users, ready, isAdmin, login, register, verifyEmail, resendVerification, requestPasswordReset, resetPassword, googleLogin, logout, refreshUser, refreshUsers, updateProfile, changePassword, uploadProfilePhoto, removeProfilePhoto, admin]
+    [domain, user, ready, isAdmin, login, register, verifyEmail, resendVerification, requestPasswordReset, resetPassword, googleLogin, logout, refreshUser, updateProfile, changePassword, askPassword, requestPassword, skipPassword, uploadProfilePhoto, removeProfilePhoto, admin]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -4,14 +4,17 @@ import { ArrowLeft, Loader2, Lock, Mail, Phone, Send, XCircle } from "lucide-rea
 import { chatApi } from "../../frontApi";
 import { useAuth } from "../../context/useAuth";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
+import { MESSAGES_READ } from "../../hooks/useNotifications";
+import { startPolling } from "../../utils/poll";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import { formatRelative, formatTime } from "../../utils/date";
 import { cloudImage } from "../../utils/cloudImage";
+import { mergeMessages } from "../../utils/messages";
 
 const POLL_MS = 8000;
 const MAX = 2000;
 
-// One conversation: messages, composer and actions. Refreshes by polling while open;
+// One conversation: messages, composer and actions. Refreshes by polling while open and visible;
 // the fetch function is the only thing to swap if real-time updates are added later.
 const ChatThread = ({ conversationId, onBack, onChanged }) => {
   const { user } = useAuth();
@@ -22,7 +25,8 @@ const ChatThread = ({ conversationId, onBack, onChanged }) => {
   const [sending, setSending] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const bottomRef = useRef(null);
-  const lastCount = useRef(0);
+  const lastShown = useRef(null);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -30,10 +34,12 @@ const ChatThread = ({ conversationId, onBack, onChanged }) => {
       try {
         const next = await chatApi.getConversationById(conversationId);
         if (!active) return;
-        setData(next);
+        // Earlier messages already on screen stay; whether there are more is known from loading them
+        setData((prev) => (prev?.conversation.id === next.conversation.id ? { ...next, messages: mergeMessages(prev.messages, next.messages), hasEarlier: prev.hasEarlier } : next));
         setError("");
         if (next.conversation.unread > 0) {
           await chatApi.markConversationAsRead(conversationId);
+          window.dispatchEvent(new Event(MESSAGES_READ));
           onChanged?.();
         }
       } catch (err) {
@@ -41,10 +47,10 @@ const ChatThread = ({ conversationId, onBack, onChanged }) => {
       }
     };
     load();
-    const timer = setInterval(load, POLL_MS);
+    const stopPolling = startPolling(load, POLL_MS);
     return () => {
       active = false;
-      clearInterval(timer);
+      stopPolling();
     };
     // onChanged is a callback from the parent; reloading on its identity is not needed
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -52,12 +58,19 @@ const ChatThread = ({ conversationId, onBack, onChanged }) => {
 
   // Keep the newest message in view
   useEffect(() => {
-    const count = data?.messages.length || 0;
-    if (count !== lastCount.current) {
-      bottomRef.current?.scrollIntoView({ behavior: lastCount.current ? "smooth" : "auto", block: "end" });
-      lastCount.current = count;
+    const newest = data?.messages.at(-1)?.id || null;
+    if (newest !== lastShown.current) {
+      bottomRef.current?.scrollIntoView({ behavior: lastShown.current ? "smooth" : "auto", block: "end" });
+      lastShown.current = newest;
     }
   }, [data]);
+
+  const showEarlier = async () => {
+    setLoadingEarlier(true);
+    const { ok, result } = await run(chatApi.getConversationById(conversationId, { before: data.messages[0].id }));
+    if (ok) setData((prev) => ({ ...prev, messages: mergeMessages(prev.messages, result.messages), hasEarlier: result.hasEarlier }));
+    setLoadingEarlier(false);
+  };
 
   const send = async (e) => {
     e?.preventDefault();
@@ -67,7 +80,7 @@ const ChatThread = ({ conversationId, onBack, onChanged }) => {
     const { ok, result } = await run(chatApi.sendMessage(conversationId, message));
     if (ok) {
       setText("");
-      setData((prev) => ({ ...prev, messages: [...prev.messages, result] }));
+      setData((prev) => ({ ...prev, messages: mergeMessages(prev.messages, [result]) }));
       onChanged?.();
     }
     setSending(false);
@@ -148,6 +161,11 @@ const ChatThread = ({ conversationId, onBack, onChanged }) => {
 
       {/* Messages */}
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-gray-50/60 p-4">
+        {data.hasEarlier && (
+          <button type="button" onClick={showEarlier} disabled={loadingEarlier} className="mx-auto flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50 disabled:opacity-60">
+            {loadingEarlier && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}Show earlier messages
+          </button>
+        )}
         {messages.map((m, i) => {
           const mine = m.senderId === user?.id;
           const newDay = i === 0 || new Date(m.createdAt).toDateString() !== new Date(messages[i - 1].createdAt).toDateString();

@@ -1,19 +1,22 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { notificationApi } from "../frontApi";
 import { useAuth } from "../context/useAuth";
+import { startPolling } from "../utils/poll";
 
-const POLL_MS = 30000;
-const EMPTY = { items: [], unread: 0, loaded: false, error: "" };
+const POLL_MS = 60000;
+// Fired when a conversation was read, so the messages badge updates at once
+export const MESSAGES_READ = "nyafie:messages-read";
+const EMPTY = { items: [], unread: 0, unreadMessages: 0, loaded: false, error: "" };
 
 /**
  * One store per signed-in account, shared by every bell on screen (the navbar renders a desktop
- * and a mobile bell), so there is one poll and every badge updates together.
+ * and a mobile bell) and by the messages badge, so there is one poll and every badge updates together.
  * Changes apply immediately; `version` makes a poll that started before a change ignore its result.
  */
 const createStore = () => {
   let state = EMPTY;
   let version = 0;
-  let timer;
+  let stop;
   const listeners = new Set();
   const set = (next) => {
     state = { ...state, ...next };
@@ -50,11 +53,16 @@ const createStore = () => {
       listeners.add(listener);
       if (listeners.size === 1) {
         load();
-        timer = setInterval(load, POLL_MS);
+        const stopPolling = startPolling(load, POLL_MS);
+        window.addEventListener(MESSAGES_READ, load);
+        stop = () => {
+          stopPolling();
+          window.removeEventListener(MESSAGES_READ, load);
+        };
       }
       return () => {
         listeners.delete(listener);
-        if (!listeners.size) clearInterval(timer);
+        if (!listeners.size) stop();
       };
     },
     load,
@@ -66,6 +74,14 @@ const stores = new Map();
 const storeFor = (key) => {
   if (!stores.has(key)) stores.set(key, createStore());
   return stores.get(key);
+};
+
+// The signed-in account's unread chat messages in this area; asks nothing while disabled
+const NO_STORE = { get: () => EMPTY, subscribe: () => () => {} };
+export const useUnreadMessages = (enabled = true) => {
+  const { user } = useAuth();
+  const store = enabled && user ? storeFor(`${user.role}:${user.id}`) : NO_STORE;
+  return useSyncExternalStore(store.subscribe, store.get, store.get).unreadMessages || 0;
 };
 
 const without = (ids) => (state) => {

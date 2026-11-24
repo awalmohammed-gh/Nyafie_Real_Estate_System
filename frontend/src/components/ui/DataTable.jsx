@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-const Pager = ({ page, pages, total, pageSize, onChange }) => {
+export const Pager = ({ page, pages, total, pageSize, onChange }) => {
   const from = total ? (page - 1) * pageSize + 1 : 0;
   const to = Math.min(total, page * pageSize);
   return (
@@ -48,13 +48,15 @@ const useWidth = () => {
  * collapsed/expanded sidebar never produce a cramped or sideways-scrolling table.
  * columns: [{ key, header, render(row), className, align }]
  * onRowClick makes whole rows open the item; pageSize adds pagination.
+ * `paging` ({ page, pages, total, pageSize, onChange }, from usePagedList): the rows are one page the server cut.
  */
-const DataTable = ({ columns, rows, rowKey = (row) => row.id, mobileCard, empty, minWidth = 760, onRowClick, pageSize = 20 }) => {
+const DataTable = ({ columns, rows, rowKey = (row) => row.id, mobileCard, empty, minWidth = 760, onRowClick, pageSize = 20, paging }) => {
   const [page, setPage] = useState(1);
   const [ref, width] = useWidth();
-  const pages = Math.max(1, Math.ceil(rows.length / pageSize));
-  const current = Math.min(page, pages); // filters may shrink the list
-  const visible = rows.slice((current - 1) * pageSize, current * pageSize);
+  const localPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const localPage = Math.min(page, localPages); // filters may shrink the list
+  const visible = paging ? rows : rows.slice((localPage - 1) * pageSize, localPage * pageSize);
+  const pager = paging || { page: localPage, pages: localPages, total: rows.length, pageSize, onChange: setPage };
   const asTable = width !== null && width >= minWidth;
 
   return (
@@ -99,7 +101,7 @@ const DataTable = ({ columns, rows, rowKey = (row) => row.id, mobileCard, empty,
           ))}
         </ul>
       )}
-      {rows.length > 0 && <Pager page={current} pages={pages} total={rows.length} pageSize={pageSize} onChange={setPage} />}
+      {rows.length > 0 && <Pager {...pager} />}
     </div>
   );
 };

@@ -17,9 +17,10 @@ import WhatsAppIcon from "../ui/WhatsAppIcon";
 import HistoryTimeline from "./HistoryTimeline";
 import Filters from "./Filters";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
+import { useDebounced, useOpenRecord, usePagedList } from "../../hooks/usePagedList";
 import { saleRequestApi } from "../../frontApi";
 import { SALE_STATUS } from "../../frontApi/mappers";
-import { formatDate, formatRelative, isWithinDays } from "../../utils/date";
+import { formatDate, formatRelative } from "../../utils/date";
 import { toWhatsAppNumber } from "../../utils/whatsapp";
 import { usePlatform } from "../../context/usePlatform";
 import { adminPath } from "../../utils/adminEntry";
@@ -33,11 +34,11 @@ const SETTABLE = ["contacted", "offer_received", "negotiating", "approved", "pay
 // These need a confirmation step
 const NEEDS_CONFIRM = { approved: "Approve", payment_pending: "Request payment", cancelled: "Cancel request", rejected: "Reject request" };
 const TABS = [
-  { id: "open", label: "Open", match: (r) => !CLOSED.includes(r.statusKey) },
-  { id: "payment", label: "Awaiting payment", match: (r) => r.statusKey === "payment_pending" },
-  { id: "completed", label: "Completed", match: (r) => r.statusKey === "completed" },
-  { id: "closed", label: "Cancelled/Rejected", match: (r) => ["cancelled", "rejected"].includes(r.statusKey) },
-  { id: "all", label: "All", match: () => true },
+  { id: "open", label: "Open" },
+  { id: "payment", label: "Awaiting payment" },
+  { id: "completed", label: "Completed" },
+  { id: "closed", label: "Cancelled/Rejected" },
+  { id: "all", label: "All" },
 ];
 
 /**
@@ -49,14 +50,13 @@ const SaleRequestsBoard = ({ scope }) => {
   const isAdmin = scope === "admin";
   const Detail = isAdmin ? AdminRecordModal : SidePanel;
   const run = useAsyncAction();
-  const { sales: requests, loading, error: loadError, reload, updateTransaction } = useTransactions();
+  const { reloadCounts } = useTransactions();
   const [params] = useSearchParams();
   const [propertyId, setPropertyId] = useState(params.get("property") || "all");
   const [range, setRange] = useState("all");
   const [tab, setTab] = useState("open");
   const [query, setQuery] = useState("");
   const [ownerId, setOwnerId] = useState("all");
-  const [openId, setOpenId] = useState(null);
   const [nextStatus, setNextStatus] = useState("");
   const [note, setNote] = useState("");
   const [confirm, setConfirm] = useState(null); // { kind: "status" | "payment" | "complete", status? }
@@ -64,33 +64,26 @@ const SaleRequestsBoard = ({ scope }) => {
   const [slip, setSlip] = useState(""); // an optional bank slip or cheque number for the receipt
   const [busy, setBusy] = useState("");
 
-  const retry = reload;
-  if (loadError) return <ErrorState title="Couldn't load sale requests" message={loadError} onRetry={retry} />;
-  if (loading) return <TableSkeleton />;
+  const search = useDebounced(query.trim());
+  const list = usePagedList(`${scope}-sales`, { tab, owner: ownerId, property: propertyId, range, search: search || undefined }, (filters) => saleRequestApi.getSaleRequestsPage(scope, filters));
+  const rows = list.data?.items || [];
+  const [open, setOpen] = useOpenRecord(rows);
+  if (!list.data) return list.error ? <ErrorState title="Couldn't load sale requests" message={list.error} onRetry={list.reload} /> : <TableSkeleton />;
 
-  const owners = [...new Map(requests.map((r) => [r.owner.id, r.owner])).values()];
-  const propertyOptions = [...new Map(requests.map((r) => [r.property.id, r.property])).values()];
-  const scoped = requests
-    .filter((r) => ownerId === "all" || r.owner.id === ownerId)
-    .filter((r) => propertyId === "all" || r.property.id === propertyId)
-    .filter((r) => range === "all" || isWithinDays(r.createdAt, Number(range)));
-  const q = query.trim().toLowerCase();
-  const rows = scoped
-    .filter(TABS.find((t) => t.id === tab).match)
-    .filter((r) => !q || `${r.contactName} ${r.contactEmail} ${r.contactPhone} ${r.property.title}`.toLowerCase().includes(q));
-
-  const open = openId && requests.find((r) => r.id === openId);
+  const { counts, stats, options, empty } = list.data;
+  const { owners, properties: propertyOptions } = options;
   const closed = open && CLOSED.includes(open.statusKey);
   const paymentConfirmed = open?.paymentStatusKey === "confirmed";
   const chatLink = open?.conversationId && (isAdmin ? open.ownerType === "admin" && adminPath(`/messages?c=${open.conversationId}`) : `/agent/messages?c=${open.conversationId}`);
   const whatsapp = open && toWhatsAppNumber(open.contactPhone);
 
   const replace = (updated) => {
-    updateTransaction("sales", updated);
-    reload(); // refresh dashboard counts and sidebar badges
+    setOpen(updated);
+    list.reload();
+    reloadCounts(); // sidebar badges
   };
-  const openRequest = (id) => {
-    setOpenId(id);
+  const openRequest = (request) => {
+    setOpen(request);
     setNextStatus("");
     setNote("");
   };
@@ -153,7 +146,7 @@ const SaleRequestsBoard = ({ scope }) => {
       header: <span className="sr-only">Actions</span>,
       align: "right",
       render: (r) => (
-        <button onClick={() => openRequest(r.id)} aria-label={`View request from ${r.contactName}`} className="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900">
+        <button onClick={() => openRequest(r)} aria-label={`View request from ${r.contactName}`} className="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900">
           <Eye className="h-4.5 w-4.5" />
         </button>
       ),
@@ -177,13 +170,13 @@ const SaleRequestsBoard = ({ scope }) => {
   return (
     <>
       {!isAdmin && <WorkspaceStats className="mb-6" items={[
-        { label: "Open requests", value: requests.filter(TABS[0].match).length, note: "Your current buyer pipeline" },
-        { label: "Awaiting payment", value: requests.filter(TABS[1].match).length, note: "Buyer payment outstanding" },
-        { label: "Payment received", value: requests.filter((r) => r.paymentStatusKey === "confirmed" && !CLOSED.includes(r.statusKey)).length, note: "Ready to complete the sale" },
-        { label: "Completed sales", value: requests.filter(TABS[2].match).length, note: "Successfully closed requests" },
+        { label: "Open requests", value: stats.open, note: "Your current buyer pipeline" },
+        { label: "Awaiting payment", value: stats.payment, note: "Buyer payment outstanding" },
+        { label: "Payment received", value: stats.received, note: "Ready to complete the sale" },
+        { label: "Completed sales", value: stats.completed, note: "Successfully closed requests" },
       ]} />}
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <FilterTabs label="Request status" value={tab} onChange={setTab} tabs={TABS.map((t) => ({ id: t.id, label: t.label, count: scoped.filter(t.match).length }))} />
+        <FilterTabs label="Request status" value={tab} onChange={setTab} tabs={TABS.map((t) => ({ id: t.id, label: t.label, count: counts[t.id] }))} />
         <SearchInput value={query} onChange={setQuery} placeholder="Search requests" className="lg:w-72" />
       </div>
       <Filters isAdmin={isAdmin} owners={owners} ownerId={ownerId} setOwnerId={setOwnerId} properties={propertyOptions} propertyId={propertyId} setPropertyId={setPropertyId} range={range} setRange={setRange} />
@@ -192,17 +185,18 @@ const SaleRequestsBoard = ({ scope }) => {
         tableFrom={isAdmin ? "md" : "xl"}
         columns={columns}
         rows={rows}
-        onRowClick={(r) => openRequest(r.id)}
+        paging={list.paging}
+        onRowClick={(r) => openRequest(r)}
         minWidth={isAdmin ? 980 : 900}
         empty={
           <EmptyState
             icon={Building}
-            title={requests.length ? "No requests here" : "No sale requests yet"}
-            description={requests.length ? "Try a different filter." : "Customers' purchase inquiries about your sale listings appear here. Discuss the price and next steps with them."}
+            title={empty ? "No sale requests yet" : "No requests here"}
+            description={!empty ? "Try a different filter." : "Customers' purchase inquiries about your sale listings appear here. Discuss the price and next steps with them."}
           />
         }
         mobileCard={(r) => (
-          <button onClick={() => openRequest(r.id)} className="w-full text-left">
+          <button onClick={() => openRequest(r)} className="w-full text-left">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="truncate font-semibold text-gray-900">{r.contactName}</p>
@@ -220,7 +214,7 @@ const SaleRequestsBoard = ({ scope }) => {
 
       <Detail
         open={Boolean(open)}
-        onClose={() => setOpenId(null)}
+        onClose={() => setOpen(null)}
         size="lg"
         title={open ? `Purchase request from ${open.contactName}` : ""}
         description={open && `Requested ${formatDate(open.createdAt)}`}

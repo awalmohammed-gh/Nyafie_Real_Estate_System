@@ -3,8 +3,8 @@ import { ArrowRight, BedDouble, CalendarDays, ChevronRight, Heart, House, KeyRou
 import { useAuth } from "../../context/useAuth";
 import { usePlatform } from "../../context/usePlatform";
 import { promoAllowedFor } from "../../utils/agentPromo";
-
-const STAYS = "Hotel,Hotel-Apartment";
+import { listPropertyPath } from "../../utils/listProperty";
+import { isShortStaySearch, shortStayPath } from "../../utils/shortStay";
 
 // Which tile is the current page (one at most): Buy/Rent/Short Stays are filtered views of the listings
 const currentTile = (pathname, search, paths) => {
@@ -12,7 +12,7 @@ const currentTile = (pathname, search, paths) => {
   if (pathname === "/") return "home";
   if (pathname === "/sale" || (pathname === paths.listings && query.get("status") === "Sale")) return "buy";
   if (pathname === "/rent" || (pathname === paths.listings && query.get("status") === "Rent")) return "rent";
-  if (pathname === paths.listings && query.get("type") === STAYS) return "stays";
+  if (pathname === paths.listings && isShortStaySearch(query)) return "stays";
   if (pathname === paths.listings) return "listings";
   if (pathname === paths.agents || pathname.startsWith(`${paths.agents}/`)) return "agents";
   return null;
@@ -33,7 +33,7 @@ const MobileMenu = ({ showHeader = false, onClose, onNavigate, wishlistCount = 0
     { key: "home", label: "Home", to: "/", Icon: House },
     { key: "buy", label: "Buy", to: "/sale", Icon: KeyRound },
     { key: "rent", label: "Rent", to: "/rent", Icon: CalendarDays },
-    { key: "stays", label: "Short Stays", to: `${paths.listings}?${new URLSearchParams({ type: STAYS })}`, Icon: BedDouble },
+    { key: "stays", label: "Short Stays", to: shortStayPath(paths.listings), Icon: BedDouble },
     { key: "listings", label: "All Listings", to: paths.listings, Icon: Layers },
     { key: "agents", label: "Agents", to: paths.agents, Icon: Users },
   ];
@@ -91,7 +91,7 @@ const MobileMenu = ({ showHeader = false, onClose, onNavigate, wishlistCount = 0
           <div className="relative max-w-[62%]">
             <p className="text-base leading-tight font-bold">List Your Property</p>
             <p className="mt-1 text-[13px] leading-snug text-white/85">Agents and owners welcome. Get verified, then reach buyers and renters on {siteName}.</p>
-            <Link to={user ? "/agent/plans" : "/agent/register"} onClick={onNavigate} className="mt-3 inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-white px-3.5 text-[13px] font-semibold text-brand-800 transition-colors hover:bg-brand-50">
+            <Link to={listPropertyPath(user)} onClick={onNavigate} className="mt-3 inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-white px-3.5 text-[13px] font-semibold text-brand-800 transition-colors hover:bg-brand-50">
               Become an Agent <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
           </div>

@@ -13,6 +13,8 @@ import { listReports, reviewReport } from "../controllers/safetyReportController
 import { adminDocumentLink, listDocumentChecks, reviewDocumentCheck } from "../controllers/documentCheckController.js";
 import { listPayments } from "../controllers/paymentController.js";
 import { checkRefund, createRefund, listRefunds, settleRefund } from "../controllers/refundController.js";
+import { getAdminProperty, getCustomer, listCustomers, pagePayments, pageProperties } from "../controllers/adminListController.js";
+import { getProvider, listProviders, pageInquiries, planSummary, reportData } from "../controllers/adminProviderController.js";
 import { protectAdmin } from "../middleware/authMiddleware.js";
 import { listApplications, reviewApplication } from "../controllers/agentApplicationController.js";
 import { adminAgentProofs, agentProofLink } from "../controllers/agentProofController.js";
@@ -29,6 +31,17 @@ router.get("/dashboard", dashboard); // the admin overview, aggregated in one re
 router.get("/performance", performance); // Platform performance chart: ?months=3|6|12
 router.get("/counts", counts); // sidebar badges (pending agent applications)
 router.get("/inventory", financialInventory); // unified rental, hotel, sale and subscription ledger
+
+// Lists that can grow without limit come a page at a time (?page=1...). Without ?page, properties and
+// payments return everything, for the reports and the pages that still need whole lists.
+const paged = (page, whole) => (req, res) => (req.query.page === undefined ? whole : page)(req, res);
+router.get("/customers", listCustomers);
+router.get("/customers/:id", getCustomer);
+
+router.get("/providers", listProviders); // agents, their plans and usage
+router.get("/providers/:id", getProvider);
+router.get("/plan-summary", planSummary);
+router.get("/report-data", reportData);
 
 router.get("/users", admin.listUsers);
 router.get("/users/:id", admin.getUser);
@@ -56,7 +69,8 @@ router.post("/refunds", createRefund);
 router.post("/refunds/:id/check", checkRefund);
 router.post("/refunds/:id/resolve", settleRefund);
 
-router.get("/properties", admin.listProperties);
+router.get("/properties", paged(pageProperties, admin.listProperties));
+router.get("/properties/:id", getAdminProperty);
 router.post("/properties", limits.listingSaves, admin.createProperty);
 router.put("/properties/:id", limits.listingSaves, admin.updateProperty);
 router.patch("/properties/:id/status", admin.setPropertyStatus);
@@ -69,7 +83,7 @@ router.get("/reviews/unseen-count", adminUnseenReviewCount);
 router.post("/reviews/mark-seen", adminMarkReviewsSeen);
 router.patch("/reviews/:id/status", adminSetReviewStatus); // hide or restore; review text is never edited
 
-router.get("/inquiries", admin.listInquiries);
+router.get("/inquiries", paged(pageInquiries, admin.listInquiries));
 router.patch("/inquiries/:id/status", admin.setInquiryStatus);
 router.get("/contact-messages", listContactMessages);
 router.patch("/contact-messages/:id/status", setContactMessageStatus);
@@ -89,6 +103,6 @@ router.patch("/reports/:id", reviewReport);
 router.get("/document-checks", listDocumentChecks); // ?status=pending|verified|rejected|all
 router.get("/document-checks/:id/documents/:docId/link", adminDocumentLink); // a link that expires
 router.patch("/document-checks/:id", reviewDocumentCheck);
-router.get("/payments", listPayments);
+router.get("/payments", paged(pagePayments, listPayments));
 
 export default router;

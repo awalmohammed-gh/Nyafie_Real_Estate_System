@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Building, Building2, CalendarClock, CreditCard, HandCoins, Inbox, KeyRound, LayoutDashboard, MessageCircle, LifeBuoy, PlusSquare, Settings, Users } from "lucide-react";
-import { useUnreadMessages } from "../hooks/useUnreadMessages";
+import { useUnreadMessages } from "../hooks/useNotifications";
 import { useAgentLiveRefresh } from "../hooks/useAgentLiveRefresh";
 import { useAgent } from "../hooks/useAgent";
 import { useRealEstate } from "../context/useRealEstate";
@@ -85,7 +85,7 @@ const AgentShell = () => {
   const { plansLoading } = usePlatform();
   const { myInquiries, permissions } = useAgent();
   const { pending } = useTransactions();
-  const unreadMessages = useUnreadMessages("agent");
+  const unreadMessages = useUnreadMessages();
   const { pathname } = useLocation();
   useAgentLiveRefresh();
 

@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Building2, CheckCircle2, Eye, HandCoins, Inbox, KeyRound, Plus, Sparkles } from "lucide-react";
 import { useAgent } from "../../hooks/useAgent";
 import { useRealEstate } from "../../context/useRealEstate";
+import { offerApi, rentalApi, saleRequestApi } from "../../frontApi";
+import { usePagedList } from "../../hooks/usePagedList";
 import { useTransactions } from "../../context/useTransactions";
 import PageTitle from "../../components/agent/PageTitle";
 import WorkspaceStats from "../../components/agent/WorkspaceStats";
@@ -20,7 +22,16 @@ const SectionHeader = ({ title, description, to, label = "View all" }) => <heade
 const Dashboard = () => {
   const { user, myProperties, myInquiries, permissions: perms } = useAgent();
   const { findProperty, isPubliclyVisible } = useRealEstate();
-  const { offers, rentals, sales, pending, loading, error, reload } = useTransactions();
+  const { pending } = useTransactions();
+  const latest = { limit: 10 };
+  const offerList = usePagedList("agent-latest-offers", latest, (params) => offerApi.getOffersPage("agent", params));
+  const rentalList = usePagedList("agent-latest-rentals", latest, (params) => rentalApi.getRentalsPage("agent", params));
+  const saleList = usePagedList("agent-latest-sales", { ...latest, tab: "all" }, (params) => saleRequestApi.getSaleRequestsPage("agent", params));
+  const lists = [offerList, rentalList, saleList];
+  const [offers, rentals, sales] = lists.map((list) => list.data?.items || []);
+  const error = lists.find((list) => !list.data && list.error)?.error || "";
+  const loading = !error && lists.some((list) => !list.data);
+  const reload = () => lists.forEach((list) => list.reload());
   const live = myProperties.filter(isPubliclyVisible).length;
   const freshInquiries = myInquiries.filter((i) => i.status === "New");
   const drafts = myProperties.filter((p) => p.listing.state === "draft");

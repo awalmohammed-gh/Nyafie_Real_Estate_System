@@ -16,9 +16,10 @@ const AuthPage = ({ mode = "login" }) => {
   const location = useLocation();
   const from = location.state?.from;
   const voluntary = Boolean(location.state?.voluntary);
-  const redirect = authRedirectDestination({ isAuthenticated, explicitSignIn: location.state?.explicitSignIn, domain, user, from });
   const isAgent = domain === "agent";
   const isSignup = mode === "signup";
+  const agentSignup = isAgent && isSignup;
+  const redirect = authRedirectDestination({ isAuthenticated, explicitSignIn: location.state?.explicitSignIn || agentSignup, domain, user, from });
   const selectedPlan = typeof from === "string" && from.startsWith("/") ? new URL(from, "https://nyafie.invalid").searchParams.get("plan") : null;
   const customerContinue = `/agent/plans${selectedPlan ? `?plan=${encodeURIComponent(selectedPlan)}` : ""}`;
 
@@ -54,6 +55,7 @@ const AuthPage = ({ mode = "login" }) => {
         <p>{isSignup ? isAgent ? "Create your account. Your next opportunity starts here." : "A home you love starts with an account of your own." : from && !voluntary ? "Sign in to continue where you left off." : isAgent ? "Sign in to your agent account and take your next step." : "Your saved homes and conversations are waiting for you."}</p>
         {isAgent && isSignup && <span className="auth-step"><span>01</span>Account creation <span className="auth-step-divider" />Step 1 of 4</span>}
       </div>
+      {agentSignup && isAuthenticated && <div role="status" className="mb-5 rounded-2xl border border-brand-200 bg-brand-50 p-4 text-sm leading-relaxed text-brand-900"><p><strong className="font-semibold">{user.name}</strong> is signed in as an agent on this browser. Registering below creates a different agent account.</p><Link to={agentDestination(user)} className="mt-2 inline-block font-semibold underline underline-offset-4">That's me, continue as {user.firstName}</Link></div>}
       <AuthForm key={domain} initialMode={mode} onSuccess={handleSuccess} onModeChange={handleModeChange} />
       {isAgent && <div className="mt-6 rounded-2xl bg-brand-50 p-4 text-sm leading-relaxed text-brand-900"><p>Already have a customer account? Keep your existing email and password.</p><Link to="/login" state={{ from: customerContinue }} className="mt-2 inline-block font-semibold underline underline-offset-4">Continue with my existing account</Link></div>}
     </AuthLayout>

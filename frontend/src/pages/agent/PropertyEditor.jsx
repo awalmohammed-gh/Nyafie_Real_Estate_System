@@ -598,12 +598,12 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
               <Segmented label="Availability" value={form.availability} onChange={(v) => set("availability", v)} options={availabilityOptions.map((a) => ({ value: a, label: a }))} />
             </div>
           </Chapter>}
-          {hotel && <Chapter id="chapter-payments" number={next()} title="How guests pay" description="Offer one or both. Rooms are only confirmed once they're secured for the guest's dates.">
+          {hotel && <Chapter id="chapter-payments" number={next()} title="How guests pay" description="Guests pay online through the hotel, or when they move in. Rooms are only confirmed once they're secured for the guest's dates.">
             {isAdminEditor && !platformHotel
               ? <HotelPaymentSettings value={booking} onChange={setBooking} error={errors.booking} platform={false} propertyId={null} ownerConnects />
               : <HotelPaymentSettings value={booking} onChange={setBooking} error={errors.booking} platform={platformHotel} propertyId={existing?.id || null} />}
           </Chapter>}
-          {nightlyRental && <Chapter id="chapter-payments" number={next()} title="How guests pay" description="Offer one or both. A reservation is only confirmed once the dates are free.">
+          {nightlyRental && <Chapter id="chapter-payments" number={next()} title="How guests pay" description="Guests pay when they arrive. A reservation is only confirmed once the dates are free.">
             <HotelPaymentSettings stay="rental" value={booking} onChange={setBooking} error={errors.booking} platform={platformHotel} propertyId={null} />
           </Chapter>}
 

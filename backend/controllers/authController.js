@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import Plan from "../models/Plan.js";
-import { setAuthCookie, clearAuthCookie } from "../utils/generateToken.js";
+import { setAuthCookie, clearAuthCookie, cookieAccount, hasSession } from "../utils/generateToken.js";
 import { ok, fail } from "../utils/response.js";
 import { onboardingState, validPhone } from "../utils/agentApplication.js";
 import { CUSTOMER_TAB_HEADER, validTabSecret } from "../utils/customerTabSession.js";
@@ -10,6 +10,7 @@ import { loginAttempts, rejectLoginAttempt } from "../utils/loginAttempts.js";
 import { startEmailVerification } from "./emailVerificationController.js";
 import { pendingRegistrationFor, resumeRegistration, startRegistration } from "./registrationController.js";
 import { passwordProblem, validPasswordInput } from "../utils/passwordPolicy.js";
+import { sameInbox, signupEmailProblem } from "../utils/signupEmail.js";
 import { adminTwoStepEnabled, startAdminSignIn } from "./adminSignInController.js";
 import { getSettings, siteName } from "../models/Setting.js";
 
@@ -18,12 +19,20 @@ const text = (value) => (typeof value === "string" ? value.trim() : "");
 // Compared against when no account matches, so a sign-in takes as long whether or not the email exists
 const DUMMY_HASH = bcrypt.hashSync("nyafie-timing-equaliser", 10);
 
+// Signed up with Google and never chose a NyaFie password
+const passwordMissing = (user) => Boolean(user.googleId) && !user.passwordSetAt;
+const GOOGLE_PROOF_MS = 15 * 60 * 1000;
+
 // The user as the frontend needs it: current subscription included, password never.
 // Agents also get their server-computed onboarding state (next step, payment, approval).
 export const loadUser = async (id) => {
-  const user = await User.findById(id).populate("subscription");
-  if (user?.role !== "agent") return user;
-  const data = { ...user.toJSON(), onboarding: await onboardingState(user) };
+  const user = await User.findById(id, "+googleId +passwordSetAt").populate("subscription");
+  if (!user) return user;
+  const data = { ...(user.toJSON?.() ?? user), passwordMissing: passwordMissing(user) };
+  delete data.googleId;
+  delete data.passwordSetAt;
+  if (user.role !== "agent") return data;
+  data.onboarding = await onboardingState(user);
   delete data.removal; // internal moderation record: admins only
   // Agency staff work under the owner's plan: share its name, logo and plan status (no billing details)
   if (user.agency?.owner) {
@@ -53,7 +62,9 @@ export const register = async (req, res) => {
   const problem = passwordProblem(password);
   if (problem) return fail(res, 400, problem);
   const normalizedEmail = email.trim().toLowerCase();
-  if (await User.exists({ email: normalizedEmail }))
+  const emailProblem = signupEmailProblem(normalizedEmail);
+  if (emailProblem) return fail(res, 400, emailProblem);
+  if (await User.exists(sameInbox(normalizedEmail)))
     return fail(res, 409, "An account with this email already exists. Try signing in.");
   // The account is created only once the emailed code is entered (controllers/registrationController.js).
   // Role is never taken from the request: every new account is a normal user.
@@ -76,7 +87,9 @@ export const registerAgent = async (req, res) => {
   if (problem) return fail(res, 400, problem);
   if (password !== confirmPassword)
     return fail(res, 400, "Passwords do not match.");
-  if (await User.exists({ email: normalizedEmail }))
+  const emailProblem = signupEmailProblem(normalizedEmail);
+  if (emailProblem) return fail(res, 400, emailProblem);
+  if (await User.exists(sameInbox(normalizedEmail)))
     return fail(
       res,
       409,
@@ -87,14 +100,21 @@ export const registerAgent = async (req, res) => {
 };
 
 // POST /api/auth/customer/become-agent: reuse the authenticated customer's identity.
-// Opening onboarding creates no subscription and grants no publishing/dashboard permissions.
+// Opening onboarding creates no subscription and grants no publishing/dashboard permissions: the profile,
+// proof documents, any required plan and the admin's approval all come after it.
 export const becomeAgent = async (req, res) => {
+  // The agent area has no Google sign-in: without a NyaFie password they couldn't come back to it
+  const own = await User.findById(req.user._id, "+googleId +passwordSetAt");
+  if (own && passwordMissing(own)) return fail(res, 409, "Create your NyaFie password first. You'll use it to sign in to the agent area.", "PASSWORD_REQUIRED");
   const settings = await getSettings();
-  const plan = settings.agent.requireSubscription
-    ? await Plan.findById(req.body?.planId).catch(() => null)
-    : null;
-  if (settings.agent.requireSubscription && !plan?.isActive) return fail(res, 404, "This plan is not available.");
+  // Starting needs a plan when subscriptions are on; someone already applying just continues
+  const needsPlan = settings.agent.requireSubscription && req.user.role === "user";
+  const plan = needsPlan ? await Plan.findById(req.body?.planId).catch(() => null) : null;
+  if (needsPlan && !plan?.isActive) return fail(res, 404, "This plan is not available.");
   let user = req.user;
+  // Google signs people in to the customer area only: an agent opens theirs with the password
+  if (user.role === "agent" && user.$locals?.googleSignInAt && !hasSession(req, "agent", user))
+    return fail(res, 403, "Sign in to the agent area with your email and password.", "AGENT_SIGN_IN");
   if (user.role === "user") {
     user = await User.findOneAndUpdate(
       { _id: user._id, role: "user", isActive: true },
@@ -104,7 +124,7 @@ export const becomeAgent = async (req, res) => {
     // A concurrent click may already have opened onboarding; never overwrite its progress.
     if (!user) user = await User.findById(req.user._id).select("+sessionVersion");
   }
-  if (!user || user.role !== "agent" || !user.customerAccess || !user.isActive || user.agentApplication?.status === "removed")
+  if (!user || user.role !== "agent" || !user.isActive || user.agentApplication?.status === "removed")
     return fail(res, 403, "Your account cannot start agent onboarding. Contact support for help.");
   setAuthCookie(res, user._id, "agent", user.sessionVersion);
   ok(res, await loadUser(user._id), "Continue with your existing account");
@@ -112,7 +132,7 @@ export const becomeAgent = async (req, res) => {
 
 const checkCredentials = async (email, password) => {
   if (typeof email !== "string" || typeof password !== "string" || !password || Buffer.byteLength(password, "utf8") > 72) return null;
-  const user = await User.findOne({ email: email.trim().toLowerCase().slice(0, 254) }).select("+password +sessionVersion");
+  const user = await User.findOne({ email: email.trim().toLowerCase().slice(0, 254) }).select("+password +sessionVersion +googleId +passwordSetAt");
   if (!user) {
     await bcrypt.compare(password, DUMMY_HASH); // same work as a real check: no account-existence timing signal
     return null;
@@ -144,16 +164,24 @@ export const loginFor = (session) => async (req, res) => {
     return fail(res, 403, `Your provider account is no longer active. Contact ${siteName()} support if you believe this is an error.`);
   const cleared = await loginAttempts.success(email);
   if (cleared.retryAfter) return rejectLoginAttempt(res, cleared);
-  if (session === "customer" && !user.emailVerifiedAt) return startEmailVerification(req, res, user);
+  // Nobody enters with an email they haven't proved is theirs (older accounts, or changed by an admin)
+  if (session !== "admin" && !user.emailVerifiedAt) return startEmailVerification(req, res, user, session);
   // Admins: the password is only the first step; a code sent to their email is the second
   if (session === "admin" && adminTwoStepEnabled()) return startAdminSignIn(res, user);
+  if (passwordMissing(user)) await User.updateOne({ _id: user._id }, { $set: { passwordSetAt: new Date() } }); // an older Google account: they know it
   setAuthCookie(res, user._id, session, user.sessionVersion, req.get(CUSTOMER_TAB_HEADER));
   ok(res, await loadUser(user._id), "Signed in");
 };
 export const login = loginFor("customer");
 export const adminLogin = loginFor("admin");
-export const logoutFor = (session) => (_req, res) => {
+// Signing out ends every session this person has on the browser: their customer and agent areas are one
+// account. A different agent account, signed in from the agent login, is someone else's and stays.
+const LINKED_SESSION = Object.freeze({ customer: "agent", agent: "customer" });
+export const logoutFor = (session) => (req, res) => {
   clearAuthCookie(res, session);
+  const linked = LINKED_SESSION[session];
+  const account = linked && cookieAccount(req, session);
+  if (account && account === cookieAccount(req, linked)) clearAuthCookie(res, linked);
   ok(res, null, "Signed out");
 };
 export const logout = logoutFor("customer");
@@ -186,15 +214,20 @@ export const updateMe = async (req, res) => {
 };
 
 // PUT /api/auth/me/password
+// Google accounts choose their first password without a current one, only just after signing in with Google
+// (the same proof as a code to their inbox): an old or stolen session isn't enough.
 export const changePassword = async (req, res) => {
   const { currentPassword, newPassword } = req.body;
-  const user = await User.findById(req.user._id).select("+password +sessionVersion");
-  if (!user || !validPasswordInput(currentPassword) || !(await user.matchPassword(currentPassword)))
+  const user = await User.findById(req.user._id).select("+password +sessionVersion +googleId +passwordSetAt");
+  const creating = Boolean(user) && req.sessionDomain === "customer" && !currentPassword && passwordMissing(user);
+  if (creating && !(Date.now() - (req.user.$locals?.googleSignInAt || 0) < GOOGLE_PROOF_MS))
+    return fail(res, 403, "To keep your account safe, confirm it's you with Google first.", "GOOGLE_CONFIRM");
+  if (!creating && (!user || !validPasswordInput(currentPassword) || !(await user.matchPassword(currentPassword))))
     return fail(res, 400, "Your current password is incorrect.");
   const problem = passwordProblem(newPassword);
   if (problem) return fail(res, 400, problem.replace("your password", "your new password"));
   user.password = newPassword;
   await user.save();
   setAuthCookie(res, user._id, req.sessionDomain, user.sessionVersion, req.get(CUSTOMER_TAB_HEADER));
-  ok(res, null, "Password updated. Other sessions have been signed out.");
+  ok(res, null, creating ? "Password created. You can now sign in with your email and password, or with Google." : "Password updated. Other sessions have been signed out.");
 };

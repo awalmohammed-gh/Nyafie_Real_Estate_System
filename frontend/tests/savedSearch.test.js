@@ -6,11 +6,19 @@ const browse = { listingType: "Rent", types: ["Apartment"], area: "East Legon", 
 
 test("a saved search reopens exactly the same results on the listings page", () => {
   const saved = toSavedFilters({ filters: browse, search: " garden ", near: null });
-  assert.deepEqual(saved, { listingType: "Rent", types: ["Apartment"], area: "East Legon", city: "", region: "", minPrice: null, maxPrice: 3000, bedrooms: 2, bathrooms: 0, availability: "", amenities: ["Parking"], search: "garden", near: null });
+  assert.deepEqual(saved, { listingType: "Rent", stay: false, types: ["Apartment"], area: "East Legon", city: "", region: "", minPrice: null, maxPrice: 3000, bedrooms: 2, bathrooms: 0, availability: "", amenities: ["Parking"], search: "garden", near: null });
   const url = new URL(savedSearchPath(saved, "/listings"), "https://site.example");
   assert.equal(url.pathname, "/listings");
   assert.deepEqual(Object.fromEntries(url.searchParams), { status: "Rent", type: "Apartment", area: "East Legon", maxPrice: "3000", bedrooms: "2", amenities: "Parking", search: "garden" });
   assert.deepEqual(describeFilters(saved), ["To rent", "Apartment", "2+ beds", "East Legon", "Up to ₵3,000", "Parking", "“garden”"]);
+});
+
+test("a short-stay search stays one when saved and reopened", () => {
+  const saved = toSavedFilters({ filters: { ...browse, listingType: "", types: [], stay: true } });
+  assert.equal(saved.stay, true);
+  assert.equal(new URL(savedSearchPath(saved, "/listings"), "https://site.example").searchParams.get("stay"), "1");
+  assert.equal(describeFilters(saved)[0], "Short stays");
+  assert.equal(hasSearchCriteria(toSavedFilters({ filters: { listingType: "", types: [], stay: true, price: null, amenities: [] } })), true);
 });
 
 test("searches near a place keep the place and radius; a still-locating device position is not saved", () => {

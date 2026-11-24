@@ -11,7 +11,7 @@ const PropertyRail = ({ items, loading, count = 3, columns = 3, label, cardVaria
   if (loading) return <SkeletonGrid count={count} className={`home-rail is-${columns}`} />;
   if (!items.length) return null;
   return (
-    <RevealGroup as="ul" className={`home-rail is-${columns}`} aria-label={label} gap={0.08}>
+    <RevealGroup as="ul" className={`home-rail is-${columns}`} style={{ "--rail-columns": Math.min(columns, Math.max(3, items.length)) }} aria-label={label} gap={0.08}>
       {items.map((house) => <RevealItem as="li" key={house.id}><HouseCard house={house} variant={cardVariant} /></RevealItem>)}
     </RevealGroup>
   );

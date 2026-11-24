@@ -2,14 +2,12 @@ import { useCallback, useRef, useState } from "react";
 import { propertyApi } from "../frontApi";
 
 export const CATEGORY_PREVIEW_LIMIT = 3;
-const HOTEL_TYPES = ["Hotel", "Hotel-Apartment"];
-const isHotelType = (property) => HOTEL_TYPES.some((type) => type.toLowerCase() === String(property.property?.type || "").toLowerCase());
 
-// What each homepage menu shows: homes for sale, homes to rent (hotels have their own menu), short stays
+// What each homepage menu shows: homes for sale, homes to rent, and short stays (their own menu)
 const QUERIES = {
   buy: { listingType: "Sale" },
-  rent: { listingType: "Rent" },
-  stays: { type: HOTEL_TYPES },
+  rent: { listingType: "Rent", stay: "false" },
+  stays: { stay: "true" },
 };
 
 /**
@@ -26,10 +24,9 @@ export const useCategoryPreviews = () => {
     requested.current.add(menu);
     setState((current) => ({ ...current, [menu]: { status: "loading", items: [] } }));
     propertyApi
-      .searchProperties({ ...QUERIES[menu], limit: 9, sort: "featured", availability: ["Available", "Under Offer"] })
+      .searchProperties({ ...QUERIES[menu], limit: CATEGORY_PREVIEW_LIMIT, sort: "featured", availability: ["Available", "Under Offer"] })
       .then(({ items }) => {
-        const shown = (menu === "rent" ? items.filter((property) => !isHotelType(property)) : items).slice(0, CATEGORY_PREVIEW_LIMIT);
-        setState((current) => ({ ...current, [menu]: { status: "ready", items: shown } }));
+        setState((current) => ({ ...current, [menu]: { status: "ready", items } }));
       })
       .catch(() => setState((current) => ({ ...current, [menu]: { status: "error", items: [] } })));
   }, []);

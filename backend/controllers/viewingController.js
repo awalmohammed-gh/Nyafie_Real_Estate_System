@@ -1,3 +1,4 @@
+import { ownerPage } from "../utils/ownerPage.js";
 import mongoose from "mongoose";
 import Viewing, { OPEN_VIEWING_STATUSES, openKeyFor } from "../models/Viewing.js";
 import { postSystemNote } from "./chatController.js";
@@ -117,8 +118,19 @@ export const myViewings = async (req, res) => {
 
 // GET /api/agents/viewings and /api/admin/viewings -> viewings on the owner's listings (admins: all)
 export const ownerViewings = async (req, res) => {
-  const viewings = await populate(Viewing.find(ownerFilter(req.user)).sort({ scheduledAt: -1 }).limit(500));
-  ok(res, viewings.map((v) => present(v, req.user)));
+  const now = new Date();
+  const toAnswer = { status: "requested", proposedBy: "customer" };
+  const toMark = { status: "confirmed", scheduledAt: { $lte: now } }; // its time has passed: did it take place?
+  const action = { $or: [toAnswer, toMark] };
+  const upcoming = { $and: [{ status: { $in: OPEN_VIEWING_STATUSES }, scheduledAt: { $gt: now } }, { $nor: [toAnswer, toMark] }] };
+  ok(res, await ownerPage(req, {
+    Model: Viewing, fields: ["contactName", "message"],
+    tab: (counts) => (counts.action ? "action" : "upcoming"),
+    tabs: { action, upcoming, past: { $nor: [action, upcoming] } },
+    stats: { action, upcoming, week: { status: "confirmed", scheduledAt: { $gt: now, $lt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) } }, completed: { status: "completed" } },
+    sort: (tab) => (tab === "past" ? { scheduledAt: -1, _id: -1 } : { scheduledAt: 1, _id: 1 }),
+    load: async (query) => (await populate(query)).map((v) => present(v, req.user)),
+  }));
 };
 
 // GET /api/viewings/:id

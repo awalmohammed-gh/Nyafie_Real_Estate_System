@@ -30,13 +30,14 @@ const count = (value) => {
 
 /**
  * Checks and normalises a search from the listings page:
- * { listingType, types, area, city, region, minPrice, maxPrice, bedrooms, bathrooms,
+ * { listingType, stay, types, area, city, region, minPrice, maxPrice, bedrooms, bathrooms,
  *   availability, amenities, search, near: { latitude, longitude, radius, label } | null }
  */
 export const parseSavedFilters = (input) => {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new HttpError(400, "Invalid search.");
   const filters = {
     listingType: ["Sale", "Rent"].includes(input.listingType) ? input.listingType : "",
+    stay: input.stay === true,
     types: words(input.types, 60, 10),
     area: text(input.area, 80),
     city: text(input.city, 80),
@@ -57,7 +58,7 @@ export const parseSavedFilters = (input) => {
     // Rounded to about 100 m: enough to match listings, without storing a precise position
     filters.near = { latitude: Math.round(latitude * 1000) / 1000, longitude: Math.round(longitude * 1000) / 1000, radius, label: text(input.near.label, 120) };
   }
-  const criteria = filters.listingType || filters.types.length || filters.area || filters.city || filters.region || filters.minPrice !== null || filters.maxPrice !== null || filters.bedrooms || filters.bathrooms || filters.amenities.length || filters.search || filters.near;
+  const criteria = filters.listingType || filters.stay || filters.types.length || filters.area || filters.city || filters.region || filters.minPrice !== null || filters.maxPrice !== null || filters.bedrooms || filters.bathrooms || filters.amenities.length || filters.search || filters.near;
   if (!criteria) throw new HttpError(400, "Choose at least one filter (for example a place, a price or a property type) before saving this search.");
   return filters;
 };
@@ -65,6 +66,7 @@ export const parseSavedFilters = (input) => {
 // The same query the listings page sends (see propertyController.buildPublicFilter)
 export const toQuery = (filters) => Object.fromEntries(Object.entries({
   listingType: filters.listingType,
+  stay: filters.stay ? "true" : undefined,
   type: filters.types?.join(","),
   area: filters.area, city: filters.city, region: filters.region,
   minPrice: filters.minPrice ?? undefined, maxPrice: filters.maxPrice ?? undefined,
@@ -78,7 +80,7 @@ const ghs = (value) => `₵${Number(value).toLocaleString("en-GH")}`;
 
 // "2+ bed House to rent in East Legon, ₵2,000–₵3,000"
 export const describeSearch = (filters) => {
-  const what = [filters.bedrooms ? `${filters.bedrooms}+ bed` : "", filters.types.length ? filters.types.join(" / ") : "homes"].filter(Boolean).join(" ");
+  const what = [filters.bedrooms ? `${filters.bedrooms}+ bed` : "", filters.types.length ? filters.types.join(" / ") : filters.stay ? "short stays" : "homes"].filter(Boolean).join(" ");
   const purpose = filters.listingType === "Sale" ? " for sale" : filters.listingType === "Rent" ? " to rent" : "";
   const place = filters.area || filters.city || filters.region || (filters.near ? `${filters.near.radius} km of ${filters.near.label || "a place"}` : "");
   const where = place ? (filters.near && !filters.area && !filters.city && !filters.region ? ` within ${place}` : ` in ${place}`) : "";

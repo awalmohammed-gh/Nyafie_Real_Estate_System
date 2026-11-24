@@ -100,7 +100,7 @@ const PropertyAction = ({ mode }) => {
         This property is {availability.toLowerCase()} and can't be {mode === "rent" ? "rented" : mode === "buy" ? "bought" : "offered on"} right now. You can still chat with {ownerName}.
       </p>
     );
-  else if (mode === "rent") panel = hotel ? <HotelCheckout key={property.id + location.search} property={property} ownerName={ownerName} /> : <RentalCheckout property={property} ownerName={ownerName} />;
+  else if (mode === "rent") panel = hotel ? <HotelCheckout key={property.id + location.search} property={property} /> : <RentalCheckout property={property} ownerName={ownerName} />;
   else if (mode === "buy") panel = <BuyNowPanel property={property} ownerName={ownerName} whatsappLink={whatsappLink} onChat={property.agent.chat ? () => setChatOpen(true) : null} />;
   else panel = <OfferForm property={property} ownerName={ownerName} whatsappNumber={whatsappNumber} />;
 

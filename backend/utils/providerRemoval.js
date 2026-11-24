@@ -296,7 +296,7 @@ export const permanentlyDeleteProvider = async (id, admin, confirm) => {
       : (await User.updateOne(removed, {
         $set: {
           ...DELETED_NAME,
-          email: `deleted-${userId}@deleted.nyafie.invalid`,
+          email: `deleted-${userId}@deleted.nyafie.invalid`, emailKey: `deleted-${userId}@deleted.nyafie.invalid`, // frees the inbox for a new account
           phone: "",
           profileImage: "",
           password: unusablePassword,

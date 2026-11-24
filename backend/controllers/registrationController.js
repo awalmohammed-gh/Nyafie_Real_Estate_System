@@ -9,6 +9,7 @@ import { consumeCode, issueCode } from "../utils/emailVerification.js";
 import { setAuthCookie, clearAuthCookie } from "../utils/generateToken.js";
 import { CUSTOMER_TAB_HEADER, validTabSecret } from "../utils/customerTabSession.js";
 import { notifyAdmins } from "../utils/notify.js";
+import { inboxKey, sameInbox } from "../utils/signupEmail.js";
 import { ok, fail, HttpError } from "../utils/response.js";
 
 /**
@@ -118,8 +119,10 @@ export const completeRegistration = (session) => async (req, res) => {
   const user = await mongoose.connection.transaction(async (dbSession) => {
     const removed = await PendingRegistration.deleteOne({ _id: pending._id, version: pending.version }, { session: dbSession });
     if (!removed.deletedCount) throw new HttpError(409, "This sign-up was just finished or replaced. Sign in, or create your account again.");
+    // Another spelling of the same inbox finished first (the unique emailKey covers the same moment)
+    if (await User.exists(sameInbox(pending.email), { session: dbSession })) throw new HttpError(409, "An account with this email already exists. Sign in to continue.");
     const created = new User({
-      firstName: pending.firstName, lastName: pending.lastName, email: pending.email, phone: pending.phone,
+      firstName: pending.firstName, lastName: pending.lastName, email: pending.email, emailKey: inboxKey(pending.email), phone: pending.phone,
       password: pending.passwordHash, role: ACCOUNT[session], isActive: true, emailVerifiedAt: new Date(),
       ...(session === "agent" && { agentApplication: { status: "incomplete" } }),
     });
