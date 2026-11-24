@@ -1,64 +1,31 @@
 import mongoose from "mongoose";
-import { paymentReturnUrl } from "../config/runtime.js";
 import Rental from "../models/Rental.js";
 import Payment from "../models/Payment.js";
 import { populateRental, presentRental } from "./rentalController.js";
-import { paymentMode, paystack, toSubunit } from "../utils/paystack.js";
+import { paymentMode } from "../utils/paystack.js";
 import { ok, fail } from "../utils/response.js";
 import { getSettings, siteName } from "../models/Setting.js";
 import { initializeHotelPayment } from "./hotelPaymentController.js";
-import { recordFailedRentalPayment } from "../utils/confirmRentalPayment.js";
 import { processRentalPayment } from "../utils/rentalPaymentProcessing.js";
-import { prepareRentalCheckout } from "../utils/prepareRentalCheckout.js";
 import { REFUND_SUMMARY } from "./refundController.js";
-import Property from "../models/Property.js";
-import { stayBookingSettings, takesStayBookings } from "../utils/hotelPayout.js";
 
 const rentalResult = async (rentalId, user) => presentRental(await populateRental(Rental.findById(rentalId)), user);
 
 // POST /api/payments/initialize { rentalId }
-// Re-checks the dates, recalculates the amount on the server, then starts (or resumes) a Paystack checkout.
+// NyaFie never collects customers' money online. The one online payment left is a hotel booking at an
+// agent hotel that offers it, paid straight into the hotel's own account (hotelPaymentController.js).
+// Short stays are paid on arrival; rent, houses and land at the office. Payments already started
+// before this rule are still verified and settled (verifyPayment, webhooks and the reconcile job).
 export const initializeRentalPayment = async (req, res) => {
-  if (paymentMode() === "disabled" || !(await getSettings()).payments.rentalsEnabled) {
-    return fail(res, 503, "Online rental payments are turned off right now. Please chat with the owner.");
-  }
-
   const initial = mongoose.isValidObjectId(req.body.rentalId) ? await Rental.findOne({ _id: req.body.rentalId, customer: req.user._id }) : null;
   if (!initial) return fail(res, 404, "Rental not found.");
-  if (initial.paymentStatus === "paid") return fail(res, 400, "This rental is already paid.");
-  if (!["pending", "payment_pending"].includes(initial.status)) return fail(res, 400, `This rental is ${initial.status.replace("_", " ")}.`);
-  if (initial.hotelId) return initializeHotelPayment(req, res, initial);
-  const listing = await Property.findById(initial.property);
-  if (takesStayBookings(listing) && !stayBookingSettings(listing).payOnline) {
-    return fail(res, 409, `This listing takes payment on arrival.${stayBookingSettings(listing).payOnArrival ? " Reserve now and pay when you arrive." : ""}`);
+  if (!initial.hotelId) return fail(res, 409, "This booking is paid in person, never online: reserve now and pay when you arrive, or pay at the owner's office for rent.");
+  if (paymentMode() === "disabled" || !(await getSettings()).payments.rentalsEnabled) {
+    return fail(res, 503, "Online payments are turned off right now. Reserve now and pay at the hotel instead.");
   }
-
-  const { rental, payment, resume } = await prepareRentalCheckout(initial, req.user);
-  const { reference } = payment;
-  if (resume) return ok(res, { mode: "paystack", reference, amount: payment.amount, authorizationUrl: payment.authorizationUrl }, "Payment resumed");
-
-  const clientUrl = paymentReturnUrl(req);
-  let result;
-  try {
-    result = await paystack("/transaction/initialize", {
-      method: "POST",
-      body: JSON.stringify({
-        email: rental.contactEmail || req.user.email,
-        amount: toSubunit(payment.amount),
-        currency: "GHS",
-        reference,
-        callback_url: `${clientUrl}/payment/success?reference=${reference}`,
-        metadata: { type: "rental", rentalId: rental.id, propertyId: String(rental.property), userId: String(req.user._id) },
-      }),
-    });
-    if (!result.status || !result.data?.authorization_url) throw new Error(result.message || "Missing checkout URL");
-  } catch (error) {
-    await recordFailedRentalPayment(payment, req.user, "Paystack could not start the checkout");
-    console.error("Paystack initialize failed:", error.message);
-    return fail(res, 502, "Could not start the payment. Please try again.");
-  }
-  await Payment.updateOne({ _id: payment._id }, { $set: { authorizationUrl: result.data.authorization_url } });
-  ok(res, { mode: "paystack", reference, amount: payment.amount, authorizationUrl: result.data.authorization_url, accessCode: result.data.access_code }, "Payment started");
+  if (initial.paymentStatus === "paid") return fail(res, 400, "This booking is already paid.");
+  if (!["pending", "payment_pending"].includes(initial.status)) return fail(res, 400, `This booking is ${initial.status.replace("_", " ")}.`);
+  return initializeHotelPayment(req, res, initial);
 };
 
 // GET /api/payments/verify/:reference -> the server confirms the transaction with Paystack itself

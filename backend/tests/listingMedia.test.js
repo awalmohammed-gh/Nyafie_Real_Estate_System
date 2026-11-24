@@ -2,7 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import Property from "../models/Property.js";
 import Setting from "../models/Setting.js";
+import User from "../models/User.js";
 import { cloudinary } from "../config/cloudinary.js";
+import { mayUseStoredImage, resolveImages } from "../utils/uploadImages.js";
 import { VIDEO_LIMITS, cleanUpAbandonedVideos, cloudinaryAsset, destroyListingMedia, removedMedia, resolveListingVideo, verifyVideo, videoUploadParams } from "../utils/listingMedia.js";
 
 const CLOUD = "nyafie-test";
@@ -40,7 +42,10 @@ test("the upload signature fixes the uploader's folder, MP4 output and compressi
   fakeCloudinary(t);
   const permit = videoUploadParams(AGENT);
   assert.equal(permit.uploadUrl, `https://api.cloudinary.com/v1_1/${CLOUD}/video/upload`);
-  assert.equal(permit.fields.folder, `nyafie/videos/${AGENT}`);
+  // One signature, one file in the uploader's folder, which it can't replace after it was checked
+  assert.match(permit.fields.public_id, new RegExp(`^nyafie/videos/${AGENT}/[a-f0-9]{24}$`));
+  assert.notEqual(videoUploadParams(AGENT).fields.public_id, permit.fields.public_id);
+  assert.equal(permit.fields.overwrite, "false");
   assert.equal(permit.fields.format, "mp4");
   assert.match(permit.fields.transformation, /c_limit,h_1280,w_1280/);
   assert.match(permit.fields.transformation, /q_auto:eco/);
@@ -95,6 +100,7 @@ test("removed photos and videos are deleted for good, unless another listing or 
     return [];
   });
   t.mock.method(Setting, "findOneAndUpdate", () => query({ key: "platform", hero: { slides: [{ image: photo("hero") }] } }));
+  t.mock.method(User, "distinct", async () => []);
   await destroyListingMedia({
     images: [photo("gone"), photo("shared"), photo("hero"), "/built-in.jpg", photo("gone")],
     videos: [`nyafie/videos/${AGENT}/old`, `nyafie/videos/${AGENT}/shared-video`, null],
@@ -109,6 +115,41 @@ test("removed photos and videos are deleted for good, unless another listing or 
   cloudinary.uploader.destroy.mock.mockImplementation(async () => { throw new Error("Cloudinary down"); });
   t.mock.method(console, "error", () => {});
   await assert.doesNotReject(destroyListingMedia({ images: [photo("later")] }));
+});
+
+test("a listing never deletes an account's profile photo or agency logo", async (t) => {
+  const destroyed = fakeCloudinary(t);
+  const avatar = `https://res.cloudinary.com/${CLOUD}/image/upload/v1/nyafie/uploads/${OTHER}/avatar.jpg`;
+  const logo = `https://res.cloudinary.com/${CLOUD}/image/upload/v1/nyafie/uploads/${OTHER}/logo.png`;
+  const profile = `https://res.cloudinary.com/${CLOUD}/image/upload/v1/nyafie/profiles/${OTHER}/me.jpg`;
+  t.mock.method(Property, "distinct", async () => []);
+  t.mock.method(Setting, "findOneAndUpdate", () => query({ key: "platform" }));
+  t.mock.method(User, "distinct", async (field, filter) => {
+    if (field === "profileImage") return filter.profileImage.$in.filter((url) => [avatar, profile].includes(url));
+    if (field === "agentApplication.agencyLogo") return filter["agentApplication.agencyLogo"].$in.filter((url) => url === logo);
+    return [];
+  });
+  await destroyListingMedia({ images: [avatar, logo, profile, photo("gone")] }, "listing-id");
+  assert.deepEqual(destroyed.map((entry) => entry.publicId), [`nyafie/uploads/${AGENT}/gone`]);
+});
+
+test("a listing only takes the site's stored photos it already has or its editor uploaded", async (t) => {
+  fakeCloudinary(t);
+  const theirs = `https://res.cloudinary.com/${CLOUD}/image/upload/v1/nyafie/uploads/${OTHER}/logo.png`;
+  const listingPhoto = `https://res.cloudinary.com/${CLOUD}/image/upload/v1/nyafie/properties/front.jpg`;
+  const owned = { current: [listingPhoto], uploaderIds: [AGENT] };
+  assert.equal(mayUseStoredImage(photo("mine"), owned), true, "the editor's own upload");
+  assert.equal(mayUseStoredImage(listingPhoto, owned), true, "already on the listing");
+  assert.equal(mayUseStoredImage(theirs, owned), false, "another account's upload");
+  assert.equal(mayUseStoredImage(`https://res.cloudinary.com/${CLOUD}/image/upload/v1/nyafie/properties/other.jpg`, owned), false, "another listing's photo");
+  assert.equal(mayUseStoredImage(`https://res.cloudinary.com/${CLOUD}/image/upload/v1/nyafie/uploads/${AGENT}0/x.jpg`, owned), false, "an id that only starts the same");
+  // Never deleted by the site, so always allowed: built-in images and other hosts
+  assert.equal(mayUseStoredImage("/hero/villa.jpg", owned), true);
+  assert.equal(mayUseStoredImage("https://example.com/a.jpg", owned), true);
+  assert.deepEqual(await resolveImages([photo("mine"), listingPhoto], owned), [photo("mine"), listingPhoto]);
+  await assert.rejects(resolveImages([photo("mine"), theirs], owned), (error) => error.status === 400);
+  // Profiles (whose old images are never deleted) still resolve without the listing rule
+  assert.deepEqual(await resolveImages([theirs]), [theirs]);
 });
 
 test("videos uploaded but never saved with a listing are deleted after a day", async (t) => {
@@ -128,4 +169,21 @@ test("videos uploaded but never saved with a listing are deleted after a day", a
   assert.deepEqual(await cleanUpAbandonedVideos(now), { deleted: 1, kept: 1 });
   assert.deepEqual(deleted, ["nyafie/videos/a/abandoned"]);
   assert.deepEqual(untagged, ["nyafie/videos/a/saved"]);
+});
+
+test("the abandoned-video clean-up reads every page and deletes in batches", async (t) => {
+  fakeCloudinary(t);
+  const now = Date.parse("2026-11-22T12:00:00Z");
+  const old = new Date(now - 48 * 3600000).toISOString();
+  const all = Array.from({ length: 650 }, (_, i) => ({ public_id: `nyafie/videos/a/v${i}`, created_at: old }));
+  t.mock.method(cloudinary.api, "resources_by_tag", async (_tag, options) => (options.next_cursor
+    ? { resources: all.slice(500) }
+    : { resources: all.slice(0, 500), next_cursor: "page-2" }));
+  t.mock.method(Property, "distinct", async () => []);
+  const batches = [];
+  t.mock.method(cloudinary.api, "delete_resources", async (ids) => { batches.push(ids.length); return {}; });
+  assert.deepEqual(await cleanUpAbandonedVideos(now), { deleted: 650, kept: 0 });
+  assert.equal(cloudinary.api.resources_by_tag.mock.callCount(), 2);
+  assert.ok(batches.every((size) => size <= 100));
+  assert.equal(batches.reduce((a, b) => a + b, 0), 650);
 });

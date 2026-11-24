@@ -113,12 +113,12 @@ test("production configuration, metadata, uploads and marketplace security", asy
       assert.ok(html.includes('/assets/app.js'));
       assert.equal(html.includes('agent@example.test'), false);
       assert.equal(html.includes('Old description'), false);
-      // Pages carry the security policy, report-only for now: it never blocks the site's own scripts or sign-in
-      const csp = response.headers.get('content-security-policy-report-only');
+      // Pages enforce the security policy: injected scripts are blocked, the site's own scripts and sign-in are not
+      const csp = response.headers.get('content-security-policy');
       assert.ok(csp.includes("script-src 'self' https://accounts.google.com/gsi/client;"));
       assert.match(csp, /frame-ancestors 'none'/);
       assert.ok(csp.includes("report-uri /api/csp-report"));
-      assert.equal(response.headers.get('content-security-policy'), null, 'nothing is enforced yet');
+      assert.equal(response.headers.get('content-security-policy-report-only'), null, 'enforced, not only reported');
       const report = await fetch(base + '/api/csp-report', { method: 'POST', headers: { 'Content-Type': 'application/csp-report', Origin: 'https://real-estate-home-phi.vercel.app' }, body: JSON.stringify({ 'csp-report': { 'document-uri': 'https://real-estate-home-phi.vercel.app/house/1?token=secret', 'violated-directive': 'img-src', 'blocked-uri': 'https://evil.test/x.png' } }) });
       assert.equal(report.status, 204);
     });

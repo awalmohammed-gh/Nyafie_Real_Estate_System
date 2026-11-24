@@ -11,11 +11,13 @@ import { formatDate } from "../../utils/date";
 import { bookingPath } from "../../utils/hotel";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
-import { arrivalText, bookingHeadline, guestCanCancel, payPlace } from "../../utils/hotelPayments";
+import { approvalDeadlineText, arrivalText, bookingHeadline, guestCanCancel, payPlace } from "../../utils/hotelPayments";
 import { cloudImage } from "../../utils/cloudImage";
 import { formatGhs } from "../../utils/property";
 import { AskAgentToUpdate } from "../../components/reports/PaymentSafety";
 import { usePlatform } from "../../context/usePlatform";
+import ReceiptCard from "../../components/receipts/ReceiptCard";
+import BookingPass from "../../components/receipts/BookingPass";
 
 // What each rental status means for the customer
 const statusHelp = {
@@ -47,6 +49,13 @@ const MyRentals = () => {
   useEffect(() => {
     rentalApi.getMyRentals().then(setRentals).catch((err) => setError(err.message));
   }, []);
+  // Stays: the guest tells the hotel or owner a new arrival time (the server checks it's allowed)
+  const changeArrival = (rental) => async (time) => {
+    const updated = await rentalApi.updateArrivalTime(rental.id, time);
+    setRentals((list) => list.map((r) => (r.id === updated.id ? updated : r)));
+  };
+  const today = new Date().toISOString().slice(0, 10);
+  const canChangeArrival = (rental) => ["pending", "payment_pending", "paid", "confirmed"].includes(rental.statusKey) && String(rental.startDate).slice(0, 10) >= today;
 
   return (
     <AccountShell title="My Rentals & Hotel Bookings" description="Your rentals and hotel stays, with payment and booking status.">
@@ -59,13 +68,15 @@ const MyRentals = () => {
         <EmptyState
           icon={KeyRound}
           title="No rentals yet"
-          description="Open a property for rent and tap “Rent Now” to book it and pay online."
+          description="Open a property for rent and tap “Rent Now” to send a request. Rent is paid at the owner's office; hotel and short stays can be paid online or on arrival."
           action={<Link to="/rent" className="btn btn-primary">Browse rentals</Link>}
         />
       ) : (
         <ul className="space-y-4">
           {rentals.map((rental) => {
-            const unpaid = ["Pending", "Payment Pending"].includes(rental.status) && rental.paymentStatus !== "Paid";
+            // Monthly and fixed-price rent is never paid online: the owner confirms, then it's paid at the office
+            const office = rental.paysAtOffice;
+            const unpaid = !office && ["Pending", "Payment Pending"].includes(rental.status) && rental.paymentStatus !== "Paid";
             const headline = bookingHeadline(rental);
             const dueOnArrival = rental.paymentOption === "on_arrival" && rental.paymentDue;
             const checkPayment = unpaid && rental.status === "Payment Pending" && Boolean(rental.reference);
@@ -114,11 +125,17 @@ const MyRentals = () => {
                         <dd className="mt-0.5"><StatusBadge status={rental.paymentStatus} /></dd>
                       </div>
                     </dl>
-                    {headline && <p className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-700"><CircleCheck className="h-4 w-4" aria-hidden="true" />{headline}</p>}
+                    {headline && <p className={`mt-3 flex items-center gap-1.5 text-sm font-semibold ${rental.awaitingApproval ? "text-amber-700" : "text-emerald-700"}`}><CircleCheck className="h-4 w-4" aria-hidden="true" />{headline}</p>}
+                    {rental.awaitingApproval && <p className="mt-1 text-sm text-gray-600">You'll get your booking receipt{rental.hotelId ? " with your room number" : ""} here and by email once the {rental.hotelId ? "hotel" : "owner"} approves it.{rental.approvalDeadline && ` If it isn't approved by ${approvalDeadlineText(rental)}, it's cancelled automatically${rental.paymentStatus === "Paid" ? " and your payment refunded" : ""}.`}</p>}
                     {dueOnArrival && rental.statusKey === "confirmed" && <p className="mt-1 text-sm text-gray-600">Pay {formatGhs(rental.amount)} {payPlace(rental)}. Please {rental.hotelId ? "check in" : "arrive"} {arrivalText(rental)}.</p>}
                     {dueOnArrival && rental.cancellationPolicy && ["confirmed", "active"].includes(rental.statusKey) && <p className="mt-1 text-xs whitespace-pre-line text-gray-500">{rental.hotelId ? "Hotel" : "Owner’s"} policy: {rental.cancellationPolicy}</p>}
-                    {!headline && !(dueOnArrival && rental.statusKey === "confirmed") && <p className="mt-3 text-sm text-gray-600">{rental.hotelId ? ({ Pending: "Choose how to pay to reserve your rooms.", "Payment Pending": "Your secure checkout is in progress. Room holds last 30 minutes.", Paid: "Payment verified. The hotel will confirm your stay.", Confirmed: "Your hotel stay is confirmed.", Active: "You have checked in. Enjoy your stay!", Completed: "Your hotel stay has ended.", Cancelled: "This hotel booking was cancelled." })[rental.status] : rental.pricePeriod === "night" && rental.status === "Pending" ? "Choose how to pay to book this stay." : statusHelp[rental.status]}</p>}
+                    {office && rental.statusKey === "pending" && <p className="mt-3 text-sm text-gray-600">Waiting for {rental.owner?.name || "the owner"} to confirm. Then pay {formatGhs(rental.amount)} at their office and get a receipt.</p>}
+                    {office && rental.statusKey === "confirmed" && rental.paymentDue && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">Your rental is confirmed. Pay {formatGhs(rental.amount)} at {rental.owner?.name || "the owner"}'s office: you get a receipt here and by email. {siteName} never takes rent online, and nobody should ask you to pay to a personal or mobile money number.</p>}
+                    {!office && !headline && !(dueOnArrival && rental.statusKey === "confirmed") && <p className="mt-3 text-sm text-gray-600">{rental.hotelId ? ({ Pending: "Choose how to pay to reserve your rooms.", "Payment Pending": "Your secure checkout is in progress. Room holds last 30 minutes.", Paid: "Payment verified. The hotel will confirm your stay.", Confirmed: "Your hotel stay is confirmed.", Active: "You have checked in. Enjoy your stay!", Completed: "Your hotel stay has ended.", Cancelled: "This hotel booking was cancelled." })[rental.status] : rental.pricePeriod === "night" && rental.status === "Pending" ? "Choose how to pay to book this stay." : statusHelp[rental.status]}</p>}
                     {rental.hotelId && <p className="mt-1 text-xs text-gray-500">{formatGhs(rental.unitPrice)} / night × {rental.units} nights × {rental.numberOfRooms} rooms</p>}
+                    {rental.hotelId && rental.paymentStatus === "Paid" && !rental.receipt && rental.statusKey !== "cancelled" && <p className="mt-1 text-xs text-gray-500">The hotel will send you a receipt for this payment.</p>}
+                    {["paid", "confirmed", "active"].includes(rental.statusKey) && <BookingPass booking={rental} onChangeArrival={canChangeArrival(rental) ? changeArrival(rental) : undefined} className="mt-3" />}
+                    <ReceiptCard receipt={rental.receipt} className="mt-3" />
                     {rental.reference && (
                       <p className="mt-1 text-xs text-gray-400">
                         Reference {rental.reference}
@@ -164,7 +181,9 @@ const MyRentals = () => {
         disabled={busy}
         tone="danger"
         title="Cancel this reservation?"
-        description={cancelling && `Your ${cancelling.roomName} reservation at "${cancelling.property.title}" will be cancelled and the rooms released.${cancelling.cancellationPolicy ? ` Hotel policy: ${cancelling.cancellationPolicy}` : ""}`}
+        description={cancelling && (cancelling.hotelId
+          ? `Your ${cancelling.roomName} reservation at "${cancelling.property.title}" will be cancelled and the rooms released.${cancelling.cancellationPolicy ? ` Hotel policy: ${cancelling.cancellationPolicy}` : ""}`
+          : `Your rental of "${cancelling.property.title}" will be cancelled and the dates released.${cancelling.cancellationPolicy ? ` Owner's policy: ${cancelling.cancellationPolicy}` : ""}`)}
         confirmLabel={busy ? <><Loader2 className="h-4 w-4 animate-spin" />Cancelling…</> : "Cancel reservation"}
       />
     </AccountShell>

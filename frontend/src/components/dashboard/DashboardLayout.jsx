@@ -137,13 +137,14 @@ const DashboardLayout = ({ variant, label, groups, badges = {}, headerActions, s
     .sort((a, b) => b.to.length - a.to.length)[0];
   const inventoryPage = variant === "admin" && current?.label === "Inventory";
   const overviewPage = variant === "admin" && current?.label === "Dashboard";
+  const plansPage = variant === "admin" && current?.label === "Plans";
   // Keep the workspace rail stable across routes; only the collapse control resizes it.
   const expandedSidebarWidth = 240;
 
   return (
     // --sidebar-width lets fixed elements (e.g. the property form's save bar) line up with the sidebar
     <MotionConfig reducedMotion="user" transition={SMOOTH_TRANSITION}>
-    <div className={`dash min-h-dvh bg-gray-50 ${variant === "agent" ? "agent-workspace" : "admin-workspace"} ${inventoryPage ? "admin-inventory-workspace" : ""} ${overviewPage ? "admin-overview-workspace" : ""}`} style={{ "--sidebar-width": `${collapsed ? 64 : expandedSidebarWidth}px` }}>
+    <div className={`dash min-h-dvh bg-gray-50 ${variant === "agent" ? "agent-workspace" : "admin-workspace"} ${inventoryPage ? "admin-inventory-workspace" : ""} ${overviewPage ? "admin-overview-workspace" : ""} ${plansPage ? "admin-plans-workspace" : ""}`} style={{ "--sidebar-width": `${collapsed ? 64 : expandedSidebarWidth}px` }}>
       <ScrollRestoration />
 
       {/* Desktop sidebar */}
@@ -186,7 +187,7 @@ const DashboardLayout = ({ variant, label, groups, badges = {}, headerActions, s
                   <ChevronRight className="hidden h-3.5 w-3.5 shrink-0 text-gray-300 sm:block" />
                   <span className="hidden text-gray-400 md:inline">{current.group}</span>
                   <ChevronRight className="hidden h-3.5 w-3.5 shrink-0 text-gray-300 md:block" />
-                  <span className="truncate font-medium text-gray-900">{current.label}</span>
+                  <span className="truncate font-medium text-gray-900">{plansPage ? "Plans & Pricing" : current.label}</span>
                 </>
               )}
             </nav>

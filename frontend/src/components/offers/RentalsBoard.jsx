@@ -21,17 +21,22 @@ import { rentalApi } from "../../frontApi";
 import { formatDate, isWithinDays } from "../../utils/date";
 import { toWhatsAppNumber } from "../../utils/whatsapp";
 import { adminPath } from "../../utils/adminEntry";
-import { arrivalText, pastArrivalDeadline, payPlace } from "../../utils/hotelPayments";
+import { approvalDeadlineText, arrivalText, pastArrivalDeadline, payPlace } from "../../utils/hotelPayments";
 import { cloudImage } from "../../utils/cloudImage";
 import { formatGhs } from "../../utils/property";
+import ReceiptCard from "../receipts/ReceiptCard";
 
 // Short stays (hotels and rentals priced per night) use check-in words
 const isStay = (r) => Boolean(r.hotelId) || r.pricePeriod === "night";
 // A pay-on-arrival reservation whose payment hasn't been recorded yet
 const dueOnArrival = (r) => r.paymentOption === "on_arrival" && r.paymentDue;
+// Monthly and fixed-price rent: confirmed first, then paid at the office (never online)
+const dueAtOffice = (r) => r.paymentOption === "office" && r.paymentDue;
+// A hotel booking the guest paid online into the hotel's account: the hotel sends the receipt
+const needsReceipt = (r) => Boolean(r.hotelId) && r.paymentMethod === "Paystack" && r.paymentStatus === "Paid" && !r.receipt && r.statusKey !== "cancelled";
 const FILTERS = [
   { id: "All", label: "All", match: () => true },
-  { id: "Action", label: "Needs action", match: (r) => ["Paid", "Confirmed"].includes(r.status) },
+  { id: "Action", label: "Needs action", match: (r) => r.awaitingApproval || ["Paid", "Confirmed"].includes(r.status) },
   { id: "Payment", label: "Awaiting payment", match: (r) => ["Pending", "Payment Pending"].includes(r.status) },
   { id: "Active", label: "Active", match: (r) => r.status === "Active" },
   { id: "CheckIns", label: "Upcoming check-ins", match: (r) => isStay(r) && ["Paid", "Confirmed"].includes(r.status) && r.startDate.slice(0, 10) >= new Date().toISOString().slice(0, 10) },
@@ -55,8 +60,20 @@ const ACTIONS = {
 
 // Stays use check-in words, and pay-on-arrival reservations add "payment received" and "no-show"
 const PAID_ON_ARRIVAL = { kind: "paid-on-arrival", label: "Payment received" };
+const PAID_AT_OFFICE = { kind: "paid-at-office", label: "Payment received at office" };
+const SEND_RECEIPT = { kind: "receipt", label: "Send receipt" };
+const CONFIRM_OFFICE = { status: "confirmed", label: "Confirm rental", note: "" };
+// Hotels: approving a booking assigns its room(s) and sends the guest's booking receipt
+const APPROVE = { kind: "approve", label: "Approve & assign room" };
+const DECLINE = { status: "cancelled", label: "Decline", danger: true };
 const NO_SHOW = { status: "cancelled", label: "Mark no-show", danger: true, note: "Guest did not arrive by the arrival deadline (no-show)." };
 const actionsFor = (r) => {
+  if (r.awaitingApproval) return [r.hotelId ? APPROVE : { ...APPROVE, label: "Approve booking" }, DECLINE];
+  if (r.paysAtOffice && r.statusKey === "pending") return [CONFIRM_OFFICE, ...ACTIONS.pending];
+  // The tenant moves in only after paying at the office
+  if (dueAtOffice(r) && r.statusKey === "confirmed") return [PAID_AT_OFFICE, ...ACTIONS.confirmed.slice(1)];
+  // Paid online: the receipt comes before check-in and completion
+  if (needsReceipt(r)) return [SEND_RECEIPT, ...(ACTIONS[r.statusKey] || []).filter((action) => !["active", "completed"].includes(action.status))];
   const base = (ACTIONS[r.statusKey] || []).map((action) => (isStay(r) && action.status === "active" ? { ...action, label: "Mark checked in" } : r.hotelId && action.status === "confirmed" ? { ...action, label: "Confirm booking" } : action));
   if (!dueOnArrival(r)) return base;
   const received = { ...PAID_ON_ARRIVAL, label: r.hotelId ? "Payment received at hotel" : "Payment received on arrival" };
@@ -65,7 +82,7 @@ const actionsFor = (r) => {
   if (r.statusKey === "active") return [received];
   return base;
 };
-const paymentChoice = (r) => (r.paymentOption !== "on_arrival" ? "Online" : r.hotelId ? "Pay at the hotel" : "Pay on arrival");
+const paymentChoice = (r) => (r.paymentOption === "office" ? "At the office" : r.paymentOption !== "on_arrival" ? "Online" : r.hotelId ? "Pay at the hotel" : "Pay on arrival");
 
 // Rental bookings. scope "agent": own listings only (enforced by the API); "admin": every rental.
 const RentalsBoard = ({ scope }) => {
@@ -83,6 +100,8 @@ const RentalsBoard = ({ scope }) => {
   const [openId, setOpenId] = useState(null);
   const [confirm, setConfirm] = useState(null); // { rental, action }
   const [note, setNote] = useState("");
+  const [slip, setSlip] = useState(""); // office payments: an optional bank slip or cheque number
+  const [roomNumbers, setRoomNumbers] = useState([]); // hotel approval: one room number per booked room
   const [busy, setBusy] = useState(false);
 
   const retry = reload;
@@ -101,7 +120,7 @@ const RentalsBoard = ({ scope }) => {
   const q = query.trim().toLowerCase();
   const rows = scoped
     .filter(FILTERS.find((f) => f.id === status).match)
-    .filter((r) => !q || `${r.contactName} ${r.property.title} ${r.roomName} ${r.reference || ""}`.toLowerCase().includes(q));
+    .filter((r) => !q || `${r.contactName} ${r.property.title} ${r.roomName} ${r.reference || ""} ${r.bookingCode || ""}`.toLowerCase().includes(q));
   const counts = Object.fromEntries(FILTERS.map((f) => [f.id, scoped.filter(f.match).length]));
   const open = openId && rentals.find((r) => r.id === openId);
   const chatLink = open?.conversationId && (isAdmin ? open.ownerType === "admin" && adminPath(`/messages?c=${open.conversationId}`) : `/agent/messages?c=${open.conversationId}`);
@@ -110,9 +129,13 @@ const RentalsBoard = ({ scope }) => {
   const apply = async () => {
     setBusy(true);
     const { rental, action } = confirm;
-    const request = action.kind === "paid-on-arrival" ? rentalApi.recordArrivalPayment(rental.id, note.trim()) : rentalApi.updateRentalStatus(rental.id, action.status, note.trim() || action.note || "");
+    const request = action.kind === "approve" ? rentalApi.approveBooking(rental.id, rental.hotelId ? roomNumbers.map((value) => value.trim()) : undefined, note.trim())
+      : action.kind === "paid-on-arrival" ? rentalApi.recordArrivalPayment(rental.id, note.trim())
+      : action.kind === "paid-at-office" ? rentalApi.recordOfficePayment(rental.id, { note: note.trim(), reference: slip.trim() })
+      : action.kind === "receipt" ? rentalApi.sendReceipt(rental.id, note.trim())
+      : rentalApi.updateRentalStatus(rental.id, action.status, note.trim() || action.note || "");
     const { ok, result } = await run(request, {
-      success: action.kind === "paid-on-arrival" ? "Payment recorded" : action === NO_SHOW ? "Marked as no-show" : `${rental.hotelId ? "Booking" : "Rental"} ${action.status === "active" ? (isStay(rental) ? "checked in" : "marked active") : action.status}`,
+      success: action.kind === "approve" ? "Booking approved and booking receipt sent" : ["paid-on-arrival", "paid-at-office"].includes(action.kind) ? "Payment recorded and receipt sent" : action.kind === "receipt" ? "Receipt sent" : action === NO_SHOW ? "Marked as no-show" : `${rental.hotelId ? "Booking" : "Rental"} ${action.status === "active" ? (isStay(rental) ? "checked in" : "marked active") : action.status}`,
       description: `${rental.contactName} has been notified.`,
     });
     if (ok) {
@@ -122,13 +145,15 @@ const RentalsBoard = ({ scope }) => {
     setBusy(false);
     setConfirm(null);
     setNote("");
+    setSlip("");
+    setRoomNumbers([]);
   };
 
   const actionButtons = (r, size = "text-xs") =>
     actionsFor(r).map((action) => (
       <button
         key={action.kind || action.label}
-        onClick={() => setConfirm({ rental: r, action })}
+        onClick={() => { if (action.kind === "approve") setRoomNumbers(r.hotelId ? Array.from({ length: r.numberOfRooms || 1 }, () => "") : []); setConfirm({ rental: r, action }); }}
         className={`btn btn-light px-3 py-1.5 ${size} ${action.danger ? "text-red-600" : "text-brand-700"}`}
       >
         {action.label}
@@ -159,9 +184,9 @@ const RentalsBoard = ({ scope }) => {
     },
     { key: "amount", header: "Amount", render: (r) => <span className="font-bold whitespace-nowrap text-gray-900">{formatGhs(r.amount)}</span> },
     { key: "payment", header: "Payment", render: (r) => <StatusBadge status={r.paymentStatus} dot={false} /> },
-    { key: "status", header: "Rental", render: (r) => <StatusBadge status={r.status} /> },
+    { key: "status", header: "Rental", render: (r) => <div><StatusBadge status={r.status} />{r.awaitingApproval && r.approvalDeadline && <span className="mt-1 block text-xs font-semibold text-amber-700">Approve by {approvalDeadlineText(r)}</span>}</div> },
     { key: "paid", header: "Date paid", render: (r) => <span className="whitespace-nowrap text-gray-600">{r.paidAt ? formatDate(r.paidAt) : "—"}</span> },
-    { key: "movein", header: "Move-in / Check-in", render: (r) => <span className="whitespace-nowrap text-gray-600">{formatDate(r.startDate)}</span> },
+    { key: "movein", header: "Move-in / Check-in", render: (r) => <span className="whitespace-nowrap text-gray-600">{formatDate(r.startDate)}{r.arrivalTime && <span className="block text-xs text-gray-500">arriving {r.arrivalTime}</span>}</span> },
     {
       key: "view",
       header: <span className="sr-only">View</span>,
@@ -184,7 +209,7 @@ const RentalsBoard = ({ scope }) => {
       ]} />}
       <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <FilterTabs label="Rental status" value={status} onChange={setStatus} tabs={FILTERS.map((f) => ({ id: f.id, label: f.label, count: counts[f.id] }))} />
-        <SearchInput value={query} onChange={setQuery} placeholder="Search rentals" className="lg:w-72" />
+        <SearchInput value={query} onChange={setQuery} placeholder="Search name or booking code" className="lg:w-72" />
       </div>
       <Filters isAdmin={isAdmin} owners={owners} ownerId={ownerId} setOwnerId={setOwnerId} properties={propertyOptions} propertyId={propertyId} setPropertyId={(value) => { setPropertyId(value); setRoomId("all"); }} range={range} setRange={setRange} />
       {!!roomOptions.length && <label className="mb-4 block max-w-sm text-sm font-medium text-gray-700">Room type<select value={roomId} onChange={(e) => setRoomId(e.target.value)} className="field mt-1.5"><option value="all">All room types</option>{roomOptions.map((room) => <option key={room.id} value={room.id}>{room.name} · {room.hotel}</option>)}</select></label>}
@@ -213,8 +238,9 @@ const RentalsBoard = ({ scope }) => {
                 <StatusBadge status={r.status} />
               </div>
               <p className="mt-2 text-sm text-gray-600">
-                Move-in {formatDate(r.startDate)} · <span className="font-bold text-gray-900">{formatGhs(r.amount)}</span>
+                {isStay(r) ? "Check-in" : "Move-in"} {formatDate(r.startDate)}{r.arrivalTime ? ` at ${r.arrivalTime}` : ""} · <span className="font-bold text-gray-900">{formatGhs(r.amount)}</span>
               </p>
+              {r.bookingCode && <p className="mt-1 font-mono text-xs font-semibold tracking-wider text-brand-700">{r.bookingCode}</p>}
             </button>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <StatusBadge status={r.paymentStatus} dot={false} />
@@ -251,7 +277,7 @@ const RentalsBoard = ({ scope }) => {
       >
         {open && (
           <div className="space-y-5">
-            <StatusSteps kind={open.paymentOption === "on_arrival" && open.paymentMethod !== "Paystack" ? "stayReservation" : "rental"} status={open.statusKey} />
+            <StatusSteps kind={open.paymentOption === "office" || open.paysAtOffice ? "officeRental" : open.paymentOption === "on_arrival" && open.paymentMethod !== "Paystack" ? "stayReservation" : "rental"} status={open.statusKey} />
             <div className="rounded-xl bg-brand-50 p-4"><p className="workspace-eyebrow">Rental summary</p><p className="mt-2 text-2xl font-semibold text-gray-900">{formatGhs(open.amount)}</p><p className="mt-2 text-sm text-gray-600">Move-in {formatDate(open.startDate)} · Until {formatDate(open.endDate)}</p><div className="mt-3 flex gap-2"><StatusBadge status={open.paymentStatus} /><StatusBadge status={open.status} /></div></div>
             <Link to={`/house/${open.property.id}`} className="flex items-center gap-3 rounded-lg p-2 ring-1 ring-gray-200 transition hover:ring-brand-200">
               {open.property.image && <img src={cloudImage(open.property.image, 80)} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />}
@@ -270,6 +296,8 @@ const RentalsBoard = ({ scope }) => {
                 ["Current address", open.currentAddress || "—"],
                 [open.hotelId ? "Guests" : "Occupants", open.occupants],
                 [open.hotelId ? "Check-in" : "Move-in", formatDate(open.startDate)],
+                ...(isStay(open) ? [["Arriving at", open.arrivalTime || "Not given"], ["Booking code", open.bookingCode || (open.awaitingApproval ? "Sent when you approve" : "—")]] : []),
+                ...(open.hotelId ? [["Room number(s)", open.roomNumbers.length ? open.roomNumbers.join(", ") : "Not assigned yet"]] : []),
                 [open.hotelId ? "Check-out" : "Until", formatDate(open.endDate)],
                 ["Amount", formatGhs(open.amount)],
                 ["Reference", open.reference || "—"],
@@ -290,7 +318,11 @@ const RentalsBoard = ({ scope }) => {
               </div>
             </dl>
             {open.notes && <p className="rounded-lg bg-brand-50/60 p-4 text-sm whitespace-pre-line text-gray-700">“{open.notes}”</p>}
-            {dueOnArrival(open) && ["confirmed", "active"].includes(open.statusKey) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{formatGhs(open.amount)} is due {payPlace(open)}. The guest should {open.hotelId ? "check in" : "arrive"} {arrivalText(open)}.{open.cancellationPolicy && <span className="mt-1 block text-xs whitespace-pre-line">Policy shown to the guest: {open.cancellationPolicy}</span>}</p>}
+            {dueAtOffice(open) && open.statusKey === "confirmed" && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{formatGhs(open.amount)} is due at your office. Record it here when the tenant pays: they get a receipt, and only then can they move in. Never ask for payment online or to a personal number.</p>}
+            {open.awaitingApproval && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{open.hotelId ? `Approve this booking and assign the room${open.numberOfRooms > 1 ? "s" : ""} the guest will stay in.` : "Approve this stay if the place is ready for these dates."} They get their booking receipt only then, and show it when they arrive. To refuse it, decline it.{open.approvalDeadline && <strong className="mt-1 block">Approve by {approvalDeadlineText(open)} (Ghana time), or it's cancelled automatically and the rooms released.</strong>}</p>}
+            {needsReceipt(open) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">The guest paid {formatGhs(open.amount)} online into your payout account. Send their receipt before they check in.</p>}
+            <ReceiptCard receipt={open.receipt} />
+            {dueOnArrival(open) && ["confirmed", "active"].includes(open.statusKey) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{formatGhs(open.amount)} is due {payPlace(open)}. The guest {open.arrivalTime ? `is arriving at ${open.arrivalTime} on ${formatDate(open.startDate)}` : `should ${open.hotelId ? "check in" : "arrive"} ${arrivalText(open)}`}{open.bookingCode ? ` and will show booking code ${open.bookingCode}: check it matches before you take payment` : ""}.{open.cancellationPolicy && <span className="mt-1 block text-xs whitespace-pre-line">Policy shown to the guest: {open.cancellationPolicy}</span>}</p>}
             {actionsFor(open).length > 0 && <div className="flex flex-wrap gap-2">{actionButtons(open, "text-sm")}</div>}
             <div>
               <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
@@ -307,13 +339,25 @@ const RentalsBoard = ({ scope }) => {
         open={Boolean(confirm)}
         onClose={() => setConfirm(null)}
         onConfirm={apply}
-        disabled={busy}
+        disabled={busy || (confirm?.action.kind === "approve" && roomNumbers.some((value) => !value.trim()))}
         tone={confirm?.action.danger ? "danger" : "primary"}
         title={confirm ? `${confirm.action.label}?` : ""}
         description={
           confirm &&
-          (confirm.action.kind === "paid-on-arrival"
-            ? `Record that ${confirm.rental.contactName} paid ${formatGhs(confirm.rental.amount)} ${payPlace(confirm.rental)}. They'll get a confirmation.`
+          (confirm.action.kind === "approve" && !confirm.rental.hotelId
+            ? `Approve ${confirm.rental.contactName}'s stay (${formatDate(confirm.rental.startDate)} to ${formatDate(confirm.rental.endDate)}${confirm.rental.arrivalTime ? `, arriving ${confirm.rental.arrivalTime}` : ""}). Their booking receipt is sent to them, and they pay you when they arrive.`
+            : confirm.action.kind === "approve"
+            ? `Assign the room${(confirm.rental.numberOfRooms || 1) > 1 ? "s" : ""} for ${confirm.rental.contactName} (${confirm.rental.numberOfRooms} × ${confirm.rental.roomName}, ${formatDate(confirm.rental.startDate)} to ${formatDate(confirm.rental.endDate)}). Their booking receipt with the room number${confirm.rental.paymentStatus === "Paid" ? " and their payment receipt are" : " is"} sent to them.`
+            : confirm.action === DECLINE
+            ? `Decline ${confirm.rental.contactName}'s booking. The ${confirm.rental.hotelId ? "rooms are" : "dates are"} released and they're told.${confirm.rental.paymentStatus === "Paid" ? " Their online payment is flagged for a refund." : ""}`
+            : confirm.action.kind === "paid-on-arrival"
+            ? `Record that ${confirm.rental.contactName} paid ${formatGhs(confirm.rental.amount)} ${payPlace(confirm.rental)}. A receipt from you is sent to them.`
+            : confirm.action.kind === "paid-at-office"
+            ? `Record that ${confirm.rental.contactName} paid ${formatGhs(confirm.rental.amount)} at your office. A receipt from you is sent to them, and they can then move in.`
+            : confirm.action.kind === "receipt"
+            ? `Send ${confirm.rental.contactName} a receipt for the ${formatGhs(confirm.rental.amount)} they paid online. It can't be changed once sent.`
+            : confirm.action === CONFIRM_OFFICE
+            ? `Confirm ${confirm.rental.contactName}'s rental of "${confirm.rental.property.title}". The dates are held for them, and they're asked to pay ${formatGhs(confirm.rental.amount)} at your office.`
             : confirm.action === NO_SHOW
             ? `${confirm.rental.contactName} didn't arrive by the deadline. Their reservation is cancelled, the ${confirm.rental.hotelId ? "rooms are" : "dates are"} released and they're notified.`
             : confirm.action.status === "cancelled" && confirm.rental.paymentStatus === "Paid"
@@ -322,7 +366,26 @@ const RentalsBoard = ({ scope }) => {
         }
         confirmLabel={busy ? "Saving..." : confirm?.action.label}
       >
-        <textarea value={note} onChange={(e) => setNote(e.target.value.slice(0, 300))} rows={2} placeholder="Note for the customer (optional)" className="field resize-none" />
+        {confirm?.action.kind === "approve" && (
+          <div className="mb-2 grid gap-2 sm:grid-cols-2">
+            {roomNumbers.map((value, index) => (
+              <label key={index} className="text-sm font-medium text-gray-700">
+                Room number{roomNumbers.length > 1 ? ` ${index + 1}` : ""}
+                {confirm.rental.roomOptions.length ? (
+                  // The hotel listed this room type's rooms: pick one (each room once per booking)
+                  <select required value={value} onChange={(e) => setRoomNumbers((list) => list.map((item, i) => (i === index ? e.target.value : item)))} className="field mt-1">
+                    <option value="">Choose a room</option>
+                    {confirm.rental.roomOptions.filter((number) => number === value || !roomNumbers.includes(number)).map((number) => <option key={number} value={number}>Room {number}</option>)}
+                  </select>
+                ) : (
+                  <input required value={value} maxLength={20} onChange={(e) => setRoomNumbers((list) => list.map((item, i) => (i === index ? e.target.value : item)))} placeholder="e.g. 204" className="field mt-1" />
+                )}
+              </label>
+            ))}
+          </div>
+        )}
+        {confirm?.action.kind === "paid-at-office" && <input value={slip} onChange={(e) => setSlip(e.target.value.slice(0, 80))} placeholder="Bank slip or cheque number (optional)" className="field mb-2" />}
+        <textarea value={note} onChange={(e) => setNote(e.target.value.slice(0, 300))} rows={2} placeholder={confirm?.action.kind ? "Note on the receipt (optional)" : "Note for the customer (optional)"} className="field resize-none" />
       </ConfirmDialog>
     </>
   );

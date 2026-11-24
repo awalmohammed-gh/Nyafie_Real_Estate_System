@@ -32,6 +32,12 @@ const LocationPicker = lazy(() => import("../../components/location/LocationPick
 
 const RENT_PERIOD_LABELS = { month: "Per month", night: "Per night" };
 
+// Facilities a hotel shares with every guest (what's inside each room belongs to its room type)
+const HOTEL_AMENITIES = [
+  "Free Wi-Fi", "24-hour reception", "Restaurant", "Bar", "Breakfast available", "Room service", "Swimming pool", "Gym",
+  "Spa", "Free parking", "Airport shuttle", "Laundry service", "Conference room", "Event hall", "Business centre", "Elevator",
+  "Backup generator", "24/7 security", "CCTV", "Garden", "Kids' play area", "Wheelchair accessible", "Luggage storage", "Currency exchange",
+];
 const AMENITIES = [
   "Swimming Pool", "Gym", "24/7 Security", "Parking", "Garage", "Garden", "Balcony", "Borehole",
   "Solar Backup", "Air Conditioning", "Fitted Kitchen", "Staff Quarters", "Elevator", "Walled Compound", "Furnished",
@@ -206,9 +212,12 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
   const monthlyRental = !hotel && form.listingType === "Rent" && form.rentPeriod === "month";
   const [moveIn, setMoveIn] = useState(() => ({ ...MOVE_IN_DEFAULTS, ...existing?.moveIn }));
   const [bookingEdits, setBooking] = useState(() => existing?.stayBooking || {});
-  const booking = { ...(hotel ? STAY_BOOKING_DEFAULTS : NIGHTLY_RENTAL_DEFAULTS), ...bookingEdits };
-  // The platform's own hotels are paid into the platform account; agent hotels into their payout account
+  // Hotels: check-in and check-out times and star rating
+  const [hotelInfo, setHotelInfo] = useState(() => ({ checkInFrom: "14:00", checkOutBy: "11:00", starRating: 0, ...existing?.hotelInfo }));
+  // The platform's own hotels and per-night rentals are paid on arrival only; agent hotels may add online
+  // payment into their own payout account. Pay on arrival is always on (the server enforces both).
   const platformHotel = existing ? existing.owner.type === "admin" : isAdminEditor;
+  const booking = { ...(hotel ? STAY_BOOKING_DEFAULTS : NIGHTLY_RENTAL_DEFAULTS), ...bookingEdits, payOnArrival: true, ...(!hotel || platformHotel ? { payOnline: false } : {}) };
   const activeRooms = rooms.filter((room) => room.active);
   const hotelPrice = activeRooms.length ? Math.min(...activeRooms.map((room) => Number(room.pricePerNight) || 0)) : 0;
   const [errors, setErrors] = useState({});
@@ -288,7 +297,6 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
     if (mediaLinkProblem(form.tourUrl, "tour")) e.tourUrl = mediaLinkProblem(form.tourUrl, "tour");
     if (monthlyRental && [moveIn.agentFeeValue, moveIn.securityDeposit].some((v) => v !== "" && !(Number(v) >= 0))) e.moveIn = "Amounts can't be negative.";
     if (monthlyRental && moveIn.agentFeeType === "percent" && !(Number(moveIn.agentFeeValue) <= 20)) e.moveIn = "Enter an agent fee between 0% and 20%.";
-    if ((hotel || nightlyRental) && !booking.payOnArrival && !booking.payOnline) e.booking = "Choose at least one way for guests to pay.";
     if (mode === "publish") {
       if (form.description.trim().length < 30) e.description = "Describe the property in at least 30 characters.";
       if (!form.type) e.type = "Choose a property type.";
@@ -330,7 +338,7 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
         size: { value: Number(form.area) || 0, unit: "sqm" },
       },
       features: form.amenities,
-      ...(hotel ? { roomTypes: roomsToPayload(rooms), stayBooking: booking } : nightlyRental ? { stayBooking: booking } : {}),
+      ...(hotel ? { roomTypes: roomsToPayload(rooms), stayBooking: booking, hotelInfo: { ...hotelInfo, starRating: Number(hotelInfo.starRating) || 0 } } : nightlyRental ? { stayBooking: booking } : {}),
       ...(monthlyRental ? { moveIn: { ...moveIn, agentFeeValue: Number(moveIn.agentFeeValue) || 0, securityDeposit: Number(moveIn.securityDeposit) || 0 } } : {}),
       media: { images: readyImages.map((img) => img.src), videoUrl: form.videoUrl.trim(), virtualTourUrl: form.tourUrl.trim(), videoFile: form.videoFile },
       agent: { id: user.id, name: form.contactName.trim() || user.name, phone: form.contactPhone.trim(), email: form.contactEmail.trim() },
@@ -651,8 +659,18 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
           </Chapter>
 
           {/* 06 Rooms and amenities */}
-          <Chapter id="chapter-details" number={next()} title={hotel ? "Hotel amenities and floor area" : "Rooms and amenities"} description={hotel ? "Facilities shared across the hotel. Add everything inside a room to its room type above." : "The facts customers compare between listings."}>
+          <Chapter id="chapter-details" number={next()} title={hotel ? "Hotel details and facilities" : "Rooms and amenities"} description={hotel ? "Check-in and check-out times, star rating and the facilities shared across the hotel. Everything inside a room belongs to its room type above." : "The facts customers compare between listings."}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {hotel && <>
+                <Field label="Check-in from"><input type="time" value={hotelInfo.checkInFrom} onChange={(e) => setHotelInfo((info) => ({ ...info, checkInFrom: e.target.value || "14:00" }))} className="field mt-1.5" /></Field>
+                <Field label="Check-out by"><input type="time" value={hotelInfo.checkOutBy} onChange={(e) => setHotelInfo((info) => ({ ...info, checkOutBy: e.target.value || "11:00" }))} className="field mt-1.5" /></Field>
+                <Field label="Star rating">
+                  <select value={hotelInfo.starRating} onChange={(e) => setHotelInfo((info) => ({ ...info, starRating: Number(e.target.value) }))} className="field mt-1.5">
+                    <option value={0}>Not rated</option>
+                    {[1, 2, 3, 4, 5].map((stars) => <option key={stars} value={stars}>{"★".repeat(stars)} {stars} star{stars > 1 ? "s" : ""}</option>)}
+                  </select>
+                </Field>
+              </>}
               {!hotel && <Stepper label="Bedrooms" icon={Bed} value={form.bedrooms} onChange={(v) => set("bedrooms", v)} error={errors.bedrooms} />}
               {!hotel && <Stepper label="Bathrooms" icon={Bath} value={form.bathrooms} onChange={(v) => set("bathrooms", v)} inputStep={0.5} error={errors.bathrooms} />}
               <div>
@@ -666,9 +684,10 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
             </div>
 
             <div className="mt-6 border-t border-gray-100 pt-6">
-              <p className="text-sm font-medium text-gray-700">Amenities <span className="font-normal text-gray-400">· {form.amenities.length} selected</span></p>
+              <p className="text-sm font-medium text-gray-700">{hotel ? "Hotel facilities" : "Amenities"} <span className="font-normal text-gray-400">· {form.amenities.length} selected</span></p>
+              {hotel && <p className="mt-1 text-xs text-gray-500">Shared by all guests. What's inside each room is set on its room type above.</p>}
               <div className="mt-3 flex flex-wrap gap-2">
-                {[...new Set([...(hotel ? ["Swimming Pool", "Restaurant", "Gym", "Parking", "Reception", "24/7 Security", "Elevator", "Garden"] : AMENITIES), ...form.amenities])].map((amenity) => {
+                {[...new Set([...(hotel ? HOTEL_AMENITIES : AMENITIES), ...form.amenities])].map((amenity) => {
                   const active = form.amenities.includes(amenity);
                   return (
                     <button

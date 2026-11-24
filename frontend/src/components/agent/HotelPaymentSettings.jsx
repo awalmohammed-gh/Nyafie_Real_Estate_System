@@ -4,9 +4,9 @@ import { hotelApi } from "../../frontApi";
 import { useApiQuery } from "../../hooks/useApiQuery";
 
 
-const Option = ({ icon: Icon, title, description, checked, onChange }) => (
-  <label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition ${checked ? "border-brand-300 bg-brand-50/60" : "border-gray-200 bg-white hover:border-gray-300"}`}>
-    <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-4.5 w-4.5 shrink-0 accent-brand-600" />
+const Option = ({ icon: Icon, title, description, checked, onChange, locked = false }) => (
+  <label className={`flex items-start gap-3 rounded-xl border p-4 transition ${locked ? "" : "cursor-pointer"} ${checked ? "border-brand-300 bg-brand-50/60" : "border-gray-200 bg-white hover:border-gray-300"}`}>
+    <input type="checkbox" checked={checked} disabled={locked} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-4.5 w-4.5 shrink-0 accent-brand-600" />
     <Icon className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" aria-hidden="true" />
     <span className="min-w-0">
       <span className="block text-sm font-semibold text-gray-900">{title}</span>
@@ -17,9 +17,10 @@ const Option = ({ icon: Icon, title, description, checked, onChange }) => (
 
 /**
  * Editor section for a hotel or a rental priced per night ("rental"): which payment options guests
- * get, the arrival deadline and the cancellation / no-show policy. Hotel online payments settle to
- * the hotel's own payout account (agent hotels) or to the platform account (the platform's own
- * hotels); per-night rentals use the existing rental checkout, so they need no payout account.
+ * get, the arrival deadline and the cancellation / no-show policy. Guests can always book and pay
+ * when they arrive (NyaFie never holds customers' money). Only a hotel listed by an agent may also
+ * take online payment, settled straight to the hotel's own payout account; the platform's own hotels
+ * and per-night rentals are paid on arrival only (the server enforces both).
  */
 const HotelPaymentSettings = ({ value, onChange, error, propertyId, platform, ownerConnects = false, stay = "hotel" }) => {
   const set = (key) => (next) => onChange({ ...value, [key]: next });
@@ -27,13 +28,14 @@ const HotelPaymentSettings = ({ value, onChange, error, propertyId, platform, ow
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2">
+        {/* Always on: booking never requires paying online */}
         {rental
-          ? <Option icon={Banknote} title="Reserve now, pay on arrival" description="Guests reserve their dates and pay you when they arrive. The dates are held until your arrival deadline." checked={value.payOnArrival} onChange={set("payOnArrival")} />
-          : <Option icon={Banknote} title="Reserve now, pay at the hotel" description="Guests reserve their rooms and pay on arrival. Rooms are held until your arrival deadline." checked={value.payOnArrival} onChange={set("payOnArrival")} />}
-        <Option icon={CreditCard} title="Pay online" description={rental ? "Guests pay by card or mobile money through Paystack when they book." : platform ? "Guests pay by card or mobile money when they book. Payments go to the platform account." : "Guests pay by card or mobile money when they book. Payments go straight to your payout account."} checked={value.payOnline} onChange={set("payOnline")} />
+          ? <Option locked icon={Banknote} title="Reserve now, pay on arrival (always on)" description="Guests reserve their dates, tell you when they're arriving and pay you when they arrive, showing their booking code. The dates are held until your arrival deadline." checked onChange={() => {}} />
+          : <Option locked icon={Banknote} title="Reserve now, pay at the hotel (always on)" description="Guests reserve their rooms, tell you when they're arriving and pay at the hotel, showing their booking code. Rooms are held until your arrival deadline." checked onChange={() => {}} />}
+        {!rental && !platform && <Option icon={CreditCard} title="Also let guests pay online" description="Optional. Guests can pay by card or mobile money when they book; the money goes straight to your payout account, never to the platform." checked={value.payOnline} onChange={set("payOnline")} />}
       </div>
       {error && <p className="text-xs text-red-600" role="alert">{error}</p>}
-      {value.payOnArrival && (
+      {(
         <div className="grid gap-4 sm:grid-cols-[12rem_1fr]">
           <label className="text-sm font-medium text-gray-700">
             Arrival deadline
@@ -59,7 +61,11 @@ const TYPES = [
   { value: "mobile_money", label: "Mobile money", icon: Smartphone },
 ];
 
+const HOLD_TIME = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" });
+const onHold = (at) => Boolean(at) && new Date(at) > new Date();
+
 // The hotel's payout account. Only the account owner can see or change it, with their password.
+// New accounts and changes wait 48 hours before money goes to them (the server enforces it).
 const PayoutAccount = ({ propertyId }) => {
   const { data, error, loading, reload } = useApiQuery(`payout:${propertyId}`, () => hotelApi.getPayout(propertyId));
   const [editing, setEditing] = useState(false);
@@ -73,7 +79,14 @@ const PayoutAccount = ({ propertyId }) => {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <p className="text-sm font-semibold text-gray-900">Payout account</p>
-      <p className="mt-0.5 text-xs leading-5 text-gray-500">Online payments for this hotel are settled to this account by Paystack, minus Paystack's fee. Guests can't pay online until it's connected.</p>
+      <p className="mt-0.5 text-xs leading-5 text-gray-500">Online payments for this hotel are settled to this account by Paystack, minus Paystack's fee. Guests can't pay online until it's connected. For your safety, a new or changed account starts receiving payments 48 hours later, and every change is emailed to you.</p>
+      {payout.connected && onHold(payout.activeFrom) && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Online payments start going to this account on {HOLD_TIME.format(new Date(payout.activeFrom))} (Ghana time). Until then guests can pay at the hotel.</p>}
+      {payout.pending && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+          <p><strong>Change waiting:</strong> {payout.pending.bankName} ending {payout.pending.accountLast4} from {HOLD_TIME.format(new Date(payout.pending.activeFrom))} (Ghana time). Payments keep going to the account below until then. Didn't ask for this? Cancel it and change your password.</p>
+          <button type="button" onClick={async () => { try { setSaved(await hotelApi.cancelPayoutChange(propertyId)); } catch { reload(); } }} className="btn btn-light px-3 py-1.5 text-xs text-red-600">Cancel change</button>
+        </div>
+      )}
       {payout.connected && !editing ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-emerald-50 p-3">
           <p className="flex items-start gap-2 text-sm text-emerald-900">

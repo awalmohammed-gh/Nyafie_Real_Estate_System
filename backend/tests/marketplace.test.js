@@ -202,3 +202,13 @@ test("payment success requires the provider's reference, GHS currency, and exact
   assert.equal(toSubunit(0.1 + 0.2), 30);
   for (const bad of [NaN, -1, Infinity, "abc"]) assert.throws(() => toSubunit(bad), /Invalid payment amount/);
 });
+
+test("a hotel's room numbers are never in public listing data, only for its owner and admins", async () => {
+  const { presentProperties } = await import("../utils/marketplace.js");
+  const hotel = new Property({ title: "Palm Hotel", propertyType: "Hotel", listingType: "Rent", pricePeriod: "night", price: 300, owner: new mongoose.Types.ObjectId(), ownerType: "admin", roomTypes: [{ name: "Deluxe", pricePerNight: 300, quantity: 2, maxGuests: 2, beds: 1, bedType: "King", roomNumbers: ["101", "102"] }] });
+  const [publicData] = await presentProperties([hotel]);
+  assert.equal(publicData.roomTypes[0].roomNumbers, undefined);
+  assert.equal(publicData.roomTypes[0].name, "Deluxe");
+  const [ownerData] = await presentProperties([hotel], { includeRoomNumbers: true });
+  assert.deepEqual(ownerData.roomTypes[0].roomNumbers, ["101", "102"]);
+});

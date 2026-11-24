@@ -19,7 +19,9 @@ test("photos are stored resized and compressed, whatever the client sent", () =>
   assert.deepEqual(imageUploadOptions("data:image/webp;base64,UklG", {}).transformation[1], { quality: "auto:good" });
   // PNG logos keep lossless encoding (only the size is capped); SVG and GIF are stored exactly as sent
   assert.deepEqual(imageUploadOptions("data:image/png;base64,iVBO", {}).transformation, [{ width: MAX_STORED_SIZE, height: MAX_STORED_SIZE, crop: "limit" }]);
-  for (const image of ["data:image/svg+xml;base64,PHN2", "data:image/gif;base64,R0lG"]) assert.deepEqual(imageUploadOptions(image, { folder: "x" }), { folder: "x" });
+  assert.deepEqual(imageUploadOptions("data:image/gif;base64,R0lG", { folder: "x" }), { folder: "x" });
+  // An SVG can carry scripts: it is stored as a PNG, never as sent
+  assert.deepEqual(imageUploadOptions("data:image/svg+xml;base64,PHN2", { folder: "x" }), { folder: "x", format: "png", transformation: [{ width: MAX_STORED_SIZE, height: MAX_STORED_SIZE, crop: "limit" }] });
 });
 
 test("rate limits on payouts, upgrades, listing saves and server-rendered pages", async (t) => {

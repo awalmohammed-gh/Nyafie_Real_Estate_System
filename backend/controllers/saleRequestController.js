@@ -20,6 +20,8 @@ import { cleanText, validateContact } from "../utils/validation.js";
 import { HttpError, ok, fail } from "../utils/response.js";
 import { siteName } from "../models/Setting.js";
 import { openRequestLimitProblem } from "../utils/openRequestLimits.js";
+import { buildReceipt, deliverReceipt, presentReceipt } from "../utils/receipts.js";
+import { OFFICE_METHOD } from "../utils/officePayments.js";
 
 const LABELS = {
   pending: "pending",
@@ -108,6 +110,7 @@ const present = (request, user, offers = new Map()) => {
         `${request.customer?._id || request.customer}:${request.property?._id || request.property}`,
       ) || null,
     conversation: request.conversation ? String(request.conversation) : null,
+    receipt: presentReceipt(request.receipt),
     canManage: canManageRecord(request, user),
   };
 };
@@ -317,7 +320,7 @@ export const updateSaleStatus = async (req, res) => {
 
   const customerText =
     status === "payment_pending"
-      ? `Payment requested: agree with ${ownerName(request)} how to pay ${formatGHS(request.askingPrice)} (in chat, by phone or in person). Only pay the owner or agent shown on ${siteName()}, and keep a receipt.`
+      ? `Payment requested: pay ${formatGHS(request.askingPrice)} at ${ownerName(request)}'s office. ${siteName()} never takes house or land payments online, and nobody should ask you to pay to a personal or mobile money number. You get a receipt when the payment is recorded.`
       : `Your purchase request is now ${LABELS[status]}.`;
   await note(
     request,
@@ -339,7 +342,8 @@ export const updateSaleStatus = async (req, res) => {
   await respond(res, request._id, req.user, "Purchase request updated");
 };
 
-// PATCH /api/sale-requests/:id/confirm-payment { amount, note } -> owner confirms they received the buyer's payment
+// PATCH /api/sale-requests/:id/confirm-payment { amount, note, reference } -> owner records the buyer's
+// payment at the office; the buyer's receipt is issued with it
 export const confirmOfficePayment = async (req, res) => {
   const request = await loadManaged(req, res);
   if (!request) return;
@@ -352,8 +356,10 @@ export const confirmOfficePayment = async (req, res) => {
   if (!Number.isFinite(amount) || amount < 1)
     return fail(res, 400, "Enter the amount received.");
   const reason = cleanText(req.body.note, 300);
+  const slip = cleanText(req.body.reference, 80); // e.g. the bank slip or cheque number, if any
 
   const now = new Date();
+  let receipt;
   // One transaction: the request is confirmed, the payment recorded and the chat noted together, or
   // nothing changes. The claim comes first so a double click or two staff members confirming at once
   // conflict on it: one commits, the other retries, finds it confirmed and gets the 409.
@@ -372,7 +378,7 @@ export const confirmOfficePayment = async (req, res) => {
       owner: request.owner?._id || request.owner,
       ownerType: request.ownerType,
       amount,
-      method: "Direct", // paid to the owner as agreed with the buyer
+      method: "Office", // houses and land are paid for at the office
       reference: newReference("HBS"),
       status: "paid",
       paidAt: now,
@@ -381,29 +387,29 @@ export const confirmOfficePayment = async (req, res) => {
     }], { session });
 
     claimed.set({ status: "paid_at_office", amountPaid: amount });
+    claimed.receipt = await buildReceipt({ ...claimed.toObject(), owner: request.owner }, {
+      amount, method: OFFICE_METHOD, paymentReference: slip, note: reason,
+      description: `Payment for "${request.property?.title || "the property"}"`, issuer: req.user, now, session,
+    });
+    receipt = claimed.receipt;
     addHistory(
       claimed,
       req.user,
-      `Payment of ${formatGHS(amount)} confirmed by the owner${reason ? ` – ${reason}` : ""}`,
+      `Payment of ${formatGHS(amount)} received at the office; receipt ${claimed.receipt.number}${reason ? ` – ${reason}` : ""}`,
     );
     await note(
       claimed,
       req.user,
       "owner",
-      `Payment of ${formatGHS(amount)} received and confirmed by the owner.`,
+      `Payment of ${formatGHS(amount)} received at the office. Receipt ${claimed.receipt.number} was sent to you.`,
       request.property,
       session,
     );
     await claimed.save({ session });
   });
 
-  await notifyUser(request.customer._id, {
-    type: "payment",
-    title: "Payment confirmed",
-    message: `Your payment of ${formatGHS(amount)} for "${request.property?.title}" was confirmed.`,
-    link: "/account/purchases",
-  });
-  await respond(res, request._id, req.user, "Payment confirmed");
+  await deliverReceipt({ customer: request.customer._id, email: request.contactEmail, receipt, link: "/account/purchases" });
+  await respond(res, request._id, req.user, "Payment recorded and receipt sent");
 };
 
 // PATCH /api/sale-requests/:id/complete -> marks the property sold (after the owner confirms the payment)

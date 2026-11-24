@@ -25,6 +25,7 @@ import { usePlatform } from "../../context/usePlatform";
 import { adminPath } from "../../utils/adminEntry";
 import { cloudImage } from "../../utils/cloudImage";
 import { formatGhs } from "../../utils/property";
+import ReceiptCard from "../receipts/ReceiptCard";
 
 const CLOSED = ["completed", "cancelled", "rejected"];
 // Statuses the owner picks directly; payment confirmation and completion have their own buttons
@@ -60,6 +61,7 @@ const SaleRequestsBoard = ({ scope }) => {
   const [note, setNote] = useState("");
   const [confirm, setConfirm] = useState(null); // { kind: "status" | "payment" | "complete", status? }
   const [paidAmount, setPaidAmount] = useState("");
+  const [slip, setSlip] = useState(""); // an optional bank slip or cheque number for the receipt
   const [busy, setBusy] = useState("");
 
   const retry = reload;
@@ -97,12 +99,12 @@ const SaleRequestsBoard = ({ scope }) => {
     setBusy(kind);
     const requestsByKind = {
       status: () => saleRequestApi.updateSaleStatus(open.id, status, note.trim()),
-      payment: () => saleRequestApi.confirmOfficePayment(open.id, paidAmount === "" ? undefined : Number(paidAmount), note.trim()),
+      payment: () => saleRequestApi.confirmOfficePayment(open.id, paidAmount === "" ? undefined : Number(paidAmount), note.trim(), slip.trim()),
       complete: () => saleRequestApi.completeSale(open.id),
     };
     const messages = {
       status: `Marked as ${SALE_STATUS[status]?.toLowerCase()}`,
-      payment: "Payment confirmed",
+      payment: "Payment recorded and receipt sent",
       complete: "Sale completed and property marked as sold",
     };
     const { ok, result } = await run(requestsByKind[kind](), { success: messages[kind], description: `${open.contactName} has been notified.` });
@@ -163,12 +165,12 @@ const SaleRequestsBoard = ({ scope }) => {
       title: `${NEEDS_CONFIRM[confirm.status]}?`,
       description:
         confirm.status === "payment_pending"
-          ? `${open?.contactName} will be asked to pay ${formatGhs(open?.askingPrice)} as you agree together (in chat, by phone or in person).`
+          ? `${open?.contactName} will be asked to pay ${formatGhs(open?.askingPrice)} at your office. Payments for houses and land are never taken online or to a personal number.`
           : `The request from ${open?.contactName} will be marked as ${SALE_STATUS[confirm.status]?.toLowerCase()} and they'll be notified.`,
       label: NEEDS_CONFIRM[confirm.status],
       tone: ["cancelled", "rejected"].includes(confirm.status) ? "danger" : "primary",
     },
-    payment: { title: "Confirm payment received?", description: `Only confirm once you've received ${open?.contactName}'s payment. This is recorded with your name and the time.`, label: "Confirm payment", tone: "primary" },
+    payment: { title: "Record payment received at the office?", description: `Only record it once ${open?.contactName} has paid at your office. A receipt from you, with your name and the time, is sent to them and can't be changed.`, label: "Record payment & send receipt", tone: "primary" },
     complete: { title: "Complete sale and mark as sold?", description: `"${open?.property.title}" will be marked as sold. Other open requests and offers on it will be closed.`, label: "Mark as sold", tone: "primary" },
   }[confirm.kind];
 
@@ -297,6 +299,8 @@ const SaleRequestsBoard = ({ scope }) => {
               )}
             </dl>
 
+            <ReceiptCard receipt={open.receipt} />
+
             {open.message && (
               <div>
                 <p className="text-sm font-semibold text-gray-900">Customer message</p>
@@ -319,13 +323,13 @@ const SaleRequestsBoard = ({ scope }) => {
                     {busy === "status" ? "Updating..." : "Update status"}
                   </button>
                 </div>
-                <textarea value={note} onChange={(e) => setNote(e.target.value.slice(0, 300))} rows={2} placeholder="Note for the customer (optional), e.g. how and where to pay" className="field resize-none" />
+                <textarea value={note} onChange={(e) => setNote(e.target.value.slice(0, 300))} rows={2} placeholder="Note for the customer (optional), e.g. your office address and opening hours" className="field resize-none" />
 
                 <div className="grid gap-2 border-t border-gray-100 pt-3 sm:grid-cols-2">
                   {!paymentConfirmed ? (
                     <button onClick={() => { setPaidAmount(""); setConfirm({ kind: "payment" }); }} disabled={Boolean(busy)} className="btn bg-emerald-600 text-white hover:bg-emerald-700 sm:col-span-2">
                       <Wallet className="h-4 w-4" />
-                      Confirm payment received
+                      Payment received at office
                     </button>
                   ) : (
                     <button onClick={() => setConfirm({ kind: "complete" })} disabled={Boolean(busy)} className="btn btn-dark sm:col-span-2">
@@ -364,6 +368,7 @@ const SaleRequestsBoard = ({ scope }) => {
             <input type="number" min="1" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} placeholder={`${open?.askingPrice ?? ""} (asking price)`} className="field" />
           </label>
         )}
+        {confirm?.kind === "payment" && <input value={slip} onChange={(e) => setSlip(e.target.value.slice(0, 80))} placeholder="Bank slip or cheque number (optional)" className="field mt-2" />}
       </ConfirmDialog>
     </>
   );

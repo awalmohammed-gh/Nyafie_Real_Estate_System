@@ -14,30 +14,34 @@ const agentHotel = (stayBooking) => ({ propertyType: "Hotel", listingType: "Rent
 
 const nightly = (stayBooking) => ({ propertyType: "Apartment", listingType: "Rent", pricePeriod: "night", ownerType: "agent", currency: "GHS", stayBooking });
 
-test("listings saved before payment options existed: hotels pay at the hotel, per-night rentals offer both", () => {
-  assert.deepEqual(stayBookingSettings({ propertyType: "Hotel" }), { payOnArrival: true, payOnline: false, arrivalDeadline: "18:00", cancellationPolicy: "" });
-  assert.deepEqual(stayBookingSettings(nightly()), { payOnArrival: true, payOnline: true, arrivalDeadline: "18:00", cancellationPolicy: "" }, "per-night rentals already took online payments");
+test("every stay can be booked without paying online: pay at the hotel or on arrival is always on", () => {
+  assert.deepEqual(stayBookingSettings({ propertyType: "Hotel", ownerType: "agent" }), { payOnArrival: true, payOnline: false, arrivalDeadline: "18:00", cancellationPolicy: "" });
+  assert.deepEqual(stayBookingSettings(nightly()), { payOnArrival: true, payOnline: false, arrivalDeadline: "18:00", cancellationPolicy: "" }, "short stays are paid on arrival");
+  assert.equal(stayBookingSettings(agentHotel({ payOnArrival: false, payOnline: true })).payOnArrival, true, "an older online-only hotel takes pay-at-hotel bookings again");
+  assert.equal(stayBookingSettings(nightly({ payOnline: true })).payOnline, false, "older per-night settings no longer take money online");
+  assert.equal(stayBookingSettings({ ...agentHotel({ payOnline: true }), ownerType: "admin" }).payOnline, false, "NyaFie's own hotels never take money online");
   assert.equal(takesStayBookings({ propertyType: "hotel" }), true);
   assert.equal(takesStayBookings(nightly()), true);
-  assert.equal(takesStayBookings({ ...nightly(), pricePeriod: "month" }), false, "monthly rentals keep the online checkout");
+  assert.equal(takesStayBookings({ ...nightly(), pricePeriod: "month" }), false, "monthly rent is paid at the office");
   assert.equal(takesStayBookings({ ...nightly(), listingType: "Sale" }), false);
 });
 
-test("owners choose options; at least one stays on and the deadline is a real time", () => {
-  const hotel = { propertyType: "Hotel" };
+test("only an agent hotel may add online payment; settings are corrected, never stored as online-only", () => {
+  const hotel = { propertyType: "Hotel", ownerType: "agent" };
   assert.deepEqual(parseStayBooking({ payOnline: true, arrivalDeadline: "14:30", cancellationPolicy: "  Free until the day before.  " }, hotel), { payOnArrival: true, payOnline: true, arrivalDeadline: "14:30", cancellationPolicy: "Free until the day before." });
-  assert.equal(parseStayBooking({ payOnArrival: false }, { ...hotel, stayBooking: { payOnArrival: true, payOnline: true } }).payOnline, true, "keeps what isn't sent");
-  assert.deepEqual(parseStayBooking({ payOnArrival: false }, nightly()), { payOnArrival: false, payOnline: true, arrivalDeadline: "18:00", cancellationPolicy: "" }, "a per-night rental can go back to online only");
-  for (const bad of [{ payOnArrival: false }, { payOnArrival: "yes" }, { arrivalDeadline: "24:00" }, { arrivalDeadline: "6pm" }, { cancellationPolicy: "x".repeat(801) }, null, []]) {
+  assert.equal(parseStayBooking({ payOnArrival: false }, hotel).payOnArrival, true, "pay at the hotel can't be switched off");
+  assert.equal(parseStayBooking({ payOnline: true }, nightly()).payOnline, false, "short stays: on arrival only");
+  assert.equal(parseStayBooking({ payOnline: true }, { ...hotel, ownerType: "admin" }).payOnline, false, "NyaFie's own hotels: at the hotel only");
+  for (const bad of [{ payOnArrival: "yes" }, { arrivalDeadline: "24:00" }, { arrivalDeadline: "6pm" }, { cancellationPolicy: "x".repeat(801) }, null, []]) {
     assert.throws(() => parseStayBooking(bad, hotel), { status: 400 }, JSON.stringify(bad));
   }
-  assert.throws(() => parseStayBooking({ payOnArrival: false, payOnline: false }, nightly()), { status: 400 });
 });
 
-test("per-night rentals: online payment needs no payout account (the existing rental checkout)", () => withPaystack(() => {
-  assert.equal(stayPaymentOptions(nightly(), null, settings).online, true);
+test("NyaFie's account never receives online payments: short stays and its own hotels can't be paid online", () => withPaystack(() => {
+  assert.equal(stayPaymentOptions(nightly({ payOnline: true }), null, settings).online, false);
   assert.equal(stayPaymentOptions(nightly(), null, settings).onArrival, true);
-  assert.match(stayPaymentOptions(nightly({ payOnline: false }), null, settings).onlineProblem, /This listing takes payment on arrival/);
+  assert.match(stayPaymentOptions(nightly(), null, settings).onlineProblem, /takes payment on arrival/);
+  assert.equal(stayPaymentOptions({ ...agentHotel({ payOnline: true }), ownerType: "admin" }, null, settings).online, false);
 }));
 
 test("online payment needs the hotel's payout account (agent hotels) and working payments", () => withPaystack(() => {
@@ -45,7 +49,7 @@ test("online payment needs the hotel's payout account (agent hotels) and working
   assert.equal(stayPaymentOptions(online, null, settings).online, false);
   assert.match(stayPaymentOptions(online, null, settings).onlineProblem, /setting up online payments/);
   assert.equal(stayPaymentOptions(online, { subaccountCode: "ACCT_x" }, settings).online, true);
-  assert.equal(stayPaymentOptions({ ...online, ownerType: "admin" }, null, settings).online, true, "the platform's own hotels use the main account");
+  assert.equal(stayPaymentOptions(online, { subaccountCode: "ACCT_x" }, settings).onArrival, true, "guests can still pay at the hotel");
   assert.equal(stayPaymentOptions(online, { subaccountCode: "ACCT_x" }, { payments: { rentalsEnabled: false } }).online, false);
   assert.equal(stayPaymentOptions({ ...online, currency: "USD" }, { subaccountCode: "ACCT_x" }, settings).online, false);
   assert.equal(stayPaymentOptions(agentHotel({ payOnline: false }), { subaccountCode: "ACCT_x" }, settings).online, false, "the owner switched it off");

@@ -4,6 +4,12 @@
 
 Existing settings gain the Hotel option once during backend initialization. Subsequent administrator changes to the available property types are respected. No room types or prices are invented for existing Hotel listings; an agent must configure them. Existing paid whole-hotel rentals conservatively block room availability for their overlapping dates.
 
+## Room numbers, room contents and hotel details
+
+- Each room type may list its **room numbers** (`roomTypes[].roomNumbers`, e.g. "101, 102, 103"). When listed, the room count follows the list, a number can belong to only one room type, and approving a booking can only assign rooms from that list (the hotel picks them from a dropdown). Room numbers are returned only to the hotel and admins, never on public pages or room lists.
+- **What's inside each room** is the room type's `amenities` (grouped in the editor: comfort, bathroom, entertainment, food and drink, view, safety, plus the hotel's own items). The hotel's **shared facilities** are the listing's `amenities`, chosen from a hotel list (reception, restaurant, pool, airport shuttle...) instead of the house list.
+- **Hotel details** (`hotelInfo`): check-in from, check-out by (Ghana time) and a star rating (0 to 5), shown on the hotel's page. Hotels have no bedroom or bathroom counts.
+
 ## API and ledger
 
 - `GET /api/properties/:id/rooms?checkIn=YYYY-MM-DD&checkOut=YYYY-MM-DD` returns date-specific availability. Guests see active room types from published, visible hotels. Authenticated owners/admins may inspect draft and inactive inventory.
@@ -37,7 +43,9 @@ The integration test uses a temporary database directory and random loopback por
 
 ## How guests pay (per hotel)
 
-Each hotel chooses, in the listing editor under **How guests pay**, one or both of:
+NyaFie never holds guests' money, so **reserve now, pay at the hotel is always offered** (it can't be switched off). Every booking asks for the guest's **arrival time** on the check-in day (no later than the hotel's arrival deadline; the guest can change it until check-in and the hotel is told) and gets a **booking code** (`NF-7KQ9PX`), emailed with the confirmation and shown in the guest's account, to show at the front desk. **The hotel approves every booking** (`PATCH /api/rentals/:id/approve { roomNumbers }`): it assigns the room number(s) the guest will stay in (one per booked room; a room can't be given to two overlapping stays), and only then is the booking code issued and the **booking receipt** (code, rooms, dates, arrival time, amount) sent to the guest in the app, by email and as a PDF to show at the front desk. Until then the rooms are held and the guest sees "waiting for the hotel". A booking paid online gets its payment receipt with the approval. Check-in needs an approved booking; to refuse a booking, the hotel cancels it. **Unanswered bookings are cancelled automatically** 24 hours before check-in (the check-in day at the guest's arrival time; a booking made less than a day ahead gives the hotel 2 hours, never past check-in): the rooms are released, the guest and hotel are told, and an online payment is flagged for a refund (`utils/bookingExpiry.js`). This runs in the daily job and whenever bookings are listed, opened, approved or checked for availability, so it never waits for the next day. An agent hotel may additionally offer online payment, paid straight into its own payout account; the platform's own hotels are paid at the hotel only.
+
+Each hotel's options, in the listing editor under **How guests pay**:
 
 - **Reserve now, pay at the hotel** (default for every hotel, including hotels saved before this option existed). `POST /api/rentals/:id/reserve` runs the same transaction and inventory check as a checkout, then confirms the reservation: `status: confirmed`, `paymentStatus: due`, `paymentOption: on_arrival`. The reservation stores the arrival deadline (check-in day + the hotel's time, Ghana/GMT) and a copy of the hotel's cancellation and no-show policy. No money passes through NyaFie, so this works when online payments are off. Not allowed while an online checkout for the same booking is still inside its 30-minute hold.
   - The hotel records the payment with `PATCH /api/rentals/:id/paid-on-arrival`. A stay with payment still due cannot be marked completed.
@@ -45,7 +53,9 @@ Each hotel chooses, in the listing editor under **How guests pay**, one or both 
   - The guest can cancel (`PATCH /api/rentals/:id/cancel`) until the check-in day; unpaid requests can be cancelled any time.
   - If an earlier online attempt for the same booking still succeeds later, it pays the reservation (no double booking, nothing due at the hotel). A payment after the hotel already recorded one is flagged as a duplicate for refund.
 - **Pay online** (Paystack). The money goes to the hotel: the owner connects a bank account or mobile money wallet (`GET/PUT/DELETE /api/properties/:id/payout`, banks from `GET /api/properties/payout-banks?type=bank|mobile_money`). The server creates a Paystack subaccount with `percentage_charge: 0`, and checkouts pass `subaccount` with `bearer: "subaccount"`, so the hotel receives the full amount minus Paystack's fee. NyaFie's own hotels settle to the main account.
-  - Only the account owner (the agent, or the agency owner) can change it, and only with their password. Every change is notified to them.
+  - Only the account owner (the agent, or the agency owner) can change it, and only with their password.
+  - **Security hold:** a new account receives online payments only 48 hours after it is connected. A change creates a new Paystack subaccount that waits out the same hold as `pending`, while payments keep going to the current account; it replaces the current account the first time the account is read after the hold. The owner can cancel a waiting change (`DELETE /api/properties/:id/payout/pending`).
+  - Every connection, change, cancellation and removal is sent to the owner in the app **and by email**, and to the admins as a critical alert.
   - Only the bank name, the account name Paystack returns and the last 4 digits are stored (`PayoutAccount`, one per hotel per Paystack mode). The full number lives at Paystack; the subaccount code is never sent to browsers.
   - Online payment is offered only when the hotel switched it on, its payout account is connected for the current Paystack mode, and platform rental payments are enabled. `GET /api/properties/:id` returns `paymentOptions` for hotels with the reason when online payment is unavailable.
 
@@ -60,6 +70,8 @@ Regular rental listings priced **per night** (short stays) offer the same choice
 - **Pay online**: the existing rental checkout (paid into the main NyaFie account; the owner then confirms). An owner who switches it off gets a 409 from `/api/payments/initialize` for that listing.
 - A late online payment for a rental that was then reserved pays the reservation and keeps it confirmed.
 
-Guests see "Reservation confirmed — Payment due on arrival".
+Like hotels, **the owner approves each reservation** (`PATCH /api/rentals/:id/approve`, no room number: the place is the whole stay) before the booking code and booking receipt are sent, and an unanswered reservation is cancelled 24 hours before check-in. Guests see "Reservation sent — waiting for the owner to approve" until then.
+
+**Existing bookings:** only reservations made under the approval rule carry `approvalRequired`; reservations confirmed before it are never treated as unapproved, never expire, and check in as before.
 
 **Check with Paystack before going live:** refunds of split (subaccount) payments. Refunds still go through the admin refund process. Confirm in the Paystack dashboard/support whose balance a refund is taken from, and agree with each hotel how refunds are recovered.

@@ -1,0 +1,24 @@
+// npm run test:integration -> every database integration test, against throwaway local MongoDB replica
+// sets the tests start and remove themselves (never the configured application database).
+// Needs a mongod binary: set MONGOD_TEST_BINARY to its path (e.g. C:/Program Files/MongoDB/Server/8.0/bin/mongod.exe).
+// Paystack is never really called: the tests use test keys and replace every Paystack request.
+import { readdirSync, readFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { join } from "node:path";
+
+const dir = new URL("../tests/", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+const files = readdirSync(dir).filter((name) => name.endsWith(".integration.test.js")).sort();
+// Each suite is switched on by its own RUN_..._INTEGRATION flag: turn them all on
+const flags = new Set(files.flatMap((name) => readFileSync(join(dir, name), "utf8").match(/RUN_[A-Z_]+_INTEGRATION|RUN_[A-Z]+_MIGRATION_INTEGRATION/g) || []));
+const only = process.argv.slice(2); // optional: names to run, e.g. npm run test:integration -- hotelFlow rentalInventory
+const selected = only.length ? files.filter((name) => only.some((part) => name.includes(part))) : files;
+
+if (!process.env.MONGOD_TEST_BINARY) console.warn("MONGOD_TEST_BINARY is not set: using the default Windows path in tests/support/isolatedMongo.js.");
+const env = { ...process.env, ...Object.fromEntries([...flags].map((flag) => [flag, "1"])) };
+// Never with live keys: the tests set their own test keys, and a live key in the shell is removed
+for (const name of ["PAYSTACK_SECRET_KEY", "Test_Secret_Key"]) if (/^sk_live_/.test(env[name] || "")) delete env[name];
+if (env.PAYSTACK_MODE === "live") delete env.PAYSTACK_MODE;
+
+console.log(`Running ${selected.length} integration suite(s) with ${flags.size} flags on.`);
+const child = spawn(process.execPath, ["--test", "--test-concurrency=1", ...selected.map((name) => join(dir, name))], { stdio: "inherit", env });
+child.on("exit", (code) => process.exit(code ?? 1));

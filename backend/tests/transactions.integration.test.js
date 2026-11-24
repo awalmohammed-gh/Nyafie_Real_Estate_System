@@ -74,6 +74,7 @@ test("transactions: multi-step changes are all-or-nothing", { skip: process.env.
     assert.equal(unchanged.paymentStatus, "payment_requested", "the request is not left confirmed");
     assert.equal(unchanged.status, "payment_pending");
     assert.equal(await Payment.countDocuments({ saleRequest: request._id }), 0, "no payment record without its request");
+    assert.equal(unchanged.receipt, undefined, "no receipt without its payment");
     assert.equal(await chatNotes(house), 0);
 
     const confirmed = await asOwner(`/sale-requests/${request.id}/confirm-payment`, { method: "PATCH", body: { amount: 500000 } });
@@ -82,6 +83,7 @@ test("transactions: multi-step changes are all-or-nothing", { skip: process.env.
     assert.equal(saved.paymentStatus, "confirmed");
     assert.equal(saved.status, "paid_at_office");
     assert.equal(saved.history.at(-1).paymentStatus, "confirmed");
+    assert.match(saved.receipt?.number || "", /^NFR-/, "the buyer's receipt is saved with the payment");
     assert.equal(await Payment.countDocuments({ saleRequest: request._id }), 1);
     assert.equal(await chatNotes(house), 1);
   });

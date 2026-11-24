@@ -281,7 +281,7 @@ const platformContact = (settings) => ({ id: "nyafie", name: settings.general.si
 export const createProperty = async (req, res) => {
   const settings = await getSettings();
   const fields = pickPropertyFields(req.body);
-  await prepareHotelFields(fields, req.body, null, settings.property.maxImages);
+  await prepareHotelFields(fields, req.body, null, settings.property.maxImages, [req.user._id]);
   const images = Array.isArray(req.body.images) ? req.body.images : [];
   if (!fields.title || fields.title.length < 3) return fail(res, 400, "Give the property a title (at least 3 characters).");
   const optionProblem = checkPropertyOptions(fields, settings);
@@ -295,7 +295,7 @@ export const createProperty = async (req, res) => {
     price: 0,
     ...fields,
     contact: { ...platformContact(settings), ...fields.contact, id: "nyafie" },
-    images: await resolveImages(images),
+    images: await resolveImages(images, { uploaderIds: [req.user._id] }),
     owner: req.user._id, // the signed-in admin, never taken from the request
     ownerType: "admin",
     status: draft ? "draft" : "published",
@@ -326,7 +326,7 @@ export const updateProperty = async (req, res) => {
   if (!property) return fail(res, 404, "Property not found.");
   const settings = await getSettings();
   const fields = pickPropertyFields(req.body);
-  await prepareHotelFields(fields, req.body, property, settings.property.maxImages);
+  await prepareHotelFields(fields, req.body, property, settings.property.maxImages, [req.user._id]);
   const optionProblem = checkPropertyOptions(fields, settings, property);
   if (optionProblem) return fail(res, 400, optionProblem);
   if (fields.contact) fields.contact = { ...fields.contact, id: property.contact?.id || (property.ownerType === "admin" ? "nyafie" : String(property.owner)) };
@@ -339,7 +339,7 @@ export const updateProperty = async (req, res) => {
   markConfirmed(property); // editing a listing confirms it is current
   if (Array.isArray(req.body.images)) {
     if (req.body.images.length > settings.property.maxImages) return fail(res, 400, `Up to ${settings.property.maxImages} photos per property.`);
-    property.images = await resolveImages(req.body.images);
+    property.images = await resolveImages(req.body.images, { current: mediaBefore.images, uploaderIds: [req.user._id] });
   }
   // Admin listings can be saved as a draft (unpublished) or published from the editor
   if (property.ownerType === "admin" && ["draft", "published"].includes(req.body.status)) {

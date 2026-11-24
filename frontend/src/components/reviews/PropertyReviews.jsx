@@ -122,6 +122,9 @@ const PropertyReviews = ({ propertyId, user, onRequireSignIn, resumeRating, onRe
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Only customers who viewed, stayed in or bought the property may review it (the server decides)
+  const [eligibility, setEligibility] = useState({ canReview: true, rule: "" });
+  const [notice, setNotice] = useState("");
   const sectionRef = useRef(null);
   const request = useRef(0);
 
@@ -135,6 +138,7 @@ const PropertyReviews = ({ propertyId, user, onRequireSignIn, resumeRating, onRe
       setList((prev) => ({ items: page === 1 ? data.items : [...prev.items, ...data.items], page: data.page, pages: data.pages, total: data.total }));
       setSummary(data.summary);
       setMine(data.mine);
+      setEligibility({ canReview: data.canReview !== false, rule: data.reviewRule || "" });
       setStatus("ready");
       setLoadError("");
       onSummary?.(data.summary);
@@ -157,13 +161,15 @@ const PropertyReviews = ({ propertyId, user, onRequireSignIn, resumeRating, onRe
   useEffect(() => {
     if (resumeRating == null || !isCustomer || status !== "ready" || resumed.current) return;
     resumed.current = true;
-    setForm(mine ? { ...mine, rating: resumeRating } : { rating: resumeRating, title: "", comment: "" });
+    if (!mine && !eligibility.canReview) setNotice(eligibility.rule);
+    else setForm(mine ? { ...mine, rating: resumeRating } : { rating: resumeRating, title: "", comment: "" });
     onResumeHandled?.();
     sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [resumeRating, isCustomer, status, mine, onResumeHandled]);
+  }, [resumeRating, isCustomer, status, mine, eligibility, onResumeHandled]);
 
   const startReview = (rating = 0) => {
     if (!isCustomer) return onRequireSignIn?.(rating);
+    if (!mine && !eligibility.canReview) return setNotice(eligibility.rule);
     setFormError("");
     setForm(mine ? { ...mine, ...(rating ? { rating } : {}) } : { rating, title: "", comment: "" });
   };
@@ -203,6 +209,7 @@ const PropertyReviews = ({ propertyId, user, onRequireSignIn, resumeRating, onRe
         <div><h3>Be the first to review this property</h3><p>Share your experience and help others make informed decisions.</p></div>
         <button type="button" onClick={() => startReview()}><Pencil size={19} aria-hidden="true" />Write a Review</button>
       </div>
+      {notice && <p role="status" className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{notice}</p>}
     </section>
   );
 
@@ -218,6 +225,7 @@ const PropertyReviews = ({ propertyId, user, onRequireSignIn, resumeRating, onRe
         )}
       </div>
 
+      {notice && !form && <p role="status" className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{notice}</p>}
       <div className="mt-5 grid gap-8 sm:grid-cols-[13rem_minmax(0,1fr)] sm:gap-10">
         <Summary summary={summary} />
 

@@ -175,6 +175,7 @@ export const mapProperty = (p) => ({
   roomTypes: p.roomTypes || [],
   // Hotels: the owner's saved payment options, and what a guest can choose right now (details page only)
   stayBooking: p.stayBooking || null,
+  hotelInfo: p.hotelInfo || null, // hotels: check-in from, check-out by, star rating
   moveIn: p.moveIn || null, // monthly rentals: advance, agent fee, deposit (utils/moveIn.js)
   paymentOptions: p.paymentOptions || null,
   // video / virtualTour: { provider, id } or null (utils/mediaLinks.js builds the players)
@@ -240,6 +241,7 @@ export const toApiProperty = (p) => {
   if (p.features) out.amenities = p.features;
   if (p.roomTypes !== undefined) out.roomTypes = p.roomTypes;
   if (p.stayBooking) out.stayBooking = p.stayBooking;
+  if (p.hotelInfo) out.hotelInfo = p.hotelInfo;
   if (p.moveIn !== undefined) out.moveIn = p.moveIn;
   if (p.media) {
     out.images = p.media.images;
@@ -388,6 +390,9 @@ export const RENTAL_STATUS = {
 };
 const PAYMENT_STATUS = { pending: "Pending", paid: "Paid", failed: "Failed", duplicate: "Duplicate", refunded: "Refunded" };
 
+// A receipt the agent, agency or hotel gave the customer (backend utils/receipts.js), or null
+export const mapReceipt = (receipt) => (receipt?.number ? { ...receipt } : null);
+
 export const mapRental = (r) => ({
   id: r.id,
   hotelId: r.hotelId || null,
@@ -407,11 +412,20 @@ export const mapRental = (r) => ({
   amount: r.amount,
   statusKey: r.status,
   status: RENTAL_STATUS[r.status] || r.status,
-  paymentStatus: r.paymentStatus === "due" ? (r.hotelId ? "Due at hotel" : "Due on arrival") : PAYMENT_STATUS[r.paymentStatus] || r.paymentStatus,
-  paymentDue: r.paymentStatus === "due", // reserved; the guest pays the hotel or owner on arrival
+  paymentStatus: r.paymentStatus === "due" ? (r.paymentOption === "office" ? "Due at the office" : r.hotelId ? "Due at hotel" : "Due on arrival") : PAYMENT_STATUS[r.paymentStatus] || r.paymentStatus,
+  paymentDue: r.paymentStatus === "due", // reserved; the guest pays the hotel, the owner on arrival, or at the office
   paymentMethod: r.paymentMethod,
-  paymentOption: r.paymentOption || null, // stays: "online" | "on_arrival"
+  paymentOption: r.paymentOption || null, // "online" | "on_arrival" (stays) | "office" (monthly and fixed-price rent)
+  paysAtOffice: Boolean(r.paysAtOffice), // monthly and fixed-price rent: never paid online
+  receipt: mapReceipt(r.receipt),
   arrivalDeadline: r.arrivalDeadline || null,
+  arrivalTime: r.arrivalTime || "", // stays: when the guest said they'll arrive ("15:30", Ghana time)
+  bookingCode: r.bookingCode || "", // stays: shown at the hotel or to the owner on arrival (hotels: once approved)
+  roomNumbers: r.roomNumbers || [], // hotels: the room(s) the hotel assigned when approving
+  roomOptions: r.roomOptions || [], // hotels, owner side: the room type's room numbers to choose from when approving
+  approvedAt: r.approvedAt || null,
+  awaitingApproval: Boolean(r.awaitingApproval), // hotels: waiting for the hotel to approve and assign rooms
+  approvalDeadline: r.approvalDeadline || null, // ...cancelled automatically if not approved by then
   cancellationPolicy: r.cancellationPolicy || "",
   contactName: r.contactName,
   contactPhone: r.contactPhone,
@@ -460,6 +474,7 @@ export const mapSaleRequest = (s) => ({
   amountPaid: s.amountPaid,
   paymentConfirmedBy: s.paymentConfirmedBy,
   paymentConfirmedAt: s.paymentConfirmedAt,
+  receipt: mapReceipt(s.receipt),
   offer: s.offer, // the customer's latest offer on this property, if any
   conversationId: s.conversation || null,
   history: mapHistory(s.history).map((h) => ({ ...h, statusLabel: SALE_STATUS[h.status] || h.status })),

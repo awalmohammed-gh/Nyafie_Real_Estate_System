@@ -16,7 +16,7 @@ const SafetyNote = ({ forSale, onReport, reportLabel = "Report this listing", do
       <li><span className="font-semibold text-gray-800">Don't pay anything, online or in cash, until you've seen the property in person.</span></li>
       <li>Never pay anyone just to view a property. Viewings are free.</li>
       {forSale && <li>Check the title documents before paying anything.</li>}
-      <li>Only pay the owner or agent shown on this page, and keep a receipt.</li>
+      <li>Pay rent, houses and land only at the office of the owner or agent shown on this page, never to a personal or mobile money number. You get a receipt in your account.</li>
       <li>Once you've paid, ask the agent to mark it as {forSale ? "sold" : "rented"} here, so nobody else pays for it.</li>
     </ul>
     {onReport && (

@@ -7,8 +7,9 @@ import { paymentApi, rentalApi } from "../../frontApi";
 import HotelRoomDetails from "../property/HotelRoomDetails";
 import { roomPrice, today, tomorrow } from "../../utils/hotel";
 import { formatDate } from "../../utils/date";
-import { arrivalText, bookingHeadline } from "../../utils/hotelPayments";
+import { approvalDeadlineText, arrivalText, bookingHeadline } from "../../utils/hotelPayments";
 import { cloudImage } from "../../utils/cloudImage";
+import BookingPass from "../receipts/BookingPass";
 
 const HotelCheckout = ({ property, ownerName }) => {
   const { user } = useAuth();
@@ -19,7 +20,7 @@ const HotelCheckout = ({ property, ownerName }) => {
     roomTypeId: rooms.find((room) => room.id === params.get("room"))?.id || "",
     checkIn: params.get("checkIn") || today(), checkOut: params.get("checkOut") || tomorrow(),
     guests: params.get("guests") || 1, numberOfRooms: params.get("numberOfRooms") || 1,
-    fullName: user.name || "", email: user.email || "", phone: user.phone || "", notes: "",
+    fullName: user.name || "", email: user.email || "", phone: user.phone || "", notes: "", arrivalTime: "",
   }));
   const [saved, setSaved] = useState(null);
   const [loading, setLoading] = useState(Boolean(params.get("booking")));
@@ -49,7 +50,8 @@ const HotelCheckout = ({ property, ownerName }) => {
   // "Reserve now, pay at the hotel": the server secures the rooms first, then confirms
   const reserve = async () => {
     setBusy(true); setError("");
-    try { setSaved(await rentalApi.reserveOnArrival(saved.id)); }
+    // Bookings made before arrival times were asked for send it now
+    try { setSaved(await rentalApi.reserveOnArrival(saved.id, saved.arrivalTime ? undefined : form.arrivalTime)); }
     catch (err) { setError(err.message); }
     finally { setBusy(false); }
   };
@@ -76,6 +78,7 @@ const HotelCheckout = ({ property, ownerName }) => {
         <label className="text-sm font-medium text-gray-700">Check-out<input required type="date" min={tomorrow(form.checkIn || today())} value={form.checkOut} onChange={set("checkOut")} className="field mt-1.5" /></label>
         <label className="text-sm font-medium text-gray-700">Guests (total)<input required type="number" min="1" max="50" step="1" value={form.guests} onChange={set("guests")} className="field mt-1.5" /></label>
         <label className="text-sm font-medium text-gray-700">Number of rooms<input required type="number" min="1" max={room?.quantity || 10000} step="1" value={form.numberOfRooms} onChange={set("numberOfRooms")} className="field mt-1.5" /></label>
+        <label className="text-sm font-medium text-gray-700 sm:col-span-2">When will you arrive on your check-in day?<input required type="time" max={options.arrivalDeadline || undefined} value={form.arrivalTime} onChange={set("arrivalTime")} className="field mt-1.5 sm:w-48" /><span className="mt-1 block text-xs font-normal text-gray-500">The hotel expects you then{options.arrivalDeadline ? `, and asks guests to arrive by ${options.arrivalDeadline}` : ""} (Ghana time). You can change it later.</span></label>
       </div>
       {estimate != null && <p className="rounded-xl bg-brand-50 p-4 text-sm text-brand-800">Estimated stay: {roomPrice(room.pricePerNight)} × {nights} night(s) × {form.numberOfRooms} room(s) = <strong>{roomPrice(estimate)}</strong></p>}
       <fieldset className="grid gap-4 border-t border-gray-100 pt-5 sm:grid-cols-2"><legend className="pt-4 font-semibold text-gray-900">Guest contact details</legend>
@@ -88,32 +91,35 @@ const HotelCheckout = ({ property, ownerName }) => {
       <button type="submit" disabled={busy} className="btn btn-primary w-full">{busy && <Loader2 className="h-4 w-4 animate-spin" />}Check availability & review booking</button>
     </form> : <div className="space-y-5">
       <dl className="divide-y divide-gray-100 rounded-xl border border-gray-200 px-4">{[
-        ["Hotel", property.title], ["Room", saved.roomName], ["Check-in", formatDate(saved.startDate)], ["Check-out", formatDate(saved.endDate)], ["Guests", saved.occupants], ["Rooms", saved.numberOfRooms], ["Stay", `${saved.units} night(s)`], ["Price per room / night", roomPrice(saved.unitPrice)], ["Calculation", `${roomPrice(saved.unitPrice)} × ${saved.units} × ${saved.numberOfRooms}`], ["Guest", `${saved.contactName} · ${saved.contactPhone}`], ["Total", roomPrice(saved.amount)],
+        ["Hotel", property.title], ["Room", saved.roomName], ["Check-in", formatDate(saved.startDate)], ...(saved.arrivalTime ? [["Arriving at", saved.arrivalTime]] : []), ["Check-out", formatDate(saved.endDate)], ["Guests", saved.occupants], ["Rooms", saved.numberOfRooms], ["Stay", `${saved.units} night(s)`], ["Price per room / night", roomPrice(saved.unitPrice)], ["Calculation", `${roomPrice(saved.unitPrice)} × ${saved.units} × ${saved.numberOfRooms}`], ["Guest", `${saved.contactName} · ${saved.contactPhone}`], ["Total", roomPrice(saved.amount)],
       ].map(([label, value]) => <div key={label} className="flex justify-between gap-4 py-3 text-sm"><dt className="text-gray-500">{label}</dt><dd className={`text-right font-semibold ${label === "Total" ? "text-lg text-brand-700" : "text-gray-900"}`}>{value}</dd></div>)}</dl>
       {(() => {
         const headline = bookingHeadline(saved);
         if (headline) return <div className="space-y-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900" role="status">
           <p className="flex items-center gap-2 text-base font-semibold"><CircleCheck className="h-5 w-5" aria-hidden="true" />{headline}</p>
+          {saved.awaitingApproval && <p>Your rooms are held. Once the hotel approves your booking and assigns your room, you'll get your booking receipt here, in your account and by email. Download it and show it at the hotel.{saved.approvalDeadline && ` If the hotel hasn't approved it by ${approvalDeadlineText(saved)}, it's cancelled automatically${saved.paymentStatus === "Paid" ? " and your payment refunded" : ""}.`}</p>}
           {saved.paymentOption === "on_arrival" && saved.paymentStatus !== "Paid" && <>
             <p className="flex items-start gap-2"><CalendarCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />Pay {roomPrice(saved.amount)} when you arrive. Please check in {arrivalText(saved)}.</p>
             {saved.cancellationPolicy && <p className="whitespace-pre-line text-emerald-800"><span className="font-semibold">Hotel policy:</span> {saved.cancellationPolicy}</p>}
           </>}
+          <BookingPass booking={{ ...saved, property: { title: property.title } }} className="text-gray-900" />
           <Link to="/account/rentals" className="btn btn-primary w-full">View your booking</Link>
         </div>;
         if (!["pending", "payment_pending"].includes(saved.statusKey)) return <p className="text-sm text-gray-600">This booking is {saved.status.toLowerCase()}.</p>;
         return <div className="space-y-4">
           <p className="text-sm font-semibold text-gray-900">How would you like to pay?</p>
+          {!saved.arrivalTime && <label className="block text-sm font-medium text-gray-700">When will you arrive on your check-in day?<input required type="time" max={options.arrivalDeadline || undefined} value={form.arrivalTime} onChange={set("arrivalTime")} className="field mt-1.5 sm:w-48" /></label>}
           {noOption && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{options.onlineProblem || "Online booking is unavailable."} Contact the hotel to arrange your stay.</p>}
-          {options.online && <div className="rounded-xl border border-gray-200 p-4">
-            <p className="flex items-center gap-2 font-semibold text-gray-900"><CreditCard className="h-4 w-4 text-brand-600" aria-hidden="true" />Pay online now</p>
-            <p className="mt-1 flex items-start gap-2 text-sm leading-6 text-gray-500"><ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-brand-600" aria-hidden="true" />Card or mobile money through Paystack. Your rooms are held for 30 minutes while you pay, and the payment goes to the hotel.</p>
-            <button type="button" onClick={pay} disabled={busy} className="btn btn-primary mt-3 w-full">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}Pay securely · {roomPrice(saved.amount)}</button>
-          </div>}
           {options.onArrival && <div className="rounded-xl border border-gray-200 p-4">
             <p className="flex items-center gap-2 font-semibold text-gray-900"><Banknote className="h-4 w-4 text-brand-600" aria-hidden="true" />Reserve now, pay at the hotel</p>
-            <p className="mt-1 text-sm leading-6 text-gray-500">Nothing to pay today. We secure your rooms, then you pay {ownerName} {roomPrice(saved.amount)} on arrival. Please arrive by {options.arrivalDeadline} on your check-in day.</p>
+            <p className="mt-1 text-sm leading-6 text-gray-500">Nothing to pay today. We secure your rooms and send you a booking code. Show it at {ownerName} when you arrive{saved.arrivalTime ? ` at ${saved.arrivalTime}` : ""} and pay {roomPrice(saved.amount)} there.</p>
             {options.cancellationPolicy && <p className="mt-2 whitespace-pre-line rounded-lg bg-gray-50 p-3 text-xs leading-5 text-gray-600"><span className="font-semibold text-gray-800">Cancellation and no-show policy:</span> {options.cancellationPolicy}</p>}
-            <button type="button" onClick={reserve} disabled={busy} className={`btn mt-3 w-full ${options.online ? "btn-light" : "btn-primary"}`}>{busy && <Loader2 className="h-4 w-4 animate-spin" />}Reserve, pay at the hotel</button>
+            <button type="button" onClick={reserve} disabled={busy} className="btn btn-primary mt-3 w-full">{busy && <Loader2 className="h-4 w-4 animate-spin" />}Reserve, pay at the hotel</button>
+          </div>}
+          {options.online && <div className="rounded-xl border border-gray-200 p-4">
+            <p className="flex items-center gap-2 font-semibold text-gray-900"><CreditCard className="h-4 w-4 text-brand-600" aria-hidden="true" />Pay online now</p>
+            <p className="mt-1 flex items-start gap-2 text-sm leading-6 text-gray-500"><ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-brand-600" aria-hidden="true" />Optional. Card or mobile money through Paystack, paid straight into the hotel's own account (never to the platform). Your rooms are held for 30 minutes while you pay.</p>
+            <button type="button" onClick={pay} disabled={busy} className="btn btn-light mt-3 w-full">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}Pay securely · {roomPrice(saved.amount)}</button>
           </div>}
           {!options.online && options.onArrival && options.onlineProblem && <p className="text-xs text-gray-500">{options.onlineProblem}</p>}
         </div>;

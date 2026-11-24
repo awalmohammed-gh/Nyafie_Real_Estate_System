@@ -46,7 +46,10 @@ test("agent safeguards: sale payments are recorded once; declined applicants can
     assert.equal(saved.paymentStatus, "confirmed");
     assert.equal(saved.status, "paid_at_office");
     assert.equal(saved.amountPaid, 500000);
-    assert.equal((await Payment.findOne({ saleRequest: request._id })).method, "Direct", "sales are paid to the owner, not at an office");
+    assert.equal((await Payment.findOne({ saleRequest: request._id })).method, "Office", "houses and land are paid for at the office");
+    // One receipt for the buyer, however many times the payment was confirmed at once
+    assert.match(saved.receipt.number, /^NFR-/);
+    assert.deepEqual([saved.receipt.amount, saved.receipt.method], [500000, "At the office"]);
     assert.equal((await asAgent(owner, `/sale-requests/${request.id}/confirm-payment`, { method: "PATCH", body: { amount: 1 } })).code, 400, "already confirmed");
   });
 

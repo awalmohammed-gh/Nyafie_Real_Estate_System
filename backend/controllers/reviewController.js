@@ -6,6 +6,7 @@ import { reviewerName, syncPropertyRating } from "../utils/reviews.js";
 import { notifyAdmins, notifyUser } from "../utils/notify.js";
 import { cleanText, escapeRegex } from "../utils/validation.js";
 import { ok, fail } from "../utils/response.js";
+import { canReview, REVIEW_RULE } from "../utils/reviewEligibility.js";
 
 const SORTS = {
   newest: { createdAt: -1, _id: -1 },
@@ -81,11 +82,12 @@ export const listPropertyReviews = async (req, res) => {
   // Only customers write reviews, so only a customer session has a review of its own
   const viewer = req.sessionDomain === "customer" || req.user?.role === "user" ? req.user : null;
 
-  const [total, docs, summary, mine] = await Promise.all([
+  const [total, docs, summary, mine, eligible] = await Promise.all([
     Review.countDocuments(filter),
     Review.find(filter).sort(sort).skip((page - 1) * limit).limit(limit).populate("user", "firstName lastName"),
     summaryOf(property._id),
     viewer ? Review.findOne({ property: property._id, user: viewer._id }).populate("user", "firstName lastName") : null,
+    viewer ? canReview(viewer._id, property._id) : false,
   ]);
 
   ok(res, {
@@ -96,6 +98,9 @@ export const listPropertyReviews = async (req, res) => {
     pages: Math.max(1, Math.ceil(total / limit)),
     summary,
     mine: mine ? present(mine, viewer) : null, // includes a hidden review so its author knows why it isn't listed
+    // Whether this customer may write a review (utils/reviewEligibility.js); their own review stays editable
+    canReview: Boolean(mine) || eligible,
+    reviewRule: REVIEW_RULE,
   });
 };
 
@@ -108,6 +113,7 @@ export const submitReview = async (req, res) => {
 
   let review = await Review.findOne({ property: property._id, user: req.user._id });
   const isNew = !review;
+  if (isNew && !(await canReview(req.user._id, property._id))) return fail(res, 403, REVIEW_RULE);
   if (review) {
     Object.assign(review, fields);
     await review.save();

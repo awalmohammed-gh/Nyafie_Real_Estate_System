@@ -16,10 +16,13 @@ import { reconcileOpenPayments } from "../controllers/subscriptionController.js"
 import { requestRefund } from "../utils/refunds.js";
 import Refund from "../models/Refund.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
+import { earlierCheckout } from "./support/earlierCheckout.js";
 
 test("rental payments recover without a browser callback using signed webhooks and scheduled checks", { skip: process.env.RUN_PAYMENT_INTEGRATION !== "1", timeout: 90000 }, async (t) => {
   await isolatedMongo(t);
   process.env.JWT_KEY = "isolated-callback-signing-key-at-least-32-characters";
+  // Test keys only: Paystack is never really called (fetch is replaced below)
+  process.env.PAYSTACK_MODE = "test";
   process.env.PAYSTACK_SECRET_KEY = "sk_test_isolated_callback";
   process.env.CRON_SECRET = "isolated-recovery-secret-at-least-32-characters";
   process.env.PUBLIC_SITE_URL = "http://localhost:5173";
@@ -59,11 +62,13 @@ test("rental payments recover without a browser callback using signed webhooks a
   };
   const start = async ({ hotel = false } = {}) => {
     const listing = await Property.create({ title: "Callback test rental", propertyType: hotel ? "Hotel" : "Apartment", listingType: "Rent", price: 100, pricePeriod: hotel ? "night" : "month", owner: owner._id, ownerType: "admin", status: "published", availability: "Available", ...(hotel ? { stayBooking: { payOnline: true }, roomTypes: [{ name: "Deluxe", bedType: "King", description: "Test room", pricePerNight: 100, quantity: 2, maxGuests: 2, beds: 1, images: ["/room.jpg"] }] } : {}) });
-    const booking = await api("/rentals", { propertyId: listing.id, startDate: "2030-01-01", endDate: hotel ? "2030-01-04" : "2030-02-01", fullName: "Test Guest", email: customer.email, phone: customer.phone, currentAddress: "12 Test Road", ...(hotel ? { roomTypeId: listing.roomTypes[0].id, checkIn: "2030-01-01", checkOut: "2030-01-04", guests: 2, numberOfRooms: 1 } : {}) });
+    const booking = await api("/rentals", { propertyId: listing.id, startDate: "2030-01-01", endDate: hotel ? "2030-01-04" : "2030-02-01", fullName: "Test Guest", email: customer.email, phone: customer.phone, currentAddress: "12 Test Road", ...(hotel ? { roomTypeId: listing.roomTypes[0].id, checkIn: "2030-01-01", checkOut: "2030-01-04", guests: 2, numberOfRooms: 1, arrivalTime: "14:00" } : {}) });
     assert.equal(booking.code, 201, JSON.stringify(booking));
-    const checkout = await api("/payments/initialize", { rentalId: booking.data.id });
-    assert.equal(checkout.code, 200, JSON.stringify(checkout));
-    return { listing, booking: booking.data, reference: checkout.data.reference };
+    // New rent and platform-hotel bookings can't be paid online any more (the server refuses it)...
+    assert.equal((await api("/payments/initialize", { rentalId: booking.data.id })).code, 409);
+    // ...but payments customers started before that are still confirmed safely: those are tested here
+    const { reference } = await earlierCheckout(booking.data.id);
+    return { listing, booking: booking.data, reference };
   };
 
   await t.test("a signed webhook confirms a regular rental without any customer callback or login cookie", async () => {

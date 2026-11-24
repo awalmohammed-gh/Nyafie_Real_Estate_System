@@ -39,6 +39,7 @@ Both `.env.example` files contain empty assignments only. Actual local `.env` fi
 | `PAYSTACK_SECRET_KEY` | Required for online payments | `sk_test_…` in test mode, `sk_live_…` in live mode. A key never works in the other mode. The older `Test_Secret_Key` variable is still read for test mode only. |
 | `PAYSTACK_PUBLIC_KEY` | Optional | Matching `pk_test_…`/`pk_live_…` key, shown only as configured/not configured in the admin summary. Checkout uses the authorization URL returned by the backend. |
 | `ADMIN_ENTRY_PATH` | Required to use the admin console | The private address of the admin console: `https://nyafie.vercel.app/<ADMIN_ENTRY_PATH>/login`. 16-64 random letters, digits, `-` or `_` (generate one with `node -e "console.log('hb-' + require('crypto').randomBytes(12).toString('base64url'))"`). Set the **same** value on the frontend service. Admin endpoints answer exactly like unknown endpoints without it, and `/admin` is an ordinary 404 page. Without this variable production has no admin console. |
+| `ADMIN_TWO_STEP` | Optional | Leave unset. Admin sign-in then has two steps: the password, then a six-digit code emailed to the admin (10 minutes, five guesses). Set `off` only in an emergency, such as email delivery being down, and remove it again straight after. |
 | `CRON_SECRET` | Required for scheduled payment and refund recovery; live mode stays off without it | At least 32 random characters. Vercel sends it as a Bearer authorization header to `/api/payments/reconcile`. Never expose it in frontend variables. |
 | `CLIENT_URL` | Optional | `https://nyafie.vercel.app`. Defaults to the canonical origin. Additional origins must be an exact comma-separated list of HTTPS origins with no paths; no wildcard. |
 | `COOKIE_SAME_SITE` | Optional | Leave unset or use `lax` for this same-domain architecture. |
@@ -284,3 +285,17 @@ Production results: **deployed, checklist not yet signed off**. The service bind
 Deployment changes are concentrated in `vercel.json`, `backend/app.js`, `backend/server.js`, `backend/config/{runtime,initialize,mongodb}.js`, environment examples/package files, security/auth/bootstrap helpers, rate-limit and image-upload routes/models, payment callback origins, SEO routes/utilities, listing/directory queries, frontend API/image handling, route splitting, metadata providers, canonical sharing helpers, and deployment tests. The same commit also includes the requested contact page/inbox, exact banner/favicon assets, logo sizing, matching agent banner/navbar and login-required agent visibility.
 
 Services is Beta and its routing/binding behavior still needs deployment verification. This remains a client-rendered application with server-generated metadata rather than full page-content SSR. Contact/email links do not send transactional email; customer verification codes are delivered separately through Google SMTP. Paystack live payments stay off until the go-live checklist is completed; no live checkout or refund has been run by these tests. Large supplied static banner/favicon originals remain unchanged; property uploads are resized in the browser. No production credentials, domain ownership, external checkout, browser refresh, or real upload success is implied by local test results.
+
+## Database integration tests
+
+`npm test` in `backend/` runs the unit tests and skips the database integration suites. Run those on a computer with MongoDB installed (any recent `mongod`; the tests start and delete their own throwaway replica sets and never touch the application database):
+
+```powershell
+$env:MONGOD_TEST_BINARY='C:/Program Files/MongoDB/Server/8.0/bin/mongod.exe'
+npm run test:integration
+```
+
+Run a few suites only with `npm run test:integration -- hotelFlow rentalInventory`. The tests use Paystack **test keys** and replace every Paystack request, so no money moves and no real key is needed; the runner removes any live key set in the shell.
+
+Keep Paystack in **test mode** (test keys, `PAYSTACK_MODE` unset or `test`) until the site is launched on its own domain and the go-live checklist above is signed off. Only then set the live secret key (`sk_live_…`) from your own Paystack account and `PAYSTACK_MODE=live` in Vercel.
+

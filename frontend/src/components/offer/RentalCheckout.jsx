@@ -2,12 +2,13 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Banknote, CalendarCheck, CalendarDays, CircleCheck, CreditCard, Loader2, ShieldCheck, UserRound } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
-import { paymentApi, rentalApi } from "../../frontApi";
+import { rentalApi } from "../../frontApi";
 import { formatDate } from "../../utils/date";
 import { getPriceParts, formatGhs } from "../../utils/property";
 import { usePlatform } from "../../context/usePlatform";
-import { arrivalText, bookingHeadline } from "../../utils/hotelPayments";
+import { approvalDeadlineText, arrivalText, bookingHeadline } from "../../utils/hotelPayments";
 import { cloudImage } from "../../utils/cloudImage";
+import BookingPass from "../receipts/BookingPass";
 
 // "YYYY-MM-DD" in the viewer's local calendar
 const toDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -37,11 +38,10 @@ const Row = ({ label, children, strong }) => (
 const ErrorNote = ({ children }) => children && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{children}</p>;
 
 // Rent flow: rental information -> customer details -> review (amount from the backend) -> Pay
-// Online with Paystack, or (rentals priced per night, when the owner offers it) reserve now and pay
-// on arrival. Nothing here decides the amount charged.
+// Never paid online: monthly and fixed-price rent is a request the owner confirms, then it's paid at the
+// office; rentals priced per night are reserved now and paid on arrival. Nothing here decides the amount.
 const RentalCheckout = ({ property, ownerName }) => {
-  const { siteName, settings } = usePlatform();
-  const paymentsOff = !settings.payments.rentalsAvailable || property.pricing.currency !== "GHS";
+  const { siteName } = usePlatform();
   const { user } = useAuth();
   const { value: price, period } = getPriceParts(property);
   const pricePeriod = property.pricing.perNight != null ? "night" : property.pricing.perMonth != null ? "month" : "total";
@@ -57,6 +57,7 @@ const RentalCheckout = ({ property, ownerName }) => {
     months: advanceMonths || 12,
     occupants: 1,
     notes: "",
+    arrivalTime: "", // per-night stays: when the guest will arrive on the check-in day
     fullName: user?.name || "",
     email: user?.email || "",
     phone: user?.phone || "",
@@ -93,6 +94,7 @@ const RentalCheckout = ({ property, ownerName }) => {
           currentAddress: form.currentAddress.trim(),
           occupants: Number(form.occupants),
           notes: form.notes.trim(),
+          ...(pricePeriod === "night" ? { arrivalTime: form.arrivalTime } : {}),
         })
       );
       setStep(2);
@@ -116,18 +118,6 @@ const RentalCheckout = ({ property, ownerName }) => {
     }
   };
 
-  const pay = async () => {
-    setError("");
-    setBusy("pay");
-    try {
-      const payment = await paymentApi.initializeRentalPayment(rental.id);
-      window.location.assign(payment.authorizationUrl); // Paystack returns to /payment/success?reference=...
-    } catch (err) {
-      setError(err.message);
-      setBusy("");
-    }
-  };
-
   const unitLabel = rental && UNIT[rental.pricePeriod]?.[rental.units === 1 ? 0 : 1];
   // Per-night rentals: what the owner offers (from the server). Other rentals: online only.
   const options = property.paymentOptions;
@@ -138,7 +128,7 @@ const RentalCheckout = ({ property, ownerName }) => {
     <div>
       {/* Steps */}
       <ol className="mb-6 grid grid-cols-3 gap-2">
-        {STEPS.map((label, i) => (
+        {(pricePeriod === "night" ? STEPS : [...STEPS.slice(0, 2), "Send request"]).map((label, i) => (
           <li key={label}>
             <span className={`block h-1.5 rounded-full ${i <= step ? "bg-brand-500" : "bg-gray-200"}`} />
             <span className={`mt-2 block text-xs font-semibold ${i === step ? "text-brand-700" : "text-gray-400"}`}>
@@ -188,6 +178,13 @@ const RentalCheckout = ({ property, ownerName }) => {
               Ends {formatDate(endDate)}. Rent is {price}{period}.
             </p>
           )}
+          {pricePeriod === "night" && (
+            <label className="block text-sm">
+              <span className="mb-1.5 block font-medium text-gray-700">When will you arrive on your check-in day?</span>
+              <input type="time" value={form.arrivalTime} onChange={set("arrivalTime")} required max={property.paymentOptions?.arrivalDeadline || undefined} className="field sm:w-48" />
+              <span className="mt-1.5 block text-xs text-gray-500">The owner expects you then{property.paymentOptions?.arrivalDeadline ? `, and asks guests to arrive by ${property.paymentOptions.arrivalDeadline}` : ""} (Ghana time). You can change it later.</span>
+            </label>
+          )}
           <label className="block text-sm">
             <span className="mb-1.5 block font-medium text-gray-700">Number of occupants</span>
             <input type="number" min="1" max="50" value={form.occupants} onChange={set("occupants")} required className="field sm:w-40" />
@@ -235,7 +232,7 @@ const RentalCheckout = ({ property, ownerName }) => {
             </button>
             <button type="submit" disabled={busy === "review"} className="btn btn-primary py-3.5">
               {busy === "review" && <Loader2 className="h-4 w-4 animate-spin" />}
-              {busy === "review" ? "Creating rental request..." : "Review rental"}
+              {busy === "review" ? "Creating rental request..." : pricePeriod === "night" ? "Review rental" : "Send rental request"}
             </button>
           </div>
         </form>
@@ -261,30 +258,21 @@ const RentalCheckout = ({ property, ownerName }) => {
             <Row label="Customer">{rental.contactName} · {rental.contactPhone}</Row>
             <Row label="Current address">{rental.currentAddress}</Row>
             <Row label="Owner">{ownerName}</Row>
-            <Row label={choosing ? "Total" : "Total to pay"} strong>{formatGhs(rental.amount)}</Row>
+            <Row label={choosing ? "Total" : "Total to pay at the office"} strong>{formatGhs(rental.amount)}</Row>
           </dl>
           {choosing ? (
-            <StayPayment rental={rental} options={options} headline={headline} ownerName={ownerName} busy={busy} error={error} onPay={pay} onReserve={reserve} onBack={() => setStep(1)} />
+            <StayPayment rental={{ ...rental, property: { title: property.title } }} options={options} headline={headline} ownerName={ownerName} busy={busy} error={error} onReserve={reserve} onBack={() => setStep(1)} />
           ) : (
+          // Rent is never paid online (the server refuses it too): the owner confirms, then it is paid at the office
           <>
-          <p className="flex items-start gap-2 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">
-            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
-            You'll pay securely on Paystack. {siteName} verifies the payment with Paystack, then {ownerName} confirms your rental.
+          <p className="flex items-start gap-2 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              <strong className="block">Request sent to {ownerName}.</strong>
+              Once they confirm, pay {formatGhs(rental.amount)} at their office and you'll get a receipt here and by email. {siteName} never takes rent online, and nobody should ask you to pay to a personal or mobile money number.
+            </span>
           </p>
-          <ErrorNote>{error}</ErrorNote>
-          {paymentsOff && (
-            <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              Online rental payments are turned off right now. Your details are saved: chat with {ownerName} to arrange payment.
-            </p>
-          )}
-          <button onClick={pay} disabled={Boolean(busy) || paymentsOff} className="btn btn-primary w-full py-4 text-base">
-            {busy === "pay" ? <Loader2 className="h-5 w-5 animate-spin" /> : <CreditCard className="h-5 w-5" />}
-            {busy === "pay" ? "Starting secure payment..." : `Pay Online · ${formatGhs(rental.amount)}`}
-          </button>
-          <button onClick={() => setStep(1)} disabled={Boolean(busy)} className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-gray-900">
-            <ArrowLeft className="h-4 w-4" />
-            Edit details
-          </button>
+          <Link to="/account/rentals" className="btn btn-primary w-full py-4 text-base">View my rentals</Link>
           </>
           )}
         </div>
@@ -294,51 +282,42 @@ const RentalCheckout = ({ property, ownerName }) => {
 };
 
 /**
- * Payment for a rental priced per night: "Pay online" and/or "Reserve now, pay on arrival",
- * as the owner chose. After reserving, shows "Reservation confirmed — Payment due on arrival".
+ * A rental priced per night: "Reserve now, pay on arrival" (never paid online). After reserving,
+ * shows "Reservation confirmed — Payment due on arrival" and the booking code to show on arrival.
  */
-const StayPayment = ({ rental, options, headline, ownerName, busy, error, onPay, onReserve, onBack }) => {
+const StayPayment = ({ rental, options, headline, ownerName, busy, error, onReserve, onBack }) => {
   if (headline) {
     return (
       <div className="space-y-3 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900" role="status">
         <p className="flex items-center gap-2 text-base font-semibold"><CircleCheck className="h-5 w-5" aria-hidden="true" />{headline}</p>
         {rental.paymentDue && <>
-          <p className="flex items-start gap-2"><CalendarCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />Pay {ownerName} {formatGhs(rental.amount)} when you arrive. Please arrive {arrivalText(rental)}.</p>
+          <p className="flex items-start gap-2"><CalendarCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />Pay {ownerName} {formatGhs(rental.amount)} when you arrive{rental.arrivalTime ? ` at ${rental.arrivalTime}` : ` ${arrivalText(rental)}`}, and show your booking code.</p>
           {rental.cancellationPolicy && <p className="whitespace-pre-line text-emerald-800"><span className="font-semibold">Owner's policy:</span> {rental.cancellationPolicy}</p>}
         </>}
+        {rental.awaitingApproval && <p>Your dates are held. Once {ownerName} approves your stay, you'll get your booking receipt here, in your account and by email. Download it and show it when you arrive.{rental.approvalDeadline && ` If it isn't approved by ${approvalDeadlineText(rental)}, it's cancelled automatically.`}</p>}
+        <BookingPass booking={rental} className="text-gray-900" />
         <Link to="/account/rentals" className="btn btn-primary w-full">View your booking</Link>
       </div>
     );
   }
   if (!["pending", "payment_pending"].includes(rental.statusKey)) return <p className="text-sm text-gray-600">This rental is {rental.status.toLowerCase()}.</p>;
-  const noOption = !options.online && !options.onArrival;
+  const noOption = !options.onArrival;
   return (
     <div className="space-y-4">
-      <p className="text-sm font-semibold text-gray-900">How would you like to pay?</p>
+      <p className="text-sm font-semibold text-gray-900">Reserve your stay</p>
       <ErrorNote>{error}</ErrorNote>
-      {noOption && <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">{options.onlineProblem || "Online booking is unavailable."} Your details are saved: chat with {ownerName} to arrange your stay.</p>}
-      {options.online && (
-        <div className="rounded-2xl border border-gray-200 p-4">
-          <p className="flex items-center gap-2 font-semibold text-gray-900"><CreditCard className="h-4 w-4 text-brand-600" aria-hidden="true" />Pay online now</p>
-          <p className="mt-1 flex items-start gap-2 text-sm leading-6 text-gray-500"><ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-brand-600" aria-hidden="true" />Card or mobile money through Paystack. Your dates are held for 30 minutes while you pay, then {ownerName} confirms your stay.</p>
-          <button type="button" onClick={onPay} disabled={Boolean(busy)} className="btn btn-primary mt-3 w-full py-3.5">
-            {busy === "pay" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-            {busy === "pay" ? "Starting secure payment..." : `Pay Online · ${formatGhs(rental.amount)}`}
-          </button>
-        </div>
-      )}
+      {noOption && <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">This listing isn't taking reservations right now. Your details are saved: chat with {ownerName} to arrange your stay.</p>}
       {options.onArrival && (
         <div className="rounded-2xl border border-gray-200 p-4">
           <p className="flex items-center gap-2 font-semibold text-gray-900"><Banknote className="h-4 w-4 text-brand-600" aria-hidden="true" />Reserve now, pay on arrival</p>
-          <p className="mt-1 text-sm leading-6 text-gray-500">Nothing to pay today. We secure your dates, then you pay {ownerName} {formatGhs(rental.amount)} when you arrive. Please arrive by {options.arrivalDeadline} on your check-in day.</p>
+          <p className="mt-1 text-sm leading-6 text-gray-500">Nothing to pay online. We secure your dates and send you a booking code. Show it to {ownerName} when you arrive{rental.arrivalTime ? ` at ${rental.arrivalTime}` : ""} and pay {formatGhs(rental.amount)} then.</p>
           {options.cancellationPolicy && <p className="mt-2 whitespace-pre-line rounded-lg bg-gray-50 p-3 text-xs leading-5 text-gray-600"><span className="font-semibold text-gray-800">Cancellation and no-show policy:</span> {options.cancellationPolicy}</p>}
-          <button type="button" onClick={onReserve} disabled={Boolean(busy)} className={`btn mt-3 w-full py-3.5 ${options.online ? "btn-light" : "btn-primary"}`}>
+          <button type="button" onClick={onReserve} disabled={Boolean(busy)} className="btn btn-primary mt-3 w-full py-3.5">
             {busy === "reserve" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarCheck className="h-4 w-4" />}
             {busy === "reserve" ? "Securing your dates..." : "Reserve, pay on arrival"}
           </button>
         </div>
       )}
-      {!options.online && options.onArrival && options.onlineProblem && <p className="text-xs text-gray-500">{options.onlineProblem}</p>}
       <button onClick={onBack} disabled={Boolean(busy)} className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-gray-900">
         <ArrowLeft className="h-4 w-4" />
         Edit details

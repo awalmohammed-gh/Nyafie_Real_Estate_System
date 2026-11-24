@@ -14,5 +14,8 @@ export const roomTypeSchema = new mongoose.Schema({
   sizeUnit: { type: String, enum: ["sqm", "sqft"], default: "sqm" },
   images: [String],
   amenities: [{ type: String, trim: true, maxlength: 100 }],
+  // The hotel's own numbers for the rooms of this type ("101", "102"...). When listed, the number of
+  // rooms follows them, and approving a booking assigns rooms from this list. Never shown publicly.
+  roomNumbers: { type: [{ type: String, trim: true, maxlength: 20 }], default: undefined },
   active: { type: Boolean, default: true },
 }, { toJSON: { virtuals: true, transform: (_doc, ret) => { delete ret._id; return ret; } } });
