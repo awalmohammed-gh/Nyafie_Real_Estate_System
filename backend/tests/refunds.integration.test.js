@@ -13,6 +13,7 @@ import Subscription from "../models/Subscription.js";
 import Refund from "../models/Refund.js";
 import Setting from "../models/Setting.js";
 import Notification from "../models/Notification.js";
+import { earlierCheckout } from "./support/earlierCheckout.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
 
 const KEYS = ["JWT_KEY", "PAYSTACK_MODE", "PAYSTACK_SECRET_KEY", "Test_Secret_Key", "CRON_SECRET", "PUBLIC_SITE_URL"];
@@ -79,16 +80,17 @@ test("refunds of flagged payments are sent once, tracked to completion and recor
   };
   const refund = (payment, extra = {}) => call("/admin/refunds", { method: "POST", body: { source: "payment", id: payment.id, method: "paystack", ...extra } });
 
-  // A real paid booking: request, checkout, signed charge webhook
+  // A paid booking: a request, an online payment started before online rent payments were removed
+  // (support/earlierCheckout.js), and the signed charge webhook that confirms it
   let sequence = 0;
   const paidRental = async () => {
     const listing = await Property.create({ title: `Refund test rental ${++sequence}`, propertyType: "Apartment", listingType: "Rent", price: 100, pricePeriod: "month", owner: admin._id, ownerType: "admin", status: "published", availability: "Available" });
     const booking = await call("/rentals", { as: "customer", method: "POST", body: { propertyId: listing.id, startDate: "2030-01-01", endDate: "2030-02-01", fullName: "Test Guest", email: customer.email, phone: customer.phone, currentAddress: "12 Test Road" } });
     assert.equal(booking.code, 201, JSON.stringify(booking));
-    const checkout = await call("/payments/initialize", { as: "customer", method: "POST", body: { rentalId: booking.data.id } });
-    assert.equal(checkout.code, 200, JSON.stringify(checkout));
-    assert.equal((await webhook("charge.success", { reference: checkout.data.reference })).code, 200);
-    return { rentalId: booking.data.id, payment: await Payment.findOne({ reference: checkout.data.reference }) };
+    assert.equal((await call("/payments/initialize", { as: "customer", method: "POST", body: { rentalId: booking.data.id } })).code, 409, "rent is never paid online now");
+    const { reference } = await earlierCheckout(booking.data.id);
+    assert.equal((await webhook("charge.success", { reference })).code, 200);
+    return { rentalId: booking.data.id, payment: await Payment.findOne({ reference }) };
   };
   const cancelled = async () => {
     const f = await paidRental();
@@ -97,7 +99,7 @@ test("refunds of flagged payments are sent once, tracked to completion and recor
     return { ...f, payment: await Payment.findById(f.payment.id) };
   };
 
-  await t.test("new checkouts record their Paystack mode", async () => {
+  await t.test("earlier test-mode payments stay in test mode when confirmed", async () => {
     const f = await paidRental();
     assert.equal(f.payment.environment, "test");
     assert.equal(f.payment.status, "paid");
