@@ -11,6 +11,7 @@ import { reportError } from "../utils/monitoring.js";
 import { checkListingFreshness } from "../utils/listingFreshness.js";
 import { releasePastViewings, sendViewingReminders } from "../utils/viewings.js";
 import { cleanUpOldRecords } from "../utils/housekeeping.js";
+import { expireUnansweredBookings } from "../utils/bookingExpiry.js";
 import { cleanUpAbandonedVideos } from "../utils/listingMedia.js";
 
 // The rental ledger or the agent subscription history: whichever stored record owns the reference
@@ -111,6 +112,8 @@ export const reconcilePayments = async (req, res) => {
   let viewings = { reminded: 0, expired: 0 };
   try { viewings = { expired: await releasePastViewings(), reminded: await sendViewingReminders() }; }
   catch (error) { console.error("Viewing reminders failed:", error.message); await reportError(error, { tags: { job: "viewing-reminders" } }); }
+  // ...and cancels hotel bookings the hotel didn't approve by 24 hours before check-in (never throws)
+  const unansweredBookings = await expireUnansweredBookings();
   if (paymentMode() === "disabled") return fail(res, 503, "Online payments are not configured.");
   const counts = { ...emptyCounts(), ...Object.fromEntries(recoveryQueues.map((queue) => [queue.name, emptyCounts()])) };
   // Bounded work fits one serverless invocation. The queues take turns from one shared
@@ -133,5 +136,5 @@ export const reconcilePayments = async (req, res) => {
       }
     }
   }
-  return res.status(counts.errors ? 503 : 200).json({ success: counts.errors === 0, data: { ...counts, reminders, freshness, cleanup, viewings }, message: counts.errors ? "Some payments could not be checked. Retry after the recovery lease expires." : "Payment recovery completed" });
+  return res.status(counts.errors ? 503 : 200).json({ success: counts.errors === 0, data: { ...counts, reminders, freshness, cleanup, viewings, unansweredBookings }, message: counts.errors ? "Some payments could not be checked. Retry after the recovery lease expires." : "Payment recovery completed" });
 };

@@ -16,6 +16,7 @@ import { OFFICE_METHOD, paysAtOffice } from "../utils/officePayments.js";
 import { buildReceipt, deliverReceipt, presentReceipt } from "../utils/receipts.js";
 import { newBookingCode, parseArrivalTime, parseRoomNumbers, sendBookingConfirmation } from "../utils/stayBooking.js";
 import { takesStayBookings } from "../utils/hotelPayout.js";
+import { approvalDeadline, expireUnansweredBookings, isAwaitingApproval } from "../utils/bookingExpiry.js";
 
 // What the customer is told about their money when a paid booking is cancelled
 const refundNotice = (flagged, cancelledPaid, fallback) => {
@@ -66,7 +67,9 @@ export const presentRental = (rental, user) => {
     history: presentHistory(rental.history),
     receipt: presentReceipt(rental.receipt),
     // Hotels: the booking waits for the hotel to approve it and assign rooms (then the booking receipt is sent)
-    awaitingApproval: Boolean(rental.hotelId) && !rental.approvedAt && ((rental.status === "confirmed" && rental.paymentOption === "on_arrival") || rental.status === "paid"),
+    awaitingApproval: isAwaitingApproval(rental),
+    // ...and when it's cancelled if the hotel hasn't approved it (24 hours before check-in)
+    approvalDeadline: isAwaitingApproval(rental) ? approvalDeadline(rental) : null,
     // Monthly and fixed-price rentals are paid at the office (utils/officePayments.js)
     paysAtOffice: rental.paymentOption === "office" || (!rental.hotelId && rental.pricePeriod !== "night" && rental.paymentStatus !== "paid" && ["pending", "confirmed"].includes(rental.status)),
     canManage: canManageRecord(rental, user),
@@ -143,6 +146,8 @@ export const createRental = async (req, res) => {
   const contact = validateContact({ ...req.body, email: req.user.email });
   if (contact.error) return fail(res, 400, contact.error);
 
+  // A hotel's overdue unapproved bookings release their rooms before availability is checked
+  if (mongoose.isValidObjectId(req.body.propertyId)) await expireUnansweredBookings({ hotelId: req.body.propertyId });
   // Request previews may revisit the customer's own checkout. Only the serialized
   // checkout below grants a hold, and it excludes just that booking's ID.
   const quote = await quoteRental(req.body, req.user, { ignoreHoldCustomer: req.user._id });
@@ -222,18 +227,21 @@ const createHotelRental = async (req, res, quote, contact) => {
 
 // GET /api/rentals/my
 export const myRentals = async (req, res) => {
+  await expireUnansweredBookings({ customer: req.user._id });
   const rentals = await populateRental(Rental.find({ customer: req.user._id }).sort({ createdAt: -1 }));
   ok(res, rentals.map((r) => presentRental(r, req.user)));
 };
 
 // GET /api/agents/rentals and /api/admin/rentals (admins see all)
 export const ownerRentals = async (req, res) => {
+  await expireUnansweredBookings(ownerFilter(req.user));
   const rentals = await populateRental(Rental.find(ownerFilter(req.user)).sort({ createdAt: -1 }));
   ok(res, rentals.map((r) => presentRental(r, req.user)));
 };
 
 // GET /api/rentals/:id
 export const getRental = async (req, res) => {
+  if (mongoose.isValidObjectId(req.params.id)) await expireUnansweredBookings({ _id: req.params.id });
   const rental = mongoose.isValidObjectId(req.params.id) ? await populateRental(Rental.findById(req.params.id)) : null;
   if (!rental || !(same(rental.customer, req.user) || canManageRecord(rental, req.user))) return fail(res, 404, "Rental not found.");
   ok(res, presentRental(rental, req.user));
@@ -400,6 +408,11 @@ export const updateArrivalTime = async (req, res) => {
 export const approveHotelBooking = async (req, res) => {
   const rental = mongoose.isValidObjectId(req.params.id) ? await populateRental(Rental.findById(req.params.id)) : null;
   if (!rental || !rental.hotelId || !canManageRecord(rental, req.user)) return fail(res, 404, "Booking not found.");
+  // Too late: it is cancelled now, as it would have been by the deadline
+  if (isAwaitingApproval(rental) && approvalDeadline(rental) <= new Date()) {
+    await expireUnansweredBookings({ _id: rental._id });
+    return fail(res, 409, "This booking wasn't approved by 24 hours before check-in, so it was cancelled and the guest told.");
+  }
   const roomNumbers = parseRoomNumbers(req.body?.roomNumbers, rental.numberOfRooms || 1);
   const note = cleanText(req.body?.note, 300);
   let paymentReceipt = null; // issued with this approval (online payments)
@@ -409,6 +422,7 @@ export const approveHotelBooking = async (req, res) => {
     if (current.approvedAt) throw new HttpError(409, "This booking is already approved.");
     const waiting = (current.status === "confirmed" && current.paymentOption === "on_arrival") || current.status === "paid";
     if (!waiting) throw new HttpError(409, "Only a reservation or a paid booking waiting for the hotel can be approved.");
+    if (approvalDeadline(current) <= new Date()) throw new HttpError(409, "This booking wasn't approved by 24 hours before check-in. It is being cancelled and the guest told.");
     const taken = await Rental.findOne({
       hotelId: current.hotelId, _id: { $ne: current._id }, roomNumbers: { $in: roomNumbers },
       status: { $in: ["confirmed", "active"] }, startDate: { $lt: current.endDate }, endDate: { $gt: current.startDate },
