@@ -8,7 +8,7 @@ import { cleanText, validateContact } from "../utils/validation.js";
 import { HttpError, ok, fail } from "../utils/response.js";
 import { isHotel, quoteHotelRoom, hotelTransaction } from "../utils/hotel.js";
 import { hasRentalConflict, rentalInventoryTransaction } from "../utils/rentalAvailability.js";
-import { announceCancelledBookingRefund, flagCancelledBookingPayment } from "../utils/refunds.js";
+import { announceCancelledBookingRefund, cancelledPaymentText, flagCancelledBookingPayment } from "../utils/refunds.js";
 import { openRequestLimitProblem } from "../utils/openRequestLimits.js";
 import Payment from "../models/Payment.js";
 import { newReference } from "../utils/paystack.js";
@@ -20,7 +20,7 @@ import { approvalDeadline, expireUnansweredBookings, isAwaitingApproval } from "
 
 // What the customer is told about their money when a paid booking is cancelled
 const refundNotice = (flagged, cancelledPaid, fallback) => {
-  if (flagged) return ` Your payment of ${formatGHS(flagged.amount)} will be refunded; we will let you know when it is processed.`;
+  if (flagged) return ` ${cancelledPaymentText(flagged)}${flagged.status !== "paid" ? "; we will let you know when it is processed" : ""}.`;
   return cancelledPaid ? fallback : "";
 };
 export { PAYMENT_HOLD } from "../utils/rentalAvailability.js";

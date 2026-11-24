@@ -34,6 +34,9 @@ const paymentSchema = new mongoose.Schema(
     nextReconcileAt: { type: Date, default: null },
     refund: { type: mongoose.Schema.Types.ObjectId, ref: "Refund", default: null }, // the latest refund attempt
     refundStatus: { type: String, default: null }, // mirrors that refund; claims one refund at a time
+    dispute: { type: mongoose.Schema.Types.ObjectId, ref: "Dispute", default: null }, // the dispute that matters most now
+    disputeStatus: { type: String, default: null }, // mirrors it: open | check | lost | won
+    disputeLost: { type: Number, default: 0 }, // GHS returned to the customer through lost disputes
   },
   schemaOptions
 );

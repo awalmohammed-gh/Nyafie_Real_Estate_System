@@ -1,5 +1,5 @@
 import Rental from "../models/Rental.js";
-import { flagCancelledBookingPayment, announceCancelledBookingRefund } from "./refunds.js";
+import { flagCancelledBookingPayment, announceCancelledBookingRefund, cancelledPaymentText } from "./refunds.js";
 import { notifyOwner, notifyUser } from "./notify.js";
 import { formatGHS } from "./ownership.js";
 import { reportError } from "./monitoring.js";
@@ -58,7 +58,7 @@ const cancelOne = async (candidate, now) => {
   const hotel = Boolean(cancelled.hotelId);
   const what = hotel ? `${cancelled.numberOfRooms} ${cancelled.roomName}` : "stay";
   await Promise.all([
-    notifyUser(cancelled.customer, { type: "status", title: hotel ? "Hotel booking cancelled" : "Stay cancelled", message: `The ${hotel ? "hotel" : "owner"} didn't approve your ${hotel ? `${cancelled.roomName} booking` : "stay"} for ${day} in time, so it was cancelled and the ${hotel ? "rooms" : "dates"} released.${flagged ? ` Your payment of ${formatGHS(flagged.amount)} will be refunded.` : " Nothing was paid."} You can book again or choose another place.`, link: "/account/rentals" }),
+    notifyUser(cancelled.customer, { type: "status", title: hotel ? "Hotel booking cancelled" : "Stay cancelled", message: `The ${hotel ? "hotel" : "owner"} didn't approve your ${hotel ? `${cancelled.roomName} booking` : "stay"} for ${day} in time, so it was cancelled and the ${hotel ? "rooms" : "dates"} released.${flagged ? ` ${cancelledPaymentText(flagged)}.` : " Nothing was paid."} You can book again or choose another place.`, link: "/account/rentals" }),
     notifyOwner(cancelled, { type: "rental", title: "Unanswered booking cancelled", message: `${cancelled.contactName}'s booking for ${day} (${what}) wasn't approved 24 hours before check-in, so it was cancelled and the ${hotel ? "rooms" : "dates"} released.`, path: "rentals" }),
   ]);
   return true;

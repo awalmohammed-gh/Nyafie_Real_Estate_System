@@ -8,6 +8,7 @@ import { getSettings, siteName } from "../models/Setting.js";
 import { initializeHotelPayment } from "./hotelPaymentController.js";
 import { processRentalPayment } from "../utils/rentalPaymentProcessing.js";
 import { REFUND_SUMMARY } from "./refundController.js";
+import { DISPUTE_SUMMARY } from "../utils/disputes.js";
 
 const rentalResult = async (rentalId, user) => presentRental(await populateRental(Rental.findById(rentalId)), user);
 
@@ -60,6 +61,7 @@ export const listPayments = async (_req, res) => {
     .populate("property", "title")
     .populate("owner", "firstName lastName")
     .populate("confirmedBy", "firstName lastName")
-    .populate("refund", REFUND_SUMMARY);
+    .populate("refund", REFUND_SUMMARY)
+    .populate("dispute", DISPUTE_SUMMARY);
   ok(res, payments);
 };

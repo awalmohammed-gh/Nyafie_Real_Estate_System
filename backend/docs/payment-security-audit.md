@@ -42,7 +42,12 @@ Tests: `marketplace.test.js` (exact amounts, fee-bearing customers, pesewa round
 
 - **Webhook signature scheme.** Paystack's published scheme is `x-paystack-signature` (HMAC-SHA512, no timestamp), which is what is implemented. No timestamped `Paystack-Signature` scheme could be confirmed in Paystack's documentation, so none was added. Replays are harmless because processing is idempotent and re-verified with the API. If Paystack enables a newer scheme on the account, add it then from their docs.
 - **Customer-borne fees.** If the Paystack account passes fees to customers, confirm in test mode that verify returns `requested_amount`. Otherwise those payments are held for review instead of confirmed.
-- **Disputes and chargebacks (`charge.dispute.*`) and reversals** are not handled automatically. A reversed payment keeps the access it granted until an admin acts. Consider handling dispute webhooks: flag the record and notify admins.
+- **Disputes and chargebacks (`charge.dispute.*`)** are now followed: flagged on the record, reported to admins, blocked from a second refund and taken off revenue when lost (`utils/disputes.js`, `disputes.integration.test.js`; see "Payment disputes" in DEPLOYMENT.md). Still open:
+  - A lost dispute keeps the plan or booking it paid for until an admin acts. This is deliberate; decide whether it should end automatically.
+  - The unused value of a plan whose payment was disputed or charged back still counts as credit towards an upgrade (`utils/planChange.js`).
+  - Paystack's status and resolution values come from its public API specification and sample events, not from a real dispute. Anything unrecognised becomes "check". Confirm with Paystack's documentation, or the first real dispute, that `resolved` + `declined` means the money stays.
+  - Reversals made without a dispute are not detected.
+  - For payments settled to a hotel's subaccount, confirm with Paystack whose balance a lost dispute comes from.
 - **Split payments to hotels:** confirm with Paystack whose balance refunds come from (see `hotel-bookings.md`).
 - **Ghana regulatory review** of collecting money for agents (rentals settle to NyaFie's account) is a business and legal question, not a code one.
 - **Live secret rotation:** no live key was found anywhere in code or history. Rotate it if it was ever shared outside the server environment.

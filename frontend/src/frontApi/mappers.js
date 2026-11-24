@@ -97,8 +97,30 @@ export const mapRefund = (r) =>
       }
     : null;
 
+// ---------- Paystack disputes (chargebacks) ----------
+const DISPUTE_LABEL = { open: "Dispute open", check: "Check dispute", lost: "Dispute lost", won: "Dispute won" };
+export const mapDispute = (d) =>
+  d && typeof d === "object"
+    ? {
+        id: d.disputeId,
+        outcome: d.outcome,
+        label: DISPUTE_LABEL[d.outcome] || d.outcome,
+        // The customer's bank has the payment in hand: a Paystack refund could pay the customer twice
+        blocksRefund: d.outcome !== "won",
+        awaitingAnswer: d.outcome === "open" && d.providerStatus === "awaiting-merchant-feedback",
+        amount: d.disputedAmount,
+        lostAmount: d.lostAmount || 0,
+        dueAt: d.dueAt,
+        resolvedAt: d.resolvedAt,
+      }
+    : null;
+// What is left of a payment after money returned through lost disputes
+const receivedAmount = (p) => Math.round((p.amount - (p.disputeLost || 0)) * 100) / 100;
+
 export const mapPayment = (s) => ({
   id: s.id,
+  received: receivedAmount(s),
+  dispute: mapDispute(s.dispute),
   userId: idOf(s.user),
   planId: idOf(s.plan),
   amount: s.amount,
@@ -485,6 +507,8 @@ export const mapSaleRequest = (s) => ({
 // ---------- Payment records (rentals online, sales paid to the owner) ----------
 export const mapPaymentRecord = (p) => ({
   id: p.id,
+  received: receivedAmount(p),
+  dispute: mapDispute(p.dispute),
   kind: p.kind,
   reference: p.reference,
   amount: p.amount,

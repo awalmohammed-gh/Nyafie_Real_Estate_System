@@ -31,6 +31,7 @@ import { removalImpact, removeProvider, restoreProvider, deletionPlan, permanent
 import { HttpError, ok, fail } from "../utils/response.js";
 import { prepareHotelFields, saveHotelProperty } from "../utils/hotel.js";
 import { REFUND_SUMMARY } from "./refundController.js";
+import { DISPUTE_SUMMARY } from "../utils/disputes.js";
 import { alertSavedSearches } from "../utils/savedSearches.js";
 import { markConfirmed } from "../utils/listingFreshness.js";
 
@@ -263,7 +264,7 @@ export const manageSubscription = async (req, res) => {
 
 // GET /api/admin/subscriptions -> every subscription record (also the payment history)
 export const listSubscriptions = async (_req, res) => {
-  ok(res, await Subscription.find().sort({ createdAt: -1 }).populate("refund", REFUND_SUMMARY));
+  ok(res, await Subscription.find().sort({ createdAt: -1 }).populate("refund", REFUND_SUMMARY).populate("dispute", DISPUTE_SUMMARY));
 };
 
 // ---------- Properties ----------

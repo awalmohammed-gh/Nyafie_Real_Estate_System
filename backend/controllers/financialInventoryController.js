@@ -6,7 +6,10 @@ import { ok, HttpError } from "../utils/response.js";
 const SECTORS = ["rental", "hotel", "sale", "subscription"];
 const STATUSES = ["paid", "pending", "failed", "review", "refunded"];
 // Match checkout's Math.round(amount * 100), including half-pesewa values.
-const minor = { $toLong: { $floor: { $add: [{ $multiply: ["$amount", 100] }, 0.5] } } };
+// Money returned through a lost dispute was not received: all of it counts as refunded, part of it comes off.
+const disputeLost = { $ifNull: ["$disputeLost", 0] };
+const chargedBack = { $and: [{ $gt: [disputeLost, 0] }, { $gte: [disputeLost, "$amount"] }] };
+const minor = { $toLong: { $floor: { $add: [{ $multiply: [{ $cond: [chargedBack, "$amount", { $subtract: ["$amount", disputeLost] }] }, 100] }, 0.5] } } };
 const day = (value, label) => {
   if (value === undefined || value === "") return null;
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new HttpError(400, `Choose a valid ${label} date.`);
@@ -54,11 +57,11 @@ export const financialInventory = async (req, res) => {
       source: { $literal: "payment" }, reference: 1, amountMinor: minor, at: { $ifNull: ["$paidAt", "$createdAt"] }, method: 1, ownerType: 1, account: "$customer",
       subject: { $ifNull: [{ $arrayElemAt: ["$listing.title", 0] }, "Removed property"] },
       sector: { $cond: [{ $eq: ["$kind", "sale"] }, "sale", { $cond: [{ $or: [{ $ifNull: [{ $arrayElemAt: ["$booking.hotelId", 0] }, false] }, { $ifNull: [{ $arrayElemAt: ["$booking.roomTypeId", 0] }, false] }, { $in: [{ $arrayElemAt: ["$listing.propertyType", 0] }, ["Hotel", "Hotel-Apartment"]] }] }, "hotel", "rental"] }] },
-      state: { $cond: [{ $in: ["$status", ["duplicate", "refund_required"]] }, "review", "$status"] },
+      state: { $cond: [chargedBack, "refunded", { $cond: [{ $in: ["$status", ["duplicate", "refund_required"]] }, "review", "$status"] }] },
     } },
     { $unionWith: { coll: Subscription.collection.name, pipeline: [
       { $match: { amount: { $gt: 0 }, paymentStatus: { $in: ["paid", "pending", "failed", "refund_required", "refunded"] }, paymentMethod: { $nin: ["Test payment", "Plan credit"] }, ...providerScope("paymentMethod") } },
-      { $project: { source: { $literal: "subscription" }, sector: { $literal: "subscription" }, reference: "$paymentReference", amountMinor: minor, at: { $ifNull: ["$paidAt", "$createdAt"] }, method: "$paymentMethod", state: { $cond: [{ $eq: ["$paymentStatus", "refund_required"] }, "review", "$paymentStatus"] }, account: "$user", subject: "$planName", ownerType: { $literal: "admin" } } },
+      { $project: { source: { $literal: "subscription" }, sector: { $literal: "subscription" }, reference: "$paymentReference", amountMinor: minor, at: { $ifNull: ["$paidAt", "$createdAt"] }, method: "$paymentMethod", state: { $cond: [chargedBack, "refunded", { $cond: [{ $eq: ["$paymentStatus", "refund_required"] }, "review", "$paymentStatus"] }] }, account: "$user", subject: "$planName", ownerType: { $literal: "admin" } } },
     ] } },
     { $match: { at } },
     { $facet: {

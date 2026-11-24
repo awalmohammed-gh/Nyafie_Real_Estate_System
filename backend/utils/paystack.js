@@ -178,3 +178,31 @@ export const fetchPaystackRefund = async (id, amount) => {
   if (!result.status || !data || String(data.id) !== String(id) || data.amount !== toSubunit(amount)) return null;
   return REFUND_STATUSES.includes(data.status) ? data.status : null;
 };
+
+const date = (value) => (typeof value === "string" && Number.isFinite(Date.parse(value)) ? new Date(value) : null);
+const word = (value) => (typeof value === "string" ? value.trim().slice(0, 60) : "");
+
+/** One Paystack dispute (webhook data or API answer) in a safe shape, or null if it doesn't identify one. */
+export const readPaystackDispute = (data) => {
+  const reference = data?.transaction?.reference ?? data?.transaction_reference;
+  if (!/^\d{1,20}$/.test(String(data?.id)) || typeof reference !== "string" || !reference.trim() || reference.length > 100) return null;
+  return {
+    id: String(data.id),
+    reference,
+    domain: word(data.domain || data.transaction?.domain),
+    status: word(data.status),
+    resolution: word(data.resolution),
+    category: word(data.category),
+    // GHS at stake; null when missing or in another currency
+    amount: Number.isSafeInteger(data.refund_amount) && data.refund_amount > 0 && data.currency === "GHS" ? data.refund_amount / 100 : null,
+    dueAt: date(data.dueAt),
+    resolvedAt: date(data.resolvedAt),
+  };
+};
+
+/** The current state of a dispute, or null if Paystack doesn't confirm it. Throws when it can't be reached. */
+export const fetchPaystackDispute = async (id) => {
+  const result = await paystack(`/dispute/${encodeURIComponent(id)}`);
+  const dispute = result.status ? readPaystackDispute(result.data) : null;
+  return dispute?.id === String(id) ? dispute : null;
+};

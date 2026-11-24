@@ -89,7 +89,7 @@ const AdminSubscriptions = () => {
         <AdminStat index={0} icon={BadgeCheck} label="Active" value={count((a) => a.sub.isActive)} tone="green" />
         <AdminStat index={1} icon={Clock} label="Expiring in 7 days" value={count((a) => a.sub.expiringSoon)} tone="amber" />
         <AdminStat index={2} icon={Hourglass} label="Pending payment" value={count((a) => a.sub.status === "pending")} tone="slate" />
-        <AdminStat index={3} icon={Wallet} label="Revenue this month" value={formatCedis(thisMonth.reduce((s, p) => s + p.amount, 0))} />
+        <AdminStat index={3} icon={Wallet} label="Revenue this month" value={formatCedis(thisMonth.reduce((s, p) => s + p.received, 0))} />
       </div>
 
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
