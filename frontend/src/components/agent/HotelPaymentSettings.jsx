@@ -59,7 +59,11 @@ const TYPES = [
   { value: "mobile_money", label: "Mobile money", icon: Smartphone },
 ];
 
+const HOLD_TIME = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" });
+const onHold = (at) => Boolean(at) && new Date(at) > new Date();
+
 // The hotel's payout account. Only the account owner can see or change it, with their password.
+// New accounts and changes wait 48 hours before money goes to them (the server enforces it).
 const PayoutAccount = ({ propertyId }) => {
   const { data, error, loading, reload } = useApiQuery(`payout:${propertyId}`, () => hotelApi.getPayout(propertyId));
   const [editing, setEditing] = useState(false);
@@ -73,7 +77,14 @@ const PayoutAccount = ({ propertyId }) => {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <p className="text-sm font-semibold text-gray-900">Payout account</p>
-      <p className="mt-0.5 text-xs leading-5 text-gray-500">Online payments for this hotel are settled to this account by Paystack, minus Paystack's fee. Guests can't pay online until it's connected.</p>
+      <p className="mt-0.5 text-xs leading-5 text-gray-500">Online payments for this hotel are settled to this account by Paystack, minus Paystack's fee. Guests can't pay online until it's connected. For your safety, a new or changed account starts receiving payments 48 hours later, and every change is emailed to you.</p>
+      {payout.connected && onHold(payout.activeFrom) && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Online payments start going to this account on {HOLD_TIME.format(new Date(payout.activeFrom))} (Ghana time). Until then guests can pay at the hotel.</p>}
+      {payout.pending && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+          <p><strong>Change waiting:</strong> {payout.pending.bankName} ending {payout.pending.accountLast4} from {HOLD_TIME.format(new Date(payout.pending.activeFrom))} (Ghana time). Payments keep going to the account below until then. Didn't ask for this? Cancel it and change your password.</p>
+          <button type="button" onClick={async () => { try { setSaved(await hotelApi.cancelPayoutChange(propertyId)); } catch { reload(); } }} className="btn btn-light px-3 py-1.5 text-xs text-red-600">Cancel change</button>
+        </div>
+      )}
       {payout.connected && !editing ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-emerald-50 p-3">
           <p className="flex items-start gap-2 text-sm text-emerald-900">

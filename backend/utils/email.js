@@ -113,3 +113,76 @@ export const searchAlertMailer = {
     });
   },
 };
+
+// A receipt for a payment the customer made to an agent, agency or hotel (utils/receipts.js)
+export const receiptMailer = {
+  async send(email, receipt) {
+    const name = siteName();
+    const amount = `GHS ${Number(receipt.amount).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const issued = new Date(receipt.issuedAt).toLocaleString("en-GH", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Accra" });
+    const rows = [
+      ["Receipt number", receipt.number],
+      ["Received from", receipt.customerName],
+      ["For", receipt.description],
+      ["Amount", amount],
+      ["Paid", receipt.method],
+      ...(receipt.paymentReference ? [["Payment reference", receipt.paymentReference]] : []),
+      ["Date", issued],
+      ["Received by", `${receipt.issuedByName}, ${receipt.business}`],
+      ...(receipt.businessAddress ? [["Address", receipt.businessAddress]] : []),
+      ...(receipt.businessPhone ? [["Phone", receipt.businessPhone]] : []),
+      ...(receipt.note ? [["Note", receipt.note]] : []),
+    ];
+    await send({
+      to: email,
+      subject: `Your receipt ${receipt.number} from ${receipt.business}`.slice(0, 150),
+      text: `${receipt.business} received your payment.\n\n${rows.map(([label, value]) => `${label}: ${value}`).join("\n")}\n\nKeep this receipt. You can also see it in your ${name} account. If you didn't make this payment, contact ${name} straight away.`,
+      html: `<!doctype html><html><body style="margin:0;background:#f6f5f9;font-family:Arial,Helvetica,sans-serif;color:#1f2937">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:12px;padding:32px">
+<tr><td style="font-size:20px;font-weight:bold;color:#5b21b6">${escapeHtml(name)}</td></tr>
+<tr><td style="padding-top:20px;font-size:18px;font-weight:bold">Payment receipt</td></tr>
+<tr><td style="padding-top:8px;font-size:15px;line-height:22px">${escapeHtml(receipt.business)} received your payment.</td></tr>
+<tr><td style="padding-top:16px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;line-height:20px">
+${rows.map(([label, value]) => `<tr><td style="padding:6px 12px 6px 0;color:#6b7280;vertical-align:top;white-space:nowrap">${escapeHtml(label)}</td><td style="padding:6px 0;font-weight:bold">${escapeHtml(value)}</td></tr>`).join("\n")}
+</table></td></tr>
+<tr><td style="padding-top:20px;font-size:13px;line-height:20px;color:#6b7280">Keep this receipt. You can also see it in your ${escapeHtml(name)} account. If you didn't make this payment, contact ${escapeHtml(name)} straight away.</td></tr>
+</table></td></tr></table></body></html>`,
+    });
+  },
+};
+
+// A hotel's payout account was connected, changed, cancelled or removed (controllers/hotelPayoutController.js).
+// Sent to the account owner's own inbox, so a stolen session can't hide the change.
+export const payoutAlertMailer = {
+  async send(email, { title, message, hotel }) {
+    const name = siteName();
+    await send({
+      to: email,
+      subject: `Security alert: ${title} for ${hotel}`.slice(0, 150),
+      text: `${title}\n\n${message}\n\nThis is an automatic security alert from ${name}.`,
+      html: `<!doctype html><html><body style="margin:0;background:#f6f5f9;font-family:Arial,Helvetica,sans-serif;color:#1f2937">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:12px;padding:32px">
+<tr><td style="font-size:20px;font-weight:bold;color:#5b21b6">${escapeHtml(name)}</td></tr>
+<tr><td style="padding-top:20px;font-size:18px;font-weight:bold">${escapeHtml(title)}</td></tr>
+<tr><td style="padding-top:8px;font-size:15px;line-height:22px">${escapeHtml(message)}</td></tr>
+<tr><td style="padding-top:20px;font-size:13px;line-height:20px;color:#6b7280">This is an automatic security alert from ${escapeHtml(name)}.</td></tr>
+</table></td></tr></table></body></html>`,
+    });
+  },
+};
+
+// The second step of an admin sign-in (controllers/adminSignInController.js)
+export const adminSignInMailer = {
+  async send(email, code) {
+    const name = siteName();
+    const note = "Never share this code. If you didn't just sign in, someone knows your admin password: change it now.";
+    await send({
+      to: email,
+      subject: `Your ${name} admin sign-in code`,
+      text: `Your ${name} admin sign-in code is ${code}.\n\nIt expires in 10 minutes. Enter it on the admin sign-in screen to finish signing in.\n\n${note}`,
+      html: codeEmailHtml({ name, heading: "Admin sign-in code", intro: "Enter this code on the admin sign-in screen to finish signing in. It expires in 10 minutes.", code, note }),
+    });
+  },
+};

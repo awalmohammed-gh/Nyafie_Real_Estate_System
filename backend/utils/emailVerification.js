@@ -36,7 +36,8 @@ const MAX_SENDS = 5;
 const MAX_ATTEMPTS = 5;
 
 // Emails a new code. { sent: true, retryAfter } or, while rate limited, { sent: false, retryAfter }.
-export const issueCode = async (Model, id, email) => {
+// mailer: which email carries it (verification by default; admin sign-in has its own wording)
+export const issueCode = async (Model, id, email, mailer = verificationMailer) => {
   smtpOptions(); // Fail before recording a send when SMTP has not been configured.
   const now = new Date();
   await Model.updateOne({ _id: id, windowStart: { $lte: new Date(now.getTime() - WINDOW_MS) } }, { $set: { windowStart: now, sendCount: 0 } });
@@ -50,7 +51,7 @@ export const issueCode = async (Model, id, email) => {
     const retryAt = current?.sendCount >= MAX_SENDS ? new Date(current.windowStart.getTime() + WINDOW_MS) : current?.nextSendAt;
     return { sent: false, retryAfter: Math.max(1, Math.ceil(((retryAt?.getTime() || now.getTime() + RESEND_MS) - now.getTime()) / 1000)) };
   }
-  try { await verificationMailer.send(email, code); }
+  try { await mailer.send(email, code); }
   catch {
     // A failed send must never leave a usable code or block an immediate delivery retry.
     await Model.updateOne({ _id: id, codeHash: hash }, { $unset: { codeHash: 1, expiresAt: 1 }, $set: { nextSendAt: new Date(0) } });

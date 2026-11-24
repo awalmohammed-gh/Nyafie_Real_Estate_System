@@ -24,11 +24,16 @@ import { adminPath } from "../../utils/adminEntry";
 import { arrivalText, pastArrivalDeadline, payPlace } from "../../utils/hotelPayments";
 import { cloudImage } from "../../utils/cloudImage";
 import { formatGhs } from "../../utils/property";
+import ReceiptCard from "../receipts/ReceiptCard";
 
 // Short stays (hotels and rentals priced per night) use check-in words
 const isStay = (r) => Boolean(r.hotelId) || r.pricePeriod === "night";
 // A pay-on-arrival reservation whose payment hasn't been recorded yet
 const dueOnArrival = (r) => r.paymentOption === "on_arrival" && r.paymentDue;
+// Monthly and fixed-price rent: confirmed first, then paid at the office (never online)
+const dueAtOffice = (r) => r.paymentOption === "office" && r.paymentDue;
+// A hotel booking the guest paid online into the hotel's account: the hotel sends the receipt
+const needsReceipt = (r) => Boolean(r.hotelId) && r.paymentMethod === "Paystack" && r.paymentStatus === "Paid" && !r.receipt && r.statusKey !== "cancelled";
 const FILTERS = [
   { id: "All", label: "All", match: () => true },
   { id: "Action", label: "Needs action", match: (r) => ["Paid", "Confirmed"].includes(r.status) },
@@ -55,8 +60,16 @@ const ACTIONS = {
 
 // Stays use check-in words, and pay-on-arrival reservations add "payment received" and "no-show"
 const PAID_ON_ARRIVAL = { kind: "paid-on-arrival", label: "Payment received" };
+const PAID_AT_OFFICE = { kind: "paid-at-office", label: "Payment received at office" };
+const SEND_RECEIPT = { kind: "receipt", label: "Send receipt" };
+const CONFIRM_OFFICE = { status: "confirmed", label: "Confirm rental", note: "" };
 const NO_SHOW = { status: "cancelled", label: "Mark no-show", danger: true, note: "Guest did not arrive by the arrival deadline (no-show)." };
 const actionsFor = (r) => {
+  if (r.paysAtOffice && r.statusKey === "pending") return [CONFIRM_OFFICE, ...ACTIONS.pending];
+  // The tenant moves in only after paying at the office
+  if (dueAtOffice(r) && r.statusKey === "confirmed") return [PAID_AT_OFFICE, ...ACTIONS.confirmed.slice(1)];
+  // Paid online: the receipt comes before check-in and completion
+  if (needsReceipt(r)) return [SEND_RECEIPT, ...(ACTIONS[r.statusKey] || []).filter((action) => !["active", "completed"].includes(action.status))];
   const base = (ACTIONS[r.statusKey] || []).map((action) => (isStay(r) && action.status === "active" ? { ...action, label: "Mark checked in" } : r.hotelId && action.status === "confirmed" ? { ...action, label: "Confirm booking" } : action));
   if (!dueOnArrival(r)) return base;
   const received = { ...PAID_ON_ARRIVAL, label: r.hotelId ? "Payment received at hotel" : "Payment received on arrival" };
@@ -65,7 +78,7 @@ const actionsFor = (r) => {
   if (r.statusKey === "active") return [received];
   return base;
 };
-const paymentChoice = (r) => (r.paymentOption !== "on_arrival" ? "Online" : r.hotelId ? "Pay at the hotel" : "Pay on arrival");
+const paymentChoice = (r) => (r.paymentOption === "office" ? "At the office" : r.paymentOption !== "on_arrival" ? "Online" : r.hotelId ? "Pay at the hotel" : "Pay on arrival");
 
 // Rental bookings. scope "agent": own listings only (enforced by the API); "admin": every rental.
 const RentalsBoard = ({ scope }) => {
@@ -83,6 +96,7 @@ const RentalsBoard = ({ scope }) => {
   const [openId, setOpenId] = useState(null);
   const [confirm, setConfirm] = useState(null); // { rental, action }
   const [note, setNote] = useState("");
+  const [slip, setSlip] = useState(""); // office payments: an optional bank slip or cheque number
   const [busy, setBusy] = useState(false);
 
   const retry = reload;
@@ -110,9 +124,12 @@ const RentalsBoard = ({ scope }) => {
   const apply = async () => {
     setBusy(true);
     const { rental, action } = confirm;
-    const request = action.kind === "paid-on-arrival" ? rentalApi.recordArrivalPayment(rental.id, note.trim()) : rentalApi.updateRentalStatus(rental.id, action.status, note.trim() || action.note || "");
+    const request = action.kind === "paid-on-arrival" ? rentalApi.recordArrivalPayment(rental.id, note.trim())
+      : action.kind === "paid-at-office" ? rentalApi.recordOfficePayment(rental.id, { note: note.trim(), reference: slip.trim() })
+      : action.kind === "receipt" ? rentalApi.sendReceipt(rental.id, note.trim())
+      : rentalApi.updateRentalStatus(rental.id, action.status, note.trim() || action.note || "");
     const { ok, result } = await run(request, {
-      success: action.kind === "paid-on-arrival" ? "Payment recorded" : action === NO_SHOW ? "Marked as no-show" : `${rental.hotelId ? "Booking" : "Rental"} ${action.status === "active" ? (isStay(rental) ? "checked in" : "marked active") : action.status}`,
+      success: ["paid-on-arrival", "paid-at-office"].includes(action.kind) ? "Payment recorded and receipt sent" : action.kind === "receipt" ? "Receipt sent" : action === NO_SHOW ? "Marked as no-show" : `${rental.hotelId ? "Booking" : "Rental"} ${action.status === "active" ? (isStay(rental) ? "checked in" : "marked active") : action.status}`,
       description: `${rental.contactName} has been notified.`,
     });
     if (ok) {
@@ -122,6 +139,7 @@ const RentalsBoard = ({ scope }) => {
     setBusy(false);
     setConfirm(null);
     setNote("");
+    setSlip("");
   };
 
   const actionButtons = (r, size = "text-xs") =>
@@ -251,7 +269,7 @@ const RentalsBoard = ({ scope }) => {
       >
         {open && (
           <div className="space-y-5">
-            <StatusSteps kind={open.paymentOption === "on_arrival" && open.paymentMethod !== "Paystack" ? "stayReservation" : "rental"} status={open.statusKey} />
+            <StatusSteps kind={open.paymentOption === "office" || open.paysAtOffice ? "officeRental" : open.paymentOption === "on_arrival" && open.paymentMethod !== "Paystack" ? "stayReservation" : "rental"} status={open.statusKey} />
             <div className="rounded-xl bg-brand-50 p-4"><p className="workspace-eyebrow">Rental summary</p><p className="mt-2 text-2xl font-semibold text-gray-900">{formatGhs(open.amount)}</p><p className="mt-2 text-sm text-gray-600">Move-in {formatDate(open.startDate)} · Until {formatDate(open.endDate)}</p><div className="mt-3 flex gap-2"><StatusBadge status={open.paymentStatus} /><StatusBadge status={open.status} /></div></div>
             <Link to={`/house/${open.property.id}`} className="flex items-center gap-3 rounded-lg p-2 ring-1 ring-gray-200 transition hover:ring-brand-200">
               {open.property.image && <img src={cloudImage(open.property.image, 80)} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />}
@@ -290,6 +308,9 @@ const RentalsBoard = ({ scope }) => {
               </div>
             </dl>
             {open.notes && <p className="rounded-lg bg-brand-50/60 p-4 text-sm whitespace-pre-line text-gray-700">“{open.notes}”</p>}
+            {dueAtOffice(open) && open.statusKey === "confirmed" && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{formatGhs(open.amount)} is due at your office. Record it here when the tenant pays: they get a receipt, and only then can they move in. Never ask for payment online or to a personal number.</p>}
+            {needsReceipt(open) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">The guest paid {formatGhs(open.amount)} online into your payout account. Send their receipt before they check in.</p>}
+            <ReceiptCard receipt={open.receipt} />
             {dueOnArrival(open) && ["confirmed", "active"].includes(open.statusKey) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{formatGhs(open.amount)} is due {payPlace(open)}. The guest should {open.hotelId ? "check in" : "arrive"} {arrivalText(open)}.{open.cancellationPolicy && <span className="mt-1 block text-xs whitespace-pre-line">Policy shown to the guest: {open.cancellationPolicy}</span>}</p>}
             {actionsFor(open).length > 0 && <div className="flex flex-wrap gap-2">{actionButtons(open, "text-sm")}</div>}
             <div>
@@ -313,7 +334,13 @@ const RentalsBoard = ({ scope }) => {
         description={
           confirm &&
           (confirm.action.kind === "paid-on-arrival"
-            ? `Record that ${confirm.rental.contactName} paid ${formatGhs(confirm.rental.amount)} ${payPlace(confirm.rental)}. They'll get a confirmation.`
+            ? `Record that ${confirm.rental.contactName} paid ${formatGhs(confirm.rental.amount)} ${payPlace(confirm.rental)}. A receipt from you is sent to them.`
+            : confirm.action.kind === "paid-at-office"
+            ? `Record that ${confirm.rental.contactName} paid ${formatGhs(confirm.rental.amount)} at your office. A receipt from you is sent to them, and they can then move in.`
+            : confirm.action.kind === "receipt"
+            ? `Send ${confirm.rental.contactName} a receipt for the ${formatGhs(confirm.rental.amount)} they paid online. It can't be changed once sent.`
+            : confirm.action === CONFIRM_OFFICE
+            ? `Confirm ${confirm.rental.contactName}'s rental of "${confirm.rental.property.title}". The dates are held for them, and they're asked to pay ${formatGhs(confirm.rental.amount)} at your office.`
             : confirm.action === NO_SHOW
             ? `${confirm.rental.contactName} didn't arrive by the deadline. Their reservation is cancelled, the ${confirm.rental.hotelId ? "rooms are" : "dates are"} released and they're notified.`
             : confirm.action.status === "cancelled" && confirm.rental.paymentStatus === "Paid"
@@ -322,7 +349,8 @@ const RentalsBoard = ({ scope }) => {
         }
         confirmLabel={busy ? "Saving..." : confirm?.action.label}
       >
-        <textarea value={note} onChange={(e) => setNote(e.target.value.slice(0, 300))} rows={2} placeholder="Note for the customer (optional)" className="field resize-none" />
+        {confirm?.action.kind === "paid-at-office" && <input value={slip} onChange={(e) => setSlip(e.target.value.slice(0, 80))} placeholder="Bank slip or cheque number (optional)" className="field mb-2" />}
+        <textarea value={note} onChange={(e) => setNote(e.target.value.slice(0, 300))} rows={2} placeholder={confirm?.action.kind ? "Note on the receipt (optional)" : "Note for the customer (optional)"} className="field resize-none" />
       </ConfirmDialog>
     </>
   );

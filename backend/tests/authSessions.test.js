@@ -13,6 +13,9 @@ import userRoutes from "../routes/userRoutes.js";
 import { protect, protectCustomer, protectOwner } from "../middleware/authMiddleware.js";
 import { SESSION_ROLES, setAuthCookie } from "../utils/generateToken.js";
 import { TEST_CUSTOMER_TAB, customerTabHeaders } from "./support/customerTab.js";
+import AdminSignInCode from "../models/AdminSignInCode.js";
+import { adminSignInMailer } from "../utils/email.js";
+import { memoryModel } from "./support/memoryModels.js";
 import { agentDestination, authRedirectDestination, sessionDomainForPath, sessionDestination } from "../../frontend/src/utils/sessionDomain.js";
 
 test("frontend destinations keep public pages and private areas in their own domain", () => {
@@ -43,6 +46,13 @@ test("explicit account switching keeps both auth forms open with an existing rol
 // touching the development database or resetting existing account passwords.
 test("role session isolation", async (t) => {
   process.env.JWT_KEY = "isolated-auth-regression-test-key";
+  // Admins finish signing in with an emailed code: caught here
+  const adminCodes = [];
+  t.mock.method(adminSignInMailer, "send", async (_email, code) => { adminCodes.push(code); });
+  const adminCodeStore = memoryModel(t, AdminSignInCode);
+  const smtp = { SMTP_USER: process.env.SMTP_USER, SMTP_APP_PASSWORD: process.env.SMTP_APP_PASSWORD };
+  Object.assign(process.env, { SMTP_USER: "sender@gmail.com", SMTP_APP_PASSWORD: "test-app-password" });
+  t.after(() => { for (const [name, value] of Object.entries(smtp)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; } });
   const accounts = Object.entries(SESSION_ROLES).map(([session, role], index) => ({
     emailVerifiedAt: new Date(), _id: String(index + 1).padStart(24, "0"), role, isActive: true,
     ...(role === "agent" ? { agentApplication: { status: "approved", profileCompletedAt: new Date(), approvedAt: new Date() } } : {}),
@@ -81,7 +91,16 @@ test("role session isolation", async (t) => {
     }, ...(data ? { body: JSON.stringify(data) } : {}),
   });
   const signIn = async (session) => {
-    const response = await call(`/api/auth/${session}/login`, { domain: session, data: { email: `${session}@example.test`, password: "TestPassword123" } });
+    // A new code may be sent once a minute: these sign-ins come faster, as if a minute had passed
+    if (session === "admin") adminCodeStore.docs.forEach((doc) => { doc.nextSendAt = new Date(0); });
+    let response = await call(`/api/auth/${session}/login`, { domain: session, data: { email: `${session}@example.test`, password: "TestPassword123" } });
+    if (session === "admin") {
+      // The password is only the first step: no session until the emailed code is entered
+      assert.equal(response.status, 202);
+      assert.equal(response.headers.getSetCookie().some((cookie) => cookie.startsWith("admin_token=ey")), false);
+      const { challenge } = (await response.json()).data;
+      response = await call("/api/auth/admin/verify-email", { domain: "admin", data: { challenge, code: adminCodes.at(-1) } });
+    }
     assert.equal(response.status, 200);
     const headers = response.headers.getSetCookie();
     assert.equal(headers.length, 1);

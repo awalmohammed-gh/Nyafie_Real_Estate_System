@@ -45,14 +45,14 @@ export default function EmailVerificationForm({ verification, onSuccess, onBack 
   return <div>
     <div className="auth-heading">
       <h2 className="text-xl font-semibold tracking-tight">Check your email</h2>
-      <p>{verification.registration ? "To finish creating your account, enter" : "Enter"} the six-digit code sent to <strong>{verification.email}</strong>. It expires in 10 minutes. Check your spam folder too.</p>
+      <p>{verification.registration ? "To finish creating your account, enter" : verification.twoStep ? "To finish signing in, enter" : "Enter"} the six-digit code sent to <strong>{verification.email}</strong>. It expires in 10 minutes. Check your spam folder too.</p>
     </div>
     <form className="auth-form" onSubmit={submit} aria-busy={busy} aria-describedby={error ? errorId : undefined}>
-      <AuthField label="Verification code" icon={Mail} name="verificationCode" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" minLength={6} maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} disabled={busy} required autoFocus />
+      <AuthField label={verification.twoStep ? "Sign-in code" : "Verification code"} icon={Mail} name="verificationCode" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" minLength={6} maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} disabled={busy} required autoFocus />
       {error && <p id={errorId} role="alert" className="auth-error"><AlertCircle size={18} aria-hidden="true" />{error}</p>}
       <p role="status" className="auth-field-hint">{message}</p>
-      <button type="submit" className="auth-submit" disabled={busy || code.length !== 6}>{busy ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : null}{verification.registration ? "Verify & create account" : "Verify email & continue"}</button>
-      <button type="button" className="account-text-button" disabled={busy || remaining > 0} onClick={resend}>{remaining > 0 ? `Resend code in ${remaining}s` : "Resend verification code"}</button>
+      <button type="submit" className="auth-submit" disabled={busy || code.length !== 6}>{busy ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : null}{verification.registration ? "Verify & create account" : verification.twoStep ? "Verify & sign in" : "Verify email & continue"}</button>
+      <button type="button" className="account-text-button" disabled={busy || remaining > 0} onClick={resend}>{remaining > 0 ? `Resend code in ${remaining}s` : verification.twoStep ? "Resend sign-in code" : "Resend verification code"}</button>
       <button type="button" className="account-text-button" disabled={busy} onClick={onBack}>Back to sign in / use a different email</button>
     </form>
   </div>;

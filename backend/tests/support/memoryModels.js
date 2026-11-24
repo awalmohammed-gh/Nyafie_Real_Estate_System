@@ -151,9 +151,15 @@ export const memoryModel = (t, Model, docs = []) => {
     hit.forEach((doc) => apply(doc, update));
     return { matchedCount: hit.length, modifiedCount: hit.length }; // as MongoDB reports it
   });
-  t.mock.method(Model, "updateOne", async (filter, update) => {
+  t.mock.method(Model, "updateOne", async (filter, update, options = {}) => {
     const doc = all(filter)[0];
     if (doc) apply(doc, update);
+    else if (options.upsert) {
+      // As MongoDB does (and findOneAndUpdate below): the filter's plain values, $setOnInsert, then the update
+      const fields = Object.fromEntries(Object.entries(filter).filter(([path, value]) => !path.startsWith("$") && !isOperatorObject(value)));
+      apply(store.add({ ...fields, ...update.$setOnInsert }), update);
+      return { matchedCount: 0, modifiedCount: 0, upsertedCount: 1 };
+    }
     return { matchedCount: doc ? 1 : 0, modifiedCount: doc ? 1 : 0 };
   });
   t.mock.method(Model, "findOneAndUpdate", (filter, update, options = {}) => {

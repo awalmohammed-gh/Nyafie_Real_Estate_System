@@ -7,6 +7,7 @@ import AuthLayout from "../../components/auth/AuthLayout";
 import { AuthField, AuthPasswordField } from "../../components/auth/AuthField";
 import PageLoader from "../../components/ui/PageLoader";
 import { sessionDestination } from "../../utils/sessionDomain";
+import EmailVerificationForm from "../../components/auth/EmailVerificationForm";
 
 const AdminLogin = () => {
   const { user, ready, adminLogin } = useAuth();
@@ -15,6 +16,8 @@ const AdminLogin = () => {
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Second step: the password was right; the code emailed to the admin finishes the sign-in
+  const [verification, setVerification] = useState(null);
   const errorId = useId();
 
   if (!ready) return <PageLoader fullScreen label="Checking your session..." />;
@@ -26,13 +29,29 @@ const AdminLogin = () => {
     setError("");
     setSubmitting(true);
     try {
-      const admin = await adminLogin(form);
-      toast({ title: `Welcome back, ${admin.firstName}` });
+      const result = await adminLogin(form);
+      if (result?.verificationRequired) {
+        setVerification(result);
+        setSubmitting(false);
+        return;
+      }
+      toast({ title: `Welcome back, ${result.firstName}` });
     } catch (err) {
       setError(err.message || "We couldn't sign you in. Please try again.");
       setSubmitting(false);
     }
   };
+
+  if (verification) return (
+    <AuthLayout domain="admin">
+      <div className="auth-admin-mark"><ShieldCheck size={25} aria-hidden="true" /></div>
+      <EmailVerificationForm
+        verification={verification}
+        onSuccess={(admin) => toast({ title: `Welcome back, ${admin.firstName}` })}
+        onBack={() => { setVerification(null); setForm((previous) => ({ ...previous, password: "" })); }}
+      />
+    </AuthLayout>
+  );
 
   return (
     <AuthLayout domain="admin">

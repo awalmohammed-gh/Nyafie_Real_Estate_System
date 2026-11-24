@@ -62,11 +62,32 @@ export const parseStayBooking = (input, property) => {
 export const arrivalDeadlineFor = (checkIn, time) => new Date(`${new Date(checkIn).toISOString().slice(0, 10)}T${time}:00Z`);
 
 // The hotel's payout account for the current Paystack environment, or null
-export const payoutAccountFor = (property, { session } = {}) => {
+// How long a new or changed payout account waits before it receives online payments. If someone
+// takes over an owner's account and redirects the hotel's money, the owner (alerted by email and in
+// the app) and the admins have this long to stop it; meanwhile payments keep going to the old account.
+export const PAYOUT_HOLD_MS = 48 * 60 * 60 * 1000;
+export const payoutHoldEnds = (now = new Date()) => new Date(now.getTime() + PAYOUT_HOLD_MS);
+
+/**
+ * The hotel's payout account (or null). A pending change whose hold is over replaces the current account
+ * here, the first time anyone reads it afterwards (atomically, so two readers can't both do it).
+ */
+export const payoutAccountFor = async (property, { session, now = new Date() } = {}) => {
   const environment = paymentEnvironment();
   if (!environment || property.ownerType !== "agent" || !hotelListing(property)) return null;
-  return PayoutAccount.findOne({ property: property._id, environment }).session(session || null);
+  const payout = await PayoutAccount.findOne({ property: property._id, environment }).session(session || null);
+  if (!payout?.pending || payout.pending.activeFrom > now) return payout;
+  const { requestedAt, activeFrom, ...next } = payout.pending.toObject ? payout.pending.toObject() : payout.pending;
+  const promoted = await PayoutAccount.findOneAndUpdate(
+    { _id: payout._id, "pending.subaccountCode": next.subaccountCode },
+    { $set: { ...next, connectedAt: requestedAt, activeFrom }, $unset: { pending: 1 } },
+    { returnDocument: "after", session: session || null },
+  );
+  return promoted || PayoutAccount.findOne({ property: property._id, environment }).session(session || null);
 };
+
+// Whether the account can receive online payments yet (accounts from before the hold have no activeFrom)
+export const payoutActive = (payout, now = new Date()) => Boolean(payout) && !(payout.activeFrom > now);
 
 /**
  * What a guest can choose for this listing right now, with the reason online payment is missing.
@@ -79,6 +100,7 @@ export const stayPaymentOptions = (property, payout, settings) => {
   if (!options.payOnline) onlineProblem = `This ${hotel ? "hotel" : "listing"} takes payment on arrival.`;
   else if (paymentMode() === "disabled" || settings?.payments?.rentalsEnabled === false || property.currency !== "GHS") onlineProblem = "Online payments are unavailable right now.";
   else if (hotel && property.ownerType === "agent" && !payout) onlineProblem = "This hotel hasn't finished setting up online payments.";
+  else if (hotel && property.ownerType === "agent" && !payoutActive(payout)) onlineProblem = "This hotel's online payments are being set up and start soon.";
   return {
     onArrival: options.payOnArrival,
     online: !onlineProblem,
@@ -97,6 +119,8 @@ export const presentPayout = (payout) => payout ? {
   accountLast4: payout.accountLast4,
   environment: payout.environment,
   connectedAt: payout.connectedAt,
+  activeFrom: payout.activeFrom || null, // a new account: online payments start then
+  pending: payout.pending ? { type: payout.pending.type, bankName: payout.pending.bankName, accountName: payout.pending.accountName, accountLast4: payout.pending.accountLast4, requestedAt: payout.pending.requestedAt, activeFrom: payout.pending.activeFrom } : null,
 } : { connected: false };
 
 // Paystack's Ghana settlement banks ("ghipss") and mobile money networks, cached for 6 hours

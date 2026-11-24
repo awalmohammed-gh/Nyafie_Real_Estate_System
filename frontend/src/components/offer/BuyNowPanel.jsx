@@ -10,7 +10,7 @@ import { getPriceParts } from "../../utils/property";
 // Buy Now (sale properties). Two ways forward:
 //  A. make an offer or chat with the owner to negotiate
 //  B. submit a purchase request at the asking price
-// No payment happens online: the customer and the owner agree how to pay, and the owner confirms it.
+// No payment happens online: houses and land are paid for at the office, and the owner records it (with a receipt).
 const BuyNowPanel = ({ property, ownerName, whatsappLink, onChat }) => {
   const { user } = useAuth();
   const [form, setForm] = useState({ fullName: user?.name || "", email: user?.email || "", phone: user?.phone || "", message: "" });
@@ -47,7 +47,7 @@ const BuyNowPanel = ({ property, ownerName, whatsappLink, onChat }) => {
         <p className="mt-5 flex items-start gap-3 rounded-2xl bg-amber-50 p-4 text-left text-sm text-amber-900">
           <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
           <span>
-            <strong className="font-semibold">This records your interest and does not complete a sale.</strong> Agree on the final amount, viewing, documents and payment arrangements directly with {ownerName}.
+            <strong className="font-semibold">This records your interest and does not complete a sale.</strong> Agree on the final amount, viewing and documents with {ownerName}. Payment is made at their office only, and you get a receipt. Never pay online or to a personal or mobile money number.
           </span>
         </p>
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -119,7 +119,7 @@ const BuyNowPanel = ({ property, ownerName, whatsappLink, onChat }) => {
         </label>
         <p className="flex items-start gap-2 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
-          No purchase payment is taken online. {ownerName} will discuss the sale and payment arrangements with you.
+          No purchase payment is taken online. Houses and land are paid for at {ownerName}'s office, after you've seen the property and its documents, and you get a receipt.
         </p>
         {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
         <button type="submit" disabled={sending} className="btn btn-primary w-full py-4 text-base">

@@ -9,6 +9,10 @@ import { isHotel, quoteHotelRoom, hotelTransaction } from "../utils/hotel.js";
 import { hasRentalConflict, rentalInventoryTransaction } from "../utils/rentalAvailability.js";
 import { announceCancelledBookingRefund, flagCancelledBookingPayment } from "../utils/refunds.js";
 import { openRequestLimitProblem } from "../utils/openRequestLimits.js";
+import Payment from "../models/Payment.js";
+import { newReference } from "../utils/paystack.js";
+import { OFFICE_METHOD, paysAtOffice } from "../utils/officePayments.js";
+import { buildReceipt, deliverReceipt, presentReceipt } from "../utils/receipts.js";
 
 // What the customer is told about their money when a paid booking is cancelled
 const refundNotice = (flagged, cancelledPaid, fallback) => {
@@ -57,9 +61,16 @@ export const presentRental = (rental, user) => {
     owner: { id: rental.ownerType === "admin" ? "admin" : String(rental.owner?._id || rental.owner), name: ownerName(rental), type: rental.ownerType },
     conversation: rental.conversation ? String(rental.conversation) : null,
     history: presentHistory(rental.history),
+    receipt: presentReceipt(rental.receipt),
+    // Monthly and fixed-price rentals are paid at the office (utils/officePayments.js)
+    paysAtOffice: rental.paymentOption === "office" || (!rental.hotelId && rental.pricePeriod !== "night" && rental.paymentStatus !== "paid" && ["pending", "confirmed"].includes(rental.status)),
     canManage: canManageRecord(rental, user),
   };
 };
+
+// The owner side has to give the guest a receipt for a hotel booking paid online (into the hotel's own
+// account) before the stay starts; payments recorded at the hotel get theirs when they are recorded
+const needsReceipt = (rental) => Boolean(rental.hotelId) && rental.paymentStatus === "paid" && !rental.receipt?.number;
 
 export const addHistory = (doc, user, note = "") => doc.history.push({ status: doc.status, paymentStatus: doc.paymentStatus, note, by: user?._id });
 
@@ -141,8 +152,11 @@ export const createRental = async (req, res) => {
   const { rental, isNew } = await saveRegularRentalRequest(req, property, contact);
 
   if (isNew) {
+    const office = paysAtOffice(property);
     await Promise.all([
-      notifyUser(req.user._id, { type: "rental", title: "Rental request submitted", message: `Complete payment of ${formatGHS(rental.amount)} to book "${property.title}".`, link: "/account/rentals" }),
+      notifyUser(req.user._id, { type: "rental", title: "Rental request submitted", message: office
+        ? `The owner will confirm "${property.title}". Then pay ${formatGHS(rental.amount)} at their office and get a receipt. Never pay online or to a personal number.`
+        : `Complete payment of ${formatGHS(rental.amount)} to book "${property.title}".`, link: "/account/rentals" }),
       notifyOwner(rental, { type: "rental", title: "New rental request", message: `${rental.contactName} wants to rent "${property.title}" from ${toDay(rental.startDate)}.`, path: "rentals" }),
     ]);
   }
@@ -221,8 +235,8 @@ export const updateRentalStatus = async (req, res) => {
   const rental = mongoose.isValidObjectId(req.params.id) ? await populateRental(Rental.findById(req.params.id)) : null;
   if (!rental || !canManageRecord(rental, req.user)) return fail(res, 404, "Rental not found.");
   const { status } = req.body;
-  const allowed = TRANSITIONS[rental.status] || [];
-  if (!allowed.includes(status)) return fail(res, 400, `A ${rental.status.replace("_", " ")} rental can't be changed to ${String(status || "that status").replace("_", " ")}.`);
+  // Regular rentals check their transitions below (office rentals have one more)
+  if (rental.hotelId && !(TRANSITIONS[rental.status] || []).includes(status)) return fail(res, 400, `A ${rental.status.replace("_", " ")} rental can't be changed to ${String(status || "that status").replace("_", " ")}.`);
 
   // A paid booking that is cancelled flags its Paystack charge for a refund in the same transaction
   let flagged = null;
@@ -231,6 +245,7 @@ export const updateRentalStatus = async (req, res) => {
       const current = await Rental.findById(rental._id).session(session);
       if (!(TRANSITIONS[current.status] || []).includes(status)) { const error = new Error("Booking status changed. Reload and try again."); error.status = 409; throw error; }
       if (status === "completed" && current.paymentStatus === "due") throw new HttpError(409, "Record the guest's payment at the hotel before completing this stay.");
+      if (["active", "completed"].includes(status) && needsReceipt(current)) throw new HttpError(409, "Send the guest their receipt for the online payment first.");
       current.status = status;
       addHistory(current, req.user, cleanText(req.body.note, 300) || `Hotel booking ${STATUS_TEXT[status]}`);
       await current.save({ session });
@@ -242,19 +257,32 @@ export const updateRentalStatus = async (req, res) => {
   }
 
   const reason = cleanText(req.body.note, 300);
+  // Monthly and fixed-price rentals: the owner confirms the request (the dates are then taken), the
+  // tenant pays at the office, and only a recorded payment lets them move in
+  const office = (current) => current.paymentOption === "office" || (current.status === "pending" && current.paymentStatus !== "paid" && paysAtOffice(rental.property));
+  const allowedFor = (current) => office(current) && current.status === "pending" ? ["confirmed", "cancelled"] : TRANSITIONS[current.status] || [];
+  if (!allowedFor(rental).includes(status)) return fail(res, 400, `A ${rental.status.replace("_", " ")} rental can't be changed to ${String(status || "that status").replace("_", " ")}.`);
   const updated = await rentalInventoryTransaction(rental.property?._id || rental.property, async (_property, session) => {
     const current = await Rental.findById(rental._id).session(session);
-    if (!current || !(TRANSITIONS[current.status] || []).includes(status)) throw new HttpError(409, "Rental status changed. Reload and try again.");
-    if (status === "completed" && current.paymentStatus === "due") throw new HttpError(409, "Record the guest's payment on arrival before completing this stay.");
+    if (!current || !allowedFor(current).includes(status)) throw new HttpError(409, "Rental status changed. Reload and try again.");
+    if (status === "completed" && current.paymentStatus === "due") throw new HttpError(409, current.paymentOption === "office" ? "Record the tenant's office payment before completing this rental." : "Record the guest's payment on arrival before completing this stay.");
+    if (status === "active" && current.paymentOption === "office" && current.paymentStatus !== "paid") throw new HttpError(409, "Record the tenant's payment at the office before they move in.");
+    if (status === "confirmed" && current.status === "pending") {
+      // Confirming takes the dates: nobody else may hold or have them
+      if (await hasRentalConflict(current, { session })) throw new HttpError(409, "Those dates are already rented or being paid for. Agree new dates with the tenant.");
+      current.set({ paymentOption: "office", paymentStatus: "due", paymentMethod: OFFICE_METHOD });
+    }
     current.status = status;
-    addHistory(current, req.user, reason || `Rental ${STATUS_TEXT[status]}`);
+    addHistory(current, req.user, reason || (current.paymentOption === "office" && status === "confirmed" ? "Rental confirmed: payment due at the office" : `Rental ${STATUS_TEXT[status]}`));
     await current.save({ session });
     flagged = status === "cancelled" && current.paymentStatus === "paid" ? await flagCancelledBookingPayment(current, session) : null;
     return current;
   });
   if (flagged) await announceCancelledBookingRefund(flagged);
+  const officeDue = updated.paymentOption === "office" && status === "confirmed";
+  const officeText = officeDue ? ` Pay ${formatGHS(updated.amount)} at ${ownerName(rental)}'s office and get a receipt. Never pay online or to a personal number.` : "";
   if (rental.property?._id) {
-    const conversation = await postSystemNote(rental.property, rental.customer._id, req.user, "owner", `Rental ${STATUS_TEXT[status]}.${reason ? `\n\n${reason}` : ""}`);
+    const conversation = await postSystemNote(rental.property, rental.customer._id, req.user, "owner", `Rental ${STATUS_TEXT[status]}.${officeText}${reason ? `\n\n${reason}` : ""}`);
     await Rental.updateOne({ _id: updated._id }, { $set: { conversation: conversation._id } });
   }
 
@@ -262,7 +290,7 @@ export const updateRentalStatus = async (req, res) => {
   await notifyUser(rental.customer._id, {
     type: "status",
     title: `Rental ${STATUS_TEXT[status]}`,
-    message: `Your rental of "${rental.property?.title || "the property"}" was ${STATUS_TEXT[status]}.${refund}`,
+    message: `Your rental of "${rental.property?.title || "the property"}" was ${STATUS_TEXT[status]}.${officeText}${refund}`,
     link: "/account/rentals",
   });
   ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), "Rental updated");
@@ -273,20 +301,67 @@ export const bookingTransaction = (rental, work) => rental.hotelId ? hotelTransa
 // How a booking is named in messages: "Deluxe stay" / "stay at "Sea View Flat""
 const stayName = (rental) => rental.hotelId ? `${rental.roomName} stay` : `stay at "${rental.property?.title || "the property"}"`;
 
-// PATCH /api/rentals/:id/paid-on-arrival { note } -> owner side: the guest paid on arrival
+// What a rental's receipt says it paid for
+const receiptDescription = (rental) => rental.hotelId
+  ? `${rental.numberOfRooms} × ${rental.roomName}, ${toDay(rental.startDate)} to ${toDay(rental.endDate)} at "${rental.property?.title || "the hotel"}"`
+  : `Rent for "${rental.property?.title || "the property"}", ${toDay(rental.startDate)} to ${toDay(rental.endDate)}`;
+
+/**
+ * PATCH /api/rentals/:id/paid-on-arrival and /paid-at-office { note, reference } -> owner side: the
+ * guest paid on arrival (hotels, short stays) or the tenant paid at the office (monthly and fixed-price
+ * rentals). The receipt is issued with it, in the same transaction, and sent to the customer.
+ */
 export const recordArrivalPayment = async (req, res) => {
   const rental = mongoose.isValidObjectId(req.params.id) ? await populateRental(Rental.findById(req.params.id)) : null;
   if (!rental || !canManageRecord(rental, req.user)) return fail(res, 404, "Booking not found.");
-  const where = rental.hotelId ? "at the hotel" : "on arrival";
-  await bookingTransaction({ hotelId: rental.hotelId, property: rental.property?._id || rental.property }, async (_listing, session) => {
+  const office = rental.paymentOption === "office";
+  const where = office ? "at the office" : rental.hotelId ? "at the hotel" : "on arrival";
+  const note = cleanText(req.body?.note, 300);
+  const reference = cleanText(req.body?.reference, 80);
+  const updated = await bookingTransaction({ hotelId: rental.hotelId, property: rental.property?._id || rental.property }, async (_listing, session) => {
     const current = await Rental.findById(rental._id).session(session);
-    if (current.paymentOption !== "on_arrival" || current.paymentStatus !== "due" || !["confirmed", "active"].includes(current.status)) throw new HttpError(409, `Only a reservation with payment due ${where} can be marked as paid.`);
-    current.set({ paymentStatus: "paid", paymentMethod: current.hotelId ? "At hotel" : "On arrival", paidAt: new Date() });
-    addHistory(current, req.user, cleanText(req.body?.note, 300) || `Payment received ${where}`);
+    if (!["on_arrival", "office"].includes(current.paymentOption) || current.paymentStatus !== "due" || !["confirmed", "active"].includes(current.status)) throw new HttpError(409, `Only a booking with payment due ${where} can be marked as paid.`);
+    const now = new Date();
+    const method = office ? OFFICE_METHOD : current.hotelId ? "At hotel" : "On arrival";
+    // Office rent goes in the payment ledger like sales do (never reconciled with Paystack)
+    let ledgerReference = reference;
+    if (office) {
+      const [payment] = await Payment.create([{ kind: "rental", rental: current._id, customer: current.customer, property: current.property, owner: current.owner, ownerType: current.ownerType, amount: current.amount, method: "Office", reference: newReference("HBO"), status: "paid", paidAt: now, confirmedBy: req.user._id, note }], { session });
+      ledgerReference = reference || payment.reference;
+    }
+    current.set({ paymentStatus: "paid", paymentMethod: method, paidAt: now });
+    current.receipt = await buildReceipt({ ...current.toObject(), property: rental.property }, {
+      amount: current.amount, method: office ? OFFICE_METHOD : current.hotelId ? "At the hotel" : "On arrival", paymentReference: ledgerReference, note,
+      description: receiptDescription({ ...current.toObject(), property: rental.property }), issuer: req.user, now, session,
+    });
+    addHistory(current, req.user, note || `Payment received ${where}; receipt ${current.receipt.number} sent`);
     await current.save({ session });
+    return current;
   });
-  await notifyUser(rental.customer._id, { type: "payment", title: `Payment received ${where}`, message: `${rental.hotelId ? "The hotel" : "The owner"} recorded your payment of ${formatGHS(rental.amount)} for your ${stayName(rental)}.`, link: "/account/rentals" });
-  ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), "Payment recorded");
+  await deliverReceipt({ customer: rental.customer._id, email: updated.contactEmail, receipt: updated.receipt, link: "/account/rentals" });
+  ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), "Payment recorded and receipt sent");
+};
+
+// POST /api/rentals/:id/receipt { note } -> owner side: the receipt for a hotel booking the guest paid
+// online into the hotel's account. Needed before the stay starts; issued once.
+export const sendRentalReceipt = async (req, res) => {
+  const rental = mongoose.isValidObjectId(req.params.id) ? await populateRental(Rental.findById(req.params.id)) : null;
+  if (!rental || !canManageRecord(rental, req.user)) return fail(res, 404, "Booking not found.");
+  const note = cleanText(req.body?.note, 300);
+  const updated = await bookingTransaction({ hotelId: rental.hotelId, property: rental.property?._id || rental.property }, async (_listing, session) => {
+    const current = await Rental.findById(rental._id).session(session);
+    if (current.receipt?.number) throw new HttpError(409, `Receipt ${current.receipt.number} was already sent.`);
+    if (current.paymentStatus !== "paid" || current.paymentMethod !== "Paystack" || current.status === "cancelled") throw new HttpError(409, "Only a booking paid online can get a receipt here. Record payments at the hotel instead.");
+    current.receipt = await buildReceipt({ ...current.toObject(), property: rental.property }, {
+      amount: current.amount, method: "Online (Paystack)", paymentReference: current.paymentReference, note,
+      description: receiptDescription({ ...current.toObject(), property: rental.property }), issuer: req.user, session,
+    });
+    addHistory(current, req.user, `Receipt ${current.receipt.number} sent to the guest`);
+    await current.save({ session });
+    return current;
+  });
+  await deliverReceipt({ customer: rental.customer._id, email: updated.contactEmail, receipt: updated.receipt, link: "/account/rentals" });
+  ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), "Receipt sent");
 };
 
 // PATCH /api/rentals/:id/cancel -> the guest cancels an unpaid hotel request, or a pay-on-arrival
@@ -297,15 +372,15 @@ export const cancelMyReservation = async (req, res) => {
   const contact = rental.hotelId ? "Contact the hotel." : "Chat with the owner.";
   const updated = await bookingTransaction({ hotelId: rental.hotelId, property: rental.property?._id || rental.property }, async (_listing, session) => {
     const current = await Rental.findById(rental._id).session(session);
-    const request = Boolean(current.hotelId) && current.status === "pending" && current.paymentStatus !== "paid";
-    const reservation = current.paymentOption === "on_arrival" && current.status === "confirmed" && current.paymentStatus === "due" && todayUTC() < current.startDate;
+    const request = (Boolean(current.hotelId) || paysAtOffice(rental.property)) && current.status === "pending" && current.paymentStatus !== "paid";
+    const reservation = ["on_arrival", "office"].includes(current.paymentOption) && current.status === "confirmed" && current.paymentStatus === "due" && todayUTC() < current.startDate;
     if (!request && !reservation) throw new HttpError(409, `This booking can't be cancelled online. ${contact}`);
     current.status = "cancelled";
     addHistory(current, req.user, reservation ? "Reservation cancelled by the guest" : "Booking request cancelled by the guest");
     await current.save({ session });
     return current;
   });
-  if (updated.paymentOption === "on_arrival") {
+  if (["on_arrival", "office"].includes(updated.paymentOption)) {
     const freed = rental.hotelId ? "The rooms are available again." : "Those dates are available again.";
     await notifyOwner(updated, { type: "rental", title: "Reservation cancelled", message: `${updated.contactName} cancelled their ${stayName(rental)} reservation for ${toDay(updated.startDate)}. ${freed}`, path: "rentals" });
   }

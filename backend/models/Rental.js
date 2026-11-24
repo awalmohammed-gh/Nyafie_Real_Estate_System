@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { schemaOptions } from "../utils/schemaOptions.js";
 import { historySchema } from "./historySchema.js";
+import { receiptSchema } from "./receiptSchema.js";
 
 // pending -> payment_pending (checkout started) -> paid (Paystack verified)
 //   -> confirmed (owner accepted) -> active (moved in) -> completed; cancelled at any point before completion
@@ -39,15 +40,19 @@ const rentalSchema = new mongoose.Schema(
     // Latest checkout attempt (every attempt is also kept in the Payment collection)
     paymentReference: { type: String, unique: true, sparse: true },
     paymentStartedAt: { type: Date },
-    paymentMethod: { type: String, default: "Paystack" }, // "Paystack", "At hotel" or "On arrival"
+    paymentMethod: { type: String, default: "Paystack" }, // "Paystack", "At hotel", "On arrival" or "At the office"
     // due: a hotel reservation the guest pays on arrival
     paymentStatus: { type: String, enum: ["pending", "paid", "failed", "refunded", "due"], default: "pending" },
     // Hotels: how the guest chose to pay. "on_arrival" reservations are confirmed without a payment;
-    // the hotel records the payment when the guest arrives.
-    paymentOption: { type: String, enum: ["online", "on_arrival"], default: undefined },
+    // the hotel records the payment when the guest arrives. "office": monthly and fixed-price rentals,
+    // which are never paid online: the owner confirms the rental, the tenant pays at the office, and the
+    // owner records it (utils/officePayments.js).
+    paymentOption: { type: String, enum: ["online", "on_arrival", "office"], default: undefined },
     arrivalDeadline: { type: Date }, // pay-at-hotel: arrive by then or the hotel may treat it as a no-show
     cancellationPolicy: { type: String, maxlength: 800 }, // the hotel's policy when the guest reserved
     paidAt: { type: Date },
+    // Given by the owner side for the payment (utils/receipts.js); a hotel stay paid online can't start without one
+    receipt: { type: receiptSchema, default: undefined },
     conversation: { type: mongoose.Schema.Types.ObjectId, ref: "Conversation" },
     history: [historySchema],
   },
@@ -56,6 +61,7 @@ const rentalSchema = new mongoose.Schema(
 
 rentalSchema.index({ hotelId: 1, roomTypeId: 1, status: 1, startDate: 1, endDate: 1 });
 rentalSchema.index({ property: 1, status: 1, startDate: 1, endDate: 1 });
+rentalSchema.index({ "receipt.number": 1 }, { unique: true, partialFilterExpression: { "receipt.number": { $type: "string" } } });
 // Hotel terminology over the shared, existing rental/payment ledger.
 for (const [alias, field] of Object.entries({ customerId: "customer", checkIn: "startDate", checkOut: "endDate", guests: "occupants", pricePerNight: "unitPrice", numberOfNights: "units", totalAmount: "amount", bookingStatus: "status" })) {
   rentalSchema.virtual(alias).get(function () { return this.hotelId ? this[field] : undefined; });

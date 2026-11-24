@@ -138,7 +138,7 @@ const RentalCheckout = ({ property, ownerName }) => {
     <div>
       {/* Steps */}
       <ol className="mb-6 grid grid-cols-3 gap-2">
-        {STEPS.map((label, i) => (
+        {(pricePeriod === "night" ? STEPS : [...STEPS.slice(0, 2), "Send request"]).map((label, i) => (
           <li key={label}>
             <span className={`block h-1.5 rounded-full ${i <= step ? "bg-brand-500" : "bg-gray-200"}`} />
             <span className={`mt-2 block text-xs font-semibold ${i === step ? "text-brand-700" : "text-gray-400"}`}>
@@ -235,7 +235,7 @@ const RentalCheckout = ({ property, ownerName }) => {
             </button>
             <button type="submit" disabled={busy === "review"} className="btn btn-primary py-3.5">
               {busy === "review" && <Loader2 className="h-4 w-4 animate-spin" />}
-              {busy === "review" ? "Creating rental request..." : "Review rental"}
+              {busy === "review" ? "Creating rental request..." : pricePeriod === "night" ? "Review rental" : "Send rental request"}
             </button>
           </div>
         </form>
@@ -261,10 +261,22 @@ const RentalCheckout = ({ property, ownerName }) => {
             <Row label="Customer">{rental.contactName} · {rental.contactPhone}</Row>
             <Row label="Current address">{rental.currentAddress}</Row>
             <Row label="Owner">{ownerName}</Row>
-            <Row label={choosing ? "Total" : "Total to pay"} strong>{formatGhs(rental.amount)}</Row>
+            <Row label={choosing ? "Total" : rental.paysAtOffice ? "Total to pay at the office" : "Total to pay"} strong>{formatGhs(rental.amount)}</Row>
           </dl>
           {choosing ? (
             <StayPayment rental={rental} options={options} headline={headline} ownerName={ownerName} busy={busy} error={error} onPay={pay} onReserve={reserve} onBack={() => setStep(1)} />
+          ) : rental.paysAtOffice ? (
+          // Monthly and fixed-price rent is never paid online (the server refuses it too)
+          <>
+          <p className="flex items-start gap-2 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              <strong className="block">Request sent to {ownerName}.</strong>
+              Once they confirm, pay {formatGhs(rental.amount)} at their office and you'll get a receipt here and by email. {siteName} never takes rent online, and nobody should ask you to pay to a personal or mobile money number.
+            </span>
+          </p>
+          <Link to="/account/rentals" className="btn btn-primary w-full py-4 text-base">View my rentals</Link>
+          </>
           ) : (
           <>
           <p className="flex items-start gap-2 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">

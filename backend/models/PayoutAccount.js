@@ -18,6 +18,25 @@ const payoutAccountSchema = new mongoose.Schema(
     subaccountCode: { type: String, required: true, maxlength: 60 },
     connectedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     connectedAt: { type: Date, required: true },
+    // Security hold (utils/hotelPayout.js): a newly connected account receives online payments only
+    // from this time (unset on accounts connected before the hold existed: in use).
+    activeFrom: { type: Date },
+    // A change waits out the same hold as a separate Paystack subaccount, while payments keep going
+    // to the current account. The owner is alerted and can cancel it; it then replaces the current one.
+    pending: {
+      type: new mongoose.Schema({
+        type: { type: String, enum: ["bank", "mobile_money"], required: true },
+        bankCode: { type: String, required: true, maxlength: 40 },
+        bankName: { type: String, default: "", maxlength: 120 },
+        accountName: { type: String, default: "", maxlength: 160 },
+        accountLast4: { type: String, required: true, maxlength: 4 },
+        subaccountCode: { type: String, required: true, maxlength: 60 },
+        connectedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        requestedAt: { type: Date, required: true },
+        activeFrom: { type: Date, required: true },
+      }, { _id: false }),
+      default: undefined,
+    },
   },
   schemaOptions
 );

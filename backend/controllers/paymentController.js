@@ -13,6 +13,7 @@ import { prepareRentalCheckout } from "../utils/prepareRentalCheckout.js";
 import { REFUND_SUMMARY } from "./refundController.js";
 import Property from "../models/Property.js";
 import { stayBookingSettings, takesStayBookings } from "../utils/hotelPayout.js";
+import { OFFICE_RULE, paysAtOffice } from "../utils/officePayments.js";
 
 const rentalResult = async (rentalId, user) => presentRental(await populateRental(Rental.findById(rentalId)), user);
 
@@ -29,6 +30,8 @@ export const initializeRentalPayment = async (req, res) => {
   if (!["pending", "payment_pending"].includes(initial.status)) return fail(res, 400, `This rental is ${initial.status.replace("_", " ")}.`);
   if (initial.hotelId) return initializeHotelPayment(req, res, initial);
   const listing = await Property.findById(initial.property);
+  // Monthly and fixed-price rent is never paid online: the owner confirms, then the tenant pays at the office
+  if (paysAtOffice(listing) || initial.paymentOption === "office") return fail(res, 409, `${OFFICE_RULE} The owner will confirm your rental first.`);
   if (takesStayBookings(listing) && !stayBookingSettings(listing).payOnline) {
     return fail(res, 409, `This listing takes payment on arrival.${stayBookingSettings(listing).payOnArrival ? " Reserve now and pay when you arrive." : ""}`);
   }

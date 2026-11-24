@@ -16,5 +16,8 @@ export const updateRentalStatus = async (id, status, note = "") => mapRental((aw
 // Stays (hotels and per-night rentals): "reserve now, pay on arrival" (rooms or dates are secured first), and cancelling it before check-in day
 export const reserveOnArrival = async (id) => mapRental((await client.post(`/rentals/${id}/reserve`, {})).data);
 export const cancelReservation = async (id) => mapRental((await client.patch(`/rentals/${id}/cancel`, {})).data);
-// Owner side: the guest paid on arrival
+// Owner side: the guest paid on arrival, or the tenant paid at the office (the receipt is sent with it)
 export const recordArrivalPayment = async (id, note = "") => mapRental((await client.patch(`/rentals/${id}/paid-on-arrival`, { note })).data);
+export const recordOfficePayment = async (id, { note = "", reference = "" } = {}) => mapRental((await client.patch(`/rentals/${id}/paid-at-office`, { note, reference })).data);
+// Owner side: the receipt for a hotel booking the guest paid online into the hotel's account
+export const sendReceipt = async (id, note = "") => mapRental((await client.post(`/rentals/${id}/receipt`, { note })).data);
