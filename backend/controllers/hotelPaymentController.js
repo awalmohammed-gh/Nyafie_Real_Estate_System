@@ -92,21 +92,20 @@ export const reserveOnArrival = async (req, res) => {
     rental.set({
       status: "confirmed", paymentStatus: "due", paymentOption: "on_arrival", paymentMethod: "At hotel",
       arrivalDeadline: arrivalDeadlineFor(rental.startDate, settings.arrivalDeadline), cancellationPolicy: settings.cancellationPolicy,
-      arrivalTime, bookingCode: rental.bookingCode || newBookingCode(),
+      arrivalTime,
     });
     // The earlier online attempt (if any) stays in the Payment ledger. If it still succeeds late,
     // confirmHotelPayment settles this reservation with it instead of charging twice.
     rental.paymentReference = undefined;
-    addHistory(rental, req.user, "Reservation confirmed — payment due at the hotel");
+    addHistory(rental, req.user, "Reserved — waiting for the hotel to approve it and assign a room; payment due at the hotel");
     await rental.save({ session });
     return { rental };
   });
   if (!repeated) {
     const day = rental.startDate.toISOString().slice(0, 10);
     await Promise.all([
-      notifyUser(req.user._id, { type: "rental", title: `Reservation confirmed · ${rental.bookingCode}`, message: `Your ${rental.roomName} reservation at "${published.title}" is confirmed for ${day}, arriving at ${rental.arrivalTime}. Show booking code ${rental.bookingCode} at the hotel and pay ${formatGHS(rental.amount)} there.`, link: "/account/rentals" }),
-      notifyOwner(rental, { type: "rental", title: "New reservation (pay at hotel)", message: `${rental.contactName} reserved ${rental.numberOfRooms} ${rental.roomName} room(s), arriving ${day} at ${rental.arrivalTime} · booking ${rental.bookingCode}. ${formatGHS(rental.amount)} is due at the hotel.`, path: "rentals" }),
-      sendBookingConfirmation(rental, { place: published.title }),
+      notifyUser(req.user._id, { type: "rental", title: "Reservation sent to the hotel", message: `Your ${rental.roomName} rooms at "${published.title}" are held for ${day}, arriving at ${rental.arrivalTime}. You'll get your booking receipt with your room number once the hotel approves it. Pay ${formatGHS(rental.amount)} at the hotel.`, link: "/account/rentals" }),
+      notifyOwner(rental, { type: "rental", title: "New reservation to approve (pay at hotel)", message: `${rental.contactName} reserved ${rental.numberOfRooms} ${rental.roomName} room(s), arriving ${day} at ${rental.arrivalTime}. Approve it and assign the room(s) to send their booking receipt. ${formatGHS(rental.amount)} is due at the hotel.`, path: "rentals" }),
     ]);
   }
   ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), repeated ? "Reservation already confirmed" : "Reservation confirmed");

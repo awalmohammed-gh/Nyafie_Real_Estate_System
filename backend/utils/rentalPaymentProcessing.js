@@ -13,7 +13,6 @@ import { formatGHS } from "./ownership.js";
 import { notifyOwner, notifyUser } from "./notify.js";
 import { populateRental } from "../controllers/rentalController.js";
 import { postSystemNote } from "../controllers/chatController.js";
-import { sendBookingConfirmation } from "./stayBooking.js";
 
 const notifyOutcome = async ({ rental, payment, review, hotel }, user) => {
   if (review) {
@@ -22,11 +21,8 @@ const notifyOutcome = async ({ rental, payment, review, hotel }, user) => {
   }
   if (hotel) {
     const reserved = rental.status === "confirmed"; // a pay-at-hotel reservation that was then paid online
-    await notifyOwner(rental, { type: "payment", title: "Hotel booking paid", message: `${rental.contactName} paid for ${rental.roomTypeId ? `${rental.numberOfRooms} ${rental.roomName} room(s)` : "an earlier whole-hotel booking"}.${reserved ? " Nothing is due at the hotel." : " Confirm the booking."} Send the guest their receipt before the stay starts.`, path: "rentals" });
-    await notifyUser(user._id, { type: "payment", title: "Hotel payment verified", message: `Your ${rental.roomName || "hotel"} payment is verified.${reserved ? " Nothing is due at the hotel." : ""} The hotel will send you a receipt.`, link: "/account/rentals" });
-    // The confirmation with the booking code to show on arrival
-    const booked = await populateRental(Rental.findById(rental._id));
-    await sendBookingConfirmation(booked, { place: booked?.property?.title || "your hotel", paid: true });
+    await notifyOwner(rental, { type: "payment", title: "Hotel booking paid", message: `${rental.contactName} paid for ${rental.roomTypeId ? `${rental.numberOfRooms} ${rental.roomName} room(s)` : "an earlier whole-hotel booking"}.${reserved ? " Nothing is due at the hotel." : ""} Approve the booking and assign the room(s): that sends their booking receipt and payment receipt.`, path: "rentals" });
+    await notifyUser(user._id, { type: "payment", title: "Hotel payment verified", message: `Your ${rental.roomName || "hotel"} payment is verified.${reserved ? " Nothing is due at the hotel." : ""} You'll get your booking receipt with your room number once the hotel approves it.`, link: "/account/rentals" });
     return;
   }
   const populated = await populateRental(Rental.findById(rental._id));

@@ -25,6 +25,9 @@ export const payPlace = (booking) => (booking?.hotelId ? "at the hotel" : "on ar
  */
 export const bookingHeadline = (booking) => {
   if (!booking || !(booking.hotelId || onArrival(booking)) || !reservedOrPaid(booking)) return null;
+  // Hotels approve each booking and assign the room; the booking receipt comes then
+  if (booking.awaitingApproval) return paid(booking) ? "Paid — waiting for the hotel to approve and assign your room" : "Reservation sent — waiting for the hotel to approve and assign your room";
+  if (booking.hotelId && booking.approvedAt && booking.roomNumbers?.length) return `Booking approved — room ${booking.roomNumbers.join(", ")}${paid(booking) ? " · Paid" : " · Pay at the hotel"}`;
   if (paid(booking)) return "Booking confirmed — Paid";
   if (dueOnArrival(booking)) return booking.hotelId ? "Reservation confirmed — Payment due at hotel" : "Reservation confirmed — Payment due on arrival";
   return null;

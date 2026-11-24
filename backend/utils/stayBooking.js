@@ -25,6 +25,19 @@ export const parseArrivalTime = (value, listing) => {
 };
 
 /**
+ * The hotel's room numbers for an approved booking: one per booked room, short, no repeats.
+ * ["101", "102"] for two rooms; a single string is accepted for one room.
+ */
+export const parseRoomNumbers = (input, count = 1) => {
+  const list = (Array.isArray(input) ? input : typeof input === "string" ? [input] : []).map((value) => (typeof value === "string" ? value.trim() : ""));
+  if (list.length !== count || list.some((value) => !value || value.length > 20 || !/^[\w .\-/#]+$/.test(value))) {
+    throw new HttpError(400, count === 1 ? "Enter the room number the guest will stay in." : `Enter the ${count} room numbers the guest will stay in, one for each room.`);
+  }
+  if (new Set(list.map((value) => value.toLowerCase())).size !== list.length) throw new HttpError(400, "Each room number can only be used once in a booking.");
+  return list;
+};
+
+/**
  * After a stay is reserved or paid: the guest's confirmation email with the booking code. Best effort:
  * the booking stands either way, and the code is also in the guest's account.
  */
@@ -36,6 +49,7 @@ export const sendBookingConfirmation = async (rental, { place, paid = false }) =
   try {
     await bookingConfirmationMailer.send(rental.contactEmail, {
       bookingCode: rental.bookingCode, place, room: rental.roomName ? `${rental.numberOfRooms} × ${rental.roomName}` : "",
+      roomNumbers: (rental.roomNumbers || []).join(", "),
       checkIn: day(rental.startDate), checkOut: day(rental.endDate), arrivalTime: rental.arrivalTime || "—", guestName: rental.contactName,
       total: formatGHS(rental.amount), paid,
       payment: paid ? "Paid online to the hotel" : `Pay ${formatGHS(rental.amount)} when you arrive`,

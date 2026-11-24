@@ -53,6 +53,11 @@ const rentalSchema = new mongoose.Schema(
     // Ghana time), and the code they show when they arrive (utils/stayBooking.js)
     arrivalTime: { type: String, match: /^([01]\d|2[0-3]):[0-5]\d$/ },
     bookingCode: { type: String },
+    // Hotels: the hotel approves the booking and assigns the guest's room number(s); only then is the
+    // booking receipt (code + rooms) issued and sent (controllers/rentalController.js approveHotelBooking)
+    approvedAt: { type: Date },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    roomNumbers: { type: [{ type: String, trim: true, maxlength: 20 }], default: undefined },
     cancellationPolicy: { type: String, maxlength: 800 }, // the hotel's policy when the guest reserved
     paidAt: { type: Date },
     // Given by the owner side for the payment (utils/receipts.js); a hotel stay paid online can't start without one
@@ -65,6 +70,8 @@ const rentalSchema = new mongoose.Schema(
 
 rentalSchema.index({ hotelId: 1, roomTypeId: 1, status: 1, startDate: 1, endDate: 1 });
 rentalSchema.index({ property: 1, status: 1, startDate: 1, endDate: 1 });
+// Assigned rooms: no room number given to two overlapping stays at the same hotel
+rentalSchema.index({ hotelId: 1, roomNumbers: 1, status: 1 }, { partialFilterExpression: { roomNumbers: { $exists: true } } });
 rentalSchema.index({ bookingCode: 1 }, { unique: true, partialFilterExpression: { bookingCode: { $type: "string" } } });
 rentalSchema.index({ "receipt.number": 1 }, { unique: true, partialFilterExpression: { "receipt.number": { $type: "string" } } });
 // Hotel terminology over the shared, existing rental/payment ledger.

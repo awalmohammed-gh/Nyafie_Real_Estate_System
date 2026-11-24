@@ -9,7 +9,8 @@ import Notification from "../models/Notification.js";
 import { paysAtOffice } from "../utils/officePayments.js";
 import { buildReceipt, newReceiptNumber, presentReceipt } from "../utils/receipts.js";
 import { receiptMailer } from "../utils/email.js";
-import { recordArrivalPayment, sendRentalReceipt, updateRentalStatus } from "../controllers/rentalController.js";
+import { approveHotelBooking, recordArrivalPayment, sendRentalReceipt, updateRentalStatus } from "../controllers/rentalController.js";
+import { bookingConfirmationMailer } from "../utils/email.js";
 import { initializeRentalPayment } from "../controllers/paymentController.js";
 
 const id = () => new mongoose.Types.ObjectId();
@@ -141,24 +142,57 @@ test("recording an office payment issues the receipt, records the ledger entry a
   assert.equal(sent.payments.length, 1);
 });
 
-test("hotels: a booking paid online needs the hotel's receipt before check-in, and gets it once", async (t) => {
+test("hotels: a paid booking is approved with its room before check-in; the guest gets both receipts once", async (t) => {
   const hotelId = id();
-  const rental = fakeRental({ hotelId, roomName: "Deluxe", numberOfRooms: 2, pricePeriod: "night", units: 3, amount: 1800, status: "paid", paymentStatus: "paid", paymentMethod: "Paystack", paymentReference: "HBH-123", property: { title: "Palm Hotel", listingType: "Rent", pricePeriod: "night", propertyType: "Hotel" } });
+  const rental = fakeRental({ hotelId, roomName: "Deluxe", numberOfRooms: 2, pricePeriod: "night", units: 3, amount: 1800, status: "paid", paymentStatus: "paid", paymentMethod: "Paystack", paymentReference: "HBH-123", arrivalTime: "14:00", property: { title: "Palm Hotel", listingType: "Rent", pricePeriod: "night", propertyType: "Hotel" } });
   const sent = world(t, rental);
-  // Confirming is fine; checking in isn't until the receipt is sent
-  rental.status = "confirmed";
-  await assert.rejects(updateRentalStatus(owner({ status: "active" }), response()), /receipt/);
+  const passes = [];
+  t.mock.method(bookingConfirmationMailer, "send", async (email, booking) => { passes.push({ email, booking }); });
+  let taken = null; // another approved stay holding a room
+  t.mock.method(Rental, "findOne", () => query(() => taken));
+  // The old shortcuts are closed: no confirming or checking in without approving and assigning rooms
+  await assert.rejects(updateRentalStatus(owner({ status: "confirmed" }), response()), /Approve the booking/);
+  // Rooms: one number per booked room, never one already given to an overlapping stay
+  await assert.rejects(approveHotelBooking(owner({ roomNumbers: ["101"] }), response()), /Enter the 2 room numbers/);
+  await assert.rejects(approveHotelBooking(owner({ roomNumbers: ["101", "101"] }), response()), /only be used once/);
+  taken = { roomNumbers: ["102"] };
+  await assert.rejects(approveHotelBooking(owner({ roomNumbers: ["101", "102"] }), response()), /Room 102 is already given to another guest/);
+  assert.equal(rental.approvedAt, undefined);
+  taken = null;
   const res = response();
-  await sendRentalReceipt(owner({ note: "Thank you" }), res);
+  await approveHotelBooking(owner({ roomNumbers: ["101", "103"] }), res);
   assert.equal(res.statusCode, 200, res.body?.message);
+  assert.equal(rental.status, "confirmed");
+  assert.deepEqual(rental.roomNumbers, ["101", "103"]);
+  assert.match(rental.bookingCode, /^NF-[A-Z2-9]{6}$/);
+  // The booking receipt (code + rooms) and the payment receipt both reach the guest
+  assert.equal(passes.length, 1);
+  assert.deepEqual([passes[0].email, passes[0].booking.bookingCode, passes[0].booking.roomNumbers, passes[0].booking.paid], ["kofi@example.test", rental.bookingCode, "101, 103", true]);
   assert.deepEqual([rental.receipt.method, rental.receipt.paymentReference, rental.receipt.amount], ["Online (Paystack)", "HBH-123", 1800]);
-  assert.match(rental.receipt.description, /2 × Deluxe/);
-  assert.equal(sent.emails.length, 1);
+  assert.equal(sent.emails.length, 1, "payment receipt email");
+  assert.ok(sent.notifications.some((n) => String(n.recipient) === String(CUSTOMER) && /approved your booking: room 101, 103/.test(n.message)));
+  await assert.rejects(approveHotelBooking(owner({ roomNumbers: ["104", "105"] }), response()), /already approved/);
   await assert.rejects(sendRentalReceipt(owner(), response()), /already sent/);
   const checkIn = response();
   await updateRentalStatus(owner({ status: "active" }), checkIn);
   assert.equal(checkIn.statusCode, 200, checkIn.body?.message);
   assert.equal(rental.status, "active");
+});
+
+test("hotels: a pay-at-hotel reservation waits for approval; the booking receipt comes only with the room", async (t) => {
+  const rental = fakeRental({ hotelId: id(), roomName: "Standard", numberOfRooms: 1, pricePeriod: "night", amount: 500, status: "confirmed", paymentOption: "on_arrival", paymentStatus: "due", paymentMethod: "At hotel", arrivalTime: "16:00", property: { title: "Palm Hotel", listingType: "Rent", pricePeriod: "night", propertyType: "Hotel" } });
+  world(t, rental);
+  const passes = [];
+  t.mock.method(bookingConfirmationMailer, "send", async (_email, booking) => { passes.push(booking); });
+  t.mock.method(Rental, "findOne", () => query(null));
+  await assert.rejects(updateRentalStatus(owner({ status: "active" }), response()), /assign the guest's room before they check in/);
+  assert.equal(rental.bookingCode, undefined, "no booking receipt before approval");
+  await approveHotelBooking(owner({ roomNumbers: "12A" }), response());
+  assert.deepEqual(rental.roomNumbers, ["12A"]);
+  assert.equal(passes.length, 1);
+  assert.equal(passes[0].paid, false);
+  assert.match(passes[0].payment, /when you arrive/);
+  assert.equal(rental.receipt, undefined, "nothing paid yet: the payment receipt comes when the hotel records the payment");
 });
 
 test("pay-at-hotel payments get their receipt when the hotel records them", async (t) => {

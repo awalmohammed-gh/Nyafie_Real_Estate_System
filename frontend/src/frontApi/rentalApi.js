@@ -22,5 +22,7 @@ export const cancelReservation = async (id) => mapRental((await client.patch(`/r
 // Owner side: the guest paid on arrival, or the tenant paid at the office (the receipt is sent with it)
 export const recordArrivalPayment = async (id, note = "") => mapRental((await client.patch(`/rentals/${id}/paid-on-arrival`, { note })).data);
 export const recordOfficePayment = async (id, { note = "", reference = "" } = {}) => mapRental((await client.patch(`/rentals/${id}/paid-at-office`, { note, reference })).data);
+// Hotels: approve a booking and assign the guest's room numbers (one per room); the booking receipt is sent with it
+export const approveBooking = async (id, roomNumbers, note = "") => mapRental((await client.patch(`/rentals/${id}/approve`, { roomNumbers, note })).data);
 // Owner side: the receipt for a hotel booking the guest paid online into the hotel's account
 export const sendReceipt = async (id, note = "") => mapRental((await client.post(`/rentals/${id}/receipt`, { note })).data);
