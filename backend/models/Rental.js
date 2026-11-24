@@ -53,8 +53,11 @@ const rentalSchema = new mongoose.Schema(
     // Ghana time), and the code they show when they arrive (utils/stayBooking.js)
     arrivalTime: { type: String, match: /^([01]\d|2[0-3]):[0-5]\d$/ },
     bookingCode: { type: String },
-    // Hotels: the hotel approves the booking and assigns the guest's room number(s); only then is the
-    // booking receipt (code + rooms) issued and sent (controllers/rentalController.js approveHotelBooking)
+    // Stays (hotels and per-night rentals): the hotel or owner approves the booking (hotels also assign the
+    // guest's room numbers); only then is the booking receipt (code + rooms) issued and sent
+    // (controllers/rentalController.js approveStayBooking). Set on bookings made under this rule, so
+    // reservations confirmed before it existed are never treated as unapproved.
+    approvalRequired: { type: Boolean },
     approvedAt: { type: Date },
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     roomNumbers: { type: [{ type: String, trim: true, maxlength: 20 }], default: undefined },

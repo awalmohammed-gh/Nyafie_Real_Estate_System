@@ -64,6 +64,8 @@ Regular rental listings priced **per night** (short stays) offer the same choice
 - **Pay online**: the existing rental checkout (paid into the main NyaFie account; the owner then confirms). An owner who switches it off gets a 409 from `/api/payments/initialize` for that listing.
 - A late online payment for a rental that was then reserved pays the reservation and keeps it confirmed.
 
-Guests see "Reservation confirmed — Payment due on arrival".
+Like hotels, **the owner approves each reservation** (`PATCH /api/rentals/:id/approve`, no room number: the place is the whole stay) before the booking code and booking receipt are sent, and an unanswered reservation is cancelled 24 hours before check-in. Guests see "Reservation sent — waiting for the owner to approve" until then.
+
+**Existing bookings:** only reservations made under the approval rule carry `approvalRequired`; reservations confirmed before it are never treated as unapproved, never expire, and check in as before.
 
 **Check with Paystack before going live:** refunds of split (subaccount) payments. Refunds still go through the admin refund process. Confirm in the Paystack dashboard/support whose balance a refund is taken from, and agree with each hotel how refunds are recovered.

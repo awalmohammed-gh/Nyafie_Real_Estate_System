@@ -195,8 +195,6 @@ const saveRegularRentalRequest = (req, initial, contact) => rentalInventoryTrans
   const isNew = !rental;
   if (rental) rental.set({ ...fields, status: "pending" });
   else rental = new Rental({ customer: req.user._id, property: property._id, ...fields });
-  // Per-night stays get a booking code to show on arrival
-  if (fields.arrivalTime && !rental.bookingCode) rental.bookingCode = newBookingCode();
   addHistory(rental, req.user, isNew ? "Rental request submitted" : "Rental details updated");
   await rental.save({ session });
   return { rental, isNew };
@@ -263,7 +261,7 @@ export const updateRentalStatus = async (req, res) => {
       if (!(TRANSITIONS[current.status] || []).includes(status)) { const error = new Error("Booking status changed. Reload and try again."); error.status = 409; throw error; }
       if (status === "completed" && current.paymentStatus === "due") throw new HttpError(409, "Record the guest's payment at the hotel before completing this stay.");
       if (status === "confirmed") throw new HttpError(409, "Approve the booking and assign the guest's room instead: that sends their booking receipt.");
-      if (status === "active" && !current.approvedAt) throw new HttpError(409, "Approve the booking and assign the guest's room before they check in.");
+      if (status === "active" && current.approvalRequired && !current.approvedAt) throw new HttpError(409, "Approve the booking and assign the guest's room before they check in.");
       if (["active", "completed"].includes(status) && needsReceipt(current)) throw new HttpError(409, "Send the guest their receipt for the online payment first.");
       current.status = status;
       addHistory(current, req.user, cleanText(req.body.note, 300) || `Hotel booking ${STATUS_TEXT[status]}`);
@@ -286,6 +284,7 @@ export const updateRentalStatus = async (req, res) => {
     if (!current || !allowedFor(current).includes(status)) throw new HttpError(409, "Rental status changed. Reload and try again.");
     if (status === "completed" && current.paymentStatus === "due") throw new HttpError(409, current.paymentOption === "office" ? "Record the tenant's office payment before completing this rental." : "Record the guest's payment on arrival before completing this stay.");
     if (status === "active" && current.paymentOption === "office" && current.paymentStatus !== "paid") throw new HttpError(409, "Record the tenant's payment at the office before they move in.");
+    if (status === "active" && current.approvalRequired && !current.approvedAt) throw new HttpError(409, "Approve the booking before the guest checks in.");
     if (status === "confirmed" && current.status === "pending") {
       // Confirming takes the dates: nobody else may hold or have them
       if (await hasRentalConflict(current, { session })) throw new HttpError(409, "Those dates are already rented or being paid for. Agree new dates with the tenant.");
@@ -393,37 +392,39 @@ export const updateArrivalTime = async (req, res) => {
   const arrivalTime = parseArrivalTime(req.body?.arrivalTime, listing);
   if (arrivalTime === rental.arrivalTime) return ok(res, presentRental(rental, req.user), "Arrival time unchanged");
   const previous = rental.arrivalTime;
-  await Rental.updateOne({ _id: rental._id, customer: req.user._id }, { $set: { arrivalTime, ...(rental.bookingCode || rental.hotelId ? {} : { bookingCode: newBookingCode() }) }, $push: { history: { status: rental.status, paymentStatus: rental.paymentStatus, note: `Arrival time ${previous ? `changed from ${previous} ` : ""}set to ${arrivalTime}`, by: req.user._id } } });
+  await Rental.updateOne({ _id: rental._id, customer: req.user._id }, { $set: { arrivalTime }, $push: { history: { status: rental.status, paymentStatus: rental.paymentStatus, note: `Arrival time ${previous ? `changed from ${previous} ` : ""}set to ${arrivalTime}`, by: req.user._id } } });
   await notifyOwner(rental, { type: "rental", title: "Guest arrival time changed", message: `${rental.contactName} will now arrive on ${toDay(rental.startDate)} at ${arrivalTime}${previous ? ` (was ${previous})` : ""}${rental.bookingCode ? ` · booking ${rental.bookingCode}` : ""}.`, path: "rentals" });
   ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), "Arrival time updated");
 };
 
 /**
- * PATCH /api/rentals/:id/approve { roomNumbers: ["101"], note } -> the hotel approves a booking and
- * assigns the room(s) the guest will stay in. Only then does the guest get their booking receipt (the
+ * PATCH /api/rentals/:id/approve { roomNumbers: ["101"], note } -> the hotel or owner approves a stay.
+ * Hotels assign the room(s) the guest will stay in; a per-night rental is the whole place, so it needs
+ * no room number. Only then does the guest get their booking receipt (the
  * booking code with the room numbers) in the app, by email and as a PDF. A booking paid online into
  * the hotel's account gets its payment receipt at the same time. A room can't be given to two
  * overlapping stays. To refuse a booking, the hotel cancels it.
  */
-export const approveHotelBooking = async (req, res) => {
+export const approveStayBooking = async (req, res) => {
   const rental = mongoose.isValidObjectId(req.params.id) ? await populateRental(Rental.findById(req.params.id)) : null;
-  if (!rental || !rental.hotelId || !canManageRecord(rental, req.user)) return fail(res, 404, "Booking not found.");
+  if (!rental || !(rental.hotelId || rental.pricePeriod === "night") || !canManageRecord(rental, req.user)) return fail(res, 404, "Booking not found.");
+  const hotel = Boolean(rental.hotelId);
   // Too late: it is cancelled now, as it would have been by the deadline
   if (isAwaitingApproval(rental) && approvalDeadline(rental) <= new Date()) {
     await expireUnansweredBookings({ _id: rental._id });
     return fail(res, 409, "This booking wasn't approved by 24 hours before check-in, so it was cancelled and the guest told.");
   }
-  const roomNumbers = parseRoomNumbers(req.body?.roomNumbers, rental.numberOfRooms || 1);
+  const roomNumbers = hotel ? parseRoomNumbers(req.body?.roomNumbers, rental.numberOfRooms || 1) : undefined;
   const note = cleanText(req.body?.note, 300);
   let paymentReceipt = null; // issued with this approval (online payments)
-  const updated = await hotelTransaction(rental.hotelId, async (_hotel, session) => {
+  const updated = await bookingTransaction({ hotelId: rental.hotelId, property: rental.property?._id || rental.property }, async (_listing, session) => {
     const current = await Rental.findById(rental._id).session(session);
     paymentReceipt = null;
     if (current.approvedAt) throw new HttpError(409, "This booking is already approved.");
     const waiting = (current.status === "confirmed" && current.paymentOption === "on_arrival") || current.status === "paid";
-    if (!waiting) throw new HttpError(409, "Only a reservation or a paid booking waiting for the hotel can be approved.");
+    if (!waiting || !current.approvalRequired) throw new HttpError(409, `Only a reservation waiting for the ${hotel ? "hotel" : "owner"} can be approved.`);
     if (approvalDeadline(current) <= new Date()) throw new HttpError(409, "This booking wasn't approved by 24 hours before check-in. It is being cancelled and the guest told.");
-    const taken = await Rental.findOne({
+    const taken = hotel && await Rental.findOne({
       hotelId: current.hotelId, _id: { $ne: current._id }, roomNumbers: { $in: roomNumbers },
       status: { $in: ["confirmed", "active"] }, startDate: { $lt: current.endDate }, endDate: { $gt: current.startDate },
     }).select("roomNumbers").session(session);
@@ -432,7 +433,7 @@ export const approveHotelBooking = async (req, res) => {
       throw new HttpError(409, `Room ${clash.join(", ") || roomNumbers.join(", ")} is already given to another guest for some of these nights. Choose another room.`);
     }
     const now = new Date();
-    current.set({ status: "confirmed", approvedAt: now, approvedBy: req.user._id, roomNumbers, bookingCode: current.bookingCode || newBookingCode() });
+    current.set({ status: "confirmed", approvedAt: now, approvedBy: req.user._id, ...(roomNumbers ? { roomNumbers } : {}), bookingCode: current.bookingCode || newBookingCode() });
     // Paid online into the hotel's account: the payment receipt goes with the approval
     if (current.paymentStatus === "paid" && current.paymentMethod === "Paystack" && !current.receipt?.number) {
       current.receipt = await buildReceipt({ ...current.toObject(), property: rental.property }, {
@@ -441,19 +442,21 @@ export const approveHotelBooking = async (req, res) => {
       });
       paymentReceipt = current.receipt;
     }
-    addHistory(current, req.user, note || `Booking approved: room${roomNumbers.length > 1 ? "s" : ""} ${roomNumbers.join(", ")}; booking receipt ${current.bookingCode} sent`);
+    addHistory(current, req.user, note || `Booking approved${roomNumbers ? `: room${roomNumbers.length > 1 ? "s" : ""} ${roomNumbers.join(", ")}` : ""}; booking receipt ${current.bookingCode} sent`);
     await current.save({ session });
     return current;
   });
-  const place = rental.property?.title || "your hotel";
-  const rooms = roomNumbers.join(", ");
+  const place = rental.property?.title || (hotel ? "your hotel" : "your stay");
+  const rooms = roomNumbers ? ` room ${roomNumbers.join(", ")},` : "";
   await Promise.all([
-    notifyUser(rental.customer._id, { type: "rental", title: `Booking approved · ${updated.bookingCode}`, message: `"${place}" approved your booking: room ${rooms}, ${toDay(updated.startDate)} to ${toDay(updated.endDate)}. Download your booking receipt and show it when you arrive${updated.arrivalTime ? ` at ${updated.arrivalTime}` : ""}.${updated.paymentStatus === "paid" ? "" : ` Pay ${formatGHS(updated.amount)} at the hotel.`}${note ? ` ${note}` : ""}`, link: "/account/rentals" }),
+    notifyUser(rental.customer._id, { type: "rental", title: `Booking approved · ${updated.bookingCode}`, message: `"${place}" approved your booking:${rooms} ${toDay(updated.startDate)} to ${toDay(updated.endDate)}. Download your booking receipt and show it when you arrive${updated.arrivalTime ? ` at ${updated.arrivalTime}` : ""}.${updated.paymentStatus === "paid" ? "" : ` Pay ${formatGHS(updated.amount)} ${hotel ? "at the hotel" : "when you arrive"}.`}${note ? ` ${note}` : ""}`, link: "/account/rentals" }),
     sendBookingConfirmation(updated, { place, paid: updated.paymentStatus === "paid" }),
     paymentReceipt ? deliverReceipt({ customer: rental.customer._id, email: updated.contactEmail, receipt: paymentReceipt, link: "/account/rentals" }) : null,
   ]);
   ok(res, presentRental(await populateRental(Rental.findById(rental._id)), req.user), "Booking approved and booking receipt sent");
 };
+// The earlier name (hotels only), kept for callers and tests
+export const approveHotelBooking = approveStayBooking;
 
 // PATCH /api/rentals/:id/cancel -> the guest cancels an unpaid hotel request, or a pay-on-arrival
 // reservation before its check-in day. Paid bookings go through the owner (refunds need review).
