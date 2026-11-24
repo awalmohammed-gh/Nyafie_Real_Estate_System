@@ -115,7 +115,7 @@ const RentalsBoard = ({ scope }) => {
   const q = query.trim().toLowerCase();
   const rows = scoped
     .filter(FILTERS.find((f) => f.id === status).match)
-    .filter((r) => !q || `${r.contactName} ${r.property.title} ${r.roomName} ${r.reference || ""}`.toLowerCase().includes(q));
+    .filter((r) => !q || `${r.contactName} ${r.property.title} ${r.roomName} ${r.reference || ""} ${r.bookingCode || ""}`.toLowerCase().includes(q));
   const counts = Object.fromEntries(FILTERS.map((f) => [f.id, scoped.filter(f.match).length]));
   const open = openId && rentals.find((r) => r.id === openId);
   const chatLink = open?.conversationId && (isAdmin ? open.ownerType === "admin" && adminPath(`/messages?c=${open.conversationId}`) : `/agent/messages?c=${open.conversationId}`);
@@ -179,7 +179,7 @@ const RentalsBoard = ({ scope }) => {
     { key: "payment", header: "Payment", render: (r) => <StatusBadge status={r.paymentStatus} dot={false} /> },
     { key: "status", header: "Rental", render: (r) => <StatusBadge status={r.status} /> },
     { key: "paid", header: "Date paid", render: (r) => <span className="whitespace-nowrap text-gray-600">{r.paidAt ? formatDate(r.paidAt) : "—"}</span> },
-    { key: "movein", header: "Move-in / Check-in", render: (r) => <span className="whitespace-nowrap text-gray-600">{formatDate(r.startDate)}</span> },
+    { key: "movein", header: "Move-in / Check-in", render: (r) => <span className="whitespace-nowrap text-gray-600">{formatDate(r.startDate)}{r.arrivalTime && <span className="block text-xs text-gray-500">arriving {r.arrivalTime}</span>}</span> },
     {
       key: "view",
       header: <span className="sr-only">View</span>,
@@ -202,7 +202,7 @@ const RentalsBoard = ({ scope }) => {
       ]} />}
       <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <FilterTabs label="Rental status" value={status} onChange={setStatus} tabs={FILTERS.map((f) => ({ id: f.id, label: f.label, count: counts[f.id] }))} />
-        <SearchInput value={query} onChange={setQuery} placeholder="Search rentals" className="lg:w-72" />
+        <SearchInput value={query} onChange={setQuery} placeholder="Search name or booking code" className="lg:w-72" />
       </div>
       <Filters isAdmin={isAdmin} owners={owners} ownerId={ownerId} setOwnerId={setOwnerId} properties={propertyOptions} propertyId={propertyId} setPropertyId={(value) => { setPropertyId(value); setRoomId("all"); }} range={range} setRange={setRange} />
       {!!roomOptions.length && <label className="mb-4 block max-w-sm text-sm font-medium text-gray-700">Room type<select value={roomId} onChange={(e) => setRoomId(e.target.value)} className="field mt-1.5"><option value="all">All room types</option>{roomOptions.map((room) => <option key={room.id} value={room.id}>{room.name} · {room.hotel}</option>)}</select></label>}
@@ -231,8 +231,9 @@ const RentalsBoard = ({ scope }) => {
                 <StatusBadge status={r.status} />
               </div>
               <p className="mt-2 text-sm text-gray-600">
-                Move-in {formatDate(r.startDate)} · <span className="font-bold text-gray-900">{formatGhs(r.amount)}</span>
+                {isStay(r) ? "Check-in" : "Move-in"} {formatDate(r.startDate)}{r.arrivalTime ? ` at ${r.arrivalTime}` : ""} · <span className="font-bold text-gray-900">{formatGhs(r.amount)}</span>
               </p>
+              {r.bookingCode && <p className="mt-1 font-mono text-xs font-semibold tracking-wider text-brand-700">{r.bookingCode}</p>}
             </button>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <StatusBadge status={r.paymentStatus} dot={false} />
@@ -288,6 +289,7 @@ const RentalsBoard = ({ scope }) => {
                 ["Current address", open.currentAddress || "—"],
                 [open.hotelId ? "Guests" : "Occupants", open.occupants],
                 [open.hotelId ? "Check-in" : "Move-in", formatDate(open.startDate)],
+                ...(isStay(open) ? [["Arriving at", open.arrivalTime || "Not given"], ["Booking code", open.bookingCode || "—"]] : []),
                 [open.hotelId ? "Check-out" : "Until", formatDate(open.endDate)],
                 ["Amount", formatGhs(open.amount)],
                 ["Reference", open.reference || "—"],
@@ -311,7 +313,7 @@ const RentalsBoard = ({ scope }) => {
             {dueAtOffice(open) && open.statusKey === "confirmed" && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{formatGhs(open.amount)} is due at your office. Record it here when the tenant pays: they get a receipt, and only then can they move in. Never ask for payment online or to a personal number.</p>}
             {needsReceipt(open) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">The guest paid {formatGhs(open.amount)} online into your payout account. Send their receipt before they check in.</p>}
             <ReceiptCard receipt={open.receipt} />
-            {dueOnArrival(open) && ["confirmed", "active"].includes(open.statusKey) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{formatGhs(open.amount)} is due {payPlace(open)}. The guest should {open.hotelId ? "check in" : "arrive"} {arrivalText(open)}.{open.cancellationPolicy && <span className="mt-1 block text-xs whitespace-pre-line">Policy shown to the guest: {open.cancellationPolicy}</span>}</p>}
+            {dueOnArrival(open) && ["confirmed", "active"].includes(open.statusKey) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{formatGhs(open.amount)} is due {payPlace(open)}. The guest {open.arrivalTime ? `is arriving at ${open.arrivalTime} on ${formatDate(open.startDate)}` : `should ${open.hotelId ? "check in" : "arrive"} ${arrivalText(open)}`}{open.bookingCode ? ` and will show booking code ${open.bookingCode}: check it matches before you take payment` : ""}.{open.cancellationPolicy && <span className="mt-1 block text-xs whitespace-pre-line">Policy shown to the guest: {open.cancellationPolicy}</span>}</p>}
             {actionsFor(open).length > 0 && <div className="flex flex-wrap gap-2">{actionButtons(open, "text-sm")}</div>}
             <div>
               <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">

@@ -84,7 +84,8 @@ test("monthly rent can't start an online checkout", async (t) => {
   const res = response();
   await initializeRentalPayment({ user: { _id: CUSTOMER }, body: { rentalId: String(rental._id) } }, res);
   assert.equal(res.statusCode, 409);
-  assert.match(res.body.message, /at the office/);
+  assert.match(res.body.message, /never online/);
+  assert.match(res.body.message, /office/);
 });
 
 test("the owner confirms an office rental: the dates are taken and payment is due at the office", async (t) => {

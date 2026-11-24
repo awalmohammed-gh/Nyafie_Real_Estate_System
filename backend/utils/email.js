@@ -186,3 +186,39 @@ export const adminSignInMailer = {
     });
   },
 };
+
+// A confirmed stay (hotels and per-night rentals): what the guest shows when they arrive
+export const bookingConfirmationMailer = {
+  async send(email, booking) {
+    const name = siteName();
+    const rows = [
+      ["Booking code", booking.bookingCode],
+      ["Where", booking.place],
+      ...(booking.room ? [["Room", booking.room]] : []),
+      ["Check-in", booking.checkIn],
+      ["Check-out", booking.checkOut],
+      ["Arriving at", `${booking.arrivalTime} (Ghana time)`],
+      ["Guest", booking.guestName],
+      ["Total", booking.total],
+      ["Payment", booking.payment],
+    ];
+    const intro = booking.paid ? "Your stay is booked and paid." : "Your stay is reserved. Nothing has been paid online: you pay when you arrive.";
+    const show = "Show this booking code when you arrive. If your arrival time changes, update it in your account so they know when to expect you.";
+    await send({
+      to: email,
+      subject: `Booking ${booking.bookingCode}: ${booking.place}`.slice(0, 150),
+      text: `${intro}\n\n${rows.map(([label, value]) => `${label}: ${value}`).join("\n")}\n\n${show}`,
+      html: `<!doctype html><html><body style="margin:0;background:#f6f5f9;font-family:Arial,Helvetica,sans-serif;color:#1f2937">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:12px;padding:32px">
+<tr><td style="font-size:20px;font-weight:bold;color:#5b21b6">${escapeHtml(name)}</td></tr>
+<tr><td style="padding-top:20px;font-size:15px;line-height:22px">${escapeHtml(intro)}</td></tr>
+<tr><td style="padding:20px 0;font-size:30px;font-weight:bold;letter-spacing:4px;color:#111827">${escapeHtml(booking.bookingCode)}</td></tr>
+<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;line-height:20px">
+${rows.slice(1).map(([label, value]) => `<tr><td style="padding:6px 12px 6px 0;color:#6b7280;vertical-align:top;white-space:nowrap">${escapeHtml(label)}</td><td style="padding:6px 0;font-weight:bold">${escapeHtml(value)}</td></tr>`).join("\n")}
+</table></td></tr>
+<tr><td style="padding-top:20px;font-size:13px;line-height:20px;color:#6b7280">${escapeHtml(show)}</td></tr>
+</table></td></tr></table></body></html>`,
+    });
+  },
+};

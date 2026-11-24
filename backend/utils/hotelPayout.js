@@ -3,20 +3,22 @@ import { HttpError } from "./response.js";
 import { paymentEnvironment, paymentMode, paystack } from "./paystack.js";
 
 /**
- * How guests pay for a stay (hotels, and rentals priced per night), and where online payments go.
+ * How guests pay for a stay (hotels, and rentals priced per night). NyaFie never holds customers'
+ * money, so a stay can always be booked without paying online:
  *
- *  - Pay on arrival: the guest reserves (the rooms or dates are held) and pays the hotel or owner
- *    on arrival. No money passes through NyaFie, so this works even when online payments are off.
- *  - Pay online, hotels: Paystack checkout, settled straight to the hotel's own bank account or
- *    mobile money wallet through a Paystack subaccount (the hotel bears Paystack's fee; NyaFie
- *    takes no share). Agent hotels need a connected payout account first. NyaFie's own (platform)
- *    hotels settle to the main NyaFie account.
- *  - Pay online, per-night rentals: the existing rental checkout (the main NyaFie account).
+ *  - Pay at the hotel / on arrival (always offered): the guest reserves (the rooms or dates are
+ *    held), says when they're arriving, and shows their booking code when they arrive and pay.
+ *  - Pay online (agent hotels only, if the hotel switches it on): Paystack checkout settled straight
+ *    to the hotel's own bank account or mobile money wallet through a Paystack subaccount (the hotel
+ *    bears Paystack's fee; NyaFie takes no share and never holds the money). Not offered for NyaFie's
+ *    own hotels or for per-night rentals, whose online payments would go to NyaFie's account.
  */
 
-// Hotels launch with pay on arrival only; per-night rentals already took online payments
+// Every stay can be booked and paid on arrival; only an agent hotel may add online payment
 export const STAY_BOOKING_DEFAULTS = Object.freeze({ payOnArrival: true, payOnline: false, arrivalDeadline: "18:00", cancellationPolicy: "" });
-export const NIGHTLY_RENTAL_DEFAULTS = Object.freeze({ ...STAY_BOOKING_DEFAULTS, payOnline: true });
+export const NIGHTLY_RENTAL_DEFAULTS = STAY_BOOKING_DEFAULTS;
+// Online payment goes to the hotel's own account: only hotels listed by an agent can offer it
+export const takesOnlinePayment = (property) => hotelListing(property) && property?.ownerType !== "admin";
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 // (utils/hotel.js imports this file, so hotels are recognised here without importing it back)
@@ -29,8 +31,8 @@ export const stayBookingSettings = (property) => {
   const saved = property?.stayBooking?.toObject?.() || property?.stayBooking || {};
   const defaults = hotelListing(property) ? STAY_BOOKING_DEFAULTS : NIGHTLY_RENTAL_DEFAULTS;
   return {
-    payOnArrival: typeof saved.payOnArrival === "boolean" ? saved.payOnArrival : defaults.payOnArrival,
-    payOnline: typeof saved.payOnline === "boolean" ? saved.payOnline : defaults.payOnline,
+    payOnArrival: true, // always: booking never requires paying online (older "online only" settings included)
+    payOnline: takesOnlinePayment(property) && (typeof saved.payOnline === "boolean" ? saved.payOnline : defaults.payOnline),
     arrivalDeadline: TIME.test(saved.arrivalDeadline || "") ? saved.arrivalDeadline : STAY_BOOKING_DEFAULTS.arrivalDeadline,
     cancellationPolicy: typeof saved.cancellationPolicy === "string" ? saved.cancellationPolicy : "",
   };
@@ -46,6 +48,11 @@ export const parseStayBooking = (input, property) => {
     if (typeof input[key] !== "boolean") throw new HttpError(400, "Payment options must be true or false.");
     next[key] = input[key];
   }
+  // Booking never requires paying online, and only an agent hotel's own account may receive online
+  // payments (never NyaFie's). Older saved settings are corrected rather than refused, so owners can
+  // keep editing their listings.
+  next.payOnArrival = true;
+  if (!takesOnlinePayment(property)) next.payOnline = false;
   if (input.arrivalDeadline !== undefined) {
     if (typeof input.arrivalDeadline !== "string" || !TIME.test(input.arrivalDeadline)) throw new HttpError(400, "Enter the arrival deadline as a time, e.g. 18:00.");
     next.arrivalDeadline = input.arrivalDeadline;
@@ -97,7 +104,7 @@ export const stayPaymentOptions = (property, payout, settings) => {
   const options = stayBookingSettings(property);
   const hotel = hotelListing(property);
   let onlineProblem = "";
-  if (!options.payOnline) onlineProblem = `This ${hotel ? "hotel" : "listing"} takes payment on arrival.`;
+  if (!options.payOnline) onlineProblem = `This ${hotel ? "hotel" : "listing"} takes payment ${hotel ? "at the hotel" : "on arrival"}.`;
   else if (paymentMode() === "disabled" || settings?.payments?.rentalsEnabled === false || property.currency !== "GHS") onlineProblem = "Online payments are unavailable right now.";
   else if (hotel && property.ownerType === "agent" && !payout) onlineProblem = "This hotel hasn't finished setting up online payments.";
   else if (hotel && property.ownerType === "agent" && !payoutActive(payout)) onlineProblem = "This hotel's online payments are being set up and start soon.";

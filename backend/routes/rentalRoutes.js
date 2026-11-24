@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createRental, myRentals, getRental, updateRentalStatus, recordArrivalPayment, sendRentalReceipt, cancelMyReservation } from "../controllers/rentalController.js";
+import { createRental, myRentals, getRental, updateRentalStatus, recordArrivalPayment, sendRentalReceipt, cancelMyReservation, updateArrivalTime } from "../controllers/rentalController.js";
 import { reserveOnArrival } from "../controllers/hotelPaymentController.js";
 import { protect, protectCustomer, protectOwner } from "../middleware/authMiddleware.js";
 
@@ -19,5 +19,7 @@ router.patch("/:id/paid-at-office", protectOwner, recordArrivalPayment);
 // Hotel bookings paid online into the hotel's account: the hotel sends the guest's receipt
 router.post("/:id/receipt", protectOwner, sendRentalReceipt);
 router.patch("/:id/cancel", protectCustomer, cancelMyReservation);
+// Stays: the guest changes when they'll arrive (the hotel or owner is told)
+router.patch("/:id/arrival", protectCustomer, updateArrivalTime);
 
 export default router;

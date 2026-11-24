@@ -49,6 +49,10 @@ const rentalSchema = new mongoose.Schema(
     // owner records it (utils/officePayments.js).
     paymentOption: { type: String, enum: ["online", "on_arrival", "office"], default: undefined },
     arrivalDeadline: { type: Date }, // pay-at-hotel: arrive by then or the hotel may treat it as a no-show
+    // Stays (hotels, per-night rentals): when the guest says they'll arrive on the check-in day ("15:30",
+    // Ghana time), and the code they show when they arrive (utils/stayBooking.js)
+    arrivalTime: { type: String, match: /^([01]\d|2[0-3]):[0-5]\d$/ },
+    bookingCode: { type: String },
     cancellationPolicy: { type: String, maxlength: 800 }, // the hotel's policy when the guest reserved
     paidAt: { type: Date },
     // Given by the owner side for the payment (utils/receipts.js); a hotel stay paid online can't start without one
@@ -61,6 +65,7 @@ const rentalSchema = new mongoose.Schema(
 
 rentalSchema.index({ hotelId: 1, roomTypeId: 1, status: 1, startDate: 1, endDate: 1 });
 rentalSchema.index({ property: 1, status: 1, startDate: 1, endDate: 1 });
+rentalSchema.index({ bookingCode: 1 }, { unique: true, partialFilterExpression: { bookingCode: { $type: "string" } } });
 rentalSchema.index({ "receipt.number": 1 }, { unique: true, partialFilterExpression: { "receipt.number": { $type: "string" } } });
 // Hotel terminology over the shared, existing rental/payment ledger.
 for (const [alias, field] of Object.entries({ customerId: "customer", checkIn: "startDate", checkOut: "endDate", guests: "occupants", pricePerNight: "unitPrice", numberOfNights: "units", totalAmount: "amount", bookingStatus: "status" })) {

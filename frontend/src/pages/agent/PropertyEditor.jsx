@@ -206,9 +206,10 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
   const monthlyRental = !hotel && form.listingType === "Rent" && form.rentPeriod === "month";
   const [moveIn, setMoveIn] = useState(() => ({ ...MOVE_IN_DEFAULTS, ...existing?.moveIn }));
   const [bookingEdits, setBooking] = useState(() => existing?.stayBooking || {});
-  const booking = { ...(hotel ? STAY_BOOKING_DEFAULTS : NIGHTLY_RENTAL_DEFAULTS), ...bookingEdits };
-  // The platform's own hotels are paid into the platform account; agent hotels into their payout account
+  // The platform's own hotels and per-night rentals are paid on arrival only; agent hotels may add online
+  // payment into their own payout account. Pay on arrival is always on (the server enforces both).
   const platformHotel = existing ? existing.owner.type === "admin" : isAdminEditor;
+  const booking = { ...(hotel ? STAY_BOOKING_DEFAULTS : NIGHTLY_RENTAL_DEFAULTS), ...bookingEdits, payOnArrival: true, ...(!hotel || platformHotel ? { payOnline: false } : {}) };
   const activeRooms = rooms.filter((room) => room.active);
   const hotelPrice = activeRooms.length ? Math.min(...activeRooms.map((room) => Number(room.pricePerNight) || 0)) : 0;
   const [errors, setErrors] = useState({});
@@ -288,7 +289,6 @@ export const PropertyEditorForm = ({ existing, isEdit, variant = "agent" }) => {
     if (mediaLinkProblem(form.tourUrl, "tour")) e.tourUrl = mediaLinkProblem(form.tourUrl, "tour");
     if (monthlyRental && [moveIn.agentFeeValue, moveIn.securityDeposit].some((v) => v !== "" && !(Number(v) >= 0))) e.moveIn = "Amounts can't be negative.";
     if (monthlyRental && moveIn.agentFeeType === "percent" && !(Number(moveIn.agentFeeValue) <= 20)) e.moveIn = "Enter an agent fee between 0% and 20%.";
-    if ((hotel || nightlyRental) && !booking.payOnArrival && !booking.payOnline) e.booking = "Choose at least one way for guests to pay.";
     if (mode === "publish") {
       if (form.description.trim().length < 30) e.description = "Describe the property in at least 30 characters.";
       if (!form.type) e.type = "Choose a property type.";

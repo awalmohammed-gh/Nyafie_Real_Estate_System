@@ -1,9 +1,10 @@
 // How a stay's payment is described to guests and owners (hotels and per-night rentals; bookings from mapRental)
 
 // A listing's payment options before its owner changes them (the server uses the same defaults):
-// hotels start with pay at the hotel only; per-night rentals keep online payment and add pay on arrival
+// every stay starts with pay at the hotel / on arrival only; agent hotels may add online payment
 export const STAY_BOOKING_DEFAULTS = { payOnArrival: true, payOnline: false, arrivalDeadline: "18:00", cancellationPolicy: "" };
-export const NIGHTLY_RENTAL_DEFAULTS = { ...STAY_BOOKING_DEFAULTS, payOnline: true };
+// Per-night rentals are paid on arrival only (NyaFie never takes customers' money online)
+export const NIGHTLY_RENTAL_DEFAULTS = { ...STAY_BOOKING_DEFAULTS };
 
 const TIME = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" }); // Ghana is GMT
 const DAY = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });

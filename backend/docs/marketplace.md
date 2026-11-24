@@ -239,7 +239,14 @@ cannot be used to reconstruct historical totals or distinguish older refresh cou
   the tenant be marked as moved in. `/api/payments/initialize` refuses these rentals. Sales record
   the office payment with `PATCH /api/sale-requests/:id/confirm-payment` as before. Both are written
   to the payment ledger as method `Office` (never reconciled with Paystack).
-- **Hotels and per-night stays** keep their options: pay online, or pay on arrival.
+- **NyaFie never holds customers' money.** Every hotel and per-night stay can be booked without paying
+  online: the guest reserves, gives their arrival time on the check-in day (no later than the
+  listing's arrival deadline; changeable with `PATCH /api/rentals/:id/arrival` until check-in), and
+  gets a booking code (`NF-7KQ9PX`, also emailed and downloadable) to show when they arrive and pay.
+  Only a hotel listed by an agent may also offer online payment, settled straight into the hotel's
+  own payout account. NyaFie's own hotels and per-night rentals are paid on arrival only, and
+  `/api/payments/initialize` refuses everything except those agent hotel bookings
+  (`utils/hotelPayout.js`, `utils/stayBooking.js`).
 - **Receipts** (`utils/receipts.js`): issued once, in the same transaction as the payment they
   confirm, and sent to the customer in the app and by email (best effort; the receipt stays in
   their account). Office rent, office sale payments and pay-at-hotel/on-arrival payments get theirs
