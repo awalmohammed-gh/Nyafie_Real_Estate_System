@@ -203,10 +203,10 @@ export const bookingConfirmationMailer = {
       ["Payment", booking.payment],
     ];
     const intro = booking.paid ? "Your stay is booked and paid." : "Your stay is reserved. Nothing has been paid online: you pay when you arrive.";
-    const show = "Show this booking code when you arrive. If your arrival time changes, update it in your account so they know when to expect you.";
+    const show = "Show this booking receipt (or its code) when you arrive. You can also download it from your account. If your arrival time changes, update it there so they know when to expect you.";
     await send({
       to: email,
-      subject: `Booking ${booking.bookingCode}: ${booking.place}`.slice(0, 150),
+      subject: `Your booking receipt ${booking.bookingCode}: ${booking.place}`.slice(0, 150),
       text: `${intro}\n\n${rows.map(([label, value]) => `${label}: ${value}`).join("\n")}\n\n${show}`,
       html: `<!doctype html><html><body style="margin:0;background:#f6f5f9;font-family:Arial,Helvetica,sans-serif;color:#1f2937">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">

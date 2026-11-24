@@ -33,12 +33,12 @@ const BookingPass = ({ booking, onChangeArrival, className = "" }) => {
     <section className={`rounded-xl p-4 ring-1 ring-brand-200 bg-brand-50/60 ${className}`} aria-label={`Booking ${booking.bookingCode}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="flex items-center gap-2 text-xs font-semibold tracking-wide text-brand-700 uppercase"><Ticket className="h-4 w-4" aria-hidden="true" />Show this when you arrive</p>
+          <p className="flex items-center gap-2 text-xs font-semibold tracking-wide text-brand-700 uppercase"><Ticket className="h-4 w-4" aria-hidden="true" />Booking receipt · show this when you arrive</p>
           <p className="mt-1 font-mono text-2xl font-bold tracking-widest text-gray-900">{booking.bookingCode}</p>
         </div>
         <button type="button" onClick={download} disabled={Boolean(busy)} className="btn btn-light px-3 py-1.5 text-xs">
           {busy === "pdf" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-          Download booking
+          Download booking receipt
         </button>
       </div>
       <dl className="mt-3 grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr]">
