@@ -214,6 +214,8 @@ When a customer disputes a charge with their bank or mobile money provider, Pays
 - **Dispute lost**: the returned amount comes off revenue, and a fully returned payment appears as **Refunded** in Financial inventory. **The booking or plan is not changed**: cancel it yourself if it should end. Cancelling a booking whose whole payment was returned does not ask for another refund.
 - **Check dispute**: Paystack reported an outcome NyaFie doesn't recognise. Look at it in the Paystack dashboard; refunds stay blocked.
 
+For a disputed subscription, the agent's upgrades are paused until the dispute is settled (they can still renew), and money lost to a dispute is taken off their upgrade credit.
+
 Disputes from the other Paystack mode, or over transactions NyaFie has no record of, are ignored. Run the checks with `npm run test:integration -- disputes` in `backend/`.
 
 ### Going live with Paystack

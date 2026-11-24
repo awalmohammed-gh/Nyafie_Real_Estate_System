@@ -53,15 +53,16 @@ test("agent safeguards: sale payments are recorded once; declined applicants can
     assert.equal((await asAgent(owner, `/sale-requests/${request.id}/confirm-payment`, { method: "PATCH", body: { amount: 1 } })).code, 400, "already confirmed");
   });
 
-  await t.test("requesting payment tells the buyer to agree it with the owner, never to pay at an office", async () => {
+  await t.test("requesting payment tells the buyer to pay at the owner's office, never online or to a personal number", async () => {
     const house = await Property.create({ title: "Direct House", description: "A house used to check the payment request wording.", propertyType: "House", listingType: "Sale", price: 400000, pricePeriod: "total", owner: owner._id, ownerType: "agent", status: "published" });
     const request = await SaleRequest.create({ customer: customer._id, property: house._id, owner: owner._id, ownerType: "agent", askingPrice: 400000, contactName: "Buyer Test", contactEmail: customer.email, contactPhone: "0241234567", status: "approved" });
     const updated = await asAgent(owner, `/sale-requests/${request.id}/status`, { method: "PATCH", body: { status: "payment_pending" } });
     assert.equal(updated.code, 200, JSON.stringify(updated));
     const sent = await Notification.findOne({ recipient: customer._id, title: "Payment requested" }).sort({ createdAt: -1 });
-    assert.match(sent.message, /agree with .+ how to pay/);
-    assert.match(sent.message, /Only pay the owner or agent shown on/);
-    assert.doesNotMatch(sent.message, /office/i);
+    assert.match(sent.message, /pay GHS 400,000 at .+'s office/);
+    assert.match(sent.message, /never takes house or land payments online/);
+    assert.match(sent.message, /nobody should ask you to pay to a personal or mobile money number/);
+    assert.match(sent.message, /You get a receipt/);
   });
 
   await t.test("an applicant an admin declined can't become approved by joining an agency", async () => {

@@ -6,6 +6,8 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import Setting from "../models/Setting.js";
 import Subscription from "../models/Subscription.js";
+import AdminSignInCode from "../models/AdminSignInCode.js";
+import { adminSignInMailer } from "../utils/email.js";
 import authRoutes from "../routes/authRoutes.js";
 import subscriptionRoutes from "../routes/subscriptionRoutes.js";
 import { optionalAuth, viewerSessions } from "../middleware/authMiddleware.js";
@@ -15,9 +17,12 @@ import { isolatedMongo } from "./support/isolatedMongo.js";
 
 test("password changes revoke older sessions while renewing only the requesting browser", { skip: process.env.RUN_AUTH_INTEGRATION !== "1", timeout: 90000 }, async (t) => {
   await isolatedMongo(t);
-  const previousKey = process.env.JWT_KEY;
-  process.env.JWT_KEY = "isolated-password-session-test-signing-key";
-  t.after(() => { if (previousKey === undefined) delete process.env.JWT_KEY; else process.env.JWT_KEY = previousKey; });
+  const previous = Object.fromEntries(["JWT_KEY", "SMTP_USER", "SMTP_APP_PASSWORD", "ADMIN_TWO_STEP"].map((key) => [key, process.env[key]]));
+  Object.assign(process.env, { JWT_KEY: "isolated-password-session-test-signing-key", SMTP_USER: "sender@example.test", SMTP_APP_PASSWORD: "not-a-real-password" });
+  delete process.env.ADMIN_TWO_STEP;
+  t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+  let adminCode; // the admin's second step: captured, never emailed
+  t.mock.method(adminSignInMailer, "send", async (_email, code) => { adminCode = code; });
   await Setting.create({ key: "platform", agent: { requireSubscription: false } });
   const accounts = {};
   for (const [session, role] of Object.entries(SESSION_ROLES)) {
@@ -41,7 +46,13 @@ test("password changes revoke older sessions while renewing only the requesting 
   });
   const cookieFrom = response => response.headers.getSetCookie()[0]?.split(";")[0];
   const login = async (session, password = "OriginalPassword123") => {
-    const response = await request(session, `/api/auth/${session}/login`, { method: "POST", body: { email: accounts[session].email, password } });
+    if (session === "admin") await AdminSignInCode.deleteMany({}); // these tests sign in more often than codes may be sent
+    let response = await request(session, `/api/auth/${session}/login`, { method: "POST", body: { email: accounts[session].email, password } });
+    if (session === "admin") {
+      assert.equal(response.status, 202);
+      const { challenge } = (await response.json()).data;
+      response = await request(session, "/api/auth/admin/verify-email", { method: "POST", body: { challenge, code: adminCode } });
+    }
     assert.equal(response.status, 200);
     assert.equal((await response.json()).data.sessionVersion, undefined);
     return cookieFrom(response);

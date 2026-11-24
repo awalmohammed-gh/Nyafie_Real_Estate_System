@@ -19,6 +19,10 @@ const env = { ...process.env, ...Object.fromEntries([...flags].map((flag) => [fl
 for (const name of ["PAYSTACK_SECRET_KEY", "Test_Secret_Key"]) if (/^sk_live_/.test(env[name] || "")) delete env[name];
 if (env.PAYSTACK_MODE === "live") delete env.PAYSTACK_MODE;
 
+// Nor with the real database or email account: the app loads backend/.env, which never replaces a
+// variable that is already set. Suites that need email set their own values and capture what is sent.
+for (const name of ["MONGODB_URI", "MONGODB_DB", "SMTP_USER", "SMTP_APP_PASSWORD", "EMAIL_SMTP_HOST", "EMAIL_SMTP_USER", "EMAIL_SMTP_PASSWORD", "SENTRY_DSN"]) env[name] = "";
+
 console.log(`Running ${selected.length} integration suite(s) with ${flags.size} flags on.`);
 const child = spawn(process.execPath, ["--test", "--test-concurrency=1", ...selected.map((name) => join(dir, name))], { stdio: "inherit", env });
 child.on("exit", (code) => process.exit(code ?? 1));

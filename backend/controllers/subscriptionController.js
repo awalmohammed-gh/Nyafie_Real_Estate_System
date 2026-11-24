@@ -7,7 +7,7 @@ import Subscription from "../models/Subscription.js";
 import User from "../models/User.js";
 import { loadUser } from "./authController.js";
 import { subscriptionState } from "../utils/permissions.js";
-import { quotePlan, presentQuote, upgradeOptions } from "../utils/planChange.js";
+import { quotePlan, presentQuote, upgradeCredit, upgradeOptions } from "../utils/planChange.js";
 import { ok, fail, HttpError } from "../utils/response.js";
 import { paymentMode as paystackMode, paystack, newReference, checkPaystackTransaction, paymentEnvironment, inCurrentEnvironment, providerScope, toSubunit } from "../utils/paystack.js";
 import { getSettings, siteName } from "../models/Setting.js";
@@ -25,6 +25,7 @@ const paymentMode = async () => {
 const freeAccessMessage = "Agent subscriptions are switched off. Complete your profile and professional proof for admin approval; no payment is required.";
 
 const DAY = 24 * 60 * 60 * 1000;
+const DISPUTED_CREDIT = "The payment behind this upgrade's credit was disputed";
 // Failed checkouts are re-checked with Paystack for this long (abandoned ones can still be
 // completed); processing ones stay eligible until Paystack settles them. Matches rentals.
 const FAILED_RECHECK_WINDOW = 7 * DAY;
@@ -115,6 +116,18 @@ const settleSubscription = async (subscription, extra = {}, { create = null } = 
       await record.save({ session });
       return { holder, record, flagged: true };
     }
+    // The credit was worked out when the checkout started. If the payment behind it has been disputed
+    // since, the plan may not be had at that price: the money is held for a refund instead.
+    if (currentActive && record.credit > 0) {
+      const { credit } = await upgradeCredit(current, await Plan.findById(current.plan?._id || current.plan).session(session), record.createdAt || now, session);
+      // (a little less than quoted is only the seconds between the quote and this record)
+      if (record.credit > credit + 1) {
+        if (record.amount <= 0) throw new HttpError(409, DISPUTED_CREDIT);
+        record.set({ paymentStatus: "refund_required", status: "cancelled", paidAt: record.paidAt || now, cancelledAt: now, activationProcessedAt: now, note: DISPUTED_CREDIT });
+        await record.save({ session });
+        return { holder, record, flagged: true };
+      }
+    }
     const base = renewing ? new Date(current.expiresAt) : now;
     record.startDate = renewing ? current.startDate : now;
     record.expiresAt = new Date(base.getTime() + duration * DAY);
@@ -142,7 +155,7 @@ const settleSubscription = async (subscription, extra = {}, { create = null } = 
     const { record } = result;
     await Promise.all([
       notifyAdmins({ critical: true, type: "payment", title: "Subscription payment needs review", message: `Payment ${record.paymentReference} (${formatGHS(record.amount)}) for ${record.planName} requires a refund. ${record.note}`, link: "/admin/payments" }),
-      notifyUser(record.user, { type: "payment", title: "Subscription payment will be refunded", message: `We received ${formatGHS(record.amount)} for ${record.planName}, but a newer plan was already active, so your current plan was kept. ${siteName()} will refund this payment.`, link: "/agent/subscription" }),
+      notifyUser(record.user, { type: "payment", title: "Subscription payment will be refunded", message: `We received ${formatGHS(record.amount)} for ${record.planName}, but ${heldReason(record.note)}. ${siteName()} will refund this payment.`, link: "/agent/subscription" }),
     ]);
   }
   clearVisibleAgentsCache(); // a new or renewed plan can make the agent's listings visible
@@ -157,6 +170,11 @@ export const createAndActivateSubscription = async (fields, extra = {}) => {
   const _id = new mongoose.Types.ObjectId();
   return (await settleSubscription({ _id }, extra, { create: { ...fields, _id } })).user;
 };
+
+// Why a paid checkout was held for a refund, as the agent is told
+const heldReason = (note = "") => (/^Paystack reported/.test(note) ? "the amount didn't match the plan price, so nothing was activated"
+  : note === DISPUTED_CREDIT ? "the payment behind your upgrade credit was disputed, so your current plan was kept"
+    : "a newer plan was already active, so your current plan was kept");
 
 /**
  * Asks Paystack about one checkout and records the answer. Shared by browser verification,
@@ -265,11 +283,12 @@ export const listUpgrades = async (req, res) => {
   if (!(await getSettings()).agent.requireSubscription) return fail(res, 403, freeAccessMessage);
   const blocked = checkoutBlocker(req.user);
   if (blocked) return fail(res, ...blocked);
-  const { status, currentPlan, upgrades } = await upgradeOptions(req.user);
+  const { status, currentPlan, upgrades, blocked: paused } = await upgradeOptions(req.user);
   ok(res, {
     status,
     currentPlan,
-    highest: status === "active" && upgrades.length === 0,
+    blocked: paused || null, // why upgrades are paused, if they are
+    highest: status === "active" && !paused && upgrades.length === 0,
     upgrades: upgrades.map((quote) => ({ plan: quote.plan, quote: presentQuote(quote) })),
   });
 };
@@ -341,8 +360,7 @@ export const verifyPayment = async (req, res) => {
 
   const outcome = await processSubscriptionPayment(subscription);
   if (outcome.state === "review") {
-    const why = /^Paystack reported/.test(outcome.subscription?.note || "") ? "the amount didn't match the plan price, so nothing was activated" : "a newer plan was already active, so your current plan was kept";
-    return fail(res, 409, `Your payment was received, but ${why}. Contact ${siteName()} for your refund; do not pay again.`);
+    return fail(res, 409, `Your payment was received, but ${heldReason(outcome.subscription?.note)}. Contact ${siteName()} for your refund; do not pay again.`);
   }
   if (outcome.state === "refunded") return fail(res, 409, "This payment has been refunded. Choose a plan again if you still need one.");
   // Idempotent: verifying twice (e.g. a page refresh, or after a webhook) returns the same result
