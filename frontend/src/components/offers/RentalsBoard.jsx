@@ -21,7 +21,7 @@ import { rentalApi } from "../../frontApi";
 import { formatDate, isWithinDays } from "../../utils/date";
 import { toWhatsAppNumber } from "../../utils/whatsapp";
 import { adminPath } from "../../utils/adminEntry";
-import { arrivalText, pastArrivalDeadline, payPlace } from "../../utils/hotelPayments";
+import { approvalDeadlineText, arrivalText, pastArrivalDeadline, payPlace } from "../../utils/hotelPayments";
 import { cloudImage } from "../../utils/cloudImage";
 import { formatGhs } from "../../utils/property";
 import ReceiptCard from "../receipts/ReceiptCard";
@@ -184,7 +184,7 @@ const RentalsBoard = ({ scope }) => {
     },
     { key: "amount", header: "Amount", render: (r) => <span className="font-bold whitespace-nowrap text-gray-900">{formatGhs(r.amount)}</span> },
     { key: "payment", header: "Payment", render: (r) => <StatusBadge status={r.paymentStatus} dot={false} /> },
-    { key: "status", header: "Rental", render: (r) => <StatusBadge status={r.status} /> },
+    { key: "status", header: "Rental", render: (r) => <div><StatusBadge status={r.status} />{r.awaitingApproval && r.approvalDeadline && <span className="mt-1 block text-xs font-semibold text-amber-700">Approve by {approvalDeadlineText(r)}</span>}</div> },
     { key: "paid", header: "Date paid", render: (r) => <span className="whitespace-nowrap text-gray-600">{r.paidAt ? formatDate(r.paidAt) : "—"}</span> },
     { key: "movein", header: "Move-in / Check-in", render: (r) => <span className="whitespace-nowrap text-gray-600">{formatDate(r.startDate)}{r.arrivalTime && <span className="block text-xs text-gray-500">arriving {r.arrivalTime}</span>}</span> },
     {
@@ -319,7 +319,7 @@ const RentalsBoard = ({ scope }) => {
             </dl>
             {open.notes && <p className="rounded-lg bg-brand-50/60 p-4 text-sm whitespace-pre-line text-gray-700">“{open.notes}”</p>}
             {dueAtOffice(open) && open.statusKey === "confirmed" && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{formatGhs(open.amount)} is due at your office. Record it here when the tenant pays: they get a receipt, and only then can they move in. Never ask for payment online or to a personal number.</p>}
-            {open.awaitingApproval && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Approve this booking and assign the room{open.numberOfRooms > 1 ? "s" : ""} the guest will stay in. They get their booking receipt only then, and show it when they arrive. To refuse it, decline it.</p>}
+            {open.awaitingApproval && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Approve this booking and assign the room{open.numberOfRooms > 1 ? "s" : ""} the guest will stay in. They get their booking receipt only then, and show it when they arrive. To refuse it, decline it.{open.approvalDeadline && <strong className="mt-1 block">Approve by {approvalDeadlineText(open)} (Ghana time), or it's cancelled automatically and the rooms released.</strong>}</p>}
             {needsReceipt(open) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">The guest paid {formatGhs(open.amount)} online into your payout account. Send their receipt before they check in.</p>}
             <ReceiptCard receipt={open.receipt} />
             {dueOnArrival(open) && ["confirmed", "active"].includes(open.statusKey) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{formatGhs(open.amount)} is due {payPlace(open)}. The guest {open.arrivalTime ? `is arriving at ${open.arrivalTime} on ${formatDate(open.startDate)}` : `should ${open.hotelId ? "check in" : "arrive"} ${arrivalText(open)}`}{open.bookingCode ? ` and will show booking code ${open.bookingCode}: check it matches before you take payment` : ""}.{open.cancellationPolicy && <span className="mt-1 block text-xs whitespace-pre-line">Policy shown to the guest: {open.cancellationPolicy}</span>}</p>}

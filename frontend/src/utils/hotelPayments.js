@@ -33,6 +33,9 @@ export const bookingHeadline = (booking) => {
   return null;
 };
 
+// "Tue 9 Jun 2030, 14:00": when an unapproved hotel booking is cancelled automatically (Ghana time)
+export const approvalDeadlineText = (booking) => (booking?.approvalDeadline ? `${DAY.format(new Date(booking.approvalDeadline))}, ${TIME.format(new Date(booking.approvalDeadline))}` : "");
+
 // "on Wed 1 Jan 2030 by 14:00"
 export const arrivalText = (booking) => {
   if (!booking.arrivalDeadline) return "on your check-in day";

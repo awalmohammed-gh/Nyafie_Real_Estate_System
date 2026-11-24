@@ -422,6 +422,7 @@ export const mapRental = (r) => ({
   roomNumbers: r.roomNumbers || [], // hotels: the room(s) the hotel assigned when approving
   approvedAt: r.approvedAt || null,
   awaitingApproval: Boolean(r.awaitingApproval), // hotels: waiting for the hotel to approve and assign rooms
+  approvalDeadline: r.approvalDeadline || null, // ...cancelled automatically if not approved by then
   cancellationPolicy: r.cancellationPolicy || "",
   contactName: r.contactName,
   contactPhone: r.contactPhone,

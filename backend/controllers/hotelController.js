@@ -8,11 +8,14 @@ import {
   roomAvailability,
 } from "../utils/hotel.js";
 import { ok, fail } from "../utils/response.js";
+import { expireUnansweredBookings } from "../utils/bookingExpiry.js";
 
 // Date-specific availability is informational; checkout rechecks inside a transaction.
 export const hotelRooms = async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id))
     return fail(res, 404, "Hotel not found.");
+  // Overdue unapproved bookings release their rooms before availability is shown
+  await expireUnansweredBookings({ hotelId: req.params.id });
   let property = await Property.findById(req.params.id);
   const managing = property && req.user && canManageRecord(property, req.user);
   if (!managing) property = await loadPublishedProperty(req.params.id);
