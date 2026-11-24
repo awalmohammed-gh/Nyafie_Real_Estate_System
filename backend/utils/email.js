@@ -195,6 +195,7 @@ export const bookingConfirmationMailer = {
       ["Booking code", booking.bookingCode],
       ["Where", booking.place],
       ...(booking.room ? [["Room", booking.room]] : []),
+      ...(booking.roomNumbers ? [["Room number", booking.roomNumbers]] : []),
       ["Check-in", booking.checkIn],
       ["Check-out", booking.checkOut],
       ["Arriving at", `${booking.arrivalTime} (Ghana time)`],
@@ -202,7 +203,7 @@ export const bookingConfirmationMailer = {
       ["Total", booking.total],
       ["Payment", booking.payment],
     ];
-    const intro = booking.paid ? "Your stay is booked and paid." : "Your stay is reserved. Nothing has been paid online: you pay when you arrive.";
+    const intro = `${booking.roomNumbers ? "The hotel approved your booking and assigned your room. " : ""}${booking.paid ? "Your stay is booked and paid." : "Nothing has been paid online: you pay when you arrive."}`;
     const show = "Show this booking receipt (or its code) when you arrive. You can also download it from your account. If your arrival time changes, update it there so they know when to expect you.";
     await send({
       to: email,

@@ -36,7 +36,7 @@ const dueAtOffice = (r) => r.paymentOption === "office" && r.paymentDue;
 const needsReceipt = (r) => Boolean(r.hotelId) && r.paymentMethod === "Paystack" && r.paymentStatus === "Paid" && !r.receipt && r.statusKey !== "cancelled";
 const FILTERS = [
   { id: "All", label: "All", match: () => true },
-  { id: "Action", label: "Needs action", match: (r) => ["Paid", "Confirmed"].includes(r.status) },
+  { id: "Action", label: "Needs action", match: (r) => r.awaitingApproval || ["Paid", "Confirmed"].includes(r.status) },
   { id: "Payment", label: "Awaiting payment", match: (r) => ["Pending", "Payment Pending"].includes(r.status) },
   { id: "Active", label: "Active", match: (r) => r.status === "Active" },
   { id: "CheckIns", label: "Upcoming check-ins", match: (r) => isStay(r) && ["Paid", "Confirmed"].includes(r.status) && r.startDate.slice(0, 10) >= new Date().toISOString().slice(0, 10) },
@@ -63,8 +63,12 @@ const PAID_ON_ARRIVAL = { kind: "paid-on-arrival", label: "Payment received" };
 const PAID_AT_OFFICE = { kind: "paid-at-office", label: "Payment received at office" };
 const SEND_RECEIPT = { kind: "receipt", label: "Send receipt" };
 const CONFIRM_OFFICE = { status: "confirmed", label: "Confirm rental", note: "" };
+// Hotels: approving a booking assigns its room(s) and sends the guest's booking receipt
+const APPROVE = { kind: "approve", label: "Approve & assign room" };
+const DECLINE = { status: "cancelled", label: "Decline", danger: true };
 const NO_SHOW = { status: "cancelled", label: "Mark no-show", danger: true, note: "Guest did not arrive by the arrival deadline (no-show)." };
 const actionsFor = (r) => {
+  if (r.awaitingApproval) return [APPROVE, DECLINE];
   if (r.paysAtOffice && r.statusKey === "pending") return [CONFIRM_OFFICE, ...ACTIONS.pending];
   // The tenant moves in only after paying at the office
   if (dueAtOffice(r) && r.statusKey === "confirmed") return [PAID_AT_OFFICE, ...ACTIONS.confirmed.slice(1)];
@@ -97,6 +101,7 @@ const RentalsBoard = ({ scope }) => {
   const [confirm, setConfirm] = useState(null); // { rental, action }
   const [note, setNote] = useState("");
   const [slip, setSlip] = useState(""); // office payments: an optional bank slip or cheque number
+  const [roomNumbers, setRoomNumbers] = useState([]); // hotel approval: one room number per booked room
   const [busy, setBusy] = useState(false);
 
   const retry = reload;
@@ -124,12 +129,13 @@ const RentalsBoard = ({ scope }) => {
   const apply = async () => {
     setBusy(true);
     const { rental, action } = confirm;
-    const request = action.kind === "paid-on-arrival" ? rentalApi.recordArrivalPayment(rental.id, note.trim())
+    const request = action.kind === "approve" ? rentalApi.approveBooking(rental.id, roomNumbers.map((value) => value.trim()), note.trim())
+      : action.kind === "paid-on-arrival" ? rentalApi.recordArrivalPayment(rental.id, note.trim())
       : action.kind === "paid-at-office" ? rentalApi.recordOfficePayment(rental.id, { note: note.trim(), reference: slip.trim() })
       : action.kind === "receipt" ? rentalApi.sendReceipt(rental.id, note.trim())
       : rentalApi.updateRentalStatus(rental.id, action.status, note.trim() || action.note || "");
     const { ok, result } = await run(request, {
-      success: ["paid-on-arrival", "paid-at-office"].includes(action.kind) ? "Payment recorded and receipt sent" : action.kind === "receipt" ? "Receipt sent" : action === NO_SHOW ? "Marked as no-show" : `${rental.hotelId ? "Booking" : "Rental"} ${action.status === "active" ? (isStay(rental) ? "checked in" : "marked active") : action.status}`,
+      success: action.kind === "approve" ? "Booking approved and booking receipt sent" : ["paid-on-arrival", "paid-at-office"].includes(action.kind) ? "Payment recorded and receipt sent" : action.kind === "receipt" ? "Receipt sent" : action === NO_SHOW ? "Marked as no-show" : `${rental.hotelId ? "Booking" : "Rental"} ${action.status === "active" ? (isStay(rental) ? "checked in" : "marked active") : action.status}`,
       description: `${rental.contactName} has been notified.`,
     });
     if (ok) {
@@ -140,13 +146,14 @@ const RentalsBoard = ({ scope }) => {
     setConfirm(null);
     setNote("");
     setSlip("");
+    setRoomNumbers([]);
   };
 
   const actionButtons = (r, size = "text-xs") =>
     actionsFor(r).map((action) => (
       <button
         key={action.kind || action.label}
-        onClick={() => setConfirm({ rental: r, action })}
+        onClick={() => { if (action.kind === "approve") setRoomNumbers(Array.from({ length: r.numberOfRooms || 1 }, () => "")); setConfirm({ rental: r, action }); }}
         className={`btn btn-light px-3 py-1.5 ${size} ${action.danger ? "text-red-600" : "text-brand-700"}`}
       >
         {action.label}
@@ -289,7 +296,8 @@ const RentalsBoard = ({ scope }) => {
                 ["Current address", open.currentAddress || "—"],
                 [open.hotelId ? "Guests" : "Occupants", open.occupants],
                 [open.hotelId ? "Check-in" : "Move-in", formatDate(open.startDate)],
-                ...(isStay(open) ? [["Arriving at", open.arrivalTime || "Not given"], ["Booking code", open.bookingCode || "—"]] : []),
+                ...(isStay(open) ? [["Arriving at", open.arrivalTime || "Not given"], ["Booking code", open.bookingCode || (open.awaitingApproval ? "Sent when you approve" : "—")]] : []),
+                ...(open.hotelId ? [["Room number(s)", open.roomNumbers.length ? open.roomNumbers.join(", ") : "Not assigned yet"]] : []),
                 [open.hotelId ? "Check-out" : "Until", formatDate(open.endDate)],
                 ["Amount", formatGhs(open.amount)],
                 ["Reference", open.reference || "—"],
@@ -311,6 +319,7 @@ const RentalsBoard = ({ scope }) => {
             </dl>
             {open.notes && <p className="rounded-lg bg-brand-50/60 p-4 text-sm whitespace-pre-line text-gray-700">“{open.notes}”</p>}
             {dueAtOffice(open) && open.statusKey === "confirmed" && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{formatGhs(open.amount)} is due at your office. Record it here when the tenant pays: they get a receipt, and only then can they move in. Never ask for payment online or to a personal number.</p>}
+            {open.awaitingApproval && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Approve this booking and assign the room{open.numberOfRooms > 1 ? "s" : ""} the guest will stay in. They get their booking receipt only then, and show it when they arrive. To refuse it, decline it.</p>}
             {needsReceipt(open) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">The guest paid {formatGhs(open.amount)} online into your payout account. Send their receipt before they check in.</p>}
             <ReceiptCard receipt={open.receipt} />
             {dueOnArrival(open) && ["confirmed", "active"].includes(open.statusKey) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{formatGhs(open.amount)} is due {payPlace(open)}. The guest {open.arrivalTime ? `is arriving at ${open.arrivalTime} on ${formatDate(open.startDate)}` : `should ${open.hotelId ? "check in" : "arrive"} ${arrivalText(open)}`}{open.bookingCode ? ` and will show booking code ${open.bookingCode}: check it matches before you take payment` : ""}.{open.cancellationPolicy && <span className="mt-1 block text-xs whitespace-pre-line">Policy shown to the guest: {open.cancellationPolicy}</span>}</p>}
@@ -330,12 +339,16 @@ const RentalsBoard = ({ scope }) => {
         open={Boolean(confirm)}
         onClose={() => setConfirm(null)}
         onConfirm={apply}
-        disabled={busy}
+        disabled={busy || (confirm?.action.kind === "approve" && roomNumbers.some((value) => !value.trim()))}
         tone={confirm?.action.danger ? "danger" : "primary"}
         title={confirm ? `${confirm.action.label}?` : ""}
         description={
           confirm &&
-          (confirm.action.kind === "paid-on-arrival"
+          (confirm.action.kind === "approve"
+            ? `Assign the room${(confirm.rental.numberOfRooms || 1) > 1 ? "s" : ""} for ${confirm.rental.contactName} (${confirm.rental.numberOfRooms} × ${confirm.rental.roomName}, ${formatDate(confirm.rental.startDate)} to ${formatDate(confirm.rental.endDate)}). Their booking receipt with the room number${confirm.rental.paymentStatus === "Paid" ? " and their payment receipt are" : " is"} sent to them.`
+            : confirm.action === DECLINE
+            ? `Decline ${confirm.rental.contactName}'s booking. The rooms are released and they're told.${confirm.rental.paymentStatus === "Paid" ? " Their online payment is flagged for a refund." : ""}`
+            : confirm.action.kind === "paid-on-arrival"
             ? `Record that ${confirm.rental.contactName} paid ${formatGhs(confirm.rental.amount)} ${payPlace(confirm.rental)}. A receipt from you is sent to them.`
             : confirm.action.kind === "paid-at-office"
             ? `Record that ${confirm.rental.contactName} paid ${formatGhs(confirm.rental.amount)} at your office. A receipt from you is sent to them, and they can then move in.`
@@ -351,6 +364,16 @@ const RentalsBoard = ({ scope }) => {
         }
         confirmLabel={busy ? "Saving..." : confirm?.action.label}
       >
+        {confirm?.action.kind === "approve" && (
+          <div className="mb-2 grid gap-2 sm:grid-cols-2">
+            {roomNumbers.map((value, index) => (
+              <label key={index} className="text-sm font-medium text-gray-700">
+                Room number{roomNumbers.length > 1 ? ` ${index + 1}` : ""}
+                <input required value={value} maxLength={20} onChange={(e) => setRoomNumbers((list) => list.map((item, i) => (i === index ? e.target.value : item)))} placeholder="e.g. 204" className="field mt-1" />
+              </label>
+            ))}
+          </div>
+        )}
         {confirm?.action.kind === "paid-at-office" && <input value={slip} onChange={(e) => setSlip(e.target.value.slice(0, 80))} placeholder="Bank slip or cheque number (optional)" className="field mb-2" />}
         <textarea value={note} onChange={(e) => setNote(e.target.value.slice(0, 300))} rows={2} placeholder={confirm?.action.kind ? "Note on the receipt (optional)" : "Note for the customer (optional)"} className="field resize-none" />
       </ConfirmDialog>

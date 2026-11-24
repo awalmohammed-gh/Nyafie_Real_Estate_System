@@ -418,7 +418,10 @@ export const mapRental = (r) => ({
   receipt: mapReceipt(r.receipt),
   arrivalDeadline: r.arrivalDeadline || null,
   arrivalTime: r.arrivalTime || "", // stays: when the guest said they'll arrive ("15:30", Ghana time)
-  bookingCode: r.bookingCode || "", // stays: shown at the hotel or to the owner on arrival
+  bookingCode: r.bookingCode || "", // stays: shown at the hotel or to the owner on arrival (hotels: once approved)
+  roomNumbers: r.roomNumbers || [], // hotels: the room(s) the hotel assigned when approving
+  approvedAt: r.approvedAt || null,
+  awaitingApproval: Boolean(r.awaitingApproval), // hotels: waiting for the hotel to approve and assign rooms
   cancellationPolicy: r.cancellationPolicy || "",
   contactName: r.contactName,
   contactPhone: r.contactPhone,

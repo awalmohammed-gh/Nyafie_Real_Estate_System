@@ -7,6 +7,7 @@ const ghs = (value) => `GHS ${Number(value).toLocaleString("en-GB")}`;
 export const bookingRows = (booking) => [
   ["Where", booking.property?.title || ""],
   ...(booking.hotelId ? [["Room", `${booking.numberOfRooms} × ${booking.roomName}`]] : []),
+  ...(booking.roomNumbers?.length ? [[booking.roomNumbers.length > 1 ? "Room numbers" : "Room number", booking.roomNumbers.join(", ")]] : []),
   ["Check-in", formatDate(booking.startDate)],
   ["Check-out", formatDate(booking.endDate)],
   ["Arriving at", booking.arrivalTime ? `${booking.arrivalTime} (Ghana time)` : "Not given yet"],

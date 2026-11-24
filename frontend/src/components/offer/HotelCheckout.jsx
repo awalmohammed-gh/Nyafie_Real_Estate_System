@@ -97,6 +97,7 @@ const HotelCheckout = ({ property, ownerName }) => {
         const headline = bookingHeadline(saved);
         if (headline) return <div className="space-y-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900" role="status">
           <p className="flex items-center gap-2 text-base font-semibold"><CircleCheck className="h-5 w-5" aria-hidden="true" />{headline}</p>
+          {saved.awaitingApproval && <p>Your rooms are held. Once the hotel approves your booking and assigns your room, you'll get your booking receipt here, in your account and by email. Download it and show it at the hotel.</p>}
           {saved.paymentOption === "on_arrival" && saved.paymentStatus !== "Paid" && <>
             <p className="flex items-start gap-2"><CalendarCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />Pay {roomPrice(saved.amount)} when you arrive. Please check in {arrivalText(saved)}.</p>
             {saved.cancellationPolicy && <p className="whitespace-pre-line text-emerald-800"><span className="font-semibold">Hotel policy:</span> {saved.cancellationPolicy}</p>}
