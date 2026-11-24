@@ -401,7 +401,7 @@ const withPaymentOptions = async (property, data) => {
 export const getProperty = async (req, res) => {
   const property = await Property.findById(req.params.id).catch(() => null);
   if (!property) return fail(res, 404, "Property not found.");
-  if (req.user?.role === "admin" || isOwner(property, req.user)) return ok(res, await withPaymentOptions(property, (await presentProperties([property]))[0]));
+  if (req.user?.role === "admin" || isOwner(property, req.user)) return ok(res, await withPaymentOptions(property, (await presentProperties([property], { includeRoomNumbers: true }))[0]));
   // The same rule as publicQuery(), checked for this listing's owner only (not the whole agent
   // directory). The details are prepared at the same time and only sent if it is visible.
   // Guests may message the agent on WhatsApp from this page (number only; never in lists or search)
@@ -449,7 +449,7 @@ export const recordView = async (req, res) => {
 
 // GET /api/properties/my (agent)
 export const myProperties = async (req, res) => {
-  ok(res, await presentProperties(await Property.find(teamFilter(req.user)).sort({ createdAt: -1 })));
+  ok(res, await presentProperties(await Property.find(teamFilter(req.user)).sort({ createdAt: -1 }), { includeRoomNumbers: true }));
 };
 
 const limitMessage = (access) =>

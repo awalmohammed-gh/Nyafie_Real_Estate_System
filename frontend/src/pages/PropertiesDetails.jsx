@@ -312,7 +312,12 @@ const PropertiesDetails = () => {
     isForSale ? requireAuth(chatAction) : startFlow("rent");
   };
 
+  // Hotels: check-in and check-out times and the stars the hotel states (Ghana time)
+  const hotelInfo = hotel ? property.hotelInfo : null;
   const specs = [
+    hotelInfo?.starRating > 0 && { icon: Tag, label: "Stars", value: "★".repeat(hotelInfo.starRating) },
+    hotelInfo && { icon: Building2, label: "Check-in from", value: hotelInfo.checkInFrom },
+    hotelInfo && { icon: Building2, label: "Check-out by", value: hotelInfo.checkOutBy },
     !hotel && details.bedrooms != null && { icon: Bed, label: "Bedrooms", value: details.bedrooms },
     !hotel && details.bathrooms != null && { icon: Bath, label: "Bathrooms", value: details.bathrooms },
     details.size?.value > 0 && { icon: Maximize2, label: `${details.size.unit}`, value: details.size.value },
@@ -332,6 +337,10 @@ const PropertiesDetails = () => {
     ["Price", `${value}${period || ""}`],
     !hotel && details.bathrooms != null && ["Bathrooms", details.bathrooms],
     ["Availability", availability],
+    hotelInfo?.starRating > 0 && ["Star rating", `${hotelInfo.starRating} star${hotelInfo.starRating > 1 ? "s" : ""}`],
+    hotelInfo && ["Check-in", `From ${hotelInfo.checkInFrom}`],
+    hotelInfo && ["Check-out", `By ${hotelInfo.checkOutBy}`],
+    hotel && property.roomTypes?.some((room) => room.active) && ["Room types", property.roomTypes.filter((room) => room.active).length],
     details.size?.value > 0 && ["Size", `${details.size.value} ${details.size.unit}`],
     moveIn?.advanceMonths > 0 && ["Rent advance", `${moveIn.advanceMonths} ${moveIn.advanceMonths === 1 ? "month" : "months"}`],
     place.digitalAddress && ["Digital address", place.digitalAddress],

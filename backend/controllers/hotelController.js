@@ -28,8 +28,11 @@ export const hotelRooms = async (req, res) => {
     : null;
   const rooms = [];
   for (const room of property.roomTypes.filter((r) => managing || r.active)) {
+    // Room numbers are for the hotel itself, never guests
+    const { roomNumbers, ...details } = room.toJSON();
     rooms.push({
-      ...room.toJSON(),
+      ...details,
+      ...(managing && roomNumbers ? { roomNumbers } : {}),
       availableRooms: dates
         ? await roomAvailability(
             property._id,

@@ -4,6 +4,12 @@
 
 Existing settings gain the Hotel option once during backend initialization. Subsequent administrator changes to the available property types are respected. No room types or prices are invented for existing Hotel listings; an agent must configure them. Existing paid whole-hotel rentals conservatively block room availability for their overlapping dates.
 
+## Room numbers, room contents and hotel details
+
+- Each room type may list its **room numbers** (`roomTypes[].roomNumbers`, e.g. "101, 102, 103"). When listed, the room count follows the list, a number can belong to only one room type, and approving a booking can only assign rooms from that list (the hotel picks them from a dropdown). Room numbers are returned only to the hotel and admins, never on public pages or room lists.
+- **What's inside each room** is the room type's `amenities` (grouped in the editor: comfort, bathroom, entertainment, food and drink, view, safety, plus the hotel's own items). The hotel's **shared facilities** are the listing's `amenities`, chosen from a hotel list (reception, restaurant, pool, airport shuttle...) instead of the house list.
+- **Hotel details** (`hotelInfo`): check-in from, check-out by (Ghana time) and a star rating (0 to 5), shown on the hotel's page. Hotels have no bedroom or bathroom counts.
+
 ## API and ledger
 
 - `GET /api/properties/:id/rooms?checkIn=YYYY-MM-DD&checkOut=YYYY-MM-DD` returns date-specific availability. Guests see active room types from published, visible hotels. Authenticated owners/admins may inspect draft and inactive inventory.

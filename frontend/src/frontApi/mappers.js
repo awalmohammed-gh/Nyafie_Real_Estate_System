@@ -175,6 +175,7 @@ export const mapProperty = (p) => ({
   roomTypes: p.roomTypes || [],
   // Hotels: the owner's saved payment options, and what a guest can choose right now (details page only)
   stayBooking: p.stayBooking || null,
+  hotelInfo: p.hotelInfo || null, // hotels: check-in from, check-out by, star rating
   moveIn: p.moveIn || null, // monthly rentals: advance, agent fee, deposit (utils/moveIn.js)
   paymentOptions: p.paymentOptions || null,
   // video / virtualTour: { provider, id } or null (utils/mediaLinks.js builds the players)
@@ -240,6 +241,7 @@ export const toApiProperty = (p) => {
   if (p.features) out.amenities = p.features;
   if (p.roomTypes !== undefined) out.roomTypes = p.roomTypes;
   if (p.stayBooking) out.stayBooking = p.stayBooking;
+  if (p.hotelInfo) out.hotelInfo = p.hotelInfo;
   if (p.moveIn !== undefined) out.moveIn = p.moveIn;
   if (p.media) {
     out.images = p.media.images;
@@ -420,6 +422,7 @@ export const mapRental = (r) => ({
   arrivalTime: r.arrivalTime || "", // stays: when the guest said they'll arrive ("15:30", Ghana time)
   bookingCode: r.bookingCode || "", // stays: shown at the hotel or to the owner on arrival (hotels: once approved)
   roomNumbers: r.roomNumbers || [], // hotels: the room(s) the hotel assigned when approving
+  roomOptions: r.roomOptions || [], // hotels, owner side: the room type's room numbers to choose from when approving
   approvedAt: r.approvedAt || null,
   awaitingApproval: Boolean(r.awaitingApproval), // hotels: waiting for the hotel to approve and assign rooms
   approvalDeadline: r.approvalDeadline || null, // ...cancelled automatically if not approved by then
