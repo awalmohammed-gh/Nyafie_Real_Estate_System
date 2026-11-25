@@ -6,6 +6,7 @@ import { uploadCustomerPhoto, removeCustomerPhoto } from "../controllers/custome
 import { rateLimit } from "../middleware/security.js";
 import { verifyEmailFor, resendVerificationFor } from "../controllers/emailVerificationController.js";
 import { requestPasswordReset, resetCustomerPassword } from "../controllers/passwordResetController.js";
+import { mySessions, endMySessions } from "../controllers/sessionController.js";
 import { createGoogleChallenge, googleCustomerLogin } from "../controllers/googleAuthController.js";
 import { resendAdminSignIn, verifyAdminSignIn } from "../controllers/adminSignInController.js";
 
@@ -24,6 +25,8 @@ for (const [session, guard] of [["customer", protectCustomer], ["agent", protect
   router.get('/' + session + '/me', guard, me);
   router.put('/' + session + '/me', guard, updateMe);
   router.put('/' + session + '/me/password', guard, passwordChangeLimit, changePassword);
+  router.get('/' + session + '/sessions', guard, mySessions); // where they're signed in
+  router.delete('/' + session + '/sessions/:id', guard, endMySessions); // an id, "others" or "all"
 }
 // Sign-ups are limited per network in app.js (limits.register); codes per email in utils/emailVerification.js
 router.post("/customer/register", register);

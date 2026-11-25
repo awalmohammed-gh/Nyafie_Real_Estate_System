@@ -15,6 +15,7 @@ import Dispute from "../models/Dispute.js";
 import Setting from "../models/Setting.js";
 import Notification from "../models/Notification.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
+import { TEST_SESSION } from "./support/sessions.js";
 
 const KEYS = ["JWT_KEY", "PAYSTACK_MODE", "PAYSTACK_SECRET_KEY", "Test_Secret_Key", "CRON_SECRET", "PUBLIC_SITE_URL"];
 const HOUR = 60 * 60 * 1000;
@@ -56,7 +57,7 @@ test("Paystack disputes are followed, reported to admins and block double refund
   });
   t.mock.method(console, "error", () => {});
 
-  const adminCookie = `admin_token=${jwt.sign({ id: admin.id, role: "admin", session: "admin" }, process.env.JWT_KEY, { expiresIn: "1h" })}`;
+  const adminCookie = `admin_token=${jwt.sign({ sid: TEST_SESSION, id: admin.id, role: "admin", session: "admin" }, process.env.JWT_KEY, { expiresIn: "1h" })}`;
   const call = async (path, { method = "GET", body } = {}) => {
     const response = await fetch(`${base}${path}`, { method, headers: { "Content-Type": "application/json", "X-Session-Domain": "admin", ...adminEntryHeaders(), Cookie: adminCookie }, ...(body ? { body: JSON.stringify(body) } : {}) });
     return { ...(await response.json()), code: response.status };

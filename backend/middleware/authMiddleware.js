@@ -6,6 +6,7 @@ import { approvedAgent, isRemoved } from "../utils/agentApplication.js";
 import { CUSTOMER_TAB_HEADER, matchesCustomerTab, validTabSecret } from "../utils/customerTabSession.js";
 import { matchesSessionRole } from "../utils/sessionAccess.js";
 import { hasAdminEntry, hideAdmin } from "../utils/adminEntry.js";
+import { TOUCH_MS, sessionStore } from "../utils/sessions.js";
 
 const userFromCookie = async (req, session) => {
   const token = req.cookies?.[cookieName(session)];
@@ -19,6 +20,8 @@ const userFromCookie = async (req, session) => {
   // A valid signature alone is insufficient: sessions must have an issued-at time and expiry.
   if (!Number.isSafeInteger(payload.iat) || !Number.isSafeInteger(payload.exp) || payload.exp <= payload.iat || payload.iat > Math.floor(Date.now() / 1000) + 60) return null;
   if (payload.session !== session || payload.role !== SESSION_ROLES[session] || !/^[a-f\d]{24}$/i.test(payload.id || "")) return null;
+  // Tokens from before sessions were stored have no session id: their owners sign in once more
+  if (!/^[a-f\d]{24}$/i.test(payload.sid || "")) return null;
   if (session === "customer" && !validTabSecret(payload.tabHash)) return null;
   if (session === "customer" && !matchesCustomerTab(payload, req.get(CUSTOMER_TAB_HEADER))) {
     // A new tab must not erase the shared cookie used by an already signed-in tab.
@@ -27,7 +30,13 @@ const userFromCookie = async (req, session) => {
   }
   // Current account role/status matter too: demotion, suspension and removal take effect immediately.
   // A removed provider's existing token stops working on its next request.
-  const user = await User.findById(payload.id).select("+sessionVersion");
+  // So does the stored session: signing out, or ending it from another device, stops this token at once.
+  const now = new Date();
+  const [user, stored] = await Promise.all([
+    User.findById(payload.id).select("+sessionVersion"),
+    sessionStore.findActive(payload.sid, payload.id, session, now),
+  ]);
+  if (!stored) return null;
   const tokenVersion = payload.sessionVersion === undefined ? "" : payload.sessionVersion;
   if (!user || typeof tokenVersion !== "string" || tokenVersion !== (user.sessionVersion || "")) return null;
   if (!matchesSessionRole(user, session) || (session !== "agent" && !user.isActive) || isRemoved(user)) return null;
@@ -37,6 +46,9 @@ const userFromCookie = async (req, session) => {
   if (user.$locals) {
     user.$locals.sessionDomain = session;
     user.$locals.googleSignInAt = payload.google === true ? payload.iat * 1000 : 0;
+  }
+  if (now - stored.lastUsedAt > TOUCH_MS) {
+    try { await sessionStore.touch(payload.sid, now); } catch (error) { console.error("Session last-used time not saved:", error.message); }
   }
   return user;
 };

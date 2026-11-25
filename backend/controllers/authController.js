@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import Plan from "../models/Plan.js";
-import { setAuthCookie, clearAuthCookie, cookieAccount, hasSession } from "../utils/generateToken.js";
+import { endSessions, hasSession, signOut, startSession } from "../utils/sessions.js";
 import { ok, fail } from "../utils/response.js";
 import { onboardingState, validPhone } from "../utils/agentApplication.js";
 import { CUSTOMER_TAB_HEADER, validTabSecret } from "../utils/customerTabSession.js";
@@ -113,7 +113,7 @@ export const becomeAgent = async (req, res) => {
   if (needsPlan && !plan?.isActive) return fail(res, 404, "This plan is not available.");
   let user = req.user;
   // Google signs people in to the customer area only: an agent opens theirs with the password
-  if (user.role === "agent" && user.$locals?.googleSignInAt && !hasSession(req, "agent", user))
+  if (user.role === "agent" && user.$locals?.googleSignInAt && !(await hasSession(req, "agent", user)))
     return fail(res, 403, "Sign in to the agent area with your email and password.", "AGENT_SIGN_IN");
   if (user.role === "user") {
     user = await User.findOneAndUpdate(
@@ -126,7 +126,7 @@ export const becomeAgent = async (req, res) => {
   }
   if (!user || user.role !== "agent" || !user.isActive || user.agentApplication?.status === "removed")
     return fail(res, 403, "Your account cannot start agent onboarding. Contact support for help.");
-  setAuthCookie(res, user._id, "agent", user.sessionVersion);
+  if (!(await hasSession(req, "agent", user))) await startSession(req, res, user, "agent", { startedWith: "customer" });
   ok(res, await loadUser(user._id), "Continue with your existing account");
 };
 
@@ -155,7 +155,7 @@ export const loginFor = (session) => async (req, res) => {
     if (!pending) return rejectLoginAttempt(res, await loginAttempts.failure(email));
     const cleared = await loginAttempts.success(email);
     if (cleared.retryAfter) return rejectLoginAttempt(res, cleared);
-    return resumeRegistration(res, session, pending);
+    return resumeRegistration(req, res, session, pending);
   }
   if (!matchesSessionRole(user, session) || (session !== "agent" && !user.isActive))
     return fail(res, 401, "Incorrect email or password for this area.");
@@ -167,21 +167,17 @@ export const loginFor = (session) => async (req, res) => {
   // Nobody enters with an email they haven't proved is theirs (older accounts, or changed by an admin)
   if (session !== "admin" && !user.emailVerifiedAt) return startEmailVerification(req, res, user, session);
   // Admins: the password is only the first step; a code sent to their email is the second
-  if (session === "admin" && adminTwoStepEnabled()) return startAdminSignIn(res, user);
+  if (session === "admin" && adminTwoStepEnabled()) return startAdminSignIn(req, res, user);
   if (passwordMissing(user)) await User.updateOne({ _id: user._id }, { $set: { passwordSetAt: new Date() } }); // an older Google account: they know it
-  setAuthCookie(res, user._id, session, user.sessionVersion, req.get(CUSTOMER_TAB_HEADER));
+  await startSession(req, res, user, session);
   ok(res, await loadUser(user._id), "Signed in");
 };
 export const login = loginFor("customer");
 export const adminLogin = loginFor("admin");
 // Signing out ends every session this person has on the browser: their customer and agent areas are one
 // account. A different agent account, signed in from the agent login, is someone else's and stays.
-const LINKED_SESSION = Object.freeze({ customer: "agent", agent: "customer" });
-export const logoutFor = (session) => (req, res) => {
-  clearAuthCookie(res, session);
-  const linked = LINKED_SESSION[session];
-  const account = linked && cookieAccount(req, session);
-  if (account && account === cookieAccount(req, linked)) clearAuthCookie(res, linked);
+export const logoutFor = (session) => async (req, res) => {
+  await signOut(req, res, session);
   ok(res, null, "Signed out");
 };
 export const logout = logoutFor("customer");
@@ -228,6 +224,7 @@ export const changePassword = async (req, res) => {
   if (problem) return fail(res, 400, problem.replace("your password", "your new password"));
   user.password = newPassword;
   await user.save();
-  setAuthCookie(res, user._id, req.sessionDomain, user.sessionVersion, req.get(CUSTOMER_TAB_HEADER));
+  await endSessions(user._id, "password"); // everywhere, this browser included; it continues with a new session
+  await startSession(req, res, user, req.sessionDomain);
   ok(res, null, creating ? "Password created. You can now sign in with your email and password, or with Google." : "Password updated. Other sessions have been signed out.");
 };

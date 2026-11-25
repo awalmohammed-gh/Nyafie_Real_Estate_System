@@ -3,7 +3,7 @@ import { initializeBackend } from "./config/initialize.js";
 import { isConnectionProblem } from "./utils/connectionProblem.js";
 
 // Local development server only (Vercel imports app.js directly).
-// Startup problems end the process with a clear message, so a watcher such as `node --watch`
+// Startup problems end the process with a clear message, so `npm run server` (scripts/dev.js)
 // shows the failure instead of a server that claims to be listening but isn't. A database that can't be
 // reached (network drop, Atlas waking up) is retried: exiting would leave the site answering 502 until a file changes.
 const port = Number(process.env.PORT) || 4000;

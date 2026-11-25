@@ -245,12 +245,13 @@ test("agent registration, onboarding, payment and admin review use real HTTP gua
     await t.test("suspension revokes old-token access but preserves status login; reactivation is admin-only", async () => {
       const path = `/api/admin/agent-applications/${id(agent)}`;
       assert.equal((await call(path, "admin", { action: "suspend" }, "PATCH")).status, 200);
-      assert.equal((await call("/api/agents/dashboard")).status, 403);
-      assert.equal((await call("/api/agents/profile", "agent", profile, "PUT")).status, 403);
+      assert.equal((await call("/api/agents/dashboard")).status, 401, "their session ended");
+      assert.equal((await call("/api/agents/profile", "agent", profile, "PUT")).status, 401);
       assert.equal((await call("/api/auth/agent/login", "agent", { email: signup.email, password: signup.password })).status, 200);
       assert.equal((await call("/api/auth/agent/me")).status, 200);
       assert.equal((await call("/api/agents/application")).status, 200);
       assert.equal((await call("/api/agents/application", "agent", profile, "PUT")).status, 409);
+      assert.equal((await call("/api/agents/dashboard")).status, 403);
       assert.equal((await call("/api/subscriptions/initialize", "agent", { planId: id(plan) })).status, 403);
       assert.equal((await call(path, "admin", { action: "reactivate" }, "PATCH")).status, 200);
       assert.equal((await call("/api/agents/dashboard")).status, 200);

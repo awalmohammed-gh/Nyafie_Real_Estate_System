@@ -98,7 +98,7 @@ test("Google challenge retries are bounded and explain an unreachable backend", 
     calls++;
     throw Object.assign(new Error("Bad gateway"), { status: 502 });
   }, async () => {}), /backend is running/);
-  assert.equal(calls, 5);
+  assert.equal(calls, 7);
 });
 
 test("Google challenges do not retry configuration, rate-limit or authorization errors", async () => {

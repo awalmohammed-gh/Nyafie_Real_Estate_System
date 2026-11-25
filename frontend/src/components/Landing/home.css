@@ -1546,11 +1546,16 @@
 .reference-header :is(a, button, span, svg) { transition: color 400ms ease, background-color 400ms ease, border-color 400ms ease; }
 .reference-header > nav { height: 76px; }
 .reference-header > nav > ul { gap: clamp(4px, 1.1vw, 18px); }
+/* The current page: a faint tint (of white over the hero photo, of the brand on the solid bar) */
 .reference-header > nav > ul > li > a[aria-current="page"] {
-  background: linear-gradient(120deg, #931eac, #651080);
-  border-radius: 12px;
-  color: white;
-  padding: 11px 20px;
+  background: #f5ecf8;
+  border-radius: 999px;
+  color: #7c1497;
+  padding: 9px 16px;
+}
+.reference-header.is-over-hero > nav > ul > li > a[aria-current="page"] {
+  background: rgb(255 255 255 / 0.14);
+  color: #fff;
 }
 .reference-header button[aria-haspopup="menu"] {
   border: 1px solid #9e46c1;

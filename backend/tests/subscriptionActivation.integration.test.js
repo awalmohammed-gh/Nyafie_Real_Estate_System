@@ -9,6 +9,7 @@ import Notification from "../models/Notification.js";
 import { createApp } from "../app.js";
 import { activateSubscription } from "../controllers/subscriptionController.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
+import { TEST_SESSION } from "./support/sessions.js";
 
 const DAY = 86400000;
 
@@ -37,7 +38,7 @@ test("subscription activation commits payment, history and account together exac
   const plan = (fields = {}) => Plan.create({ name: `Plan ${++sequence}`, price: 100, duration: 30, propertyLimit: 10, imageLimit: 5, ...fields });
   const agent = (fields = {}) => User.create({ firstName: "Test", lastName: "Agent", email: `agent${++sequence}@subscription.test`, password: "TestPassword123", emailVerifiedAt: new Date(), role: "agent", agentApplication: { status: "approved", agentType: "individual" }, ...fields });
   const purchase = (user, target, fields = {}) => Subscription.create({ user: user.id, plan: target.id, planName: target.name, accountType: target.accountType, amount: target.price, planPrice: target.price, durationDays: target.duration, paymentReference: `SUB-${++sequence}`, ...fields });
-  const verify = (user, record) => realFetch(base + "/subscriptions/verify", { method: "POST", headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", Cookie: "agent_token=" + jwt.sign({ id: user.id, role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" }) }, body: JSON.stringify({ reference: record.paymentReference }) });
+  const verify = (user, record) => realFetch(base + "/subscriptions/verify", { method: "POST", headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", Cookie: "agent_token=" + jwt.sign({ sid: TEST_SESSION, id: user.id, role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" }) }, body: JSON.stringify({ reference: record.paymentReference }) });
   const currentPlan = async (user, target, fields = {}) => {
     const current = await purchase(user, target, { status: "active", paymentStatus: "paid", startDate: new Date(Date.now() - 5 * DAY), expiresAt: new Date(Date.now() + 25 * DAY), paidAt: new Date(), ...fields });
     await User.updateOne({ _id: user.id }, { subscription: current.id });
@@ -186,7 +187,7 @@ test("subscription activation commits payment, history and account together exac
   await t.test("an upgrade credit only counts money that was kept", async (st) => {
     const basic = () => plan({ sortOrder: 1 }), higher = () => plan({ price: 300, sortOrder: 2 });
     const asAgent = async (user, path, body) => {
-      const response = await realFetch(base + path, { method: body ? "POST" : "GET", headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", Cookie: "agent_token=" + jwt.sign({ id: user.id, role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" }) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+      const response = await realFetch(base + path, { method: body ? "POST" : "GET", headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", Cookie: "agent_token=" + jwt.sign({ sid: TEST_SESSION, id: user.id, role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" }) }, ...(body ? { body: JSON.stringify(body) } : {}) });
       return { code: response.status, ...(await response.json()) };
     };
     const ready = () => agent({ emailVerifiedAt: new Date(), agentApplication: { status: "approved", agentType: "individual", profileCompletedAt: new Date() } });

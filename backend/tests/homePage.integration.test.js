@@ -47,5 +47,9 @@ test("the home page's rows, counts and short stays come from what is really list
   assert.deepEqual(await list("stay=true"), ["Hotel apartment", "Nightly villa"]);
   assert.deepEqual(await list("listingType=Rent&stay=false"), ["Already rented", "Monthly flat"]);
   assert.deepEqual((await get("/properties/facets?stay=true")).types.map((type) => type.value).sort(), ["Hotel-Apartment", "Villa"]);
+  assert.deepEqual([home.facets.rent, home.facets.rentHomes], [4, 2], "rent without short stays");
+  const rent = await get("/properties/facets?listingType=Rent&stay=false");
+  assert.deepEqual([rent.total, rent.rentHomes, rent.stays, rent.types.map((type) => type.value)], [2, 2, 0, ["Apartment"]]);
+  assert.deepEqual([rent.priceRange.Rent.minPrice, rent.priceRange.Rent.maxPrice], [4000, 4000]);
   assert.equal((await get("/properties/facets?listingType=Sale")).total, 12, "facets for one listing type are unchanged");
 });

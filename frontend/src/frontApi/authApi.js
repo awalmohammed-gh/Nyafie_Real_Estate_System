@@ -40,6 +40,9 @@ export const forSession = (domain) => {
     },
     updateProfile: async (changes) => present((await client.put(base + "/me", changes, config)).data),
     changePassword: (currentPassword, newPassword) => client.put(base + "/me/password", { currentPassword, newPassword }, config),
+    // Where this account is signed in; end one session (its id), "others" or "all"
+    sessions: async () => (await client.get(base + "/sessions", config)).data,
+    endSession: (target) => client.delete(base + "/sessions/" + target, config),
     uploadProfilePhoto: async (image) => present((await client.post(base + "/me/photo", { image }, config)).data),
     removeProfilePhoto: async () => present((await client.delete(base + "/me/photo", config)).data),
   };

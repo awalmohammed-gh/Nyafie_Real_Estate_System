@@ -47,6 +47,7 @@ router.get("/users", admin.listUsers);
 router.get("/users/:id", admin.getUser);
 router.put("/users/:id", admin.updateUser);
 router.patch("/users/:id/status", admin.setUserStatus);
+router.post("/users/:id/sign-out", admin.signOutUser); // everywhere
 router.delete("/users/:id", admin.deleteUser);
 
 router.get("/agents", admin.listAgents);

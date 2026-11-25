@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import { clearVisibleAgentsCache } from "../utils/marketplace.js";
-import { setAuthCookie } from "../utils/generateToken.js";
+import { ensureAgentSession } from "../utils/sessions.js";
 import { paymentReturnUrl } from "../config/runtime.js";
 import Plan from "../models/Plan.js";
 import Subscription from "../models/Subscription.js";
@@ -60,7 +60,7 @@ const saveUnconfirmedStatus = async (subscription, status) => {
 const alreadyConfirmed = async (req, res) => {
   const user = await User.findById(req.user._id);
   await submitReadyApplication(user);
-  if (req.user.role === "agent") setAuthCookie(res, req.user._id, "agent", req.user.sessionVersion);
+  if (req.user.role === "agent") await ensureAgentSession(req, res, req.user);
   return ok(res, await loadUser(req.user._id), "Payment already confirmed. Agent approval remains a separate requirement.");
 };
 
@@ -311,7 +311,7 @@ const startCheckout = async (req, res, { upgradeOnly = false } = {}) => {
   if (quote.amount <= 0) {
     const subscription = await Subscription.create({ ...record, amount: 0, paymentReference: newReference("HB-CR"), paymentMethod: "Plan credit", paymentStatus: "pending" });
     const agent = await activateSubscription(subscription);
-    setAuthCookie(res, agent._id, "agent", req.user.sessionVersion);
+    await ensureAgentSession(req, res, { _id: agent._id, sessionVersion: req.user.sessionVersion });
     return ok(res, { mode: "credit", user: await loadUser(agent._id) }, `You're now on ${plan.name}`);
   }
   if ((await paymentMode()) === "disabled") return fail(res, 503, "Subscription payments are not available right now.");
@@ -374,7 +374,7 @@ export const verifyPayment = async (req, res) => {
   }
 
   const agent = outcome.user;
-  setAuthCookie(res, agent._id, "agent", req.user.sessionVersion);
+  await ensureAgentSession(req, res, { _id: agent._id, sessionVersion: req.user.sessionVersion });
   ok(res, await loadUser(req.user._id), "Subscription activated");
 };
 

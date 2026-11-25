@@ -66,7 +66,7 @@ export const parseSavedFilters = (input) => {
 // The same query the listings page sends (see propertyController.buildPublicFilter)
 export const toQuery = (filters) => Object.fromEntries(Object.entries({
   listingType: filters.listingType,
-  stay: filters.stay ? "true" : undefined,
+  stay: filters.stay ? "true" : filters.listingType === "Rent" ? "false" : undefined, // the same as the Rent and Short stays tabs
   type: filters.types?.join(","),
   area: filters.area, city: filters.city, region: filters.region,
   minPrice: filters.minPrice ?? undefined, maxPrice: filters.maxPrice ?? undefined,

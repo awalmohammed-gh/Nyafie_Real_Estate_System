@@ -9,7 +9,7 @@ import "./location.css";
  * onUseDevice() for "Use my current location" (shown unless allowDevice is false).
  * Lookups are debounced, and an outdated lookup is cancelled so it can never replace a newer one.
  */
-const LocationSearch = ({ onSelect, onUseDevice, allowDevice = true, deviceBusy = false, purpose = "place", near, placeholder = "Search by city, neighborhood or location…", initialQuery = "", autoFocus = false, className = "", inputRef: externalRef }) => {
+const LocationSearch = ({ onSelect, onUseDevice, allowDevice = true, deviceBusy = false, purpose = "place", near, placeholder = "Search by city, neighbourhood or location…", initialQuery = "", autoFocus = false, className = "", inputRef: externalRef }) => {
   const id = useId();
   const localRef = useRef(null);
   const inputRef = externalRef || localRef;

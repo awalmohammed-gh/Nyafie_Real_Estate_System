@@ -125,7 +125,7 @@ test("customers become agents on the same account, pay first, and retain custome
     assert.equal(user.onboarding.dashboardAccess, false);
     assert.equal(user.onboarding.requireSubscription, false);
     await Setting.updateOne({ key: "platform" }, { $set: { "agent.requireSubscription": true } });
-    agentCookie = cookieFrom(paid, "agent");
+    assert.equal(cookieFrom(paid, "agent"), undefined, "their agent session simply goes on");
     assert.equal((await request("/api/subscriptions/verify", { session: "agent", cookie: agentCookie, method: "POST", body: { reference } })).status, 200);
     const expiresAt = (await Subscription.findOne({ paymentReference: reference })).expiresAt;
     const profile = await request("/api/agents/application", { session: "agent", cookie: agentCookie, method: "PUT", body: { firstName: "Existing", lastName: "Customer", phone: "+233241234567", agentType: "individual", region: "Greater Accra", city: "Accra", yearsExperience: 2, bio: "Helping people find homes in Accra." } });

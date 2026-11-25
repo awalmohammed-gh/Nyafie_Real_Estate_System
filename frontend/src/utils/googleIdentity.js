@@ -1,6 +1,6 @@
 let loading;
 
-const RETRY_AFTER_MS = [500, 1000, 2000, 3000]; // about as long as the server takes to restart
+const RETRY_AFTER_MS = [500, 1000, 2000, 3000, 4000, 5000]; // about as long as a restart takes, connecting to the database included
 
 // Safe to repeat: asking for a challenge signs nobody in, and a sign-in is single-use on the server.
 // Retry only temporary gateway failures, never rejected credentials or configuration errors.

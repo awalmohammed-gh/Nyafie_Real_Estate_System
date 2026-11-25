@@ -3,6 +3,7 @@ import { AlertCircle, Bell, BellRing, Check, Eye, EyeOff, HandCoins, Loader2, Lo
 import { useAuth } from "../../context/useAuth";
 import CustomerProfileForm from "./CustomerProfileForm";
 import ProfilePhotoEditor from "./ProfilePhotoEditor";
+import SignedInDevices from "./SignedInDevices";
 
 const sections = [
   { key: "profile", label: "Personal info", icon: UserRound },
@@ -136,6 +137,8 @@ const CustomerSettings = () => {
             </div>
             <footer className="account-section-footer"><p role="status" aria-live="polite" className={`account-save-status ${passwordSaved ? "text-emerald-700" : "text-gray-500"}`}>{passwordSaved ? <><Check className="h-4 w-4" />Password updated.</> : passwordSaving ? "Updating your password..." : "Changes take effect immediately."}</p><button type="submit" disabled={passwordSaving || !passwords.current || !passwords.next || !passwords.confirm} className="account-button">{passwordSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}{passwordSaving ? "Updating..." : "Update password"}</button></footer>
           </form>}
+          <header className="account-section-heading border-t border-gray-100"><h2>Where you're signed in</h2><p>The browsers and devices using your account now.</p></header>
+          {active === "security" && <div className="account-section-body !pt-2"><SignedInDevices /></div>}
         </section>
         <section role="tabpanel" id="settings-panel-notifications" aria-labelledby="settings-tab-notifications" hidden={active !== "notifications"}>
           <header className="account-section-heading"><p className="account-eyebrow">Make it yours</p><h2>Notification preferences</h2><p>Choose which updates appear in your NyaFie notification bell.</p></header>

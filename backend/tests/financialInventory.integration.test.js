@@ -12,6 +12,7 @@ import Subscription from "../models/Subscription.js";
 import adminRoutes from "../routes/adminRoutes.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
 import { customerTabHeaders } from "./support/customerTab.js";
+import { TEST_SESSION } from "./support/sessions.js";
 
 test("financial inventory combines cash ledgers without counting attempts, credits or refunds as receipts", {skip:process.env.RUN_FINANCE_INTEGRATION!=="1",timeout:90000}, async t=>{
   await isolatedMongo(t);
@@ -26,7 +27,7 @@ test("financial inventory combines cash ledgers without counting attempts, credi
   const app=express();app.use(express.json(),cookieParser());app.use("/api/admin",adminRoutes);app.use((error,_req,res,_next)=>res.status(error.status||500).json({success:false,message:error.message}));
   const server=app.listen(0,"127.0.0.1");await new Promise(done=>server.once("listening",done));t.after(()=>new Promise(done=>server.close(done)));
   const url=`http://127.0.0.1:${server.address().port}/api/admin/inventory`;
-  const cookie=(user,session)=>`${session}_token=${jwt.sign({id:user.id,role:user.role,session},process.env.JWT_KEY,{expiresIn:"1h"})}`;
+  const cookie=(user,session)=>`${session}_token=${jwt.sign({sid:TEST_SESSION,id:user.id,role:user.role,session},process.env.JWT_KEY,{expiresIn:"1h"})}`;
   const call=async(query="",auth=cookie(admin,"admin"),domain="admin")=>{const response=await fetch(url+query,{headers:{"X-Session-Domain":domain,...customerTabHeaders(domain),...(auth?{Cookie:auth}:{})}});return {status:response.status,headers:response.headers,...await response.json()};};
   let sequence=0;
   const payment=(amount,status="paid",extra={})=>Payment.create({kind:"rental",customer:customer.id,property:home.id,owner:admin.id,ownerType:"admin",amount,method:"Paystack",reference:`FIN-${++sequence}`,status,createdAt:new Date("2024-02-15"),...extra});

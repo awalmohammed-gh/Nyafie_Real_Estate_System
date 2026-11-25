@@ -22,7 +22,7 @@ import { formatType } from "../../utils/property";
 import { DEFAULT_RADIUS_KM, DEVICE, nearToParams } from "../../utils/geo";
 import { useVisitorLocation } from "../../hooks/useVisitorLocation";
 import { geoApi } from "../../frontApi";
-import { PRICE_RANGES } from "../../hooks/usePropertyBrowseState";
+import { priceRanges, priceUnit } from "../../utils/browseTabs";
 import NavOverlay from "../nav/NavOverlay";
 
 const NEAR_ME = "__near_me__"; // an option value no neighbourhood can have
@@ -150,7 +150,7 @@ const Hero = () => {
         : area.startsWith("place:") && place
           ? { ...nearToParams(place), radius: String(DEFAULT_RADIUS_KM) }
           : { area };
-    const budget = price === "" ? null : PRICE_RANGES[Number(price)];
+    const budget = price === "" ? null : priceRanges(status)[Number(price)];
     const params = new URLSearchParams(
       Object.entries({
         status: status === "stay" ? "" : status,
@@ -282,12 +282,12 @@ const Hero = () => {
               }
               options={[
                 { value: "", label: "Any price" },
-                ...PRICE_RANGES.map((range, index) => ({
+                ...priceRanges(search.status).map((range, index) => ({
                   value: String(index),
                   label: range.label,
                 })),
               ]}
-              footerHint="Prices use each listing’s stated payment period."
+              footerHint={`Prices ${priceUnit(search.status)}.`}
             />
             <button type="submit" className="home-search-submit">
               <Search size={18} aria-hidden="true" /> Search Properties

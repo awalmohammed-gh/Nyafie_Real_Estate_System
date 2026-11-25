@@ -323,12 +323,12 @@ const mergeSpellings = (places) => {
 
 /**
  * GET /api/properties/facets (public): filter options and headline numbers,
- * computed from the public listings in MongoDB (optionally for one listingType, or ?stay=true).
+ * computed from the public listings in MongoDB (optionally for one listingType, and short stays only or none: ?stay=true|false).
  */
 export const propertyFacets = async (req, res) => {
   const { agents } = await publicQuery();
   const base = publicBase(agents);
-  const match = { $and: [base, ...(["Sale", "Rent"].includes(req.query.listingType) ? [{ listingType: req.query.listingType }] : []), ...(req.query.stay === "true" ? [SHORT_STAY] : [])] };
+  const match = { $and: [base, ...(["Sale", "Rent"].includes(req.query.listingType) ? [{ listingType: req.query.listingType }] : []), ...(req.query.stay === "true" ? [SHORT_STAY] : req.query.stay === "false" ? [{ $nor: [SHORT_STAY] }] : [])] };
   ok(res, await facetSummary(match, agents));
 };
 
@@ -360,6 +360,7 @@ const facetSummary = async (match, agents) => {
     sale: byListingType.Sale?.count || 0,
     rent: byListingType.Rent?.count || 0,
     stays: facet.stays[0]?.count || 0,
+    rentHomes: (byListingType.Rent?.count || 0) - (facet.stays[0]?.count || 0), // rentals that aren't short stays
     priceRange: byListingType,
     agents: agents.length, // available agents (same rule as the public agents directory), with or without listings
     avgRating: totals.avgRating ? Math.round(totals.avgRating * 10) / 10 : null,

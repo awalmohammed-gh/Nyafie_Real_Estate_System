@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Ban, Building2, CalendarPlus, CheckCircle2, Eye, Inbox, Pencil, Repeat, RotateCcw, Trash2, UserCog, UserX, XCircle, Zap } from "lucide-react";
+import { Ban, Building2, CalendarPlus, CheckCircle2, Eye, Inbox, LogOut, Pencil, Repeat, RotateCcw, Trash2, UserCog, UserX, XCircle, Zap } from "lucide-react";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useAdminChange, useDebounced, usePagedList } from "../../hooks/usePagedList";
 import { useAuth } from "../../context/useAuth";
@@ -83,6 +83,7 @@ const AdminAgents = () => {
     { label: "View application", icon: Eye, onClick: () => navigate(adminPath(`/agent-applications?open=${a.id}`)) },
     { label: "View agent", icon: Eye, onClick: () => setOpen(a.id) },
     { label: "Edit agent", icon: Pencil, onClick: () => setEditing(a) },
+    { label: "Sign out everywhere", icon: LogOut, onClick: () => setConfirm({ type: "signOut", agent: a }) },
     { label: "Change plan", icon: Repeat, onClick: () => setSubAction({ type: "changePlan", agent: a }) },
     { label: "Extend subscription", icon: CalendarPlus, onClick: () => setSubAction({ type: "extend", agent: a }), hidden: !a.subscription },
     { label: "Activate subscription", icon: Zap, onClick: () => setSubAction({ type: "activate", agent: a }), hidden: !a.subscription || a.sub.isActive },
@@ -142,6 +143,7 @@ const AdminAgents = () => {
   const runConfirm = async () => {
     const { type, agent } = confirm;
     setConfirm(null);
+    if (type === "signOut") return run(admin.signOutUser(agent.id), { success: "Signed out everywhere", description: agent.name, type: "info" });
     await run(admin.setStatus(agent.id, type === "suspend" ? "suspended" : "active", "agent"), {
       success: type === "suspend" ? "Agent suspended" : "Agent activated",
       description: agent.name,
@@ -349,10 +351,10 @@ const AdminAgents = () => {
         onClose={() => setConfirm(null)}
         onConfirm={runConfirm}
         tone={confirm?.type === "activate" ? "primary" : "danger"}
-        title={confirm?.type === "suspend" ? "Suspend agent?" : "Activate agent?"}
-        confirmLabel={confirm?.type === "suspend" ? "Suspend Agent" : "Activate Agent"}
+        title={{ signOut: "Sign out everywhere?", suspend: "Suspend agent?", activate: "Activate agent?" }[confirm?.type]}
+        confirmLabel={{ signOut: "Sign out everywhere", suspend: "Suspend Agent", activate: "Activate Agent" }[confirm?.type]}
         description={
-          confirm?.type === "suspend"
+          confirm?.type === "signOut" ? `${confirm.agent.name} will be signed out of every device. They can sign in again.` : confirm?.type === "suspend"
             ? `This will prevent ${confirm.agent.name} from signing in, publishing or managing properties. Their listings will be hidden from the public.`
             : `${confirm?.agent.name} will regain access based on their subscription.`
         }

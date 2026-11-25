@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Ban, Building, CheckCircle2, Eye, HandCoins, Heart, Inbox, KeyRound, Mail, Pencil, Phone, Trash2, Users } from "lucide-react";
+import { Ban, Building, CheckCircle2, Eye, HandCoins, Heart, Inbox, KeyRound, LogOut, Mail, Pencil, Phone, Trash2, Users } from "lucide-react";
 import { useApiQuery } from "../../hooks/useApiQuery";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { useDebounced, usePagedList } from "../../hooks/usePagedList";
@@ -57,6 +57,7 @@ const AdminUsers = () => {
   const actionsFor = (u) => [
     { label: "View customer", icon: Eye, onClick: () => setViewing(u.id) },
     { label: "Edit details", icon: Pencil, onClick: () => setEditing(u) },
+    { label: "Sign out everywhere", icon: LogOut, onClick: () => setConfirm({ type: "signOut", user: u }) },
     u.status === "suspended"
       ? { label: "Activate", icon: CheckCircle2, onClick: () => setConfirm({ type: "activate", user: u }) }
       : { label: "Suspend", icon: Ban, onClick: () => setConfirm({ type: "suspend", user: u }) },
@@ -66,7 +67,8 @@ const AdminUsers = () => {
   const runConfirm = async () => {
     const { type, user: u } = confirm;
     setConfirm(null);
-    if (type === "delete") {
+    if (type === "signOut") await run(admin.signOutUser(u.id), { success: "Signed out everywhere", description: u.name, type: "info" });
+    else if (type === "delete") {
       const { ok } = await run(admin.deleteUser(u.id), { success: "Customer deleted", description: u.name, type: "info" });
       if (ok && viewing === u.id) setViewing(null);
       if (ok) list.reload();
@@ -277,11 +279,12 @@ const AdminUsers = () => {
         onClose={() => setConfirm(null)}
         onConfirm={runConfirm}
         tone={confirm?.type === "activate" ? "primary" : "danger"}
-        title={{ suspend: "Suspend customer?", activate: "Activate customer?", delete: "Delete customer?" }[confirm?.type]}
-        confirmLabel={{ suspend: "Suspend", activate: "Activate", delete: "Delete customer" }[confirm?.type]}
+        title={{ signOut: "Sign out everywhere?", suspend: "Suspend customer?", activate: "Activate customer?", delete: "Delete customer?" }[confirm?.type]}
+        confirmLabel={{ signOut: "Sign out everywhere", suspend: "Suspend", activate: "Activate", delete: "Delete customer" }[confirm?.type]}
         description={
           confirm &&
           {
+            signOut: `${confirm.user.name} will be signed out of every device. They can sign in again.`,
             suspend: `${confirm.user.name} will be signed out and won't be able to sign in until reactivated.`,
             activate: `${confirm.user.name} will be able to sign in again.`,
             delete: `${confirm.user.name}'s account and open requests will be permanently removed. Completed payments stay on record. This can't be undone.`,

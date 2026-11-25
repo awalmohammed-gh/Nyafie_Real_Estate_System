@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AlertCircle, ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Heart, House, KeyRound, MapPin, RotateCcw, Search, SlidersHorizontal, Tag, X } from "lucide-react";
+import { AlertCircle, ArrowUpRight, BedDouble, ChevronDown, ChevronLeft, ChevronRight, Heart, House, KeyRound, MapPin, RotateCcw, Search, SlidersHorizontal, Tag, X } from "lucide-react";
 import HouseCard from "./card/HouseCard";
 import NearbyBar from "./location/NearbyBar";
 import { useVisitorLocation } from "../hooks/useVisitorLocation";
@@ -13,6 +13,9 @@ import { useApiQuery } from "../hooks/useApiQuery";
 import { usePropertyBrowseState } from "../hooks/usePropertyBrowseState";
 import { usePropertyFacets } from "../hooks/usePropertyFacets";
 import { usePlatform } from "../context/usePlatform";
+import { useAuth } from "../context/useAuth";
+import { sortsFor, tabCount, tabFacets, tabQuery } from "../utils/browseTabs";
+import { shortStayPath } from "../utils/shortStay";
 import { propertyApi } from "../frontApi";
 import { formatType } from "../utils/property";
 import SaveSearchButton from "./property/SaveSearchButton";
@@ -21,8 +24,8 @@ import { placePath } from "../utils/places";
 import "./property/catalogue.css";
 import "./property/catalogueSearch.css";
 
-const PAGE_SIZE = 9;
-const INTENTS = [{ value: "", label: "All homes", icon: House }, { value: "Sale", label: "Buy", icon: Tag }, { value: "Rent", label: "Rent", icon: KeyRound }];
+const PAGE_SIZE = 12;
+const INTENTS = [{ value: "", label: "All", icon: House }, { value: "Sale", label: "Buy", icon: Tag }, { value: "Rent", label: "Rent", icon: KeyRound }, { value: "stay", label: "Short stays", icon: BedDouble }];
 const SORTS = [
   { value: "", label: "Recommended" }, { value: "latest", label: "Newest first" },
   { value: "priceAsc", label: "Price: low to high" }, { value: "priceDesc", label: "Price: high to low" },
@@ -39,7 +42,8 @@ const DiscoveryMap = lazy(() => import("./location/DiscoveryMap"));
 const PropertyBrowser = ({ title, description, fixedListingType, banner, place = null }) => {
   const { paths } = usePlatform();
   const navigate = useNavigate();
-  const { filters, query, search, sort, page, view, params: urlParams, update: updateSearch, clear: clearSearch } = usePropertyBrowseState(fixedListingType, place);
+  const { isAuthenticated } = useAuth();
+  const { filters, query, search, sort: urlSort, page, view, params: urlParams, update: updateSearch, clear: clearSearch } = usePropertyBrowseState(fixedListingType, place);
   // On a location page the place is part of the address: changing or clearing it continues on the
   // general /sale or /rent results, with the visitor's other filters kept
   const basePath = fixedListingType === "Sale" ? "/sale" : "/rent";
@@ -61,16 +65,21 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner, place =
   const resultsRef = useRef(null);
   const locationInputRef = useRef(null);
   const allFacets = usePropertyFacets();
-  const facets = usePropertyFacets(filters.stay ? "stay" : filters.listingType);
+  const { tab } = filters;
+  const allRentals = Boolean(place); // /rent/osu: every rental there
+  const facets = usePropertyFacets(tabFacets(tab, { allRentals }));
   const visitor = useVisitorLocation();
   // ?near=me (device, approximate) or ?near=lat,lng&place=… ; pending while the device position loads
   const near = parseNear(urlParams, visitor.position);
   const nearbyActive = Boolean(near && !near.pending);
   const locating = near?.source === "device" && near.pending && ["idle", "locating"].includes(visitor.status);
   const locationProblem = near?.source === "device" && near.pending ? LOCATION_PROBLEMS[visitor.status] || "" : "";
+  // Sorting by price needs a tab: a night, a month and a sale can't be ranked together
+  const sorts = sortsFor(tab, near && !near.pending ? NEARBY_SORTS : SORTS);
+  const sort = sorts.some(({ value }) => value === urlSort) ? urlSort : "";
   const params = {
-    page, limit: PAGE_SIZE, search, sort, listingType: filters.listingType,
-    stay: filters.stay ? "true" : undefined, type: filters.types, area: filters.area, city: filters.city, region: filters.region, minPrice: filters.price?.min ?? undefined,
+    page, limit: PAGE_SIZE, search, sort, ...tabQuery(tab, { allRentals }),
+    type: filters.types, area: filters.area, city: filters.city, region: filters.region, minPrice: filters.price?.min ?? undefined,
     maxPrice: filters.price?.max ?? undefined, bedrooms: filters.beds || undefined,
     bathrooms: filters.baths || undefined, availability: filters.availability, amenities: filters.amenities,
   };
@@ -116,13 +125,12 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner, place =
   const words = title.split(" ");
 
   const changeIntent = (value) => {
-    if (value === filters.listingType) return;
-    if (fixedListingType) navigate(value === "Sale" ? "/sale" : value === "Rent" ? "/rent" : paths.listings);
-    else update({ listingType: value, stay: "", area: "", types: [], price: null });
+    if (value === tab) return;
+    if (fixedListingType) navigate(value === "Sale" ? "/sale" : value === "Rent" ? "/rent" : value === "stay" ? shortStayPath(paths.listings) : paths.listings);
+    else update({ listingType: value === "stay" ? "" : value, stay: value === "stay" ? "1" : "", area: "", types: [], price: null, ...(value ? {} : { sort: "" }) });
   };
 
   const activeFilters = [
-    filters.stay && { key: "stay", kind: "stay", value: true, label: "Short stays", clear: () => update({ stay: "", types: [] }) },
     ...filters.types.map((type) => ({ key: `type:${type}`, kind: "type", value: type, label: formatType(type), clear: () => update({ types: filters.types.filter((value) => value !== type) }) })),
     filters.area && { key: "area", kind: "area", value: filters.area, label: filters.area, clear: () => update({ area: "" }) },
     filters.city && { key: "city", kind: "city", value: filters.city, label: filters.city, clear: () => update({ city: "", area: "" }) },
@@ -134,16 +142,24 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner, place =
     ...filters.amenities.map((amenity) => ({ key: `amenity:${amenity}`, kind: "amenity", value: amenity, label: amenity, clear: () => update({ amenities: filters.amenities.filter((value) => value !== amenity) }) })),
     query.trim() && { key: "search", kind: "search", value: query.trim(), label: `“${query.trim()}”`, clear: () => update({ query: "" }, { replace: true }) },
   ].filter(Boolean);
-  const hasFilters = activeFilters.length > 0 || Boolean(!fixedListingType && filters.listingType);
+  const hasFilters = activeFilters.length > 0 || Boolean(!fixedListingType && tab);
   // "Save search": the current filters, so new matching homes can be announced
   const savedFilters = toSavedFilters({ filters, search, near: nearbyActive ? near : null });
   const canSaveSearch = hasSearchCriteria(savedFilters);
   // The banner also names Buy/Rent when it is a filter here (not on the fixed /sale and /rent pages)
   const bannerFilters = [
-    !fixedListingType && filters.listingType && { key: "intent", kind: "intent", value: filters.listingType, label: filters.listingType === "Rent" ? "For rent" : "For sale", clear: () => update({ listingType: "" }) },
+    !fixedListingType && tab && { key: "intent", kind: "intent", value: tab, label: { Sale: "For sale", Rent: "For rent", stay: "Short stays" }[tab], clear: () => changeIntent("") },
     ...activeFilters,
   ].filter(Boolean);
   const shortlistLink = <Link to="/account/saved" className="catalogue-shortlist"><Heart size={16} aria-hidden="true" />Your shortlist<ArrowUpRight size={15} aria-hidden="true" /></Link>;
+
+  // A page that doesn't exist (an old link, or listings that have since gone): the last one instead
+  const lastPage = results.data?.pages;
+  useEffect(() => {
+    if (lastPage && page > lastPage) updateSearch({ page: lastPage }, { replace: true });
+    // updateSearch is recreated every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastPage, page]);
 
   const goToPage = (next) => {
     update({ page: next });
@@ -173,10 +189,10 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner, place =
           <fieldset className="catalogue-intents">
             <legend className="sr-only">I’m looking to</legend>
             {INTENTS.map(({ value, label, icon: Icon }) => {
-              const count = value === "Sale" ? allFacets.data?.sale : value === "Rent" ? allFacets.data?.rent : allFacets.data?.total;
+              const count = tabCount(allFacets.data, value);
               return (
-                <label key={label} className={`catalogue-intent ${filters.listingType === value ? "is-active" : ""}`}>
-                  <input type="radio" className="sr-only" name="catalogue-intent" value={value} checked={filters.listingType === value} onChange={() => changeIntent(value)} />
+                <label key={label} className={`catalogue-intent ${tab === value ? "is-active" : ""}`}>
+                  <input type="radio" className="sr-only" name="catalogue-intent" value={value} checked={tab === value} onChange={() => changeIntent(value)} />
                   <Icon size={15} aria-hidden="true" /><span className="catalogue-intent-label">{label}</span>{count !== undefined && <small>{count}</small>}
                 </label>
               );
@@ -188,6 +204,7 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner, place =
               <input type="search" aria-label="Search properties" placeholder="Search a home, neighbourhood or type" value={query} onChange={(event) => update({ query: event.target.value }, { replace: true })} />
               {query && <button type="button" aria-label="Clear search" onClick={() => update({ query: "" }, { replace: true })}><X size={16} aria-hidden="true" /></button>}
             </form>
+            {!near && <button type="button" className="catalogue-near-trigger" aria-expanded={changingLocation} onClick={() => (changingLocation ? setChangingLocation(false) : changeLocation())}><MapPin size={17} aria-hidden="true" /><span>Near a place</span></button>}
             <button type="button" className="catalogue-filter-trigger" aria-label={activeFilters.length ? `Filters, ${activeFilters.length} active` : "Filters"} onClick={() => setIsFilterOpen(true)}><SlidersHorizontal size={18} aria-hidden="true" /><span>Filters</span>{activeFilters.length > 0 && <small>{activeFilters.length}</small>}</button>
           </div>
         </div>
@@ -197,31 +214,29 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner, place =
         <aside className="catalogue-sidebar" aria-label="Property filters">
           <div className="catalogue-sidebar-inner">
             <div className="catalogue-sidebar-heading">
-              <div className="catalogue-filter-intro"><span className="catalogue-filter-emblem"><SlidersHorizontal size={20} aria-hidden="true" /></span><span className="catalogue-eyebrow">A HOME THAT FITS YOU</span></div>
-              <div className="catalogue-filter-title"><h2>Find your fit<span>.</span></h2><button type="button" onClick={clear} className="catalogue-reset" disabled={!hasFilters} aria-label="Reset filters"><RotateCcw size={13} aria-hidden="true" />Reset</button></div>
-              <p>Choose the details that make a place yours.</p>
+              <div className="catalogue-filter-title"><h2>Filters</h2><button type="button" onClick={clear} className="catalogue-reset" disabled={!hasFilters} aria-label="Reset filters"><RotateCcw size={13} aria-hidden="true" />Reset</button></div>
               {activeFilters.length > 0 && <span className="catalogue-filter-applied">{activeFilters.length} {activeFilters.length === 1 ? "filter" : "filters"} applied</span>}
             </div>
             <PropertyFilterPanel filters={filters} update={update} facets={facets} />
-            <Link to={paths.agents} className="catalogue-sidebar-note"><span>KNOW THE NEIGHBOURHOOD</span><strong>A little local insight?</strong><p>Connect with an agent who knows the area.</p><span className="catalogue-agent-link">Explore agents<ArrowUpRight size={16} aria-hidden="true" /></span></Link>
+            <Link to={paths.agents} className="catalogue-sidebar-note"><strong>Need local insight?</strong><p>{isAuthenticated ? "Connect with an agent who knows the area." : "Sign in to see agents who know the area."}</p><span className="catalogue-agent-link">{isAuthenticated ? "Explore agents" : "Sign in to see agents"}<ArrowUpRight size={16} aria-hidden="true" /></span></Link>
           </div>
         </aside>
 
         <section ref={resultsRef} className="catalogue-results" aria-label="Property results">
-          <NearbyBar
+          {(near || changingLocation) && <NearbyBar
             near={near} locating={locating} problem={locationProblem} view={view}
             onView={(next) => update({ view: next === "map" ? "map" : "", page })}
             onSelectPlace={selectPlace} onUseDevice={useDevice} onRadius={(radius) => update({ radius })} onClear={clearLocation}
             searchInputRef={locationInputRef} changing={changingLocation} onChanging={setChangingLocation}
-          />
+          />}
           <div className="catalogue-results-heading">
             <div className="catalogue-result-count" role="status" aria-live="polite">
-              <h2>{firstLoad ? "Finding homes…" : results.error ? "Your search" : <><strong>{total}</strong> {total === 1 ? "home" : "homes"}{filters.listingType === "Sale" ? " for sale" : filters.listingType === "Rent" ? " to rent" : nearbyActive ? "" : " to explore"}{nearbyActive && ` ${describeSearchArea(near)}`}</>}</h2>
-              <p>{pending && !firstLoad ? "Updating your results…" : showMap ? (total > MAP_MARKER_LIMIT ? `The ${MAP_MARKER_LIMIT} nearest are on the map. Narrow the radius or filters to see the rest.` : "Select a price on the map to preview the home.") : total ? `Showing ${first}–${last} · ${nearbyActive ? "Nearest first unless you sort otherwise." : "Find the one that fits."}` : "Your next chapter starts here."}</p>
+              <h2>{firstLoad ? "Finding homes…" : results.error ? "Your search" : <><strong>{total}</strong> {tab === "stay" ? (total === 1 ? "short stay" : "short stays") : total === 1 ? "home" : "homes"}{tab === "Sale" ? " for sale" : tab === "Rent" ? " to rent" : ""}{nearbyActive && ` ${describeSearchArea(near)}`}</>}</h2>
+              <p>{pending && !firstLoad ? "Updating your results…" : showMap ? (total > MAP_MARKER_LIMIT ? `The ${MAP_MARKER_LIMIT} nearest are on the map. Narrow the radius or filters to see the rest.` : "Select a price on the map to preview the home.") : total ? `Showing ${first}–${last}${nearbyActive ? " · Nearest first unless you sort otherwise." : ""}` : ""}</p>
             </div>
             <div className="catalogue-results-actions">
               {canSaveSearch && <SaveSearchButton key={JSON.stringify(savedFilters)} saved={savedFilters} />}
-              <div className="catalogue-sort"><label htmlFor="catalogue-sort">Sort by</label><div className="catalogue-select-wrap"><select id="catalogue-sort" aria-label="Sort properties" value={sort} onChange={(event) => update({ sort: event.target.value })}>{(nearbyActive ? NEARBY_SORTS : SORTS).map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div></div>
+              <div className="catalogue-sort"><label htmlFor="catalogue-sort">Sort by</label><div className="catalogue-select-wrap"><select id="catalogue-sort" aria-label="Sort properties" value={sort} onChange={(event) => update({ sort: event.target.value })}>{sorts.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={14} aria-hidden="true" /></div></div>
             </div>
           </div>
 
@@ -263,7 +278,7 @@ const PropertyBrowser = ({ title, description, fixedListingType, banner, place =
             </nav>
           )}
 
-          <div className="catalogue-help"><div><span className="catalogue-eyebrow">A LITTLE LOCAL KNOWLEDGE</span><p>Find the home. Get to know the neighbourhood.</p></div><Link to={paths.agents}>Talk to an agent<ArrowUpRight size={17} aria-hidden="true" /></Link></div>
+          <div className="catalogue-help"><div><span className="catalogue-eyebrow">A LITTLE LOCAL KNOWLEDGE</span><p>Find the home. Get to know the neighbourhood.</p></div><Link to={paths.agents}>{isAuthenticated ? "Talk to an agent" : "Sign in to talk to an agent"}<ArrowUpRight size={17} aria-hidden="true" /></Link></div>
         </section>
       </div>
 

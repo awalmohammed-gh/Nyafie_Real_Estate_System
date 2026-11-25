@@ -3,7 +3,8 @@ import EmailVerification from "../models/EmailVerification.js";
 import { loadUser } from "./authController.js";
 import { completeRegistration, isRegistrationChallenge, resendRegistrationCode } from "./registrationController.js";
 import { verificationChallenge, readVerificationChallenge, sendVerificationCode, consumeCode } from "../utils/emailVerification.js";
-import { setAuthCookie, clearAuthCookie } from "../utils/generateToken.js";
+import { clearAuthCookie } from "../utils/generateToken.js";
+import { endBrowserSession, startSession } from "../utils/sessions.js";
 import { CUSTOMER_TAB_HEADER, validTabSecret } from "../utils/customerTabSession.js";
 import { matchesSessionRole } from "../utils/sessionAccess.js";
 import { ok, fail, HttpError } from "../utils/response.js";
@@ -13,6 +14,7 @@ import { ok, fail, HttpError } from "../utils/response.js";
  * customers and agents enter a code at their next sign-in before anything opens.
  */
 export const startEmailVerification = async (req, res, user, session = "customer") => {
+  await endBrowserSession(req, session, "replaced");
   clearAuthCookie(res, session);
   let delivery;
   try { delivery = await sendVerificationCode(user); }
@@ -61,6 +63,6 @@ export const verifyEmailFor = (session) => async (req, res) => {
   const versionFilter = user.sessionVersion ? { sessionVersion: user.sessionVersion } : { $or: [{ sessionVersion: "" }, { sessionVersion: { $exists: false } }] };
   const verified = await User.findOneAndUpdate({ _id: user._id, email: user.email, ...(session === "agent" ? {} : { isActive: true }), role: user.role, ...versionFilter }, { $set: { emailVerifiedAt: now } }, { returnDocument: "after" }).select("+sessionVersion");
   if (!verified) return fail(res, 401, "Your account changed. Sign in again to continue.");
-  setAuthCookie(res, verified._id, session, verified.sessionVersion, session === "customer" ? req.get(CUSTOMER_TAB_HEADER) : undefined);
+  await startSession(req, res, verified, session, { startedWith: "code" });
   return ok(res, await loadUser(verified._id), "Email verified. You are signed in.");
 };

@@ -16,7 +16,7 @@ import { isHotel } from "../utils/hotel";
 import BuyNowPanel from "../components/offer/BuyNowPanel";
 import { SeeBeforeYouPay } from "../components/reports/PaymentSafety";
 import NotFound from "./NotFound";
-import { formatType, getPriceParts, statusLabel } from "../utils/property";
+import { formatType, getPriceParts, listingLabel } from "../utils/property";
 import { buildWhatsAppLink, ownerWhatsAppNumber } from "../utils/whatsapp";
 import { propertyUrl } from "../utils/siteUrl";
 import { cloudImage } from "../utils/cloudImage";
@@ -123,7 +123,7 @@ const PropertyAction = ({ mode }) => {
               <div className="p-5">
                 <div className="flex flex-wrap gap-2">
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${isForSale ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-700"}`}>
-                    {statusLabel(details.status)}
+                    {listingLabel(property)}
                   </span>
                   <StatusBadge status={availability} className="px-3 py-1" />
                 </div>

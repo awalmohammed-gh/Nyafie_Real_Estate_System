@@ -32,6 +32,7 @@ export const reviewAgentApplication = async (id, action, rejectionReason = "", r
 export const updateUser = async (id, changes) => mapUser((await client.put(`/admin/users/${id}`, changes)).data);
 export const setUserStatus = (id, status) => client.patch(`/admin/users/${id}/status`, { status });
 export const deleteUser = (id) => client.delete(`/admin/users/${id}`);
+export const signOutUser = (id) => client.post(`/admin/users/${id}/sign-out`); // every device
 
 // Provider removal: remove (deactivate, keep history) -> restore, or later a separate permanent delete
 export const getRemovalImpact = async (id) => (await client.get(`/admin/agents/${id}/removal`)).data;

@@ -14,7 +14,7 @@ const DiscoverCategories = ({ facets }) => {
   const land = landTypes(facets.types);
   const categories = [
     { label: "Homes for Sale", count: facets.sale, Icon: House, image: "/hero/nyafie-modern-villa-960.jpg", to: href({ status: "Sale" }) },
-    { label: "Homes for Rent", count: facets.rent, Icon: KeyRound, image: "/hero/modern-living-960.jpg", to: href({ status: "Rent" }) },
+    { label: "Homes for Rent", count: facets.rentHomes ?? facets.rent, Icon: KeyRound, image: "/hero/modern-living-960.jpg", to: href({ status: "Rent" }) },
     { label: "Apartments", count: countOf(facets.types, /^apartment$/i), Icon: Building2, image: "/properties/house9.jpg", to: href({ type: "Apartment" }) },
     { label: "Short Stays", count: facets.stays, Icon: Hotel, image: "/banners/properties-resort-960.jpg", to: shortStayPath(paths.listings) },
     { label: "Land & Plots", count: land.reduce((sum, type) => sum + type.count, 0), Icon: Layers3, image: "/banners/nyafie-land.jpg", to: href({ type: land.map((type) => type.value).join(",") }) },

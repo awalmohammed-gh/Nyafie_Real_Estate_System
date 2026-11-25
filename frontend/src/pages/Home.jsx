@@ -24,7 +24,7 @@ const Home = () => {
   const ROWS = {
     latest: { title: "Latest homes", href: `${paths.listings}?sort=latest`, linkText: "View all homes" },
     sale: { title: "Homes for sale", href: `${paths.listings}?status=Sale`, linkText: `See all ${facets?.sale ?? ""} for sale` },
-    rent: { title: "Homes for rent", href: `${paths.listings}?status=Rent`, linkText: `See all ${facets?.rent ?? ""} for rent` },
+    rent: { title: "Homes for rent", href: `${paths.listings}?status=Rent`, linkText: `See all ${facets?.rentHomes ?? ""} for rent` },
     stays: { title: "Short stays", href: shortStayPath(paths.listings), linkText: `See all ${facets?.stays ?? ""} short stays` },
   };
   const [first, ...rest] = rows;

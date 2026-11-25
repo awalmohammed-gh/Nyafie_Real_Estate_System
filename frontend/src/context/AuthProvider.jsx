@@ -138,6 +138,12 @@ export const AuthProvider = ({ children, domain }) => {
     passwordAnswer.current = resolve;
     setAskPassword(reason);
   }), []);
+  const listSessions = useCallback(() => api.sessions(), [api]);
+  const endSession = useCallback(async (target) => {
+    const result = await api.endSession(target);
+    if (result.data?.signedOut) { ++revision.current; setUser(null); } // this browser too
+    return result;
+  }, [api]);
   const uploadProfilePhoto = useCallback(async (image) => {
     const next = checkRole(await api.uploadProfilePhoto(image));
     ++revision.current;
@@ -162,6 +168,7 @@ export const AuthProvider = ({ children, domain }) => {
       updateUser: (id, changes) => run(adminApi.updateUser(id, changes)),
       setStatus: (id, status, role) => run(role === "agent" ? adminApi.reviewAgentApplication(id, status === "suspended" ? "suspend" : "reactivate") : adminApi.setUserStatus(id, status)),
       deleteUser: (id) => run(adminApi.deleteUser(id)),
+      signOutUser: (id) => run(adminApi.signOutUser(id)),
       changePlan: (id, planId) => run(adminApi.manageSubscription(id, "changePlan", { planId })),
       extendSubscription: (id, days) => run(adminApi.manageSubscription(id, "extend", { days })),
       cancelSubscription: (id) => run(adminApi.manageSubscription(id, "cancel")),
@@ -193,6 +200,8 @@ export const AuthProvider = ({ children, domain }) => {
       refreshUser,
       updateProfile,
       changePassword,
+      listSessions,
+      endSession,
       askPassword: user?.passwordMissing ? askPassword : null,
       requestPassword,
       skipPassword,
@@ -200,7 +209,7 @@ export const AuthProvider = ({ children, domain }) => {
       removeProfilePhoto,
       admin,
     }),
-    [domain, user, ready, isAdmin, login, register, verifyEmail, resendVerification, requestPasswordReset, resetPassword, googleLogin, logout, refreshUser, updateProfile, changePassword, askPassword, requestPassword, skipPassword, uploadProfilePhoto, removeProfilePhoto, admin]
+    [domain, user, ready, isAdmin, login, register, verifyEmail, resendVerification, requestPasswordReset, resetPassword, googleLogin, logout, refreshUser, updateProfile, changePassword, listSessions, endSession, askPassword, requestPassword, skipPassword, uploadProfilePhoto, removeProfilePhoto, admin]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

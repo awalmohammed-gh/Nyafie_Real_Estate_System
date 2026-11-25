@@ -17,7 +17,7 @@ import {
   formatType,
   getInitials,
   getPriceParts,
-  statusLabel,
+  listingLabel,
 } from "../../utils/property";
 import { usePlatform } from "../../context/usePlatform";
 import { useAuth } from "../../context/useAuth";
@@ -117,7 +117,7 @@ const HouseCard = ({ house, variant }) => {
           />
           {unavailable
             ? house.listing.availability
-            : variant === "home" && (house.pricing?.perNight != null || property.type === "Hotel") ? "Short Stay" : statusLabel(property.status)}
+            : listingLabel(house)}
         </span>
 
         <button
@@ -148,7 +148,7 @@ const HouseCard = ({ house, variant }) => {
         )}
         <p className="absolute bottom-4 left-4 text-white [text-shadow:0_1px_6px_rgb(0_0_0/0.35)]">
           <span className="text-2xl font-extrabold tracking-tight">
-            {variant === "home" ? value.replace(/^₵/, "GH₵ ") : value}
+            {value}
           </span>
           {period && (
             <span className="text-sm font-medium text-white/80">{period}</span>

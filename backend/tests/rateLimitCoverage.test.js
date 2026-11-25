@@ -9,6 +9,7 @@ import Plan from "../models/Plan.js";
 import Property from "../models/Property.js";
 import { createApp } from "../app.js";
 import { imageUploadOptions, MAX_STORED_SIZE } from "../utils/uploadImages.js";
+import { TEST_SESSION } from "./support/sessions.js";
 
 const query = (value) => ({ then: (yes, no) => Promise.resolve(value).then(yes, no), catch: (no) => Promise.resolve(value).catch(no), select: () => query(value), populate: () => query(value), sort: () => query(value), lean: () => Promise.resolve(value) });
 
@@ -52,7 +53,7 @@ test("rate limits on payouts, upgrades, listing saves and server-rendered pages"
   await new Promise((done) => server.once("listening", done));
   t.after(() => Promise.all([new Promise((done) => server.close(done)), new Promise((done) => frontend.close(done))]));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const cookie = `agent_token=${jwt.sign({ id: String(agent._id), role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" })}`;
+  const cookie = `agent_token=${jwt.sign({ sid: TEST_SESSION, id: String(agent._id), role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" })}`;
   const send = (path, method = "GET", body) => fetch(base + path, { method, headers: { "X-Session-Domain": "agent", Cookie: cookie, ...(body ? { "Content-Type": "application/json" } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
   // The status of each of `count` requests, in order
   const statuses = async (count, request) => { const codes = []; for (let i = 0; i < count; i++) codes.push((await request(i)).status); return codes; };

@@ -13,11 +13,13 @@ export const bannerHeading = (filters, fallback) => {
   const area = filters.find((f) => f.kind === "area") || filters.find((f) => f.kind === "city") || filters.find((f) => f.kind === "region");
 
   if (types.length === 1 || intent || area) {
-    let heading = types.length === 1 ? `${types[0].label} listings`
+    const stay = intent?.value === "stay";
+    let heading = types.length === 1 ? `${types[0].label} ${stay ? "short stays" : "listings"}`
       : intent?.value === "Rent" ? "Rental listings"
         : intent?.value === "Sale" ? "Homes for sale"
+        : stay ? "Short stays"
           : "Properties";
-    if (types.length === 1 && intent) heading += intent.value === "Rent" ? " to rent" : " for sale";
+    if (types.length === 1 && intent && !stay) heading += intent.value === "Rent" ? " to rent" : " for sale";
     if (area) heading += ` in ${area.label}`;
     return heading;
   }

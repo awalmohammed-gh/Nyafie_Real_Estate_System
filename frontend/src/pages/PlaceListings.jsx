@@ -13,7 +13,7 @@ import { findPlace } from "../utils/places";
 const PlaceListings = ({ status }) => {
   const { place: slug } = useParams();
   const listingType = status === "sale" ? "Sale" : "Rent";
-  const facets = usePropertyFacets(listingType);
+  const facets = usePropertyFacets(listingType === "Rent" ? "RentAll" : listingType); // every rental there, short stays too
   if (!facets.data) return facets.error ? <NotFound /> : <PageLoader label="Loading homes..." />;
   const place = findPlace(facets.data, slug);
   if (!place) return <NotFound />;

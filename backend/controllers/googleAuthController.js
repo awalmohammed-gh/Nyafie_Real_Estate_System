@@ -5,7 +5,7 @@ import GoogleLoginChallenge from "../models/GoogleLoginChallenge.js";
 import { googleClientId, googleIdentity, validGoogleClaims } from "../utils/googleIdentity.js";
 import { CUSTOMER_TAB_HEADER, validTabSecret, tabSecretHash } from "../utils/customerTabSession.js";
 import { matchesSessionRole } from "../utils/sessionAccess.js";
-import { setAuthCookie } from "../utils/generateToken.js";
+import { endSessions, startSession } from "../utils/sessions.js";
 import { loadUser } from "./authController.js";
 import { notifyAdmins } from "../utils/notify.js";
 import { inboxKey, sameInbox } from "../utils/signupEmail.js";
@@ -64,6 +64,7 @@ const findGoogleCustomer = async (claims) => {
     const versionFilter = user.sessionVersion ? { sessionVersion: user.sessionVersion } : { $or: [{ sessionVersion: "" }, { sessionVersion: { $exists: false } }] };
     const linked = await User.findOneAndUpdate({ _id: user._id, email: user.email, isActive: true, role: user.role, googleId: user.googleId || { $exists: false }, ...versionFilter }, { $set: changes, ...unset }, { returnDocument: "after" }).select("+sessionVersion");
     if (!linked) throw new HttpError(409, "Your account changed during sign-in. Please try Google sign-in again.");
+    if (!user.emailVerifiedAt) await endSessions(user._id, "security"); // whoever registered it before is out
     return { user: linked, created: false };
   }
   const firstName = (typeof claims.given_name === "string" && claims.given_name.trim() || typeof claims.name === "string" && claims.name.trim() || "Google").slice(0, 80);
@@ -101,7 +102,7 @@ export const googleCustomerLogin = async (req, res) => {
     throw error;
   }
   if (!allowed(result.user)) return fail(res, 403, unavailable(result.user));
-  setAuthCookie(res, result.user._id, "customer", result.user.sessionVersion, req.get(CUSTOMER_TAB_HEADER), { google: true });
+  await startSession(req, res, result.user, "customer", { startedWith: "google" });
   if (result.created) notifyAdmins({ type: "user", title: "New Google account", message: `${result.user.firstName} ${result.user.lastName} signed up with Google.`, link: "/admin/customers" });
   return ok(res, { user: await loadUser(result.user._id), created: result.created }, result.created ? "Account created with Google" : "Signed in with Google");
 };

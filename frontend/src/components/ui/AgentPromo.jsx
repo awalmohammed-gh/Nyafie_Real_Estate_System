@@ -24,10 +24,10 @@ const AgentPromo = ({ paused = false }) => {
   const titleId = useId();
   const { pathname } = useLocation();
   const { user, ready } = useAuth();
-  const { siteName } = usePlatform();
+  const { siteName, paths } = usePlatform();
   const [open, setOpen] = useState(false);
   const eligible = ready && promoAllowedFor(user);
-  const shown = open && eligible && !paused && promoAllowedOn(pathname);
+  const shown = open && eligible && !paused && promoAllowedOn(pathname, paths.listings);
 
   useEffect(() => {
     if (!eligible) return undefined;

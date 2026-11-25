@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { AlertCircle, Bell, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
+import { AlertCircle, Bell, Eye, EyeOff, Loader2, MonitorSmartphone, ShieldCheck } from "lucide-react";
 import PageTitle from "../../components/agent/PageTitle";
 import AccountShell from "../../components/account/AccountShell";
 import CustomerSettings from "../../components/account/CustomerSettings";
+import SignedInDevices from "../../components/account/SignedInDevices";
 import { useAuth } from "../../context/useAuth";
 import { useToast } from "../../context/useToast";
 
@@ -112,6 +113,11 @@ export const AccountSettings = ({ activeSection = null, showAccountSummary = tru
             Update password
           </button></div>
         </form>
+
+        {(activeSection === null || activeSection === "security") && <section aria-labelledby="settings-devices-title" className={`bg-white p-5 sm:p-8 ${isAgent ? "workspace-card settings-content-card mt-6" : "rounded-3xl ring-1 ring-gray-200"}`}>
+          <header className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700"><MonitorSmartphone className="h-5 w-5" /></span><div><h2 id="settings-devices-title" className="text-lg font-semibold text-gray-900">Where you're signed in</h2><p className="mt-1 text-sm leading-relaxed text-gray-500">The browsers and devices using your account now, as an agent and as a customer.</p></div></header>
+          <SignedInDevices className="mt-3" />
+        </section>}
 
         <section id="settings-notifications" aria-labelledby="settings-notifications-title" hidden={activeSection !== null && activeSection !== "notifications"} className={`bg-white p-5 sm:p-8 ${isAgent ? "workspace-card settings-content-card" : "rounded-3xl ring-1 ring-gray-200"}`}>
           <header className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700"><Bell className="h-5 w-5" /></span><div><h2 id="settings-notifications-title" className="text-lg font-semibold text-gray-900">Notification preferences</h2><p className="mt-1 text-sm leading-relaxed text-gray-500">Choose which updates you want to receive.</p></div></header>

@@ -635,3 +635,37 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* A short banner, four tabs and one search: the first homes show without scrolling */
+.catalogue-banner-inner { min-height: 0; padding-top: 100px; padding-bottom: 26px; }
+.catalogue-banner-row { padding-top: 12px; }
+.catalogue-banner-label { display: none; }
+.catalogue-banner h1 { margin-top: 0; font-size: clamp(30px, 3vw, 42px); }
+.catalogue-banner-description { margin-top: 6px; max-width: 680px; font-size: 14px; line-height: 1.6; }
+.catalogue-banner-chips { margin-top: 8px; }
+.catalogue-controls { padding-block: 14px; }
+.catalogue-controls-inner { grid-template-columns: minmax(400px, auto) minmax(0, 1fr); gap: 22px; }
+.catalogue-intent { padding-inline: 10px; }
+.catalogue-near-trigger { display: inline-flex; flex-shrink: 0; align-items: center; gap: 7px; height: 46px; padding-inline: 15px; border: 1px solid var(--catalogue-rule); border-radius: 10px; background: #fff; color: #4d3a5a; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: border-color .2s, color .2s; }
+.catalogue-near-trigger:hover, .catalogue-near-trigger[aria-expanded="true"] { border-color: #a97fc0; color: #663283; }
+.catalogue-near-trigger:focus-visible { outline: 2px solid var(--catalogue-accent); outline-offset: 2px; }
+.catalogue-layout { padding-top: 22px; }
+.catalogue-results-heading { margin-bottom: 16px; }
+.nearby-bar-intro { position: relative; padding-right: 40px; }
+.nearby-bar-intro .nearby-bar-clear { position: absolute; top: 0; right: 0; }
+@media (max-width: 1023px) {
+  .catalogue-controls-inner { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+}
+@media (max-width: 767px) {
+  .catalogue-banner-inner { padding-top: 80px; padding-bottom: 18px; }
+  .catalogue-banner-row { padding-top: 8px; }
+  .catalogue-banner h1 { margin-top: 0; font-size: 28px; }
+  .catalogue-banner-description { display: none; }
+  .catalogue-controls-inner { padding-bottom: 0; gap: 10px; }
+  .catalogue-intents { gap: 3px; margin-bottom: 0; }
+  .catalogue-intent { min-height: 40px; padding: 8px 4px; }
+  .catalogue-intent > svg { display: none; }
+  .catalogue-near-trigger { width: 46px; padding: 0; justify-content: center; }
+  .catalogue-near-trigger > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .catalogue-layout { padding-top: 14px; }
+}

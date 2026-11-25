@@ -200,7 +200,7 @@ test("role session isolation", async (t) => {
         assert.equal(response.status, 401);
         assert.equal(response.headers.getSetCookie().length, 0);
       }
-      const agent = await call("/api/auth/customer/login", { domain: "customer", data: { email: "agent@example.test", password: "TestPassword123" } });
+      const agent = await call("/api/auth/customer/login", { domain: "customer", jar: {}, data: { email: "agent@example.test", password: "TestPassword123" } });
       assert.equal(agent.status, 200);
       assert.deepEqual(agent.headers.getSetCookie().map((value) => value.split("=")[0]), ["customer_token"], "the customer area only");
     });

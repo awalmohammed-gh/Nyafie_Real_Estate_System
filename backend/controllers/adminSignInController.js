@@ -4,7 +4,8 @@ import AdminSignInCode from "../models/AdminSignInCode.js";
 import { loadUser } from "./authController.js";
 import { consumeCode, issueCode } from "../utils/emailVerification.js";
 import { adminSignInMailer } from "../utils/email.js";
-import { setAuthCookie, clearAuthCookie } from "../utils/generateToken.js";
+import { clearAuthCookie } from "../utils/generateToken.js";
+import { endBrowserSession, startSession } from "../utils/sessions.js";
 import { matchesSessionRole } from "../utils/sessionAccess.js";
 import { HttpError, ok, fail } from "../utils/response.js";
 
@@ -22,7 +23,8 @@ const challengeFor = (user) => jwt.sign({ id: String(user._id), email: user.emai
 const masked = (email) => String(email).replace(/^(.)(.*)(.@.*)$/, (_all, first, middle, rest) => `${first}${"*".repeat(Math.min(middle.length, 6))}${rest}`);
 
 // Called by the admin password check (controllers/authController.js) instead of signing in
-export const startAdminSignIn = async (res, user) => {
+export const startAdminSignIn = async (req, res, user) => {
+  await endBrowserSession(req, "admin", "replaced");
   clearAuthCookie(res, "admin");
   await AdminSignInCode.updateOne({ _id: user._id }, { $setOnInsert: { nextSendAt: new Date(0), windowStart: new Date(0), sendCount: 0, attempts: 0 } }, { upsert: true }).catch((error) => { if (error.code !== 11000) throw error; });
   let delivery;
@@ -53,7 +55,7 @@ const challengedAdmin = async (req) => {
 export const verifyAdminSignIn = async (req, res) => {
   const user = await challengedAdmin(req);
   await consumeCode(AdminSignInCode, user._id, user.email, req.body?.code);
-  setAuthCookie(res, user._id, "admin", user.sessionVersion);
+  await startSession(req, res, user, "admin", { startedWith: "code" });
   return ok(res, await loadUser(user._id), "Signed in");
 };
 

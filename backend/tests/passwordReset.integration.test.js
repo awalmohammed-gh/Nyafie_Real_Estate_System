@@ -9,6 +9,7 @@ import { passwordResetMailer } from "../utils/email.js";
 import { loginAttempts } from "../utils/loginAttempts.js";
 import { customerTabClaims, customerTabHeaders } from "./support/customerTab.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
+import { TEST_SESSION } from "./support/sessions.js";
 
 test("customer password recovery proves mailbox ownership, expires and revokes sessions", {
   skip: process.env.RUN_PASSWORD_RESET_INTEGRATION !== "1", timeout: 90000,
@@ -141,7 +142,7 @@ test("customer password recovery proves mailbox ownership, expires and revokes s
   await t.test("customers who became agents recover the same account and lose old agent sessions too", async () => {
     client = 6;
     const account = await person("dual@reset.test", { role: "agent", customerAccess: true, agentApplication: { status: "approved" } });
-    const cookie = "agent_token=" + jwt.sign({ id: account.id, role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" });
+    const cookie = "agent_token=" + jwt.sign({ sid: TEST_SESSION, id: account.id, role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" });
     const agentMe = () => fetch(base + "/auth/agent/me", { headers: { "X-Session-Domain": "agent", Cookie: cookie } });
     assert.equal((await agentMe()).status, 200);
     await forgot(account.email);

@@ -8,7 +8,8 @@ export const googleClientId = () => {
   return value;
 };
 
-const client = new OAuth2Client();
+// Node's own fetch: the library's default loads another package in the middle of the first sign-in
+const client = new OAuth2Client({ transporterOptions: { fetchImplementation: (...args) => globalThis.fetch(...args) } });
 export const googleIdentity = {
   async verify(credential, audience) {
     const ticket = await client.verifyIdToken({ idToken: credential, audience });

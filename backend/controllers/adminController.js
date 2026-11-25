@@ -32,6 +32,7 @@ import { HttpError, ok, fail } from "../utils/response.js";
 import { prepareHotelFields, saveHotelProperty } from "../utils/hotel.js";
 import { REFUND_SUMMARY } from "./refundController.js";
 import { inboxKey, sameInbox } from "../utils/signupEmail.js";
+import { deleteSessions, endSessions } from "../utils/sessions.js";
 import { DISPUTE_SUMMARY } from "../utils/disputes.js";
 import { alertSavedSearches } from "../utils/savedSearches.js";
 import { markConfirmed } from "../utils/listingFreshness.js";
@@ -97,7 +98,9 @@ export const updateUser = async (req, res) => {
   if (firstName !== undefined) user.firstName = firstName;
   if (lastName !== undefined) user.lastName = lastName;
   if (phone !== undefined) user.phone = phone;
+  const emailChanged = user.isModified("email");
   await user.save();
+  if (emailChanged) await endSessions(user._id, "email");
   ok(res, await User.findById(user._id).populate("subscription"), "Account updated");
 };
 
@@ -110,7 +113,17 @@ export const setUserStatus = async (req, res) => {
   if (user.role === "agent") return fail(res, 400, "Manage agent approval and suspension from Agent Applications.");
   user.isActive = req.body.status !== "suspended";
   await user.save();
+  if (!user.isActive) await endSessions(user._id, "suspended");
   ok(res, user, user.isActive ? "User activated" : "User suspended");
+};
+
+// POST /api/admin/users/:id/sign-out -> ends every session of a customer or agent, on every device
+export const signOutUser = async (req, res) => {
+  const user = await User.findById(req.params.id).catch(() => null);
+  if (!user) return fail(res, 404, "User not found.");
+  if (user.role === "admin") return fail(res, 403, "Admins end their own sessions on the Account page.");
+  const ended = await endSessions(user._id, "admin");
+  ok(res, { ended }, ended ? `Signed out of ${ended} ${ended === 1 ? "device" : "devices"}` : "They weren't signed in anywhere");
 };
 
 // DELETE /api/admin/users/:id -> customers only (agents are suspended or cancelled instead)
@@ -138,6 +151,7 @@ export const deleteUser = async (req, res) => {
       () => Conversation.deleteMany({ customer: id }, { session }),
       () => Inquiry.deleteMany({ customer: id }, { session }),
       () => Notification.deleteMany({ recipient: id }, { session }),
+      () => deleteSessions(id, { session }),
       () => Review.deleteMany({ user: id }, { session }),
     ];
     for (const step of steps) await step();

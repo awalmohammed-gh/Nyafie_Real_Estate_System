@@ -50,8 +50,8 @@ export const remindLater = (state) => ({ ...state, hiddenUntil: 0, showAt: state
 export const accepted = (state, now) => ({ ...state, hiddenUntil: now + AGENT_PROMO.acceptedQuietMs, showAt: state.activeMs + AGENT_PROMO.firstDelayMs });
 
 // Pages where it never appears: the home page (it would cover the search and the first homes, and the
-// page already invites sellers), agent onboarding, accounts, checkout and payment
-export const promoAllowedOn = (pathname) => pathname !== "/" && !/^\/(agent|agents\/register|account|checkout|payment|make-offer|login|register)(\/|$)/.test(pathname);
+// page already invites sellers), the listings (it would cover the filters), agent onboarding, accounts, checkout and payment
+export const promoAllowedOn = (pathname, listingsPath = "/listings") => pathname !== "/" && pathname !== listingsPath && !/^\/(sale|rent)(\/|$)/.test(pathname) && !/^\/(agent|agents\/register|account|checkout|payment|make-offer|login|register)(\/|$)/.test(pathname);
 
 // People it is not for: agents, admins, and anyone already applying to be an agent
 export const promoAllowedFor = (user) => !user || (user.role !== "agent" && user.role !== "admin" && !user.agentAccess && !(user.agentApplication?.status && user.agentApplication.status !== "incomplete"));
