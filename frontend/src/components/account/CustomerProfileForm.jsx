@@ -1,3 +1,4 @@
+import EmailStatus from "../ui/EmailStatus";
 import { useState } from "react";
 import { AlertCircle, Check, Loader2, Save } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
@@ -39,7 +40,7 @@ const CustomerProfileForm = ({ showPhoto = false }) => {
           <legend className="sr-only">Personal information</legend>
           <div><label htmlFor="customer-first-name" className="account-label">First name</label><input id="customer-first-name" name="firstName" required maxLength={80} value={form.firstName} onChange={(event) => change("firstName", event.target.value)} autoComplete="given-name" className="account-input" /></div>
           <div><label htmlFor="customer-last-name" className="account-label">Last name</label><input id="customer-last-name" name="lastName" required maxLength={80} value={form.lastName} onChange={(event) => change("lastName", event.target.value)} autoComplete="family-name" className="account-input" /></div>
-          <div className="sm:col-span-2"><label htmlFor="customer-email" className="account-label">Email address</label><input id="customer-email" type="email" value={user.email} readOnly aria-describedby="customer-email-hint" className="account-input account-input--readonly" /><p id="customer-email-hint" className="account-field-hint">Your email is used to sign in to your account.</p></div>
+          <div className="sm:col-span-2"><label htmlFor="customer-email" className="account-label">Email address</label><input id="customer-email" type="email" value={user.email} readOnly aria-describedby="customer-email-hint" className="account-input account-input--readonly" /><p id="customer-email-hint" className="account-field-hint">Your email is used to sign in to your account. <EmailStatus verified={user.emailVerified} className="align-middle" /></p></div>
           <div className="sm:col-span-2"><label htmlFor="customer-phone" className="account-label">Phone number <span className="font-normal text-gray-400">(optional)</span></label><input id="customer-phone" name="phone" type="tel" maxLength={30} value={form.phone} onChange={(event) => change("phone", event.target.value)} autoComplete="tel" placeholder="+233 24 000 0000" className="account-input" /></div>
         </fieldset>
         {error && <p role="alert" className="account-error"><AlertCircle className="h-4 w-4 shrink-0" />{error}</p>}

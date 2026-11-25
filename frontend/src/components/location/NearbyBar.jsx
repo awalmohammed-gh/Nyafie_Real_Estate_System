@@ -5,7 +5,7 @@ import "./location.css";
 
 /**
  * The listings page's location row.
- *  - No location: "Discover properties near you" with place search and "Use my current location".
+ *  - No location, opened from "Near a place": place search and "Use my current location".
  *  - A location: "Within [5 km] of East Legon" with Change, remove, and the List/Map switch.
  * problem: why the device position isn't available (denied, timeout...), shown with the search.
  */
@@ -46,7 +46,8 @@ const NearbyBar = ({ near, locating, problem, view, onView, onSelectPlace, onUse
           {!near && (
             <div className="nearby-bar-intro">
               <span className="nearby-bar-icon is-device"><Crosshair size={16} aria-hidden="true" /></span>
-              <p><strong>Discover properties near you</strong><span>Search a neighbourhood or city, or use your current location. Your location is only used to find nearby homes.</span></p>
+              <p><strong>Homes near a place</strong><span>Choose a place, or use your current location. It's only used to find nearby homes.</span></p>
+              <button type="button" className="nearby-bar-clear" onClick={() => setChanging(false)} aria-label="Close place search"><X size={15} aria-hidden="true" /></button>
             </div>
           )}
           {near?.pending && locating && <p className="nearby-bar-locating" role="status"><Loader2 size={15} className="location-spin" aria-hidden="true" />Finding your location…</p>}

@@ -1,3 +1,4 @@
+import { workCounts } from "../utils/workCounts.js";
 import User from "../models/User.js";
 import Property from "../models/Property.js";
 import Inquiry from "../models/Inquiry.js";
@@ -41,12 +42,13 @@ const OPEN_SALE_STATUSES = [
  *  - rental payments confirmed paid by Paystack, and sale payments confirmed by the owner (Payment, status "paid")
  *  - agent subscription payments confirmed paid by Paystack (Subscription, paymentStatus "paid")
  * Excluded: pending and failed attempts, duplicate charges (to be refunded), "Test payment"
- * records, waived subscriptions, and property asking prices. Dated by when the payment was confirmed.
+ * records, waived subscriptions, property asking prices, and money returned through lost disputes. Dated by when the payment was confirmed.
  */
 // Paystack money counts only for the current Paystack mode, so test checkouts never appear as live revenue
 const PAID_PAYMENT = () => ({ status: "paid", method: { $ne: "Test payment" }, ...providerScope() });
 const PAID_SUBSCRIPTION = () => ({ paymentStatus: "paid", ...providerScope("paymentMethod") });
 const paidAt = { $ifNull: ["$paidAt", "$createdAt"] };
+const received = { $subtract: ["$amount", { $ifNull: ["$disputeLost", 0] }] };
 
 const revenueSummary = async (now) => {
   const last30 = new Date(now.getTime() - 30 * DAY);
@@ -76,12 +78,12 @@ const revenueSummary = async (now) => {
   const [[payments], [subscriptions]] = await Promise.all([
     Payment.aggregate([
       { $match: PAID_PAYMENT() },
-      { $project: { kind: 1, amount: 1, at: paidAt } },
+      { $project: { kind: 1, amount: received, at: paidAt } },
       { $facet: facets },
     ]),
     Subscription.aggregate([
       { $match: PAID_SUBSCRIPTION() },
-      { $project: { kind: "subscription", amount: 1, at: paidAt } },
+      { $project: { kind: "subscription", amount: received, at: paidAt } },
       { $facet: facets },
     ]),
   ]);
@@ -344,8 +346,8 @@ export const performance = async (req, res) => {
     agents,
     revenueByKind,
   ] = await Promise.all([
-    monthly(Payment, PAID_PAYMENT(), "$amount", paidAt),
-    monthly(Subscription, PAID_SUBSCRIPTION(), "$amount", paidAt),
+    monthly(Payment, PAID_PAYMENT(), received, paidAt),
+    monthly(Subscription, PAID_SUBSCRIPTION(), received, paidAt),
     monthly(Property, { status: { $ne: "draft" } }, COUNT),
     monthly(Inquiry, {}, COUNT),
     monthly(User, CURRENT_AGENTS, COUNT),
@@ -353,13 +355,13 @@ export const performance = async (req, res) => {
     Promise.all([
       Payment.aggregate([
         { $match: PAID_PAYMENT() },
-        { $project: { kind: 1, amount: 1, at: paidAt } },
+        { $project: { kind: 1, amount: received, at: paidAt } },
         { $match: { at: { $gte: periodStart, $lte: now } } },
         { $group: { _id: "$kind", total: { $sum: "$amount" } } },
       ]),
       Subscription.aggregate([
         { $match: PAID_SUBSCRIPTION() },
-        { $project: { amount: 1, at: paidAt } },
+        { $project: { amount: received, at: paidAt } },
         { $match: { at: { $gte: periodStart, $lte: now } } },
         { $group: { _id: "subscription", total: { $sum: "$amount" } } },
       ]),
@@ -411,7 +413,10 @@ export const performance = async (req, res) => {
 };
 
 // GET /api/admin/counts -> small counters for the sidebar badges (polled)
-export const counts = async (_req, res) => {
-  const [pendingApplications, openReports, pendingDocumentChecks] = await Promise.all([pendingApplicationCount(), openReportCount(), pendingDocumentCheckCount()]);
-  ok(res, { pendingApplications, openReports, pendingDocumentChecks });
+export const counts = async (req, res) => {
+  const [pendingApplications, openReports, pendingDocumentChecks, pendingListings, newInquiries, work] = await Promise.all([
+    pendingApplicationCount(), openReportCount(), pendingDocumentCheckCount(),
+    Property.countDocuments({ status: "pending" }), Inquiry.countDocuments({ status: "new" }), workCounts(req.user),
+  ]);
+  ok(res, { pendingApplications, openReports, pendingDocumentChecks, pendingListings, newInquiries, work });
 };

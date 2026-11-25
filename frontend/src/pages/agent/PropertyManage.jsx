@@ -3,12 +3,12 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { AlertCircle, ArrowLeft, Building2, CheckCircle2, ExternalLink, Pencil, Trash2 } from "lucide-react";
 import { useAgent } from "../../hooks/useAgent";
 import { useRealEstate } from "../../context/useRealEstate";
-import { useTransactions } from "../../context/useTransactions";
+import { usePagedList } from "../../hooks/usePagedList";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { DetailList, Panel } from "../../components/dashboard/Page";
 import PropertyQuickActions from "../../components/agent/PropertyQuickActions";
 import AssignWork from "../../components/agent/AssignWork";
-import { propertyApi } from "../../frontApi";
+import { offerApi, propertyApi, rentalApi, saleRequestApi } from "../../frontApi";
 import StatusBadge from "../../components/ui/StatusBadge";
 import EmptyState from "../../components/ui/EmptyState";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
@@ -61,13 +61,15 @@ const PropertyManage = () => {
   const navigate = useNavigate();
   const { myProperties, myInquiries, permissions: perms } = useAgent();
   const { deleteListing, isPubliclyVisible, refreshListings, refreshInquiries } = useRealEstate();
-  const { offers, rentals, sales, loading } = useTransactions();
   const run = useAsyncAction();
   const [activeImage, setActiveImage] = useState(0);
   const [tab, setTab] = useState("inquiries");
   const [deleting, setDeleting] = useState(false);
 
   const property = myProperties.find((p) => p.id === propertyId);
+  const isSale = property?.property.status === "Sale";
+  const offerList = usePagedList("agent-property-offers", { property: propertyId, limit: 6 }, (params) => offerApi.getOffersPage("agent", params));
+  const requestList = usePagedList(`agent-property-${isSale ? "sales" : "rentals"}`, { property: propertyId, limit: 6, ...(isSale ? { tab: "all" } : {}) }, (params) => (isSale ? saleRequestApi.getSaleRequestsPage("agent", params) : rentalApi.getRentalsPage("agent", params)));
   if (!property) {
     return (
       <EmptyState
@@ -79,18 +81,18 @@ const PropertyManage = () => {
     );
   }
 
-  const isSale = property.property.status === "Sale";
   const state = property.listing.state;
   const status = getListingStatus(property, state !== "published" || isPubliclyVisible(property));
   const images = property.media.images;
 
   const inquiries = myInquiries.filter((i) => i.propertyId === property.id).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  const propertyOffers = offers.filter((o) => o.property.id === property.id);
-  const requests = (isSale ? sales : rentals).filter((r) => r.property.id === property.id);
+  const propertyOffers = offerList.data?.items || [];
+  const requests = requestList.data?.items || [];
 
   const lists = {
     inquiries: {
       label: "Inquiries",
+      total: inquiries.length,
       rows: inquiries.map((i) => ({ id: i.id, name: i.name, detail: i.message, at: i.createdAt, status: i.status })),
       empty: "No inquiries about this property yet.",
       to: `/agent/inquiries?property=${property.id}`,
@@ -98,6 +100,7 @@ const PropertyManage = () => {
     },
     offers: {
       label: "Offers",
+      total: offerList.data?.total,
       rows: propertyOffers.map((o) => ({ id: o.id, name: o.customer.name, detail: `Offered ${formatGhs(o.amount)}`, at: o.createdAt, status: o.status })),
       empty: "No offers on this property yet.",
       to: `/agent/offers?property=${property.id}`,
@@ -105,6 +108,7 @@ const PropertyManage = () => {
     },
     requests: {
       label: isSale ? "Sale requests" : "Rental requests",
+      total: requestList.data?.total,
       rows: requests.map((r) =>
         isSale
           ? { id: r.id, name: r.contactName, detail: `${r.paymentStatus} payment`, at: r.createdAt, status: r.status }
@@ -167,8 +171,8 @@ const PropertyManage = () => {
       <WorkspaceStats className="mb-6" items={[
         { label: "Property views", value: (property.meta?.views || 0).toLocaleString(), note: "Customer interest in this listing" },
         { label: "Inquiries", value: inquiries.length, note: "Customers asking for details", to: `/agent/inquiries?property=${property.id}` },
-        { label: "Offers", value: propertyOffers.length, note: "Price offers received", to: `/agent/offers?property=${property.id}` },
-        { label: isSale ? "Purchase requests" : "Rental requests", value: loading ? "—" : requests.length, note: "Customers taking the next step", to: `${isSale ? "/agent/sale-requests" : "/agent/rentals"}?property=${property.id}` },
+        { label: "Offers", value: offerList.data?.total ?? "—", note: "Price offers received", to: `/agent/offers?property=${property.id}` },
+        { label: isSale ? "Purchase requests" : "Rental requests", value: requestList.data?.total ?? "—", note: "Customers taking the next step", to: `${isSale ? "/agent/sale-requests" : "/agent/rentals"}?property=${property.id}` },
       ]} />
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="space-y-6 xl:col-span-2">
@@ -206,7 +210,7 @@ const PropertyManage = () => {
               ]}
             />
           </Panel>
-          {isHotel(property) && <HotelInventory property={property} bookings={rentals.filter((r) => r.property.id === property.id)} />}
+          {isHotel(property) && <HotelInventory property={property} />}
 
           <Panel title="Description & amenities">
             <p className="text-sm leading-relaxed whitespace-pre-line text-gray-700">{property.description || "No description yet."}</p>
@@ -243,7 +247,7 @@ const PropertyManage = () => {
                   aria-pressed={tab === key}
                   className={`border-b-2 px-2 py-2.5 transition-colors ${tab === key ? "border-brand-500 bg-brand-50/40" : "border-transparent hover:bg-gray-50"}`}
                 >
-                  <span className="block text-lg font-semibold text-gray-900 tabular-nums">{key === "inquiries" || !loading ? list.rows.length : "–"}</span>
+                  <span className="block text-lg font-semibold text-gray-900 tabular-nums">{list.total ?? "–"}</span>
                   <span className="block truncate text-[11px] font-medium text-gray-500">{list.label}</span>
                 </button>
               ))}

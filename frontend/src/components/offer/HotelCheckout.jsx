@@ -7,11 +7,27 @@ import { paymentApi, rentalApi } from "../../frontApi";
 import HotelRoomDetails from "../property/HotelRoomDetails";
 import { roomPrice, today, tomorrow } from "../../utils/hotel";
 import { formatDate } from "../../utils/date";
-import { approvalDeadlineText, arrivalText, bookingHeadline } from "../../utils/hotelPayments";
+import { approvalDeadlineText, arrivalText, bookingHeadline, hotelPayChoices } from "../../utils/hotelPayments";
 import { cloudImage } from "../../utils/cloudImage";
 import BookingPass from "../receipts/BookingPass";
 
-const HotelCheckout = ({ property, ownerName }) => {
+// One of the two ways to pay: a card the guest picks, with what happens next
+const PayChoice = ({ id, icon: Icon, title, amount, checked, disabled, problem, onChoose, children }) => (
+  <label className={`block rounded-xl border p-4 transition ${disabled ? "cursor-not-allowed border-gray-200 bg-gray-50" : `cursor-pointer has-focus-visible:ring-2 has-focus-visible:ring-brand-500 ${checked ? "border-brand-500 bg-brand-50/60" : "border-gray-200 bg-white hover:border-gray-300"}`}`}>
+    <span className="flex items-start gap-3">
+      <input type="radio" name="hotel-payment" value={id} checked={checked} disabled={disabled} onChange={() => onChoose(id)} className="mt-1 h-4.5 w-4.5 shrink-0 accent-brand-600" />
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <span className={`flex items-center gap-2 font-semibold ${disabled ? "text-gray-500" : "text-gray-900"}`}><Icon className="h-4 w-4 shrink-0 text-brand-600" aria-hidden="true" />{title}</span>
+          {!disabled && <span className="text-sm font-medium text-gray-700">{amount}</span>}
+        </span>
+        <span className="mt-1 block text-sm leading-6 text-gray-600">{disabled ? problem : children}</span>
+      </span>
+    </span>
+  </label>
+);
+
+const HotelCheckout = ({ property }) => {
   const { user } = useAuth();
   const { settings } = usePlatform();
   const [params] = useSearchParams();
@@ -27,6 +43,7 @@ const HotelCheckout = ({ property, ownerName }) => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [details, setDetails] = useState(false);
+  const [payChoice, setPayChoice] = useState(null); // "online" | "on_arrival"
   const bookingId = params.get("booking");
   useEffect(() => {
     if (!bookingId) return;
@@ -47,7 +64,7 @@ const HotelCheckout = ({ property, ownerName }) => {
     catch (err) { setError(err.message); }
     finally { setBusy(false); }
   };
-  // "Reserve now, pay at the hotel": the server secures the rooms first, then confirms
+  // "Pay when you move in": the server secures the rooms first, then confirms
   const reserve = async () => {
     setBusy(true); setError("");
     // Bookings made before arrival times were asked for send it now
@@ -62,7 +79,11 @@ const HotelCheckout = ({ property, ownerName }) => {
   };
   // What this hotel accepts right now (from the server). Older responses: online only, as before.
   const options = property.paymentOptions || { online: settings.payments.rentalsAvailable && property.pricing.currency === "GHS", onArrival: false, onlineProblem: "Online payments are currently unavailable.", arrivalDeadline: "18:00", cancellationPolicy: "" };
-  const noOption = !options.online && !options.onArrival;
+  const choices = hotelPayChoices(options);
+  const availableChoices = choices.filter((choice) => choice.available);
+  // The guest chooses; with a single way left, or a checkout already started, it's chosen for them
+  const suggested = availableChoices.length === 1 ? availableChoices[0].id : saved?.statusKey === "payment_pending" && options.online ? "online" : null;
+  const chosen = availableChoices.some((choice) => choice.id === payChoice) ? payChoice : suggested;
   const nights = Math.round((new Date(form.checkOut) - new Date(form.checkIn)) / 86400000);
   const estimate = room && nights > 0 ? room.pricePerNight * nights * Number(form.numberOfRooms) : null;
   if (loading) return <p className="flex items-center gap-2 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" />Loading your hotel booking…</p>;
@@ -109,19 +130,18 @@ const HotelCheckout = ({ property, ownerName }) => {
         return <div className="space-y-4">
           <p className="text-sm font-semibold text-gray-900">How would you like to pay?</p>
           {!saved.arrivalTime && <label className="block text-sm font-medium text-gray-700">When will you arrive on your check-in day?<input required type="time" max={options.arrivalDeadline || undefined} value={form.arrivalTime} onChange={set("arrivalTime")} className="field mt-1.5 sm:w-48" /></label>}
-          {noOption && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{options.onlineProblem || "Online booking is unavailable."} Contact the hotel to arrange your stay.</p>}
-          {options.onArrival && <div className="rounded-xl border border-gray-200 p-4">
-            <p className="flex items-center gap-2 font-semibold text-gray-900"><Banknote className="h-4 w-4 text-brand-600" aria-hidden="true" />Reserve now, pay at the hotel</p>
-            <p className="mt-1 text-sm leading-6 text-gray-500">Nothing to pay today. We secure your rooms and send you a booking code. Show it at {ownerName} when you arrive{saved.arrivalTime ? ` at ${saved.arrivalTime}` : ""} and pay {roomPrice(saved.amount)} there.</p>
-            {options.cancellationPolicy && <p className="mt-2 whitespace-pre-line rounded-lg bg-gray-50 p-3 text-xs leading-5 text-gray-600"><span className="font-semibold text-gray-800">Cancellation and no-show policy:</span> {options.cancellationPolicy}</p>}
-            <button type="button" onClick={reserve} disabled={busy} className="btn btn-primary mt-3 w-full">{busy && <Loader2 className="h-4 w-4 animate-spin" />}Reserve, pay at the hotel</button>
-          </div>}
-          {options.online && <div className="rounded-xl border border-gray-200 p-4">
-            <p className="flex items-center gap-2 font-semibold text-gray-900"><CreditCard className="h-4 w-4 text-brand-600" aria-hidden="true" />Pay online now</p>
-            <p className="mt-1 flex items-start gap-2 text-sm leading-6 text-gray-500"><ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-brand-600" aria-hidden="true" />Optional. Card or mobile money through Paystack, paid straight into the hotel's own account (never to the platform). Your rooms are held for 30 minutes while you pay.</p>
-            <button type="button" onClick={pay} disabled={busy} className="btn btn-light mt-3 w-full">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}Pay securely · {roomPrice(saved.amount)}</button>
-          </div>}
-          {!options.online && options.onArrival && options.onlineProblem && <p className="text-xs text-gray-500">{options.onlineProblem}</p>}
+          {!availableChoices.length && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{options.onlineProblem || "Online booking is unavailable."} Contact the hotel to arrange your stay.</p>}
+          <fieldset disabled={busy} className="space-y-3">
+            <legend className="sr-only">How would you like to pay?</legend>
+            {choices.map(({ id, available, problem }) => id === "online"
+              ? <PayChoice key={id} id={id} icon={CreditCard} title="Pay online now" amount={roomPrice(saved.amount)} checked={chosen === id} disabled={!available} problem={problem} onChoose={setPayChoice}>Card or mobile money through the hotel's payment gateway (Paystack), straight into the hotel's own account. Your rooms are held for 30 minutes while you pay.</PayChoice>
+              : <PayChoice key={id} id={id} icon={Banknote} title="Pay when you move in" amount="Nothing to pay today" checked={chosen === id} disabled={!available} problem={problem} onChoose={setPayChoice}>We hold your rooms. Show your booking code at the hotel when you move in{saved.arrivalTime ? ` at ${saved.arrivalTime}` : ""} and pay {roomPrice(saved.amount)} there.</PayChoice>)}
+          </fieldset>
+          {options.cancellationPolicy && <p className="whitespace-pre-line rounded-lg bg-gray-50 p-3 text-xs leading-5 text-gray-600"><span className="font-semibold text-gray-800">Cancellation and no-show policy:</span> {options.cancellationPolicy}</p>}
+          {availableChoices.length > 0 && <button type="button" onClick={chosen === "online" ? pay : reserve} disabled={busy || !chosen} className="btn btn-primary w-full">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : chosen === "online" ? <ShieldCheck className="h-4 w-4" aria-hidden="true" /> : <CalendarCheck className="h-4 w-4" aria-hidden="true" />}
+            {!chosen ? "Choose how to pay" : chosen === "online" ? `Pay ${roomPrice(saved.amount)} securely` : "Reserve, pay when you move in"}
+          </button>}
         </div>;
       })()}
       {!bookingId && !saved.reference && saved.statusKey === "pending" && <button type="button" disabled={busy} onClick={() => { setSaved(null); setError(""); }} className="flex items-center gap-1 text-sm font-medium text-gray-500"><ArrowLeft className="h-4 w-4" />Edit stay details</button>}

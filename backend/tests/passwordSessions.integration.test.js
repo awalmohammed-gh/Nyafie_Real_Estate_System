@@ -6,18 +6,23 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import Setting from "../models/Setting.js";
 import Subscription from "../models/Subscription.js";
+import AdminSignInCode from "../models/AdminSignInCode.js";
+import { adminSignInMailer } from "../utils/email.js";
 import authRoutes from "../routes/authRoutes.js";
 import subscriptionRoutes from "../routes/subscriptionRoutes.js";
 import { optionalAuth, viewerSessions } from "../middleware/authMiddleware.js";
 import { SESSION_ROLES } from "../utils/generateToken.js";
-import { customerTabHeaders } from "./support/customerTab.js";
+import { customerTabClaims, customerTabHeaders } from "./support/customerTab.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
 
 test("password changes revoke older sessions while renewing only the requesting browser", { skip: process.env.RUN_AUTH_INTEGRATION !== "1", timeout: 90000 }, async (t) => {
   await isolatedMongo(t);
-  const previousKey = process.env.JWT_KEY;
-  process.env.JWT_KEY = "isolated-password-session-test-signing-key";
-  t.after(() => { if (previousKey === undefined) delete process.env.JWT_KEY; else process.env.JWT_KEY = previousKey; });
+  const previous = Object.fromEntries(["JWT_KEY", "SMTP_USER", "SMTP_APP_PASSWORD", "ADMIN_TWO_STEP"].map((key) => [key, process.env[key]]));
+  Object.assign(process.env, { JWT_KEY: "isolated-password-session-test-signing-key", SMTP_USER: "sender@example.test", SMTP_APP_PASSWORD: "not-a-real-password" });
+  delete process.env.ADMIN_TWO_STEP;
+  t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+  let adminCode; // the admin's second step: captured, never emailed
+  t.mock.method(adminSignInMailer, "send", async (_email, code) => { adminCode = code; });
   await Setting.create({ key: "platform", agent: { requireSubscription: false } });
   const accounts = {};
   for (const [session, role] of Object.entries(SESSION_ROLES)) {
@@ -41,7 +46,13 @@ test("password changes revoke older sessions while renewing only the requesting 
   });
   const cookieFrom = response => response.headers.getSetCookie()[0]?.split(";")[0];
   const login = async (session, password = "OriginalPassword123") => {
-    const response = await request(session, `/api/auth/${session}/login`, { method: "POST", body: { email: accounts[session].email, password } });
+    if (session === "admin") await AdminSignInCode.deleteMany({}); // these tests sign in more often than codes may be sent
+    let response = await request(session, `/api/auth/${session}/login`, { method: "POST", body: { email: accounts[session].email, password } });
+    if (session === "admin") {
+      assert.equal(response.status, 202);
+      const { challenge } = (await response.json()).data;
+      response = await request(session, "/api/auth/admin/verify-email", { method: "POST", body: { challenge, code: adminCode } });
+    }
     assert.equal(response.status, 200);
     assert.equal((await response.json()).data.sessionVersion, undefined);
     return cookieFrom(response);
@@ -53,11 +64,11 @@ test("password changes revoke older sessions while renewing only the requesting 
     await t.test(`${session}: old cookies are revoked, fresh login and the renewed cookie work`, async () => {
       const account = accounts[session];
       const first = await login(session), second = await login(session);
-      const legacyToken = jwt.sign({ id: account.id, role: account.role, session }, process.env.JWT_KEY, { expiresIn: "1h" });
+      const legacyToken = jwt.sign({ id: account.id, role: account.role, session, ...(session === "customer" ? { tabHash: customerTabClaims("customer").tabHash } : {}) }, process.env.JWT_KEY, { expiresIn: "1h" });
       const legacy = `${session}_token=${legacyToken}`;
       const me = cookie => request(session, `/api/auth/${session}/me`, { cookie });
       const change = (cookie, currentPassword, newPassword) => request(session, `/api/auth/${session}/me/password`, { method: "PUT", cookie, body: { currentPassword, newPassword } });
-      assert.equal((await me(legacy)).status, session === "customer" ? 401 : 200, "customers must reauthenticate into a tab-bound session; other roles retain legacy compatibility until password change");
+      assert.equal((await me(legacy)).status, 401, "a token from before sessions were stored no longer opens anything");
 
       for (const [current, next] of [["WrongPassword123", "StrongNewPassword123"], ["OriginalPassword123", "short"]]) {
         const rejected = await change(first, current, next);
@@ -126,15 +137,13 @@ test("password changes revoke older sessions while renewing only the requesting 
     assert.equal((await request("customer", "/api/auth/customer/me", { cookie })).status, 200);
   });
 
-  await t.test("subscription verification preserves a changed-password agent's current session version", async () => {
+  await t.test("subscription verification leaves a changed-password agent's session as it is", async () => {
     const cookie = await login("agent", "NewestPassword123");
     const subscription = await Subscription.create({ user: accounts.agent.id, plan: accounts.agent.id, planName: "Session test plan", amount: 0, paymentStatus: "paid", paymentReference: "session-test-already-paid" });
     const response = await request("agent", "/api/subscriptions/verify", { method: "POST", cookie, body: { reference: subscription.paymentReference } });
     assert.equal(response.status, 200);
-    const renewed = cookieFrom(response);
-    const token = jwt.verify(renewed.slice(renewed.indexOf("=") + 1), process.env.JWT_KEY);
-    assert.equal(token.sessionVersion, (await User.findById(accounts.agent.id).select("+sessionVersion")).sessionVersion);
-    assert.equal((await request("agent", "/api/auth/agent/me", { cookie: renewed })).status, 200);
+    assert.equal(response.headers.getSetCookie().length, 0, "paying doesn't start another session");
+    assert.equal((await request("agent", "/api/auth/agent/me", { cookie })).status, 200);
   });
 
   await t.test("admin password recovery through the model also revokes existing cookies", async () => {

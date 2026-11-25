@@ -69,10 +69,10 @@ test("viewings: booking, answering, rescheduling, reminders and clean-up", { ski
     assert.equal(viewing.contactPhone, undefined, "the customer's own view doesn't need it");
     assert.ok(await Notification.exists({ recipient: agent._id, type: "viewing", title: "New viewing request" }));
     const list = await owner("GET", "/agents/viewings");
-    assert.equal(list.data.length, 1);
-    assert.equal(list.data[0].contactPhone, "0241234567");
-    assert.equal(list.data[0].customer.email, buyer.email);
-    assert.equal((await as(otherAgent)("GET", "/agents/viewings")).data.length, 0, "other agents see nothing");
+    assert.equal(list.data.items.length, 1);
+    assert.equal(list.data.items[0].contactPhone, "0241234567");
+    assert.equal(list.data.items[0].customer.email, buyer.email);
+    assert.equal((await as(otherAgent)("GET", "/agents/viewings")).data.items.length, 0, "other agents see nothing");
     assert.equal((await as(stranger)("GET", `/viewings/${viewing.id}`)).code, 404);
   });
 

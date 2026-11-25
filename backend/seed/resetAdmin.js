@@ -5,6 +5,7 @@ import connectDB from "../config/mongodb.js";
 import User from "../models/User.js";
 import { passwordProblem } from "../utils/passwordPolicy.js";
 import { createLoginAttempts } from "../utils/loginAttempts.js";
+import { endSessions } from "../utils/sessions.js";
 
 try {
   const password = process.env.ADMIN_PSD;
@@ -21,6 +22,7 @@ try {
   const previousEmail = admin.email;
   admin.set({ email, password, isActive: true });
   await admin.save(); // hashed by the pre-save hook
+  await endSessions(admin._id, "password");
   // An authorized operator recovery clears durable locks for the old and current address.
   const attempts = createLoginAttempts({ persistent: () => true });
   await attempts.resetAfterRecovery(previousEmail);

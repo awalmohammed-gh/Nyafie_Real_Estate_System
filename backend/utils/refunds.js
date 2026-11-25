@@ -8,6 +8,7 @@ import { createPaystackRefund, fetchPaystackRefund, inCurrentEnvironment, paymen
 import { HttpError } from "./response.js";
 import { formatGHS } from "./ownership.js";
 import { notifyAdmins, notifyUser } from "./notify.js";
+import { DISPUTE_BLOCKS_REFUND } from "./disputes.js";
 import { addHistory } from "../controllers/rentalController.js";
 
 // Only Paystack charges that were flagged for review can be refunded, and only in full
@@ -29,6 +30,9 @@ const RANK = { submitting: 0, unconfirmed: 0, pending: 1, processing: 2, "needs-
 // An admin may settle a request whose outcome is unknown after checking the Paystack dashboard
 const UNKNOWN = ["submitting", "unconfirmed"];
 const SUBMIT_GRACE = 2 * 60 * 1000;
+
+// The customer's bank has the payment in hand, so a refund on top could pay them twice
+const DISPUTED_REFUND = "This payment is disputed, so refunding it could pay the customer twice. Settle the dispute in the Paystack dashboard. If the customer already has the money, record it as returned another way.";
 
 const text = (value, max) => (typeof value === "string" ? value.trim().slice(0, max) : "");
 
@@ -114,13 +118,14 @@ export const requestRefund = async (admin, body = {}) => {
   if (method === "Paystack") {
     if (paymentMode() === "disabled") throw new HttpError(503, "Paystack is not configured, so refunds cannot be sent.");
     if (!inCurrentEnvironment(record)) throw new HttpError(409, `This payment was made in Paystack ${environment} mode. Refund it from that Paystack dashboard, then record it as a manual refund.`);
+    if (DISPUTE_BLOCKS_REFUND.includes(record.disputeStatus)) throw new HttpError(409, DISPUTED_REFUND);
   }
 
   const refundId = new mongoose.Types.ObjectId();
   const status = method === "Manual" ? "processed" : "submitting";
   const refund = await mongoose.connection.transaction(async (session) => {
     const claimed = await config.model.findOneAndUpdate(
-      { _id: record._id, ...config.flagged, refundStatus: { $in: [null, "failed"] } },
+      { _id: record._id, ...config.flagged, refundStatus: { $in: [null, "failed"] }, ...(method === "Paystack" ? { disputeStatus: { $nin: DISPUTE_BLOCKS_REFUND } } : {}) },
       { $set: { refund: refundId, refundStatus: status } },
       { session, returnDocument: "after" },
     );
@@ -201,15 +206,26 @@ export const resolveRefund = async (admin, id, body = {}) => {
 
 /**
  * Inside a cancellation: marks the Paystack charge that paid this booking for a refund.
- * Returns the flagged payment, or null when nothing was charged online.
+ * Returns the flagged payment, the payment unchanged when a lost dispute already returned all of
+ * it, or null when nothing was charged online.
  */
-export const flagCancelledBookingPayment = (rental, session) => Payment.findOneAndUpdate(
-  { rental: rental._id, reference: rental.paymentReference, kind: "rental", method: "Paystack", status: "paid" },
-  { $set: { status: "refund_required", note: "Booking cancelled after payment" } },
-  { session, returnDocument: "after" },
-);
+export const flagCancelledBookingPayment = async (rental, session) => {
+  const paid = { rental: rental._id, reference: rental.paymentReference, kind: "rental", method: "Paystack", status: "paid" };
+  const flagged = await Payment.findOneAndUpdate(
+    { ...paid, $expr: { $lt: [{ $ifNull: ["$disputeLost", 0] }, { $ifNull: ["$paidAmount", "$amount"] }] } },
+    { $set: { status: "refund_required", note: "Booking cancelled after payment" } },
+    { session, returnDocument: "after" },
+  );
+  return flagged || Payment.findOne({ ...paid, disputeLost: { $gt: 0 } }).session(session);
+};
 
-export const announceCancelledBookingRefund = (payment) => notifyAdmins({
+// What the customer is told about their money when a booking they paid for is cancelled
+// (still "paid" means a lost dispute already returned it, see flagCancelledBookingPayment)
+export const cancelledPaymentText = (payment) => payment.status === "paid"
+  ? `Your payment of ${formatGHS(payment.amount)} was already returned through your bank or mobile money provider`
+  : `Your payment of ${formatGHS(payment.amount)} will be refunded`;
+
+export const announceCancelledBookingRefund = (payment) => payment.status !== "paid" && notifyAdmins({
   critical: true, type: "payment", title: "Cancelled booking needs a refund",
   message: `Payment ${payment.reference} (${formatGHS(payment.amount)}) was for a booking that has been cancelled. Refund it from Payments.`,
   link: "/admin/payments",

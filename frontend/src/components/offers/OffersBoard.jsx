@@ -15,8 +15,9 @@ import SearchInput from "../ui/SearchInput";
 import StatusBadge from "../ui/StatusBadge";
 import WhatsAppIcon from "../ui/WhatsAppIcon";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
+import { useDebounced, useOpenRecord, usePagedList } from "../../hooks/usePagedList";
 import { offerApi } from "../../frontApi";
-import { formatDate, formatRelative, isWithinDays } from "../../utils/date";
+import { formatDate, formatRelative } from "../../utils/date";
 import { toWhatsAppNumber } from "../../utils/whatsapp";
 import { adminPath } from "../../utils/adminEntry";
 import { cloudImage } from "../../utils/cloudImage";
@@ -32,42 +33,33 @@ const OffersBoard = ({ scope }) => {
   const isAdmin = scope === "admin";
   const Detail = isAdmin ? AdminRecordModal : SidePanel;
   const run = useAsyncAction();
-  const { offers, loading, error: loadError, reload, updateTransaction } = useTransactions();
+  const { reloadCounts } = useTransactions();
   const [params] = useSearchParams();
   const [status, setStatus] = useState("All");
   const [query, setQuery] = useState("");
   const [ownerId, setOwnerId] = useState("all");
   const [propertyId, setPropertyId] = useState(params.get("property") || "all"); // set by links from a property page
   const [range, setRange] = useState("all");
-  const [openId, setOpenId] = useState(null);
   const [counter, setCounter] = useState({ amount: "", message: "", show: false });
   const [busy, setBusy] = useState("");
 
-  const retry = reload;
-  if (loadError) return <ErrorState title="Couldn't load offers" message={loadError} onRetry={retry} />;
-  if (loading) return <TableSkeleton />;
+  const search = useDebounced(query.trim());
+  const list = usePagedList(`${scope}-offers`, { tab: status === "All" ? "All" : status.toLowerCase(), owner: ownerId, property: propertyId, range, search: search || undefined }, (filters) => offerApi.getOffersPage(scope, filters));
+  const rows = list.data?.items || [];
+  const [open, setOpen] = useOpenRecord(rows);
+  if (!list.data) return list.error ? <ErrorState title="Couldn't load offers" message={list.error} onRetry={list.reload} /> : <TableSkeleton />;
 
-  const owners = [...new Map(offers.map((o) => [o.owner.id, o.owner])).values()];
-  const scoped = offers
-    .filter((o) => ownerId === "all" || o.owner.id === ownerId)
-    .filter((o) => propertyId === "all" || o.property.id === propertyId)
-    .filter((o) => range === "all" || isWithinDays(o.createdAt, Number(range)));
-  const q = query.trim().toLowerCase();
-  const rows = scoped
-    .filter((o) => status === "All" || o.status === status)
-    .filter((o) => !q || `${o.customer.name} ${o.property.title} ${o.message}`.toLowerCase().includes(q));
-  const propertyOptions = [...new Map(offers.map((o) => [o.property.id, o.property])).values()];
-  const counts = { All: scoped.length, ...Object.fromEntries(STATUSES.map((s) => [s, scoped.filter((o) => o.status === s).length])) };
-
-  const open = openId && offers.find((o) => o.id === openId);
+  const { counts, stats, options, empty } = list.data;
+  const { owners, properties: propertyOptions } = options;
   const canRespond = open && (open.status === "Pending" || open.status === "Countered");
   // The admin inbox only holds chats about NyaFie listings
   const chatLink = open && (isAdmin ? open.ownerType === "admin" && adminPath(`/messages?c=${open.conversationId}`) : `/agent/messages?c=${open.conversationId}`);
   const whatsapp = open?.customer.phone && toWhatsAppNumber(open.customer.phone);
 
   const replace = (updated) => {
-    updateTransaction("offers", updated);
-    reload(); // refresh dashboard counts and sidebar badges
+    setOpen(updated);
+    list.reload();
+    reloadCounts(); // sidebar badges
   };
 
   const respond = async (action) => {
@@ -117,7 +109,7 @@ const OffersBoard = ({ scope }) => {
       header: <span className="sr-only">Actions</span>,
       align: "right",
       render: (o) => (
-        <button onClick={() => setOpenId(o.id)} aria-label={`View offer from ${o.customer.name}`} className="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900">
+        <button onClick={() => setOpen(o)} aria-label={`View offer from ${o.customer.name}`} className="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900">
           <Eye className="h-4.5 w-4.5" />
         </button>
       ),
@@ -127,17 +119,17 @@ const OffersBoard = ({ scope }) => {
   return (
     <>
       {!isAdmin && <WorkspaceStats className="mb-6" items={[
-        { label: "All offers", value: offers.length, note: "Across your properties" },
-        { label: "Needs a response", value: offers.filter((o) => ["Pending", "Countered"].includes(o.status)).length, note: "Keep negotiations moving" },
-        { label: "Accepted", value: offers.filter((o) => o.status === "Accepted").length, note: "Ready for the next step" },
-        { label: "Closed", value: offers.filter((o) => ["Rejected", "Withdrawn"].includes(o.status)).length, note: "Completed negotiations" },
+        { label: "All offers", value: stats.all, note: "Across your properties" },
+        { label: "Needs a response", value: stats.respond, note: "Keep negotiations moving" },
+        { label: "Accepted", value: stats.accepted, note: "Ready for the next step" },
+        { label: "Closed", value: stats.closed, note: "Completed negotiations" },
       ]} />}
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <FilterTabs
           label="Offer status"
           value={status}
           onChange={setStatus}
-          tabs={["All", ...STATUSES].map((s) => ({ id: s, label: s, count: counts[s] }))}
+          tabs={["All", ...STATUSES].map((s) => ({ id: s, label: s, count: counts[s] ?? counts[s.toLowerCase()] }))}
         />
         <SearchInput value={query} onChange={setQuery} placeholder="Search offers" className="lg:w-72" />
       </div>
@@ -148,17 +140,18 @@ const OffersBoard = ({ scope }) => {
         tableFrom={isAdmin ? "md" : "xl"}
         columns={columns}
         rows={rows}
-        onRowClick={(o) => setOpenId(o.id)}
+        paging={list.paging}
+        onRowClick={(o) => setOpen(o)}
         minWidth={isAdmin ? 920 : 800}
         empty={
           <EmptyState
             icon={HandCoins}
-            title={offers.length ? "No offers match" : "No offers yet"}
-            description={offers.length ? "Try a different filter." : "When customers make offers on properties for sale, they appear here."}
+            title={empty ? "No offers yet" : "No offers match"}
+            description={!empty ? "Try a different filter." : "When customers make offers on properties for sale, they appear here."}
           />
         }
         mobileCard={(o) => (
-          <button onClick={() => setOpenId(o.id)} className="w-full text-left">
+          <button onClick={() => setOpen(o)} className="w-full text-left">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="truncate font-semibold text-gray-900">{o.customer.name}</p>
@@ -177,7 +170,7 @@ const OffersBoard = ({ scope }) => {
       <Detail
         open={Boolean(open)}
         onClose={() => {
-          setOpenId(null);
+          setOpen(null);
           setCounter({ amount: "", message: "", show: false });
         }}
         title={open ? `Offer from ${open.customer.name}` : ""}

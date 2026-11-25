@@ -17,6 +17,7 @@ import TeamInvite from "../models/TeamInvite.js";
 import Notification from "../models/Notification.js";
 import { HttpError } from "./response.js";
 import { notifyUser } from "./notify.js";
+import { deleteSessions, endSessions } from "./sessions.js";
 import { accountTypeOf, subscriptionState } from "./permissions.js";
 import { isOrganization, ACCOUNT_LABELS } from "./accountTypes.js";
 import { isRemoved } from "./agentApplication.js";
@@ -166,6 +167,7 @@ export const removeProvider = async (id, admin, { reason, note } = {}) => {
     };
   });
 
+  await endSessions(user._id, "removed"); // on every device
   // People are told only once the removal is saved
   if (staffOf) {
     await notifyUser(staffOf, { type: "user", title: "A team member was removed", message: `NyaFie removed ${providerName(user)} from your team. Their assigned listings and leads are back with you.`, link: "/agent/team" });
@@ -288,6 +290,7 @@ export const permanentlyDeleteProvider = async (id, admin, confirm) => {
     await TeamInvite.deleteMany({ agency: userId }, { session });
     await TeamInvite.updateMany({ usedBy: userId }, { $set: { usedBy: null } }, { session });
     await Notification.deleteMany({ recipient: userId }, { session });
+    await deleteSessions(userId, { session });
     const files = await deleteDocumentChecks({ owner: userId }, session); // their private ownership documents
 
     const removed = { _id: userId, "agentApplication.status": "removed" };
@@ -296,7 +299,7 @@ export const permanentlyDeleteProvider = async (id, admin, confirm) => {
       : (await User.updateOne(removed, {
         $set: {
           ...DELETED_NAME,
-          email: `deleted-${userId}@deleted.nyafie.invalid`,
+          email: `deleted-${userId}@deleted.nyafie.invalid`, emailKey: `deleted-${userId}@deleted.nyafie.invalid`, // frees the inbox for a new account
           phone: "",
           profileImage: "",
           password: unusablePassword,
@@ -306,6 +309,7 @@ export const permanentlyDeleteProvider = async (id, admin, confirm) => {
           "removal.deletedAt": now,
           "removal.deletedBy": admin._id,
         },
+        $unset: { googleId: 1, passwordSetAt: 1 }, // their Google account is free to be used again
       }, { session })).matchedCount;
     if (!done) throw new HttpError(409, "This provider was restored or changed meanwhile. Refresh and try again.");
     return [...files, ...proofFiles];

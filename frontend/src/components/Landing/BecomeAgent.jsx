@@ -3,16 +3,17 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Check } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { usePlatform } from "../../context/usePlatform";
+import { AGENT_START, approvedAgentAccess, listPropertyPath } from "../../utils/listProperty";
 
 const BecomeAgent = () => {
   const { user } = useAuth();
   const { siteName } = usePlatform();
-  const isAgent = user?.role === "agent";
+  const isAgent = approvedAgentAccess(user);
   return <RevealBlock as="section" id="become-agent" className="home-agent-cta" aria-labelledby="agent-heading"><div className="container-page home-agent-layout">
     <img className="home-agent-photo" src="/banners/nyafie-agent-consultation.jpg" alt="A property agent discussing a home with a couple" loading="lazy" decoding="async" width="768" height="512" />
     <div className="home-agent-panel">
       <div className="home-agent-copy"><p className="home-eyebrow">FOR AGENTS & PROPERTY OWNERS</p><h2 id="agent-heading">List and grow with {siteName}.</h2><p>Agents, agencies and property owners can all post properties on {siteName}. We verify every lister before their listings go live, so buyers and renters can trust what they see.</p><ul className="home-agent-benefits">{["Verified before you list", "List properties easily", "Manage inquiries"].map(text => <li key={text}><Check size={15} aria-hidden="true" />{text}</li>)}</ul></div>
-      <div className="home-agent-actions"><Link to={isAgent ? "/agent/dashboard" : "/agent/register"} className="home-button home-button-white">{isAgent ? "Open dashboard" : "Become an Agent"}<ArrowRight size={17} aria-hidden="true" /></Link><Link to="/agent/plans" className="home-button home-button-outline">View Plans</Link></div>
+      <div className="home-agent-actions"><Link to={isAgent ? `${AGENT_START}?to=dashboard` : listPropertyPath(user)} className="home-button home-button-white">{isAgent ? "Open dashboard" : user?.agentAccess ? "Continue application" : "Become an Agent"}<ArrowRight size={17} aria-hidden="true" /></Link><Link to="/agent/plans" className="home-button home-button-outline">View Plans</Link></div>
     </div>
   </div></RevealBlock>;
 };

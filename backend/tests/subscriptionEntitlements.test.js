@@ -16,6 +16,7 @@ import agentRoutes from "../routes/agentRoutes.js";
 import { quotePlan } from "../utils/planChange.js";
 import { chatEnabledAgents, withinImageLimit } from "../utils/permissions.js";
 import { fakeListedAgents } from "./support/listedAgents.js";
+import { TEST_SESSION } from "./support/sessions.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date();
@@ -196,7 +197,7 @@ test("approved agents can't change their account type by editing their profile",
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   t.after(() => server.close());
-  const token = jwt.sign({ id: String(individual._id), role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" });
+  const token = jwt.sign({ sid: TEST_SESSION, id: String(individual._id), role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" });
   await fetch(`http://127.0.0.1:${server.address().port}/api/agents/profile`, {
     method: "PUT",
     headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", Cookie: `agent_token=${token}` },

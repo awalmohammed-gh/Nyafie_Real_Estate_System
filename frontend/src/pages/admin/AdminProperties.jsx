@@ -1,10 +1,14 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, ArrowUpRight, Building2, CheckCircle2, ClipboardCheck, ExternalLink, Eye, EyeOff, FilePenLine, MapPin, Pencil, RotateCcw, Star, StarOff, Trash2, X, XCircle, Plus, Tag } from "lucide-react";
-import { useAdminData } from "../../hooks/useAdminData";
+import { useApiQuery } from "../../hooks/useApiQuery";
+import { useDebounced, usePagedList } from "../../hooks/usePagedList";
+import { useRealEstate } from "../../context/useRealEstate";
+import { adminApi } from "../../frontApi";
+import { ErrorState, TableSkeleton } from "../../components/dashboard/States";
 import { useToast } from "../../context/useToast";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
-import DataTable from "../../components/ui/DataTable";
+import DataTable, { Pager } from "../../components/ui/DataTable";
 import FilterTabs from "../../components/ui/FilterTabs";
 import SearchInput from "../../components/ui/SearchInput";
 import StatusBadge from "../../components/ui/StatusBadge";
@@ -26,16 +30,12 @@ import FreshnessNotice, { FreshnessBadge } from "../../components/dashboard/Fres
 import "./adminProperties.css";
 import { cloudImage } from "../../utils/cloudImage";
 
-const priceOf = (property) => {
-  if (property.property.type.toLowerCase() === "hotel") {
-    const prices = (property.roomTypes || []).filter((room) => room.active).map((room) => room.pricePerNight);
-    return prices.length ? Math.min(...prices) : null;
-  }
-  return property.pricing.amount ?? property.pricing.perNight ?? property.pricing.perMonth ?? null;
-};
+// The owner as the list shows it (the server names it)
+const ownerOf = (property) => (property.owner.type === "admin" ? { name: property.ownerName, type: "Admin" } : { name: property.ownerName, type: "Agent", id: property.owner.id });
+const isPubliclyVisible = (property) => property.isPublic;
 
-const EditPropertyModal = ({ property, onClose }) => {
-  const { updateListing } = useAdminData();
+const EditPropertyModal = ({ property, onClose, onSaved }) => {
+  const { updateListing } = useRealEstate();
   const { toast } = useToast();
   const run = useAsyncAction();
   const priceKey = property.pricing.amount != null ? "amount" : property.pricing.perNight != null ? "perNight" : "perMonth";
@@ -60,7 +60,10 @@ const EditPropertyModal = ({ property, onClose }) => {
       }),
       { success: "Property updated", description: form.title }
     );
-    if (ok) onClose();
+    if (ok) {
+      onSaved();
+      onClose();
+    }
   };
 
   return (
@@ -95,8 +98,8 @@ const EditPropertyModal = ({ property, onClose }) => {
 
 const AdminProperties = () => {
   const { siteName, paths } = usePlatform();
-  const { listings, ownerOf, isPubliclyVisible, setListingState, setFeatured, deleteListing, updateListing, users, confirmAvailability } = useAdminData();
-  const run = useAsyncAction();
+  const { setListingState, setFeatured, deleteListing, updateListing, confirmAvailability } = useRealEstate();
+  const runAction = useAsyncAction();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [status, setStatus] = useState(params.get("status") || "all");
@@ -111,9 +114,23 @@ const AdminProperties = () => {
   const [view, setView] = useViewMode("admin-properties");
 
   const ownerId = params.get("owner");
-  const ownerFilterName = ownerId && users.find((u) => u.id === ownerId)?.name;
   const openId = params.get("open");
-  const viewed = openId && listings.find((p) => p.id === openId);
+  const search = useDebounced(query.trim());
+  const list = usePagedList("admin-properties", { status, ownerType, owner: ownerId || undefined, purpose, sort, search: search || undefined }, adminApi.getPropertiesPage);
+  const rows = list.data?.items || [];
+  // Opened from a link, it may not be on the page shown
+  const onPage = openId && rows.find((p) => p.id === openId);
+  const details = useApiQuery(openId && list.data && !onPage ? `admin-property:${openId}` : null, () => adminApi.getAdminProperty(openId));
+  const viewed = openId && (onPage || details.data || null);
+  // Every change reloads the page shown (and an open listing that isn't on it)
+  const run = async (...args) => {
+    const result = await runAction(...args);
+    if (result.ok) {
+      list.reload();
+      details.reload();
+    }
+    return result;
+  };
 
   const setParam = (key, value) => {
     const next = new URLSearchParams(params);
@@ -123,31 +140,17 @@ const AdminProperties = () => {
   };
   const selectStatus = (value) => { setStatus(value); setParam("status", value === "all" ? null : value); };
 
-  const q = query.trim().toLowerCase();
-  const scoped = listings.filter((p) => (!ownerId || p.owner.id === ownerId) && (ownerType === "all" || p.owner.type === ownerType));
-  const rows = scoped
-    .filter((p) => status === "all" || p.listing.state === status)
-    .filter((p) => purpose === "all" || p.property.status === purpose)
-    .filter((p) => !q || `${p.title} ${p.property.type} ${p.location.name} ${p.location.city} ${ownerOf(p).name}`.toLowerCase().includes(q))
-    .sort((a, b) => {
-      if (sort === "priceAsc" || sort === "priceDesc") {
-        const left = priceOf(a), right = priceOf(b);
-        if (left === null || right === null) return left === right ? 0 : left === null ? 1 : -1;
-        return sort === "priceAsc" ? left - right : right - left;
-      }
-      if (sort === "views") return (b.meta?.views || 0) - (a.meta?.views || 0);
-      return (sort === "review" ? (a.listing.state === "pending" ? -1 : 0) - (b.listing.state === "pending" ? -1 : 0) : 0) || new Date(b.listing.createdAt) - new Date(a.listing.createdAt);
-    });
-
-  const count = (state) => scoped.filter((p) => state === "all" || p.listing.state === state).length;
-  const filtered = status !== "all" || ownerType !== "all" || purpose !== "all" || Boolean(q || ownerId);
+  const counts = list.data?.counts || {};
+  const purposes = list.data?.purposes || {};
+  const count = (state) => counts[state] || 0;
+  const filtered = status !== "all" || ownerType !== "all" || purpose !== "all" || Boolean(query.trim() || ownerId);
   const resetFilters = () => {
     setStatus("all"); setOwnerType("all"); setPurpose("all"); setQuery(""); setSort("review");
     setParams((current) => { const next = new URLSearchParams(current); next.delete("owner"); next.delete("status"); return next; }, { replace: true });
   };
   const reviewQueue = () => { selectStatus("pending"); setPurpose("all"); setQuery(""); setSort("review"); };
   const summary = [
-    { id: "all", label: "Total properties", icon: Building2, note: `${scoped.filter((p) => p.property.status === "Rent").length} for rent · ${scoped.filter((p) => p.property.status === "Sale").length} for sale`, tone: "plum" },
+    { id: "all", label: "Total properties", icon: Building2, note: `${purposes.Rent || 0} for rent · ${purposes.Sale || 0} for sale`, tone: "plum" },
     { id: "published", label: "Published", icon: CheckCircle2, note: "Approved listings", tone: "green" },
     { id: "pending", label: "Awaiting review", icon: ClipboardCheck, note: "Check details before publishing", tone: "amber" },
     { id: "draft", label: "Drafts", icon: FilePenLine, note: "Saved, not yet published", tone: "slate" },
@@ -230,6 +233,8 @@ const AdminProperties = () => {
     { key: "actions", header: <span className="sr-only">Actions</span>, align: "right", render: (p) => <ActionMenu actions={actionsFor(p)} label={`Actions for ${p.title}`} /> },
   ];
 
+  if (!list.data) return <div className="admin-properties">{list.error ? <ErrorState title="Couldn't load properties" message={list.error} onRetry={list.reload} /> : <TableSkeleton />}</div>;
+
   return (
     <div className="admin-properties">
       <header className="ap-heading">
@@ -240,14 +245,14 @@ const AdminProperties = () => {
       <section className="ap-summary" aria-label="Property overview">{summary.map(({ id, label, icon: Icon, note, tone }) => (
         <button key={id} type="button" className={`ap-stat is-${tone}`} aria-pressed={status === id} onClick={() => selectStatus(id)}>
           <span className="ap-stat-top"><span>{label}</span><span className="ap-stat-icon"><Icon size={19} aria-hidden="true" /></span></span>
-          <strong>{count(id).toLocaleString()}</strong><span className="ap-stat-note">{note}</span><span className="ap-stat-bar"><span style={{ width: `${scoped.length ? count(id) / scoped.length * 100 : 0}%` }} /></span>
+          <strong>{count(id).toLocaleString()}</strong><span className="ap-stat-note">{note}</span><span className="ap-stat-bar"><span style={{ width: `${count("all") ? count(id) / count("all") * 100 : 0}%` }} /></span>
         </button>
       ))}</section>
 
       {count("pending") > 0 && <div className="ap-review-notice"><span className="ap-review-icon"><ClipboardCheck size={21} aria-hidden="true" /></span><div><h2>{count("pending")} {count("pending") === 1 ? "listing needs" : "listings need"} your review</h2><p>Check the photos, price, and property details before they go live.</p></div><button type="button" onClick={reviewQueue}>Review listings<ArrowRight size={16} aria-hidden="true" /></button></div>}
 
       {/* The platform's own listings: the admin team confirms they are still available */}
-      <FreshnessNotice listings={listings.filter((p) => p.owner.type === "admin")} onConfirm={confirmAvailability} className="mb-6" />
+      <FreshnessNotice listings={list.data.stale} onConfirm={async (id) => { await confirmAvailability(id); list.reload(); }} className="mb-6" />
 
       <section className="ap-collection" aria-label="Manage properties">
       <div className="ap-collection-heading"><div><h2>Property collection</h2><p>Listings from {siteName} and your agent community.</p></div><div className="ap-view-control"><span>View</span><ViewToggle value={view} onChange={setView} /></div></div>
@@ -275,10 +280,10 @@ const AdminProperties = () => {
           <select value={purpose} onChange={(event) => setPurpose(event.target.value)} aria-label="Filter by listing purpose" className="field"><option value="all">Rent & sale</option><option value="Rent">For rent</option><option value="Sale">For sale</option></select>
           <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort properties" className="field"><option value="review">Review priority</option><option value="newest">Newest first</option><option value="priceAsc">Price: low to high</option><option value="priceDesc">Price: high to low</option><option value="views">Most viewed</option></select>
         </div>
-        <div className="ap-result-bar"><p role="status" aria-live="polite"><strong>{rows.length}</strong> {rows.length === 1 ? "property" : "properties"}<span>of {scoped.length} in this collection</span></p><div className="ap-filter-chips">
+        <div className="ap-result-bar"><p role="status" aria-live="polite"><strong>{list.data.total}</strong> {list.data.total === 1 ? "property" : "properties"}<span>of {count("all")} in this collection</span></p><div className="ap-filter-chips">
           {ownerId && (
             <button onClick={() => setParam("owner", null)} className="ap-owner-filter">
-              Owner: {ownerFilterName || ownerId}
+              Owner: {list.data.ownerName || ownerId}
               <X className="h-4 w-4" />
             </button>
           )}
@@ -288,13 +293,13 @@ const AdminProperties = () => {
 
       {view === "grid" ? (
         rows.length === 0 ? (
-          listings.length === 0 ? (
+          list.data.empty ? (
             <EmptyState icon={Building2} title="No properties yet" description="Properties added to the platform will appear here." action={<Link to={adminPath("/properties/add")} className="btn btn-primary px-3.5 py-2"><Plus className="h-4 w-4" />Add Property</Link>} />
           ) : (
             <EmptyState icon={Building2} title="No matching properties" description="Try another area, owner, or listing status." action={<button type="button" onClick={resetFilters} className="btn btn-light">Clear filters</button>} />
           )
         ) : (
-          <div className="ap-property-grid">
+          <div className="space-y-4"><div className="ap-property-grid">
             {rows.map((p, i) => (
               <PropertyTile
                 key={p.id}
@@ -306,15 +311,16 @@ const AdminProperties = () => {
                 onOpen={() => setParam("open", p.id)}
               />
             ))}
-          </div>
+          </div>{list.paging.pages > 1 && <div className="admin-card overflow-hidden"><Pager {...list.paging} /></div>}</div>
         )
       ) : (
       <div className="ap-property-table"><DataTable
         columns={columns}
         rows={rows}
+        paging={list.paging}
         minWidth={980}
         onRowClick={(p) => setParam("open", p.id)}
-        empty={<EmptyState icon={Building2} title={listings.length ? "No matching properties" : "No properties yet"} description={listings.length ? "Try another area, owner, or listing status." : "Add your first property to start your portfolio."} action={filtered ? <button type="button" onClick={resetFilters} className="btn btn-light">Clear filters</button> : <Link to={adminPath("/properties/add")} className="btn btn-primary">Add property</Link>} />}
+        empty={<EmptyState icon={Building2} title={list.data.empty ? "No properties yet" : "No matching properties"} description={!list.data.empty ? "Try another area, owner, or listing status." : "Add your first property to start your portfolio."} action={filtered ? <button type="button" onClick={resetFilters} className="btn btn-light">Clear filters</button> : <Link to={adminPath("/properties/add")} className="btn btn-primary">Add property</Link>} />}
         mobileCard={(p) => (
           <div className="flex gap-3">
             <img src={cloudImage(p.media.images[0], 96)} alt="" className="h-20 w-24 shrink-0 rounded-xl object-cover" />
@@ -410,7 +416,7 @@ const AdminProperties = () => {
         )}
       </AdminRecordModal>
 
-      {editing && <EditPropertyModal property={editing} onClose={() => setEditing(null)} />}
+      {editing && <EditPropertyModal property={editing} onClose={() => setEditing(null)} onSaved={() => { list.reload(); details.reload(); }} />}
 
       <ConfirmDialog
         open={Boolean(rejecting)}

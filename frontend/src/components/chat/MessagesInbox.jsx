@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Loader2, MessageSquare, RefreshCw } from "lucide-react";
 import SearchInput from "../ui/SearchInput";
@@ -8,6 +8,8 @@ import ChatThread from "./ChatThread";
 import FilterTabs from "../ui/FilterTabs";
 import EmptyState from "../ui/EmptyState";
 import { timeAgo } from "../../utils/date";
+import { useDebounced, usePagedList } from "../../hooks/usePagedList";
+import { Pager } from "../ui/DataTable";
 import { cloudImage } from "../../utils/cloudImage";
 
 const POLL_MS = 15000;
@@ -21,29 +23,14 @@ const POLL_MS = 15000;
  */
 const MessagesInbox = ({ scope, emptyTitle, emptyDescription, emptyAction }) => {
   const [params, setParams] = useSearchParams();
-  const [conversations, setConversations] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
-  const [loadError, setLoadError] = useState("");
   const selectedId = params.get("c");
 
-  const refresh = useCallback(async () => {
-    try {
-      setConversations(await chatApi.getConversations(scope));
-      setLoadError("");
-    } catch (err) {
-      setLoadError(err.message || "We couldn't load your conversations.");
-    } finally {
-      setLoading(false);
-    }
-  }, [scope]);
-
-  useEffect(() => {
-    refresh().catch(() => {});
-    const timer = setInterval(() => refresh().catch(() => {}), POLL_MS);
-    return () => clearInterval(timer);
-  }, [refresh]);
+  const search = useDebounced(query.trim());
+  const list = usePagedList(`${scope}-conversations`, { tab: filter, search: search || undefined }, (filters) => chatApi.getConversationsPage(scope, filters), { every: POLL_MS });
+  const refresh = list.reload;
+  const loadError = list.error;
 
   const select = (id) => {
     const next = new URLSearchParams(params);
@@ -52,16 +39,8 @@ const MessagesInbox = ({ scope, emptyTitle, emptyDescription, emptyAction }) => 
     setParams(next, { replace: !id });
   };
 
-  const counts = {
-    all: conversations.filter((c) => c.status === "open").length,
-    unread: conversations.filter((c) => c.status === "open" && c.unread > 0).length,
-    closed: conversations.filter((c) => c.status === "closed").length,
-  };
-  const visible = conversations.filter((c) =>
-    filter === "unread" ? c.status === "open" && c.unread > 0 : filter === "closed" ? c.status === "closed" : c.status === "open"
-  ).filter((c) => { const counterpart = c.side === "owner" ? c.customer : c.owner; return !query.trim() || `${counterpart?.name} ${c.property.title} ${c.lastMessage}`.toLowerCase().includes(query.trim().toLowerCase()); });
-
-  if (loading) {
+  if (!list.data) {
+    if (loadError) return <ErrorState title="Messages couldn't be loaded" message={loadError} onRetry={refresh} />;
     return (
       <div className="grid min-h-[40vh] place-items-center">
         <Loader2 className="h-7 w-7 animate-spin text-brand-500" />
@@ -69,8 +48,8 @@ const MessagesInbox = ({ scope, emptyTitle, emptyDescription, emptyAction }) => 
     );
   }
 
-  if (conversations.length === 0) {
-    if (loadError) return <ErrorState title="Messages couldn't be loaded" message={loadError} onRetry={refresh} />;
+  const { items: visible, counts, empty } = list.data;
+  if (empty) {
     return <EmptyState icon={MessageSquare} title={emptyTitle} description={emptyDescription} action={emptyAction} />;
   }
 
@@ -127,12 +106,13 @@ const MessagesInbox = ({ scope, emptyTitle, emptyDescription, emptyAction }) => 
             );
           })}
         </ul>
+        {list.paging.pages > 1 && <Pager {...list.paging} />}
       </aside>
 
       {/* Open conversation */}
       <section className={`min-h-0 ${selectedId ? "block" : "hidden lg:block"}`}>
         {selectedId ? (
-          <ChatThread key={selectedId} conversationId={selectedId} onBack={() => select(null)} onChanged={() => refresh().catch(() => {})} />
+          <ChatThread key={selectedId} conversationId={selectedId} onBack={() => select(null)} onChanged={refresh} />
         ) : (
           <div className="grid h-full place-items-center p-6 text-center">
             <div>

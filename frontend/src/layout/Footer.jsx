@@ -20,7 +20,7 @@ const exploreLinks = [
 const serviceLinks = [
   { name: "Buy a Home", path: "/sale" },
   { name: "Rent a Home", path: "/rent" },
-  { name: "List Your Property", path: "/agent/register" },
+  { name: "List Your Property", path: "/agent/start" },
   { name: "My Offers", path: "/account/offers" },
 ];
 

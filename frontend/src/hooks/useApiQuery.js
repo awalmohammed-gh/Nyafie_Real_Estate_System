@@ -16,8 +16,8 @@ export const useApiQuery = (key, request) => {
     let active = true;
     const controller = new AbortController();
     request(controller.signal).then(
-      (data) => active && setState({ key, data, error: "" }),
-      (err) => active && setState({ key, data: undefined, error: err.message || "Something went wrong." })
+      (data) => active && setState({ key, shown: key, data, error: "" }),
+      (err) => active && setState((s) => ({ key, data: undefined, error: err.message || "Something went wrong.", last: s.data === undefined ? s.last : { key: s.shown ?? s.key, data: s.data } }))
     );
     return () => {
       active = false;
@@ -34,5 +34,6 @@ export const useApiQuery = (key, request) => {
 
   const current = state.key === key;
   // `previous` keeps the last result on screen (dimmed) while a new key loads
-  return { data: current ? state.data : undefined, previous: state.data, error: current ? state.error : "", loading: !current, reload };
+  // `last`: what this same key showed before a refresh of it failed
+  return { data: current ? state.data : undefined, previous: state.data, last: state.last?.key === key ? state.last.data : undefined, error: current ? state.error : "", loading: !current, reload };
 };

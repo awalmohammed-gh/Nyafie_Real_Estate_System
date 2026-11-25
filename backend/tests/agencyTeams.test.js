@@ -23,6 +23,7 @@ import teamRoutes from "../routes/teamRoutes.js";
 import propertyRoutes from "../routes/propertyRoutes.js";
 import subscriptionRoutes from "../routes/subscriptionRoutes.js";
 import { canHandleTeamRecord, teamFilter } from "../utils/team.js";
+import { TEST_SESSION } from "./support/sessions.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 const q = (value) => {
@@ -123,7 +124,7 @@ test("agency invites, joining, roles and removal are enforced on the server", as
   await new Promise((resolve) => server.once("listening", resolve));
   t.after(() => server.close());
   const base = `http://127.0.0.1:${server.address().port}/api`;
-  const as = (user) => (method, path, body) => fetch(`${base}${path}`, { method, headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", Cookie: `agent_token=${jwt.sign({ id: String(user._id), role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" })}` }, body: body && JSON.stringify(body) });
+  const as = (user) => (method, path, body) => fetch(`${base}${path}`, { method, headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", Cookie: `agent_token=${jwt.sign({ sid: TEST_SESSION, id: String(user._id), role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" })}` }, body: body && JSON.stringify(body) });
   const ownerCall = as(owner);
   let token;
 

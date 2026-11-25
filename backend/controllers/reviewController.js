@@ -7,6 +7,7 @@ import { notifyAdmins, notifyUser } from "../utils/notify.js";
 import { cleanText, escapeRegex } from "../utils/validation.js";
 import { ok, fail } from "../utils/response.js";
 import { canReview, REVIEW_RULE } from "../utils/reviewEligibility.js";
+import { isOwnListing } from "../utils/ownership.js";
 
 const SORTS = {
   newest: { createdAt: -1, _id: -1 },
@@ -99,7 +100,7 @@ export const listPropertyReviews = async (req, res) => {
     summary,
     mine: mine ? present(mine, viewer) : null, // includes a hidden review so its author knows why it isn't listed
     // Whether this customer may write a review (utils/reviewEligibility.js); their own review stays editable
-    canReview: Boolean(mine) || eligible,
+    canReview: !(viewer && isOwnListing(property, viewer)) && (Boolean(mine) || eligible),
     reviewRule: REVIEW_RULE,
   });
 };
@@ -108,6 +109,7 @@ export const listPropertyReviews = async (req, res) => {
 export const submitReview = async (req, res) => {
   const property = await loadPublicProperty(req.params.id);
   if (!property) return fail(res, 404, "Property not found.");
+  if (isOwnListing(property, req.user)) return fail(res, 403, "You can't review your own listing.");
   const fields = readReview(req.body);
   if (fields.error) return fail(res, 400, fields.error);
 

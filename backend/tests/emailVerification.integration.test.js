@@ -12,12 +12,13 @@ import { verificationMailer } from "../utils/email.js";
 import { verificationChallenge } from "../utils/emailVerification.js";
 import { adminEntryHeaders, customerTabHeaders } from "./support/customerTab.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
+import { TEST_SESSION } from "./support/sessions.js";
 
 test("customer email verification requires inbox ownership before every customer entry point", {
   skip: process.env.RUN_EMAIL_INTEGRATION !== "1", timeout: 90000,
 }, async (t) => {
-  const previous = { JWT_KEY: process.env.JWT_KEY, SMTP_USER: process.env.SMTP_USER, SMTP_APP_PASSWORD: process.env.SMTP_APP_PASSWORD, NODE_ENV: process.env.NODE_ENV };
-  Object.assign(process.env, { JWT_KEY: "email-integration-signing-key", SMTP_USER: "sender@gmail.com", SMTP_APP_PASSWORD: "test-app-password", NODE_ENV: "development" });
+  const previous = { JWT_KEY: process.env.JWT_KEY, SMTP_USER: process.env.SMTP_USER, SMTP_APP_PASSWORD: process.env.SMTP_APP_PASSWORD, NODE_ENV: process.env.NODE_ENV, SIGNUP_EMAILS: process.env.SIGNUP_EMAILS };
+  Object.assign(process.env, { JWT_KEY: "email-integration-signing-key", SMTP_USER: "sender@gmail.com", SMTP_APP_PASSWORD: "test-app-password", NODE_ENV: "development", SIGNUP_EMAILS: "any" });
   t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
   await isolatedMongo(t);
   await Setting.create({ key: "platform" });
@@ -163,13 +164,13 @@ test("customer email verification requires inbox ownership before every customer
   await t.test("ordinary session tokens and inactive accounts cannot verify", async () => {
     const inactive = await User.create({ firstName: "Inactive", lastName: "Customer", email: "inactive@example.test", password: details.password, isActive: false });
     assert.equal((await request("/auth/customer/verify-email", { challenge: verificationChallenge(inactive), code: "123456" })).status, 401);
-    const sessionToken = jwt.sign({ id: user.id, session: "customer" }, process.env.JWT_KEY);
+    const sessionToken = jwt.sign({ sid: TEST_SESSION, id: user.id, session: "customer" }, process.env.JWT_KEY);
     assert.equal((await request("/auth/customer/verify-email", { challenge: sessionToken, code: "123456" })).status, 401);
   });
 
   await t.test("an admin email change clears verification and revokes the old session", async () => {
     const admin = await User.findOne({ role: "admin" });
-    const adminCookie = "admin_token=" + jwt.sign({ id: admin.id, role: "admin", session: "admin" }, process.env.JWT_KEY, { expiresIn: "1h" });
+    const adminCookie = "admin_token=" + jwt.sign({ sid: TEST_SESSION, id: admin.id, role: "admin", session: "admin" }, process.env.JWT_KEY, { expiresIn: "1h" });
     const response = await fetch(base + `/api/admin/users/${user.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json", "X-Session-Domain": "admin", ...adminEntryHeaders(), Cookie: adminCookie },
       body: JSON.stringify({ email: "new-address@example.test", emailVerifiedAt: new Date() }),

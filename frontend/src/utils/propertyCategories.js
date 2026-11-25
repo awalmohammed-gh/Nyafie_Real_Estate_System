@@ -46,7 +46,7 @@ export const buildPropertyCategories = (configured = [], facets, properties = []
 export const propertyCategoryHref = (listingsPath, type) => `${listingsPath}?${new URLSearchParams({ type })}`;
 
 // Older homepage and shared search links retain their filters when Properties becomes a hub.
-const SEARCH_KEYS = ['status', 'type', 'area', 'minPrice', 'maxPrice', 'bedrooms', 'bathrooms', 'availability', 'search', 'sort', 'page'];
+const SEARCH_KEYS = ['status', 'stay', 'type', 'area', 'minPrice', 'maxPrice', 'bedrooms', 'bathrooms', 'availability', 'search', 'sort', 'page'];
 export const propertyDiscoveryRedirect = (listingsPath, search, hash = '') => {
   const params = new URLSearchParams(search);
   return SEARCH_KEYS.some((key) => params.has(key)) ? `${listingsPath}${search}${hash}` : null;

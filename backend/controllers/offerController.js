@@ -1,3 +1,4 @@
+import { ownerPage } from "../utils/ownerPage.js";
 import mongoose from "mongoose";
 import Offer from "../models/Offer.js";
 import Property from "../models/Property.js";
@@ -99,11 +100,14 @@ export const myOffers = async (req, res) => {
   ok(res, offers.map((o) => present(o, req.user)));
 };
 
-// GET /api/agents/offers and /api/admin/offers -> offers received (admins see all)
-export const ownerOffers = async (req, res) => {
-  const offers = await populate(Offer.find(ownerFilter(req.user)).sort({ createdAt: -1 }));
-  ok(res, offers.map((o) => present(o, req.user)));
-};
+const OFFER_TABS = { All: {}, ...Object.fromEntries(["pending", "countered", "accepted", "rejected", "withdrawn"].map((status) => [status, { status }])) };
+
+// GET /api/agents/offers and /api/admin/offers -> a page of the offers received (admins see all)
+export const ownerOffers = async (req, res) => ok(res, await ownerPage(req, {
+  Model: Offer, tabs: OFFER_TABS, tab: "All", fields: ["message"],
+  stats: { all: {}, respond: { status: { $in: ["pending", "countered"] } }, accepted: { status: "accepted" }, closed: { status: { $in: ["rejected", "withdrawn"] } } },
+  load: async (query) => (await populate(query)).map((o) => present(o, req.user)),
+}));
 
 // GET /api/offers/:id
 export const getOffer = async (req, res) => {

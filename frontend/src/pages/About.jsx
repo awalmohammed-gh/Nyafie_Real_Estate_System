@@ -93,7 +93,7 @@ const About = () => {
             <h2 id="about-agents" className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">List properties, reach more clients, and grow your business.</h2>
             <p className="mt-4 text-sm leading-6 text-white/85">Join real estate professionals on {siteName}. Showcase your properties, manage listings and bookings, and connect with serious buyers and renters across Ghana.</p>
             <div className="mt-7 flex flex-wrap gap-3">
-              <Link to="/agent/register" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-white px-5 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50">
+              <Link to="/agent/start" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-white px-5 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50">
                 Become an Agent
                 <ArrowRight aria-hidden="true" className="h-4 w-4" />
               </Link>

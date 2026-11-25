@@ -8,6 +8,7 @@ import { agentApplicationApi } from "../../frontApi";
 import AgentProfileFields from "../../components/agent/AgentProfileFields";
 import { agentProfileForm } from "../../utils/agentProfile";
 import PageTitle from "../../components/agent/PageTitle";
+import EmailStatus from "../../components/ui/EmailStatus";
 import { AccountSettings } from "../account/Settings";
 import { getInitials } from "../../utils/property";
 import { cloudImage } from "../../utils/cloudImage";
@@ -83,7 +84,7 @@ const Profile = () => {
         <nav aria-label="Settings sections" className="settings-section-nav">
           {SECTIONS.map(({ id, label, description, icon: Icon }) => <button key={id} type="button" aria-pressed={active === id} aria-controls={`settings-${id}`} onClick={() => selectSection(id)} className={`settings-section-link ${active === id ? "is-active" : ""}`}><Icon className="h-5 w-5 shrink-0" /><span className="min-w-0"><span className="settings-section-label">{label}</span><span className="settings-section-description">{description}</span></span></button>)}
         </nav>
-        <div className="settings-account-note"><span className="settings-account-status"><ShieldCheck className="h-4 w-4" />Approved agent</span><p className="mt-3 text-xs text-gray-400">Signed in as</p><p className="mt-1 break-all text-xs leading-relaxed text-gray-600">{user.email}</p></div>
+        <div className="settings-account-note"><span className="settings-account-status"><ShieldCheck className="h-4 w-4" />Approved agent</span><p className="mt-3 text-xs text-gray-400">Signed in as</p><p className="mt-1 break-all text-xs leading-relaxed text-gray-600">{user.email}</p><EmailStatus verified={user.emailVerified} className="mt-2" /></div>
       </aside>
       <div className="settings-main">
         <section id="settings-profile" hidden={active !== "profile"} aria-labelledby="settings-profile-title">

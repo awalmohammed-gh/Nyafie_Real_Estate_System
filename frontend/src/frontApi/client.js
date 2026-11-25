@@ -34,7 +34,9 @@ client.interceptors.response.use(
     }
     const message =
       error.response?.data?.message ||
-      (error.request && !error.response ? "Can't reach the server. Please check your connection and try again." : error.message);
+      (error.request && !error.response ? "Can't reach the server. Please check your connection and try again."
+        // The API itself didn't answer (restarting, or not running): never a bare status code
+        : [502, 503, 504].includes(error.response?.status) ? "The server isn't responding right now. Please wait a few seconds and try again." : error.message);
     const wrapped = new Error(message);
     wrapped.status = error.response?.status;
     wrapped.code = error.response?.data?.code;

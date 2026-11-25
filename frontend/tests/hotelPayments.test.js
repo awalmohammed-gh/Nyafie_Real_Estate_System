@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { arrivalText, bookingHeadline, guestCanCancel, pastArrivalDeadline, payPlace } from "../src/utils/hotelPayments.js";
+import { arrivalText, bookingHeadline, guestCanCancel, hotelPayChoices, pastArrivalDeadline, payPlace } from "../src/utils/hotelPayments.js";
 
 const reservation = { hotelId: "h1", statusKey: "confirmed", paymentOption: "on_arrival", paymentStatus: "Due at hotel", paymentDue: true, startDate: "2030-01-01T00:00:00.000Z", arrivalDeadline: "2030-01-01T14:00:00.000Z" };
 const paidUp = { paymentStatus: "Paid", paymentDue: false };
@@ -37,4 +37,13 @@ test("no-show only after the deadline; guest cancellation only before check-in d
     assert.equal(guestCanCancel(booking, new Date("2030-01-01T08:00:00Z")), false, "on the day: contact the owner");
     assert.equal(guestCanCancel({ ...booking, paymentOption: "online" }, new Date("2029-12-01T00:00:00Z")), false, "paid bookings go through the owner");
   }
+});
+
+test("a hotel guest gets two ways to pay; online shows its reason while it isn't ready", () => {
+  const ids = (options) => hotelPayChoices(options).map(({ id, available }) => [id, available]);
+  assert.deepEqual(ids({ online: true, onlineOffered: true, onArrival: true }), [["online", true], ["on_arrival", true]]);
+  const waiting = hotelPayChoices({ online: false, onlineOffered: true, onArrival: true, onlineProblem: "Being set up." });
+  assert.deepEqual(waiting, [{ id: "online", available: false, problem: "Being set up." }, { id: "on_arrival", available: true, problem: "" }]);
+  assert.deepEqual(ids({ online: false, onlineOffered: false, onArrival: true }), [["on_arrival", true]], "the hotel switched online payment off");
+  assert.deepEqual(ids({ online: true, onArrival: false }), [["online", true]], "an older server response");
 });

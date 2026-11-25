@@ -33,6 +33,7 @@ import { useToast } from "../../context/useToast";
 import UserAvatar from "./UserAvatar";
 import { canAccessAgent } from "../../utils/sessionDomain";
 import { adminPath } from "../../utils/adminEntry";
+import { AGENT_START, approvedAgentAccess } from "../../utils/listProperty";
 
 const userItems = [
   { label: "My Profile", to: "/account/profile", icon: UserRound },
@@ -127,7 +128,9 @@ const AccountMenu = ({ onAuth, compact = false, onDark = false, label }) => {
   // agentAccess flag identifies their registered agent account without changing roles.
   const customerItems = userItems.map((item) =>
     item.to === "/agent/plans" && user?.agentAccess === true
-      ? { label: "Agent Dashboard", to: "/agent/dashboard", icon: LayoutDashboard, highlight: true }
+      ? approvedAgentAccess(user)
+        ? { label: "Agent Dashboard", to: `${AGENT_START}?to=dashboard`, icon: LayoutDashboard, highlight: true }
+        : { label: "Agent application", to: AGENT_START, icon: ClipboardCheck, highlight: true } // the workspace opens after approval
       : item,
   );
   const items = isAdmin ? adminItems : isAgent ? canAccessAgent(user) ? agentItems : [{ label: "Application status", to: "/agent/status", icon: ClipboardCheck }, { label: "Agent profile", to: "/agent/onboarding/profile", icon: UserRound }] : customerItems;

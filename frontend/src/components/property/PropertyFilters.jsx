@@ -12,7 +12,8 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { FEATURE_OPTIONS, PRICE_RANGES } from "../../hooks/usePropertyBrowseState";
+import { FEATURE_OPTIONS } from "../../hooks/usePropertyBrowseState";
+import { priceRanges, priceUnit } from "../../utils/browseTabs";
 import { useLockBodyScroll } from "../../hooks/useLockBodyScroll";
 import { formatType } from "../../utils/property";
 
@@ -88,6 +89,7 @@ const FilterSelect = ({ label, name, value, onChange, disabled, children }) => {
 
 export const PropertyFilterPanel = ({ filters, update, facets }) => {
   const options = facets.data;
+  const PRICE_RANGES = priceRanges(filters.tab);
   const bounds = Object.values(options?.priceRange || {});
   const ranges = PRICE_RANGES.filter((range) =>
     bounds.some(
@@ -138,9 +140,6 @@ export const PropertyFilterPanel = ({ filters, update, facets }) => {
         }
         open
       >
-        <p className="catalogue-group-description">
-          Start with a neighborhood you love.
-        </p>
         <FilterSelect
           label="Region"
           name="region"
@@ -180,7 +179,7 @@ export const PropertyFilterPanel = ({ filters, update, facets }) => {
           ))}
         </FilterSelect>
         <FilterSelect
-          label="Neighborhood"
+          label="Neighbourhood"
           name="area"
           value={filters.area}
           disabled={facets.loading}
@@ -201,12 +200,9 @@ export const PropertyFilterPanel = ({ filters, update, facets }) => {
         </FilterSelect>
       </FilterGroup>
 
-      <FilterGroup title="Budget" icon={Wallet} summary="GHS" open>
-        <p className="catalogue-group-description">
-          A comfortable space. A comfortable price.
-        </p>
-        <FilterSelect
-          label="Price range · GHS"
+      <FilterGroup title="Budget" icon={Wallet} summary={filters.price ? "Selected" : priceUnit(filters.tab) || "Any"} open>
+        {!filters.tab && !filters.price ? <p className="catalogue-filter-hint">Choose Buy, Rent or Short stays above to set a budget.</p> : <FilterSelect
+          label={`Price ${priceUnit(filters.tab)}`.trim()}
           name="budget"
           value={budgetValue}
           disabled={facets.loading}
@@ -233,12 +229,7 @@ export const PropertyFilterPanel = ({ filters, update, facets }) => {
           {priceIndex >= 0 && !ranges.includes(PRICE_RANGES[priceIndex]) && (
             <option value={String(priceIndex)}>{filters.price.label}</option>
           )}
-        </FilterSelect>
-        {filters.listingType === "Rent" && (
-          <p className="catalogue-filter-hint">
-            Rental prices are per night or month, as shown on each home.
-          </p>
-        )}
+        </FilterSelect>}
       </FilterGroup>
 
       <FilterGroup title="Rooms" icon={BedDouble} open>

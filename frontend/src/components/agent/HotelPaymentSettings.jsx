@@ -18,8 +18,8 @@ const Option = ({ icon: Icon, title, description, checked, onChange, locked = fa
 /**
  * Editor section for a hotel or a rental priced per night ("rental"): which payment options guests
  * get, the arrival deadline and the cancellation / no-show policy. Guests can always book and pay
- * when they arrive (NyaFie never holds customers' money). Only a hotel listed by an agent may also
- * take online payment, settled straight to the hotel's own payout account; the platform's own hotels
+ * when they move in (NyaFie never holds customers' money). A hotel listed by an agent also takes
+ * online payment unless its owner switches it off, settled straight to the hotel's own payout account; the platform's own hotels
  * and per-night rentals are paid on arrival only (the server enforces both).
  */
 const HotelPaymentSettings = ({ value, onChange, error, propertyId, platform, ownerConnects = false, stay = "hotel" }) => {
@@ -31,8 +31,8 @@ const HotelPaymentSettings = ({ value, onChange, error, propertyId, platform, ow
         {/* Always on: booking never requires paying online */}
         {rental
           ? <Option locked icon={Banknote} title="Reserve now, pay on arrival (always on)" description="Guests reserve their dates, tell you when they're arriving and pay you when they arrive, showing their booking code. The dates are held until your arrival deadline." checked onChange={() => {}} />
-          : <Option locked icon={Banknote} title="Reserve now, pay at the hotel (always on)" description="Guests reserve their rooms, tell you when they're arriving and pay at the hotel, showing their booking code. Rooms are held until your arrival deadline." checked onChange={() => {}} />}
-        {!rental && !platform && <Option icon={CreditCard} title="Also let guests pay online" description="Optional. Guests can pay by card or mobile money when they book; the money goes straight to your payout account, never to the platform." checked={value.payOnline} onChange={set("payOnline")} />}
+          : <Option locked icon={Banknote} title="Pay when moving in (always on)" description="Guests reserve their rooms, tell you when they're arriving and pay at the hotel, showing their booking code. Rooms are held until your arrival deadline." checked onChange={() => {}} />}
+        {!rental && !platform && <Option icon={CreditCard} title="Pay online through the hotel" description="Guests pay by card or mobile money when they book. The money goes straight to the hotel's payout account, never to the platform. Connect the account below to open it." checked={value.payOnline} onChange={set("payOnline")} />}
       </div>
       {error && <p className="text-xs text-red-600" role="alert">{error}</p>}
       {(

@@ -22,14 +22,12 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { useRealEstate } from "../context/useRealEstate";
 import { usePlatform } from "../context/usePlatform";
 import { TransactionsProvider } from "../context/TransactionsProvider";
 import { useTransactions } from "../context/useTransactions";
-import { useUnreadMessages } from "../hooks/useUnreadMessages";
+import { useUnreadMessages } from "../hooks/useNotifications";
 import { useUnseenReviews } from "../hooks/useUnseenReviews";
 import { useAdminCounts } from "../hooks/useAdminCounts";
-import { useAdminLiveRefresh } from "../hooks/useAdminLiveRefresh";
 import DashboardLayout from "../components/dashboard/DashboardLayout";
 import PageLoader from "../components/ui/PageLoader";
 import NotificationBell from "../components/ui/NotificationBell";
@@ -92,21 +90,18 @@ const groups = [
 ];
 
 const AdminShell = () => {
-  const { listings, inquiries, listingsReady } = useRealEstate();
   const { plansLoading, settingsReady } = usePlatform();
   const { pending } = useTransactions();
-  const unreadMessages = useUnreadMessages("admin");
+  const unreadMessages = useUnreadMessages();
   const newReviews = useUnseenReviews();
-  const { pendingApplications, openReports, pendingDocumentChecks } = useAdminCounts();
-  useAdminLiveRefresh();
-  const review = listings.filter((p) => p.listing.state === "pending").length;
+  const { pendingApplications, openReports, pendingDocumentChecks, pendingListings: review, newInquiries } = useAdminCounts();
 
   const badges = {
     review,
     applications: pendingApplications,
     reports: openReports,
     documents: pendingDocumentChecks,
-    inquiries: inquiries.filter((i) => i.status === "New").length,
+    inquiries: newInquiries,
     messages: unreadMessages,
     reviews: newReviews,
     offers: pending.offers,
@@ -121,7 +116,7 @@ const AdminShell = () => {
       label="Admin"
       groups={groups}
       badges={badges}
-      ready={listingsReady && !plansLoading && settingsReady}
+      ready={!plansLoading && settingsReady}
       fallback={<PageLoader label="Loading your workspace..." />}
       sidebarFooter={<SidebarAccount roleLabel="Administrator" tone="dark" />}
       headerActions={

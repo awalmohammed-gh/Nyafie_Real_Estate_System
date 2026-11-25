@@ -1,6 +1,6 @@
 import client from "./client";
 
-// Reads return { items, unread }; bulk changes and deletes return the updated { items, unread } too
+// Reads return { items, unread, unreadMessages } (unreadMessages: chat, for the signed-in area); bulk changes and deletes return the updated { items, unread } too
 export const getNotifications = async () => (await client.get("/notifications")).data;
 export const markNotificationRead = (id) => client.patch(`/notifications/${id}/read`);
 export const markAllNotificationsRead = () => client.patch("/notifications/read-all");

@@ -22,7 +22,7 @@ import { formatType } from "../../utils/property";
 import { DEFAULT_RADIUS_KM, DEVICE, nearToParams } from "../../utils/geo";
 import { useVisitorLocation } from "../../hooks/useVisitorLocation";
 import { geoApi } from "../../frontApi";
-import { PRICE_RANGES } from "../../hooks/usePropertyBrowseState";
+import { priceRanges, priceUnit } from "../../utils/browseTabs";
 import NavOverlay from "../nav/NavOverlay";
 
 const NEAR_ME = "__near_me__"; // an option value no neighbourhood can have
@@ -58,9 +58,7 @@ const Hero = () => {
   const [mapHint, setMapHint] = useState(false);
   // A place picked from the map: { label, latitude, longitude } (its option value starts with "place:")
   const [place, setPlace] = useState(null);
-  const facets = usePropertyFacets(
-    search.status === "stay" ? "" : search.status,
-  );
+  const facets = usePropertyFacets(search.status);
   const areas = [...(facets.data?.areas || [])]
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((area) => ({
@@ -70,11 +68,6 @@ const Hero = () => {
       count: area.count,
     }));
   const types = [...(facets.data?.types || [])]
-    .filter(
-      (type) =>
-        search.status !== "stay" ||
-        ["hotel", "hotel-apartment"].includes(type.value.toLowerCase()),
-    )
     .sort((a, b) => a.value.localeCompare(b.value))
     .map((type) => ({
       value: type.value,
@@ -157,11 +150,12 @@ const Hero = () => {
         : area.startsWith("place:") && place
           ? { ...nearToParams(place), radius: String(DEFAULT_RADIUS_KM) }
           : { area };
-    const budget = price === "" ? null : PRICE_RANGES[Number(price)];
+    const budget = price === "" ? null : priceRanges(status)[Number(price)];
     const params = new URLSearchParams(
       Object.entries({
         status: status === "stay" ? "" : status,
-        type: type || (status === "stay" ? "Hotel,Hotel-Apartment" : ""),
+        stay: status === "stay" ? "1" : "",
+        type,
         minPrice: budget?.min,
         maxPrice: budget?.max,
         ...where,
@@ -288,12 +282,12 @@ const Hero = () => {
               }
               options={[
                 { value: "", label: "Any price" },
-                ...PRICE_RANGES.map((range, index) => ({
+                ...priceRanges(search.status).map((range, index) => ({
                   value: String(index),
                   label: range.label,
                 })),
               ]}
-              footerHint="Prices use each listing’s stated payment period."
+              footerHint={`Prices ${priceUnit(search.status)}.`}
             />
             <button type="submit" className="home-search-submit">
               <Search size={18} aria-hidden="true" /> Search Properties

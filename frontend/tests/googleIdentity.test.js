@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadGoogleChallenge } from "../src/utils/googleIdentity.js";
+import { retryUnreachable } from "../src/utils/googleIdentity.js";
 
 const setup = async (t) => {
   const previous = { window: globalThis.window, document: globalThis.document };
@@ -83,29 +83,29 @@ test("Google challenge creation recovers from a temporary gateway failure", asyn
   let calls = 0;
   const delays = [];
   const challenge = { clientId: "client", nonce: "nonce", challenge: "challenge" };
-  const result = await loadGoogleChallenge(async () => {
+  const result = await retryUnreachable(async () => {
     if (++calls < 3) throw Object.assign(new Error("Bad gateway"), { status: calls === 1 ? 502 : 504 });
     return challenge;
   }, async (ms) => { delays.push(ms); });
   assert.equal(result, challenge);
   assert.equal(calls, 3);
-  assert.deepEqual(delays, [350, 700]);
+  assert.deepEqual(delays, [500, 1000]);
 });
 
 test("Google challenge retries are bounded and explain an unreachable backend", async () => {
   let calls = 0;
-  await assert.rejects(loadGoogleChallenge(async () => {
+  await assert.rejects(retryUnreachable(async () => {
     calls++;
     throw Object.assign(new Error("Bad gateway"), { status: 502 });
   }, async () => {}), /backend is running/);
-  assert.equal(calls, 3);
+  assert.equal(calls, 7);
 });
 
 test("Google challenges do not retry configuration, rate-limit or authorization errors", async () => {
   for (const status of [400, 401, 403, 429, 503]) {
     let calls = 0;
     const error = Object.assign(new Error("Original server message"), { status });
-    await assert.rejects(loadGoogleChallenge(async () => { calls++; throw error; }, async () => { assert.fail("Must not retry"); }), (actual) => actual === error);
+    await assert.rejects(retryUnreachable(async () => { calls++; throw error; }, async () => { assert.fail("Must not retry"); }), (actual) => actual === error);
     assert.equal(calls, 1);
   }
 });

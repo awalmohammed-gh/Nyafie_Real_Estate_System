@@ -1,20 +1,13 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-
-export const PRICE_RANGES = [
-  { label: "Up to ₵2,000", min: 0, max: 2000 },
-  { label: "₵2,001 – ₵5,000", min: 2001, max: 5000 },
-  { label: "₵5,001 – ₵200,000", min: 5001, max: 200000 },
-  { label: "₵200,001 – ₵400,000", min: 200001, max: 400000 },
-  { label: "₵400,001 – ₵700,000", min: 400001, max: 700000 },
-  { label: "Over ₵700,000", min: 700001, max: null },
-];
+import { isShortStaySearch } from "../utils/shortStay";
+import { priceLabel, tabOf } from "../utils/browseTabs";
 
 // Listing features people filter by most; matched against each listing's amenities on the server
 export const FEATURE_OPTIONS = ["Parking", "Furnished", "Swimming Pool", "24/7 Security", "Air Conditioning", "Borehole", "Solar Backup", "Garden"];
 
 // Filters. The search location (near, place, radius) and view (list/map) are kept by "Clear all".
-const URL_KEYS = ["status", "purpose", "type", "region", "city", "area", "minPrice", "maxPrice", "bedrooms", "bathrooms", "availability", "amenities", "search", "sort", "page"];
+const URL_KEYS = ["status", "purpose", "stay", "type", "region", "city", "area", "minPrice", "maxPrice", "bedrooms", "bathrooms", "availability", "amenities", "search", "sort", "page"];
 const SORTS = ["latest", "priceAsc", "priceDesc", "popular", "rating"];
 const numberParam = (params, key) => {
   const raw = params.get(key);
@@ -22,21 +15,20 @@ const numberParam = (params, key) => {
   const value = Number(raw);
   return Number.isFinite(value) && value >= 0 ? value : null;
 };
-const priceLabel = (min, max) => max === null
-  ? `From ₵${(min || 0).toLocaleString()}`
-  : min === null ? `Up to ₵${max.toLocaleString()}` : `₵${min.toLocaleString()} – ₵${max.toLocaleString()}`;
-
 // The URL is the source of truth: refresh, shared links and Back restore the same search.
 // place: a location page's fixed neighbourhood/city ({ area?, city }), which the URL cannot change
 export const usePropertyBrowseState = (fixedListingType, place = null) => {
   const [params, setParams] = useSearchParams();
   const min = numberParam(params, "minPrice");
   const max = numberParam(params, "maxPrice");
-  const price = min === null && max === null ? null : {
-    min, max, label: PRICE_RANGES.find((range) => range.min === min && range.max === max)?.label || priceLabel(min, max),
-  };
+  const listingType = fixedListingType || (["Sale", "Rent"].includes(params.get("status")) ? params.get("status") : ({ rent: "Rent", sale: "Sale" })[params.get("purpose")] || "");
+  const stay = !fixedListingType && isShortStaySearch(params);
+  const tab = tabOf({ listingType, stay });
+  const price = min === null && max === null ? null : { min, max, label: priceLabel(tab, min, max) };
   const filters = {
-    listingType: fixedListingType || (["Sale", "Rent"].includes(params.get("status")) ? params.get("status") : ({ rent: "Rent", sale: "Sale" })[params.get("purpose")] || ""),
+    tab, // "" | Sale | Rent | stay
+    listingType: stay ? "" : listingType,
+    stay,
     types: [...new Set((params.get("type") || "").split(",").map((value) => value.trim()).filter(Boolean))],
     area: place ? place.area || "" : params.get("area") || "",
     city: place ? place.city || "" : params.get("city") || "",

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Notification from "../models/Notification.js";
 import { ok, fail } from "../utils/response.js";
+import { unreadMessages } from "../utils/unreadMessages.js";
 
 // The authenticated account's notifications. Identity always comes from the verified session (req.user),
 // never from the request. Admins also see the shared notifications about NyaFie listings; like the
@@ -18,9 +19,11 @@ const snapshot = async (user) => {
   return { items, unread };
 };
 
-// GET /api/notifications -> latest notifications + unread count
+// GET /api/notifications -> latest notifications + unread count, and the area's unread chat messages:
+// every open page asks for this regularly, so both badges share one request
 export const listNotifications = async (req, res) => {
-  ok(res, await snapshot(req.user));
+  const [latest, messages] = await Promise.all([snapshot(req.user), unreadMessages(req.user, req.sessionDomain)]);
+  ok(res, { ...latest, unreadMessages: messages });
 };
 
 // PATCH /api/notifications/:id/read

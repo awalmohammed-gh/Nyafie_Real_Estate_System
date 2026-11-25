@@ -4,7 +4,8 @@ import { loadGoogleIdentity } from "../../utils/googleIdentity";
 
 const customerAuth = forSession("customer");
 
-export default function GoogleSignIn({ onCredential, disabled }) {
+// confirm: an account already signed in proves it's still them (nothing is created)
+export default function GoogleSignIn({ onCredential, disabled, confirm = false }) {
   const host = useRef(null);
   const callback = useRef(onCredential);
   const blocked = useRef(disabled);
@@ -40,11 +41,11 @@ export default function GoogleSignIn({ onCredential, disabled }) {
     return () => { active = false; container?.replaceChildren(); };
   }, [attempt]);
 
-  return <div className="mt-6 border-t border-gray-200 pt-5">
-    <p className="mb-3 text-center text-xs text-gray-500">Or continue with Google</p>
+  return <div className={confirm ? "mt-5" : "mt-6 border-t border-gray-200 pt-5"}>
+    {!confirm && <p className="mb-3 text-center text-xs text-gray-500">Or continue with Google</p>}
     <div ref={host} inert={disabled || undefined} aria-busy={loading || disabled} className="min-h-11 w-full" />
     {loading && <p role="status" className="auth-field-hint">Loading Google sign-in...</p>}
     {error && <div><p role="status" className="auth-field-hint">{error}</p><button type="button" className="account-text-button mt-2" disabled={disabled} onClick={() => setAttempt((value) => value + 1)}>Try Google again</button></div>}
-    {!error && !loading && <p className="auth-field-hint mt-3">Google signs you in or creates a customer account automatically.</p>}
+    {!error && !loading && !confirm && <p className="auth-field-hint mt-3">Google signs you in or creates a customer account. You can then create a password to sign in by typing your email too.</p>}
   </div>;
 }

@@ -7,7 +7,7 @@ import { useApiQuery } from "../hooks/useApiQuery";
 import { useBrowsingList } from "../hooks/useBrowsingList";
 import { usePlatform } from "../context/usePlatform";
 import { COMPARE_KEY, COMPARE_LIMIT, clearCompare, inOrder, toggleCompare } from "../utils/browsingLists";
-import { formatLocation, formatType, getPriceParts, statusLabel } from "../utils/property";
+import { formatLocation, formatType, getPriceParts, listingLabel } from "../utils/property";
 import { formatDate } from "../utils/date";
 import { embedUrl } from "../utils/mediaLinks";
 import { cloudImage } from "../utils/cloudImage";
@@ -23,7 +23,7 @@ const perSqm = (p) => {
 // Each row: a label and what to show for one home. `best` marks the lowest/highest value worth noticing.
 const ROWS = [
   { label: "Price", value: (p) => { const { value, period } = getPriceParts(p); return `${value}${period || ""}`; }, best: { pick: "min", of: amount } },
-  { label: "Listing", value: (p) => statusLabel(p.property.status) },
+  { label: "Listing", value: (p) => listingLabel(p) },
   { label: "Type", value: (p) => formatType(p.property.type || "") },
   { label: "Bedrooms", value: (p) => p.property.bedrooms ?? "–", best: { pick: "max", of: (p) => p.property.bedrooms } },
   { label: "Bathrooms", value: (p) => p.property.bathrooms ?? "–", best: { pick: "max", of: (p) => p.property.bathrooms } },

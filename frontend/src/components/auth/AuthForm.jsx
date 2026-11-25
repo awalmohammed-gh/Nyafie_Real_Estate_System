@@ -103,7 +103,7 @@ const AuthForm = ({ initialMode = "login", onSuccess, onModeChange }) => {
               <AuthField label={isAgent ? "Phone number" : "Phone number (optional)"} icon={Phone} type="tel" name="phone" placeholder="e.g. 024 123 4567" autoComplete="tel" value={formData.phone} onChange={handleChange} required={isAgent} />
             </>
           )}
-          <AuthField label="Email address" icon={Mail} type="email" name="email" placeholder="you@example.com" autoComplete={isSignup ? "email" : "username"} value={formData.email} onChange={handleChange} required />
+          <AuthField label={isSignup ? "Gmail address" : "Email address"} icon={Mail} type="email" name="email" placeholder={isSignup ? "you@gmail.com" : "you@example.com"} autoComplete={isSignup ? "email" : "username"} value={formData.email} onChange={handleChange} required hint={isSignup ? "We'll email a code to this address to confirm it's yours." : undefined} />
           <AuthPasswordField label="Password" name="password" placeholder={isSignup ? "Create a password" : "Enter your password"} autoComplete={isSignup ? "new-password" : "current-password"} value={formData.password} onChange={handleChange} required minLength={isSignup ? 15 : undefined} hint={isSignup ? "Use at least 15 characters." : undefined} />
           {isSignup && isAgent && <AuthPasswordField label="Confirm password" name="confirmPassword" placeholder="Enter your password again" autoComplete="new-password" value={formData.confirmPassword} onChange={handleChange} required />}
           {isSignup && (
@@ -120,7 +120,7 @@ const AuthForm = ({ initialMode = "login", onSuccess, onModeChange }) => {
         </button>
         {isSignup && isAgent && <p className="auth-onboarding-note">Next: complete your profile and submit your application. Your dashboard opens after admin approval and any required subscription.</p>}
       </form>
-      {!isSignup && domain === "customer" && <button type="button" className="account-text-button mt-5" disabled={submitting} onClick={() => { setRecovering(true); setError(""); setFormData((previous) => ({ ...previous, password: "", confirmPassword: "" })); }}>Forgot your password?</button>}
+      {!isSignup && <button type="button" className="account-text-button mt-5" disabled={submitting} onClick={() => { setRecovering(true); setError(""); setFormData((previous) => ({ ...previous, password: "", confirmPassword: "" })); }}>Forgot your password?</button>}
       {domain === "customer" && <GoogleSignIn key={googleAttempt} onCredential={handleGoogle} disabled={submitting} />}
     </div>
   );

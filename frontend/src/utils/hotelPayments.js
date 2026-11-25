@@ -1,10 +1,19 @@
 // How a stay's payment is described to guests and owners (hotels and per-night rentals; bookings from mapRental)
 
 // A listing's payment options before its owner changes them (the server uses the same defaults):
-// every stay starts with pay at the hotel / on arrival only; agent hotels may add online payment
-export const STAY_BOOKING_DEFAULTS = { payOnArrival: true, payOnline: false, arrivalDeadline: "18:00", cancellationPolicy: "" };
+// agent hotels start with both ways (online payment opens once the payout account is connected)
+export const STAY_BOOKING_DEFAULTS = { payOnArrival: true, payOnline: true, arrivalDeadline: "18:00", cancellationPolicy: "" };
 // Per-night rentals are paid on arrival only (NyaFie never takes customers' money online)
-export const NIGHTLY_RENTAL_DEFAULTS = { ...STAY_BOOKING_DEFAULTS };
+export const NIGHTLY_RENTAL_DEFAULTS = { ...STAY_BOOKING_DEFAULTS, payOnline: false };
+
+/**
+ * The ways a guest can pay a hotel, in order. `options` is the listing's paymentOptions from the server.
+ * Online stays visible with its reason while the hotel is still setting it up.
+ */
+export const hotelPayChoices = (options) => [
+  ...(options.online || options.onlineOffered ? [{ id: "online", available: Boolean(options.online), problem: options.online ? "" : options.onlineProblem || "Online payment isn't available right now." }] : []),
+  ...(options.onArrival ? [{ id: "on_arrival", available: true, problem: "" }] : []),
+];
 
 const TIME = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" }); // Ghana is GMT
 const DAY = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });

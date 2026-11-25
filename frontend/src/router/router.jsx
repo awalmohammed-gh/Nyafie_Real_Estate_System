@@ -1,4 +1,4 @@
-import { Compare, AdminDocumentChecks, AdminSafetyReports, MyViewings, AgentViewings, AdminViewings, UpgradePlan, Team, JoinAgency, AdminLogin, AgentLayout, OnboardingLayout, Onboarding, ApplicationStatus, AdminAgentApplications, Home, Contact, PropertiesDetails, SlugPage, PlaceListings, PropertyAction, AgentDetailsPage, NotFound, AuthPage, Profile, AgentProfile, SavedProperties, SavedSearches, MyInquiries, Settings, AccountMessages, MyOffers, MyRentals, MyPurchases, AgentSaleRequests, AdminSaleRequests, AgentOffers, AgentRentals, AdminOffers, AdminRentals, AdminPayments, PaymentResult, AgentMessages, AdminMessages, Plans, Checkout, Dashboard, MyProperties, PropertyEditor, Inquiries, PropertyManage, Subscription, AdminLayout, AdminDashboard, AdminUsers, AdminAgents, AdminProperties, AdminInquiries, AdminContactMessages, AdminReviews, AdminSubscriptions, AdminPlans, AdminFinancialInventory, AdminReports, AdminSettings, AdminPropertyEditor } from './routePages';
+import { AgentStart, Compare, AdminDocumentChecks, AdminSafetyReports, MyViewings, AgentViewings, AdminViewings, UpgradePlan, Team, JoinAgency, AdminLogin, AgentLayout, OnboardingLayout, Onboarding, ApplicationStatus, AdminAgentApplications, Home, Contact, PropertiesDetails, SlugPage, PlaceListings, PropertyAction, AgentDetailsPage, NotFound, AuthPage, Profile, AgentProfile, SavedProperties, SavedSearches, MyInquiries, Settings, AccountMessages, MyOffers, MyRentals, MyPurchases, AgentSaleRequests, AdminSaleRequests, AgentOffers, AgentRentals, AdminOffers, AdminRentals, AdminPayments, PaymentResult, AgentMessages, AdminMessages, Plans, Checkout, Dashboard, MyProperties, PropertyEditor, Inquiries, PropertyManage, Subscription, AdminLayout, AdminDashboard, AdminUsers, AdminAgents, AdminProperties, AdminInquiries, AdminContactMessages, AdminReviews, AdminSubscriptions, AdminPlans, AdminFinancialInventory, AdminReports, AdminSettings, AdminPropertyEditor } from './routePages';
 import {createBrowserRouter, createRoutesFromElements, Navigate, Route} from 'react-router-dom'
 import SessionLayout from '../layout/SessionLayout'
 import { About } from './routePages'
@@ -37,6 +37,8 @@ const router = createBrowserRouter(
 
             {/* Becoming an agent: the plans page is public; onboarding has its own layout below */}
             <Route path='agent/plans' element={<Plans />} />
+            {/* "List your property": registration, the application, or the visitor's own agent account */}
+            <Route path='agent/start' element={<AgentStart />} />
             {/* Agency invite links: staff sign in with their own agent account and join */}
             <Route path='agent/join/:token' element={<JoinAgency />} />
             <Route element={<RequireAuth />}>

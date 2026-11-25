@@ -12,6 +12,7 @@ import { ACCOUNT_LABELS, isOrganization } from "../utils/accountTypes.js";
 import { notifyAdmins, notifyUser } from "../utils/notify.js";
 import { ok, fail } from "../utils/response.js";
 import { loadUser } from "./authController.js";
+import { endSessions } from "../utils/sessions.js";
 import { reconcileOpenPayments } from "./subscriptionController.js";
 import { destroyDocument } from "../utils/propertyDocuments.js";
 import { reportError } from "../utils/monitoring.js";
@@ -274,6 +275,7 @@ export const reviewApplication = async (req, res) => {
       409,
       "Another reviewer updated this application. Refresh to see the latest status.",
     );
+  if (action === "suspend") await endSessions(updated._id, "suspended"); // they can sign in again to read why
   if (reviewed) await deleteReviewedProofs(updated._id, proofFiles);
   clearVisibleAgentsCache(); // approved, suspended or restored: whose listings are public changed
   notifyUser(updated._id, {

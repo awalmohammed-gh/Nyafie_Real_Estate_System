@@ -31,7 +31,7 @@ const RecentlyViewed = () => {
           return <article className="home-recent-card" key={house.id}>
             <Link to={`/house/${house.id}`} className="home-recent-link">
               <img {...propertyCardImageSources(house.media.images[0])} alt="" loading="lazy" />
-              <span><strong>{house.title}</strong><small><MapPin size={12} aria-hidden="true" />{formatLocation(house.location)}</small><b>{price.value.replace(/^₵/, "GH₵ ")} <span>{price.period}</span></b></span>
+              <span><strong>{house.title}</strong><small><MapPin size={12} aria-hidden="true" />{formatLocation(house.location)}</small><b>{price.value} <span>{price.period}</span></b></span>
             </Link>
             <button type="button" onClick={() => toggleFavorite(house.id)} aria-label={liked ? "Remove from favorites" : "Save to favorites"} aria-pressed={liked}><Heart size={20} fill={liked ? "currentColor" : "none"} /></button>
           </article>;

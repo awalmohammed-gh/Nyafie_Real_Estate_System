@@ -94,6 +94,13 @@ const UpgradePlan = () => {
         {data.status === "pending" ? "Check its status on your subscription page before starting another payment." : `Your plan ${data.status === "none" ? "isn't active" : `is ${data.status}`}. Renew it, or choose any ${type.label.toLowerCase()} plan, to continue.`}
       </StateCard>
     );
+  else if (data.blocked)
+    body = (
+      <StateCard icon={AlertCircle} tone="amber" title="Upgrades are paused"
+        actions={<><Link to="/agent/subscription" className="btn btn-light">Back to subscription</Link>{sub && <Link to={`/agent/subscription/checkout?plan=${sub.planId}`} className="btn btn-primary"><RefreshCw className="h-4 w-4" />Renew {sub.planName}</Link>}</>}>
+        {data.blocked}
+      </StateCard>
+    );
   else if (data.highest)
     body = (
       <StateCard icon={Crown} title="You're on the highest available plan"

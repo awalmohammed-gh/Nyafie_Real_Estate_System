@@ -9,6 +9,7 @@ import { passwordResetMailer } from "../utils/email.js";
 import { loginAttempts } from "../utils/loginAttempts.js";
 import { customerTabClaims, customerTabHeaders } from "./support/customerTab.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
+import { TEST_SESSION } from "./support/sessions.js";
 
 test("customer password recovery proves mailbox ownership, expires and revokes sessions", {
   skip: process.env.RUN_PASSWORD_RESET_INTEGRATION !== "1", timeout: 90000,
@@ -38,10 +39,10 @@ test("customer password recovery proves mailbox ownership, expires and revokes s
   const user = await person("customer@reset.test");
   let code;
 
-  await t.test("unknown, inactive and non-customer accounts receive the same public response", async () => {
+  await t.test("unknown, inactive, admin and removed accounts receive the same public response", async () => {
     const inactive = await person("inactive@reset.test", { isActive: false });
     const admin = await person("admin@reset.test", { role: "admin" });
-    const agent = await person("agent@reset.test", { role: "agent" });
+    const agent = await person("agent@reset.test", { role: "agent", agentApplication: { status: "removed" } });
     const expected = await (await forgot("unknown@reset.test")).json();
     for (const email of [inactive.email, admin.email, agent.email, user.email]) {
       const response = await forgot(email);
@@ -123,10 +124,25 @@ test("customer password recovery proves mailbox ownership, expires and revokes s
     assert.ok((await User.findById(account.id)).emailVerifiedAt);
   });
 
+  await t.test("someone who registered directly as an agent recovers their password from the agent sign-in", async () => {
+    client = 7;
+    const account = await person("direct@reset.test", { role: "agent", agentApplication: { status: "approved", agentType: "individual" } });
+    const agent = (path, body) => fetch(base + "/auth/agent" + path, { method: "POST", headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", "X-Forwarded-For": "127.0.0.77" }, body: JSON.stringify(body) });
+    assert.equal((await agent("/forgot-password", { email: account.email })).status, 200);
+    const done = await agent("/reset-password", { email: account.email, code: deliveries.at(-1).code, newPassword: "AgentsNewPassword123" });
+    assert.equal(done.status, 200);
+    assert.deepEqual(done.headers.getSetCookie().map((value) => value.split("=")[0]).sort(), ["agent_token", "customer_token"], "signed out everywhere");
+    assert.equal((await agent("/login", { email: account.email, password: "AgentsNewPassword123" })).status, 200);
+    const removed = await person("removed@reset.test", { role: "agent", agentApplication: { status: "removed" } });
+    const before = deliveries.length;
+    assert.equal((await agent("/forgot-password", { email: removed.email })).status, 200, "the same answer");
+    assert.equal(deliveries.length, before, "but no code for a removed agent");
+  });
+
   await t.test("customers who became agents recover the same account and lose old agent sessions too", async () => {
     client = 6;
     const account = await person("dual@reset.test", { role: "agent", customerAccess: true, agentApplication: { status: "approved" } });
-    const cookie = "agent_token=" + jwt.sign({ id: account.id, role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" });
+    const cookie = "agent_token=" + jwt.sign({ sid: TEST_SESSION, id: account.id, role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" });
     const agentMe = () => fetch(base + "/auth/agent/me", { headers: { "X-Session-Domain": "agent", Cookie: cookie } });
     assert.equal((await agentMe()).status, 200);
     await forgot(account.email);

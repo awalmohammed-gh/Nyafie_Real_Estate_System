@@ -5,6 +5,7 @@ import Payment from "../models/Payment.js";
 import Rental from "../models/Rental.js";
 import Subscription from "../models/Subscription.js";
 import Refund from "../models/Refund.js";
+import Dispute from "../models/Dispute.js";
 import { createApp } from "../app.js";
 import { validPaystackSignature } from "../utils/paystack.js";
 
@@ -25,6 +26,7 @@ test("payment callbacks authenticate raw bytes and service credentials before da
   t.mock.method(Subscription, "findOne", async () => { lookups += 1; return null; });
   t.mock.method(Subscription, "findOneAndUpdate", () => ({ sort: async () => { claims += 1; return null; } }));
   t.mock.method(Refund, "findOneAndUpdate", () => ({ sort: async () => { claims += 1; return null; } }));
+  t.mock.method(Dispute, "findOneAndUpdate", () => ({ sort: async () => { claims += 1; return null; } }));
   t.mock.method(Refund, "findOne", () => ({ sort: async () => { lookups += 1; return null; } }));
   const send = (body, signature, headers = {}) => fetch(`${base}/paystack/webhook`, { method: "POST", headers: { "Content-Type": "application/json", ...(signature ? { "x-paystack-signature": signature } : {}), ...headers }, body });
 
@@ -74,7 +76,8 @@ test("payment callbacks authenticate raw bytes and service credentials before da
     assert.equal(body.data.checked, 0);
     assert.equal(body.data.subscriptions.checked, 0);
     assert.equal(body.data.refunds.checked, 0);
-    assert.equal(claims, 3, "rentals, subscriptions and refunds are each checked for due work");
+    assert.equal(body.data.disputes.checked, 0);
+    assert.equal(claims, 4, "rentals, subscriptions, refunds and disputes are each checked for due work");
   });
 
   await t.test("recovery processes at most 20 records and reports partial failures", async (st) => {

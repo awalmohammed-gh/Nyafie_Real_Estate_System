@@ -27,6 +27,9 @@ export const formatType = (type) => type.replace(/-/g, " ");
 export const isListingPublic = (property, agents) => property.listing?.state === "published" && (property.owner?.type === "admin" || agents.some((agent) => agent.id === property.owner?.id));
 
 export const statusLabel = (status) => (status === "Sale" ? "For Sale" : "For Rent");
+// What a public listing is offered as: a home rented by the night, or a hotel, is a short stay
+export const listingLabel = ({ property, pricing }) =>
+  (property.status !== "Sale" && (pricing?.perNight != null || property.type === "Hotel") ? "Short Stay" : statusLabel(property.status));
 
 export const getInitials = (name) =>
   name

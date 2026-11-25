@@ -6,10 +6,14 @@ import BrandLogo from "../brand/BrandLogo";
 import SocialLinks from "../brand/SocialLinks";
 import InstallAppButton from "../ui/InstallAppButton";
 import { usePlatform } from "../../context/usePlatform";
+import { useAuth } from "../../context/useAuth";
+import { listPropertyPath } from "../../utils/listProperty";
+import { shortStayPath } from "../../utils/shortStay";
 import { sendMessage } from "../../frontApi/contactApi";
 
 const HomeFooter = () => {
   const { paths, settings, siteName } = usePlatform();
+  const { user } = useAuth();
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState("");
@@ -25,8 +29,8 @@ const HomeFooter = () => {
     finally { setBusy(false); }
   };
   const groups = [
-    { title: "Explore", links: [["Home", "/"], ["All Listings", paths.listings], ["Buy a Home", `${paths.listings}?status=Sale`], ["Rent a Home", `${paths.listings}?status=Rent`], ["Short Stays", `${paths.listings}?type=Hotel,Hotel-Apartment`]] },
-    { title: "For Agents", links: [["Become an Agent", "/agent/register"], ["Agent Login", "/agent/login"], ["Subscription Plans", "/agent/plans"]] },
+    { title: "Explore", links: [["Home", "/"], ["All Listings", paths.listings], ["Buy a Home", `${paths.listings}?status=Sale`], ["Rent a Home", `${paths.listings}?status=Rent`], ["Short Stays", shortStayPath(paths.listings)]] },
+    { title: "For Agents", links: [["List Your Property", listPropertyPath(user)], ["Agent Login", "/agent/login"], ["Subscription Plans", "/agent/plans"]] },
     { title: "Company", links: [[`About ${siteName}`, "/about"], ["Contact Us", "/contact"]] },
   ];
   return <RevealBlock as="footer" className="home-reference-footer"><div className="container-page">

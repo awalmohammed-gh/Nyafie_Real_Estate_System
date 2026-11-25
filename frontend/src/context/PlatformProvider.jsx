@@ -12,9 +12,9 @@ const SETTINGS_CACHE = "nyafie:settings";
 const withDefaults = (saved = {}) =>
   Object.fromEntries(Object.entries(defaultSettings).map(([section, defaults]) => [section, { ...defaults, ...(saved[section] || {}) }]));
 
-// Plans, platform settings and (for admins) the payment ledger, loaded from the API
+// Plans and platform settings, loaded from the API
 export const PlatformProvider = ({ children }) => {
-  const { isAdmin, users, user } = useAuth();
+  const { isAdmin, user } = useAuth();
   const viewerId = user?.id;
   const [plans, setPlans] = useState([]);
   const [plansLoading, setPlansLoading] = useState(true);
@@ -22,7 +22,6 @@ export const PlatformProvider = ({ children }) => {
   const [settings, setSettingsState] = useState(() => withDefaults(readStorage(SETTINGS_CACHE, {})));
   const [settingsReady, setSettingsReady] = useState(false);
   const [settingsError, setSettingsError] = useState("");
-  const [payments, setPayments] = useState([]);
 
   const refreshPlans = useCallback(async () => {
     try {
@@ -37,10 +36,6 @@ export const PlatformProvider = ({ children }) => {
     // Reloaded per signed-in account: providers also receive their own plan after it's retired
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, viewerId]);
-
-  const refreshPayments = useCallback(async () => {
-    setPayments(await adminApi.getSubscriptions());
-  }, []);
 
   useEffect(() => {
     refreshPlans().catch(() => {});
@@ -66,11 +61,6 @@ export const PlatformProvider = ({ children }) => {
   useEffect(() => {
     reloadSettings();
   }, [reloadSettings]);
-
-  // Reload the payment ledger when admins change subscriptions (the user list refreshes)
-  useEffect(() => {
-    if (isAdmin) adminApi.getSubscriptions().then(setPayments).catch(() => {});
-  }, [isAdmin, users]);
 
   const getPlan = useCallback((id) => plans.find((p) => p.id === id) || null, [plans]);
 
@@ -125,16 +115,14 @@ export const PlatformProvider = ({ children }) => {
       paths,
       activePlans: plans.filter((p) => p.active),
       settings,
-      payments,
       getPlan,
       savePlan,
       deletePlan,
       togglePlanActive,
       updateSettings,
       refreshPlans,
-      refreshPayments,
     }),
-    [plans, plansLoading, plansError, settingsReady, settingsError, reloadSettings, paths, settings, payments, getPlan, savePlan, deletePlan, togglePlanActive, updateSettings, refreshPlans, refreshPayments]
+    [plans, plansLoading, plansError, settingsReady, settingsError, reloadSettings, paths, settings, getPlan, savePlan, deletePlan, togglePlanActive, updateSettings, refreshPlans]
   );
 
   return <PlatformContext.Provider value={value}>{children}</PlatformContext.Provider>;

@@ -3,7 +3,7 @@ import { Heart, House, Menu, MessageCircle, Search, X } from "lucide-react";
 import { useAuth } from "../context/useAuth";
 import { usePlatform } from "../context/usePlatform";
 import { useDesktop } from "../hooks/useDesktop";
-import { useUnreadMessages } from "../hooks/useUnreadMessages";
+import { useUnreadMessages } from "../hooks/useNotifications";
 import { bottomNavTab } from "../utils/bottomNav";
 
 /**
@@ -21,7 +21,7 @@ const BottomNav = ({ menuOpen, onMenuToggle, onNavigate, menuButtonRef }) => {
   const { isAuthenticated } = useAuth();
   const desktop = useDesktop();
   // Only polled while the bar is on screen and someone is signed in
-  const unread = useUnreadMessages("customer", isAuthenticated && !desktop);
+  const unread = useUnreadMessages(isAuthenticated && !desktop);
   // While the menu is open, the menu is "where you are"
   const current = menuOpen ? "menu" : bottomNavTab(pathname, paths);
 

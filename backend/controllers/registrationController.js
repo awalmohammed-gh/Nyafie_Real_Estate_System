@@ -6,9 +6,11 @@ import User from "../models/User.js";
 import PendingRegistration from "../models/PendingRegistration.js";
 import { loadUser } from "./authController.js";
 import { consumeCode, issueCode } from "../utils/emailVerification.js";
-import { setAuthCookie, clearAuthCookie } from "../utils/generateToken.js";
+import { clearAuthCookie } from "../utils/generateToken.js";
+import { endBrowserSession, startSession } from "../utils/sessions.js";
 import { CUSTOMER_TAB_HEADER, validTabSecret } from "../utils/customerTabSession.js";
 import { notifyAdmins } from "../utils/notify.js";
+import { inboxKey, sameInbox } from "../utils/signupEmail.js";
 import { ok, fail, HttpError } from "../utils/response.js";
 
 /**
@@ -48,7 +50,8 @@ const checkTab = (req, session) => {
 };
 
 // Sends a code (or explains why not) and hands the browser what it needs to enter it
-const askForCode = async (res, session, pending, message) => {
+const askForCode = async (req, res, session, pending, message) => {
+  await endBrowserSession(req, session, "replaced");
   clearAuthCookie(res, session);
   let delivery;
   try { delivery = await issueCode(PendingRegistration, pending._id, pending.email); }
@@ -80,7 +83,7 @@ export const startRegistration = async (req, res, session, details) => {
     // Two sign-ups for the same email at once: the other one created the record first
     pending = await PendingRegistration.findOneAndUpdate({ email: details.email }, { $set: set, ...(same ? {} : { $unset: { codeHash: 1, expiresAt: 1 } }) }, { returnDocument: "after" });
   }
-  return askForCode(res, session, pending, "Enter the code we emailed you to finish creating your account.");
+  return askForCode(req, res, session, pending, "Enter the code we emailed you to finish creating your account.");
 };
 
 // From sign-in: the email and password belong to an unfinished sign-up, so a fresh code is sent
@@ -88,7 +91,7 @@ export const pendingRegistrationFor = async (email, password, session) => {
   const pending = await PendingRegistration.findOne({ email, account: ACCOUNT[session] }).select("+passwordHash");
   return pending && await bcrypt.compare(password, pending.passwordHash) ? pending : null;
 };
-export const resumeRegistration = (res, session, pending) => askForCode(res, session, pending, "Your account isn't finished yet. Enter the code we emailed you to create it.");
+export const resumeRegistration = (req, res, session, pending) => askForCode(req, res, session, pending, "Your account isn't finished yet. Enter the code we emailed you to create it.");
 
 const loadPending = async (req, session) => {
   checkTab(req, session);
@@ -118,8 +121,10 @@ export const completeRegistration = (session) => async (req, res) => {
   const user = await mongoose.connection.transaction(async (dbSession) => {
     const removed = await PendingRegistration.deleteOne({ _id: pending._id, version: pending.version }, { session: dbSession });
     if (!removed.deletedCount) throw new HttpError(409, "This sign-up was just finished or replaced. Sign in, or create your account again.");
+    // Another spelling of the same inbox finished first (the unique emailKey covers the same moment)
+    if (await User.exists(sameInbox(pending.email), { session: dbSession })) throw new HttpError(409, "An account with this email already exists. Sign in to continue.");
     const created = new User({
-      firstName: pending.firstName, lastName: pending.lastName, email: pending.email, phone: pending.phone,
+      firstName: pending.firstName, lastName: pending.lastName, email: pending.email, emailKey: inboxKey(pending.email), phone: pending.phone,
       password: pending.passwordHash, role: ACCOUNT[session], isActive: true, emailVerifiedAt: new Date(),
       ...(session === "agent" && { agentApplication: { status: "incomplete" } }),
     });
@@ -132,6 +137,6 @@ export const completeRegistration = (session) => async (req, res) => {
     return created;
   });
   if (session === "customer") notifyAdmins({ type: "user", title: "New account", message: `${user.firstName} ${user.lastName} (${user.email}) signed up.`, link: "/admin/customers" });
-  setAuthCookie(res, user._id, session, user.sessionVersion, session === "customer" ? req.get(CUSTOMER_TAB_HEADER) : undefined);
+  await startSession(req, res, user, session, { startedWith: "code" });
   return ok(res, await loadUser(user._id), session === "agent" ? "Email verified. Complete your application to continue." : "Email verified. Your account is ready.", 201);
 };

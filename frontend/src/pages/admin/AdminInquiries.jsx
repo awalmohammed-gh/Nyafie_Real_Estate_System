@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Eye, Inbox, Mail, Phone } from "lucide-react";
-import { useAdminData } from "../../hooks/useAdminData";
+import { useDebounced, useOpenRecord, usePagedList } from "../../hooks/usePagedList";
+import { adminApi } from "../../frontApi";
+import { adminCountsChanged } from "../../utils/adminCounts";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import AdminPageTitle from "../../components/admin/AdminPageTitle";
 import DataTable from "../../components/ui/DataTable";
@@ -10,8 +12,9 @@ import SearchInput from "../../components/ui/SearchInput";
 import StatusBadge from "../../components/ui/StatusBadge";
 import AdminRecordModal from "../../components/admin/AdminRecordModal";
 import EmptyState from "../../components/ui/EmptyState";
-import { formatDate, formatRelative, isWithinDays } from "../../utils/date";
-import { formatPrice } from "../../utils/property";
+import { ErrorState, TableSkeleton } from "../../components/dashboard/States";
+import { formatDate, formatRelative } from "../../utils/date";
+import { formatGhs } from "../../utils/property";
 import { usePlatform } from "../../context/usePlatform";
 import { cloudImage } from "../../utils/cloudImage";
 
@@ -25,7 +28,6 @@ const RANGES = [
 
 const AdminInquiries = () => {
   const { siteName } = usePlatform();
-  const { inquiries, agents, allAgents, findProperty, updateInquiryStatus } = useAdminData();
   const run = useAsyncAction();
   const [params, setParams] = useSearchParams();
   const [status, setStatus] = useState(params.get("status") || "All");
@@ -33,27 +35,16 @@ const AdminInquiries = () => {
   const [propertyId, setPropertyId] = useState("all");
   const [range, setRange] = useState("all");
   const [query, setQuery] = useState("");
-  const [openId, setOpenId] = useState(null);
 
-  const ownerName = (inq) => (inq.ownerType === "admin" ? siteName : allAgents.find((a) => a.id === inq.ownerId)?.name || "Deleted agent");
-
-  const scoped = inquiries
-    .filter((i) => agentId === "all" || (agentId === "admin" ? i.ownerType === "admin" : i.ownerId === agentId))
-    .filter((i) => propertyId === "all" || i.propertyId === propertyId)
-    .filter((i) => range === "all" || isWithinDays(i.createdAt, Number(range)));
-  const q = query.trim().toLowerCase();
-  const rows = scoped
-    .filter((i) => status === "All" || i.status === status)
-    .filter((i) => !q || `${i.name} ${i.email} ${i.message} ${findProperty(i.propertyId)?.title || ""}`.toLowerCase().includes(q))
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-  // Properties that have inquiries, limited to the selected agent
-  const propertyOptions = [...new Set(inquiries.filter((i) => agentId === "all" || (agentId === "admin" ? i.ownerType === "admin" : i.ownerId === agentId)).map((i) => i.propertyId))]
-    .map((id) => findProperty(id))
-    .filter(Boolean);
-
-  const open = openId && inquiries.find((i) => i.id === openId);
-  const openProperty = open && findProperty(open.propertyId);
+  const search = useDebounced(query.trim());
+  const list = usePagedList("admin-inquiries", { status, agent: agentId, property: propertyId, range, search: search || undefined }, adminApi.getInquiriesPage);
+  const rows = list.data?.items || [];
+  const [open, setOpen] = useOpenRecord(rows);
+  const openProperty = open?.property.image !== undefined && open.property.title !== "Removed property" ? open.property : null;
+  const ownerName = (inq) => inq.ownerName;
+  const counts = list.data?.counts || {};
+  const { agents = [], properties: propertyOptions = [] } = list.data?.options || {};
+  const COUNT = { All: counts.all, New: counts.new, Contacted: counts.contacted, "In Progress": counts.inProgress, Closed: counts.closed };
 
   const columns = [
     {
@@ -66,7 +57,7 @@ const AdminInquiries = () => {
         </div>
       ),
     },
-    { key: "property", header: "Property", render: (i) => <span className="block max-w-48 truncate text-gray-700">{findProperty(i.propertyId)?.title || "Removed property"}</span> },
+    { key: "property", header: "Property", render: (i) => <span className="block max-w-48 truncate text-gray-700">{i.property.title}</span> },
     { key: "agent", header: "Agent", render: (i) => <span className="whitespace-nowrap text-gray-700">{ownerName(i)}</span> },
     { key: "message", header: "Message", render: (i) => <span className="line-clamp-1 max-w-64 text-gray-500">{i.message}</span> },
     { key: "date", header: "Date", render: (i) => <span className="whitespace-nowrap text-gray-600">{formatRelative(i.createdAt)}</span> },
@@ -76,16 +67,20 @@ const AdminInquiries = () => {
       header: <span className="sr-only">Actions</span>,
       align: "right",
       render: (i) => (
-        <button onClick={() => setOpenId(i.id)} aria-label={`View inquiry from ${i.name}`} className="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900">
+        <button onClick={() => setOpen(i)} aria-label={`View inquiry from ${i.name}`} className="grid h-9 w-9 place-items-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900">
           <Eye className="h-4.5 w-4.5" />
         </button>
       ),
     },
   ];
 
-  const changeStatus = (inq, next) => {
+  const changeStatus = async (inq, next) => {
     if (inq.status === next) return;
-    run(updateInquiryStatus(inq.id, next), { success: `Marked as ${next.toLowerCase()}`, description: `Inquiry from ${inq.name}` });
+    const { ok } = await run(adminApi.updateInquiryStatus(inq.id, next), { success: `Marked as ${next.toLowerCase()}`, description: `Inquiry from ${inq.name}` });
+    if (!ok) return;
+    setOpen({ ...inq, status: next });
+    list.reload();
+    adminCountsChanged();
   };
 
   return (
@@ -96,7 +91,7 @@ const AdminInquiries = () => {
         <FilterTabs
           value={status}
           onChange={setStatus}
-          tabs={["All", ...STATUSES].map((s) => ({ id: s, label: s, count: scoped.filter((i) => s === "All" || i.status === s).length }))}
+          tabs={["All", ...STATUSES].map((s) => ({ id: s, label: s, count: COUNT[s] }))}
         />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SearchInput value={query} onChange={setQuery} placeholder="Search customer or message" />
@@ -129,14 +124,15 @@ const AdminInquiries = () => {
       <DataTable
         columns={columns}
         rows={rows}
+        paging={list.paging}
         minWidth={1000}
-        empty={<EmptyState icon={Inbox} title="No inquiries match" description="Try widening the filters." />}
+        empty={!list.data ? list.error ? <ErrorState title="Couldn't load inquiries" message={list.error} onRetry={list.reload} /> : <TableSkeleton /> : <EmptyState icon={Inbox} title="No inquiries match" description="Try widening the filters." />}
         mobileCard={(i) => (
-          <button onClick={() => setOpenId(i.id)} className="w-full text-left">
+          <button onClick={() => setOpen(i)} className="w-full text-left">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate font-semibold text-gray-900">{i.name}</p>
-                <p className="truncate text-sm text-gray-500">{findProperty(i.propertyId)?.title || "Removed property"} · {ownerName(i)}</p>
+                <p className="truncate text-sm text-gray-500">{i.property.title} · {ownerName(i)}</p>
               </div>
               <StatusBadge status={i.status} />
             </div>
@@ -148,7 +144,7 @@ const AdminInquiries = () => {
 
       <AdminRecordModal
         open={Boolean(open)}
-        onClose={() => setOpenId(null)}
+        onClose={() => setOpen(null)}
         title={open ? `Inquiry from ${open.name}` : ""}
         description={open && `Received ${formatDate(open.createdAt)} · handled by ${ownerName(open)}`}
         footer={open && (
@@ -170,10 +166,10 @@ const AdminInquiries = () => {
             </dl>
             {openProperty && (
               <div className="flex items-center gap-3 rounded-lg p-2 ring-1 ring-slate-200">
-                <img src={cloudImage(openProperty.media.images[0], 80)} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />
+                <img src={cloudImage(openProperty.image, 80)} alt="" className="h-14 w-20 shrink-0 rounded-xl object-cover" />
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-gray-900">{openProperty.title}</p>
-                  <p className="text-sm text-gray-500">{formatPrice(openProperty)} · {openProperty.location.name}</p>
+                  <p className="text-sm text-gray-500">{formatGhs(openProperty.price)} · {openProperty.location}</p>
                 </div>
               </div>
             )}

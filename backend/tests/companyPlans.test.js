@@ -13,6 +13,7 @@ import TeamInvite from "../models/TeamInvite.js";
 import agentRoutes from "../routes/agentRoutes.js";
 import propertyRoutes from "../routes/propertyRoutes.js";
 import subscriptionRoutes from "../routes/subscriptionRoutes.js";
+import { TEST_SESSION } from "./support/sessions.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 const q = (value) => {
@@ -83,7 +84,7 @@ test("company plans: eligibility, limits, team, billing and payments are enforce
   await new Promise((resolve) => server.once("listening", resolve));
   t.after(() => server.close());
   const base = `http://127.0.0.1:${server.address().port}/api`;
-  const as = (user) => (method, path, body) => realFetch(`${base}${path}`, { method, headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", Cookie: `agent_token=${jwt.sign({ id: String(user._id), role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" })}` }, body: body && JSON.stringify(body) });
+  const as = (user) => (method, path, body) => realFetch(`${base}${path}`, { method, headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", Cookie: `agent_token=${jwt.sign({ sid: TEST_SESSION, id: String(user._id), role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" })}` }, body: body && JSON.stringify(body) });
   const quote = (user, forPlan, extra = {}) => as(user)("POST", "/subscriptions/quote", { planId: String(forPlan._id), ...extra });
 
   await t.test("only company accounts can buy company plans, and companies only company plans", async () => {

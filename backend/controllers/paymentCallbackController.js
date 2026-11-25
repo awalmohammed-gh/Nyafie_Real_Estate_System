@@ -1,7 +1,9 @@
 import Payment from "../models/Payment.js";
 import Subscription from "../models/Subscription.js";
 import Refund from "../models/Refund.js";
+import Dispute from "../models/Dispute.js";
 import { handleRefundWebhook, reconcileRefund } from "../utils/refunds.js";
+import { handleDisputeWebhook, reconcileDispute } from "../utils/disputes.js";
 import { processRentalPayment } from "../utils/rentalPaymentProcessing.js";
 import { processSubscriptionPayment, recoverableSubscriptionPayments } from "./subscriptionController.js";
 import { paymentEnvironment, paymentMode, providerScope } from "../utils/paystack.js";
@@ -30,6 +32,11 @@ export const paystackWebhook = async (req, res) => {
   catch { return fail(res, 400, "Invalid payment callback payload."); }
   // Refund progress (refund.pending, .processing, .needs-attention, .processed, .failed)
   if (typeof event?.event === "string" && event.event.startsWith("refund.")) return ok(res, await handleRefundWebhook(event.data));
+  // Customers disputing a charge with their bank (charge.dispute.create, .remind, .resolve)
+  if (typeof event?.event === "string" && event.event.startsWith("charge.dispute.")) {
+    const result = await handleDisputeWebhook(event.event, event.data);
+    return result.retry ? fail(res, 503, "The dispute could not be confirmed yet. Retry this callback.") : ok(res, result);
+  }
   if (event?.event !== "charge.success") return ok(res, { ignored: true });
   const reference = event.data?.reference;
   if (typeof reference !== "string" || !reference.trim() || reference.length > 100) return fail(res, 400, "Invalid payment reference.");
@@ -87,6 +94,16 @@ const recoveryQueues = [
     process: (refund) => reconcileRefund(refund),
     reference: (refund) => `refund of ${refund.reference}`,
   },
+  {
+    // Disputes still open, in case Paystack's webhook about their result never arrived
+    name: "disputes",
+    claim: (now, lease) => Dispute.findOneAndUpdate({
+      environment: paymentEnvironment(), outcome: "open",
+      $or: [{ nextReconcileAt: null }, { nextReconcileAt: { $lte: now } }],
+    }, lease, { returnDocument: "after" }).sort({ nextReconcileAt: 1, createdAt: 1 }),
+    process: (dispute) => reconcileDispute(dispute),
+    reference: (dispute) => `dispute ${dispute.disputeId} over ${dispute.reference}`,
+  },
 ];
 
 const emptyCounts = () => ({ checked: 0, paid: 0, review: 0, pending: 0, failed: 0, errors: 0 });
@@ -117,7 +134,7 @@ export const reconcilePayments = async (req, res) => {
   if (paymentMode() === "disabled") return fail(res, 503, "Online payments are not configured.");
   const counts = { ...emptyCounts(), ...Object.fromEntries(recoveryQueues.map((queue) => [queue.name, emptyCounts()])) };
   // Bounded work fits one serverless invocation. The queues take turns from one shared
-  // budget, so a backlog in one (rentals, subscriptions or refunds) cannot starve the others.
+  // budget, so a backlog in one (rentals, subscriptions, refunds or disputes) cannot starve the others.
   let open = recoveryQueues;
   while (counts.checked < RECOVERY_BATCH && open.length) {
     for (const queue of open) {

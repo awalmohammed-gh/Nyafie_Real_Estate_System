@@ -83,6 +83,14 @@
 .auth-input-with-action { padding-right: 46px; }
 .auth-password-toggle { position: absolute; top: 50%; right: 4px; transform: translateY(-50%); display: grid; place-items: center; width: 42px; height: 42px; border-radius: 7px; color: #7b6d85; transition: color .2s, background .2s; }
 .auth-password-toggle:hover { background: #f3edf8; color: #5e0a9a; }
+.auth-code-label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #463b51; }
+.auth-code { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: clamp(6px, 2vw, 10px); }
+.auth-code-box { width: 100%; min-width: 0; height: 56px; padding: 0; border: 1px solid #e6dfed; border-radius: 12px; background: #fcfbfd; color: #2c2035; font: inherit; font-size: 22px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; caret-color: #5e0a9a; transition: border-color .2s, box-shadow .2s, background .2s; }
+.auth-code-box:hover { border-color: #cdbdd8; }
+.auth-code-box.is-filled { border-color: #b493c8; background: #fff; }
+.auth-code-box:focus { outline: 0; border-color: #8c5aaa; background: #fff; box-shadow: 0 0 0 3px rgb(94 10 154 / .12); }
+.auth-code-box[aria-invalid="true"] { border-color: #f1a5a5; }
+.auth-code-box:disabled { opacity: .6; }
 .auth-field-hint { margin-top: 6px; color: #75687f; font-size: 11px; line-height: 1.6; }
 .auth-field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .auth-terms { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; line-height: 1.7; color: #75687f; }

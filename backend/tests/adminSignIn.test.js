@@ -5,6 +5,7 @@ import User from "../models/User.js";
 import AdminSignInCode from "../models/AdminSignInCode.js";
 import { adminSignInMailer } from "../utils/email.js";
 import { memoryModel } from "./support/memoryModels.js";
+import "./support/sessions.js";
 import { adminTwoStepEnabled, resendAdminSignIn, startAdminSignIn, verifyAdminSignIn } from "../controllers/adminSignInController.js";
 
 const ADMIN = { _id: "0000000000000000000000a1", role: "admin", isActive: true, email: "admin@example.test", firstName: "Ada", lastName: "Admin", sessionVersion: "v1" };
@@ -13,6 +14,7 @@ const query = (value) => {
   for (const name of ["populate", "select", "lean", "session"]) chain[name] = () => chain;
   return chain;
 };
+const request = (body) => ({ body, cookies: {}, ip: "127.0.0.1", get: () => undefined });
 const response = () => {
   const res = { statusCode: 200, body: null, cookies: [] };
   res.status = (code) => { res.statusCode = code; return res; };
@@ -37,7 +39,7 @@ const setup = (t, account = { ...ADMIN }) => {
 };
 const begin = async () => {
   const res = response();
-  await startAdminSignIn(res, ADMIN);
+  await startAdminSignIn(request({}), res, ADMIN);
   return res;
 };
 
@@ -57,23 +59,23 @@ test("the right code starts the admin session once; wrong codes are limited", as
   const { codes } = setup(t);
   const { challenge } = (await begin()).body.data;
   for (const code of ["000000", "123456"]) {
-    await assert.rejects(verifyAdminSignIn({ body: { challenge, code: code === codes[0].code ? "999999" : code } }, response()), (error) => error.status === 400);
+    await assert.rejects(verifyAdminSignIn(request({ challenge, code: code === codes[0].code ? "999999" : code }), response()), (error) => error.status === 400);
   }
   const res = response();
-  await verifyAdminSignIn({ body: { challenge, code: codes[0].code } }, res);
+  await verifyAdminSignIn(request({ challenge, code: codes[0].code }), res);
   assert.equal(res.statusCode, 200);
   const cookie = res.cookies.find((entry) => entry.name === "admin_token");
   assert.ok(cookie?.value);
   assert.equal(jwt.verify(cookie.value, process.env.JWT_KEY).session, "admin");
-  await assert.rejects(verifyAdminSignIn({ body: { challenge, code: codes[0].code } }, response()), (error) => error.status === 400, "a code works once");
+  await assert.rejects(verifyAdminSignIn(request({ challenge, code: codes[0].code }), response()), (error) => error.status === 400, "a code works once");
 });
 
 test("five wrong guesses use the code up, even when the sixth is right", async (t) => {
   const { codes } = setup(t);
   const { challenge } = (await begin()).body.data;
   const wrong = codes[0].code === "000000" ? "111111" : "000000";
-  for (let i = 0; i < 5; i += 1) await assert.rejects(verifyAdminSignIn({ body: { challenge, code: wrong } }, response()), (error) => error.status === 400);
-  await assert.rejects(verifyAdminSignIn({ body: { challenge, code: codes[0].code } }, response()), /too many attempts/);
+  for (let i = 0; i < 5; i += 1) await assert.rejects(verifyAdminSignIn(request({ challenge, code: wrong }), response()), (error) => error.status === 400);
+  await assert.rejects(verifyAdminSignIn(request({ challenge, code: codes[0].code }), response()), /too many attempts/);
 });
 
 test("the challenge only works for the same active admin, with the same password and email", async (t) => {
@@ -82,7 +84,7 @@ test("the challenge only works for the same active admin, with the same password
   const code = codes[0].code;
   for (const changed of [{ sessionVersion: "v2" }, { isActive: false }, { role: "agent" }, { email: "other@example.test" }]) {
     state.account = { ...ADMIN, ...changed };
-    await assert.rejects(verifyAdminSignIn({ body: { challenge, code } }, response()), (error) => error.status === 401, JSON.stringify(changed));
+    await assert.rejects(verifyAdminSignIn(request({ challenge, code }), response()), (error) => error.status === 401, JSON.stringify(changed));
   }
   state.account = { ...ADMIN };
   // Forged or foreign challenges
@@ -90,7 +92,7 @@ test("the challenge only works for the same active admin, with the same password
   const forged = jwt.sign({ id: ADMIN._id, email: ADMIN.email, version: "v1", purpose: "admin-sign-in" }, "another-key");
   const expired = jwt.sign({ id: ADMIN._id, email: ADMIN.email, version: "v1", purpose: "admin-sign-in" }, process.env.JWT_KEY, { expiresIn: -1 });
   for (const bad of [customerChallenge, forged, expired, "", null, "x".repeat(3000)]) {
-    await assert.rejects(verifyAdminSignIn({ body: { challenge: bad, code } }, response()), (error) => error.status === 401);
+    await assert.rejects(verifyAdminSignIn(request({ challenge: bad, code }), response()), (error) => error.status === 401);
   }
 });
 
@@ -98,7 +100,7 @@ test("a new code at most once a minute; ADMIN_TWO_STEP=off is the emergency swit
   const { codes } = setup(t);
   const { challenge } = (await begin()).body.data;
   const res = response();
-  await resendAdminSignIn({ body: { challenge } }, res);
+  await resendAdminSignIn(request({ challenge }), res);
   assert.equal(res.statusCode, 429);
   assert.equal(codes.length, 1);
   assert.equal(adminTwoStepEnabled(), true, "on unless switched off");

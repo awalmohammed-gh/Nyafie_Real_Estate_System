@@ -13,13 +13,14 @@ const FINAL = ["processed", "failed"];
 
 /**
  * Refunds one flagged payment (rental, hotel or subscription), or follows up on its refund.
- * `payment`: { source, recordId, reference, amount, payer, item, note, refund }
+ * `payment`: { source, recordId, reference, amount, payer, item, note, refund, dispute }
  */
 const RefundDialog = ({ payment, onClose, onChanged }) => {
   const { toast } = useToast();
   const refund = payment?.refund;
   const startNew = !refund || refund.status === "failed";
-  const [method, setMethod] = useState("paystack");
+  const disputed = Boolean(payment?.dispute?.blocksRefund);
+  const [method, setMethod] = useState(disputed ? "manual" : "paystack");
   const [reason, setReason] = useState("");
   const [externalReference, setExternalReference] = useState("");
   const [outcome, setOutcome] = useState("processed");
@@ -95,9 +96,10 @@ const RefundDialog = ({ payment, onClose, onChanged }) => {
             <>
               <fieldset className="space-y-2">
                 <legend className="mb-2 font-semibold text-gray-900">How is the money returned?</legend>
+                {disputed && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900"><strong>{payment.dispute.label}.</strong> A refund now could pay the customer twice, so it can&apos;t be sent from here. Settle the dispute in the Paystack dashboard. If the customer already has the money, record that below.</p>}
                 {[["paystack", "Refund through Paystack", "Paystack returns the whole payment to the customer's original payment method."], ["manual", "Already returned another way", "Record a refund you made outside Paystack, for example by mobile money."]].map(([value, label, hint]) => (
-                  <label key={value} className={`flex cursor-pointer gap-3 rounded-lg border p-3 ${method === value ? "border-brand-200 bg-brand-50" : "border-gray-200"}`}>
-                    <input type="radio" name="refund-method" value={value} checked={method === value} onChange={() => setMethod(value)} className="mt-1" />
+                  <label key={value} className={`flex gap-3 rounded-lg border p-3 ${disputed && value === "paystack" ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${method === value ? "border-brand-200 bg-brand-50" : "border-gray-200"}`}>
+                    <input type="radio" name="refund-method" value={value} checked={method === value} disabled={disputed && value === "paystack"} onChange={() => setMethod(value)} className="mt-1" />
                     <span><span className="block font-medium text-gray-900">{label}</span><span className="text-xs text-gray-500">{hint}</span></span>
                   </label>
                 ))}

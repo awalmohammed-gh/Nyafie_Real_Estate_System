@@ -13,6 +13,7 @@ import adminRoutes from "../routes/adminRoutes.js";
 import { adminEntryHeaders } from "./support/customerTab.js";
 import { createContactMessage } from "../controllers/contactController.js";
 import { originCheck, rejectOperatorKeys } from "../middleware/security.js";
+import { TEST_SESSION } from "./support/sessions.js";
 
 const valid = { name: " Akua Mensah ", email: " AKUA@example.test ", phone: "+233 24 123 4567", subject: " Buying a home ", message: " I'd like help finding my next home. " };
 const response = () => ({ statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } });
@@ -74,7 +75,7 @@ test("anonymous contact submission reaches an admin-only inbox and survives stat
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const token = jwt.sign({ id: String(admin._id), role: "admin", session: "admin" }, process.env.JWT_KEY, { expiresIn: "1h" });
+  const token = jwt.sign({ sid: TEST_SESSION, id: String(admin._id), role: "admin", session: "admin" }, process.env.JWT_KEY, { expiresIn: "1h" });
   const call = (path, { data, method = data ? "POST" : "GET", authenticated = false, headers = {} } = {}) => fetch(base + path, { method, headers: { "Content-Type": "application/json", ...(authenticated ? { Cookie: `admin_token=${token}`, "X-Session-Domain": "admin", ...adminEntryHeaders() } : {}), ...headers }, ...(data ? { body: JSON.stringify(data) } : {}) });
   try {
     await t.test("public submission saves normalized, allowlisted fields and notifies admins", async () => {

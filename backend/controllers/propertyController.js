@@ -146,9 +146,12 @@ const SORTS = {
   featured: { isFeatured: -1, ratingAverage: -1, createdAt: -1 }, // featured listings first (homepage)
 };
 
+// A short stay: a hotel or serviced apartment, or any home rented by the night
+const SHORT_STAY = { listingType: "Rent", $or: [{ propertyType: /^hotel(?:[-_ ]|$)/i }, { pricePeriod: "night" }] };
+
 /**
  * Turns query-string filters into a MongoDB filter on top of the public visibility rules.
- * Supported: search, listingType, type (comma list), area, city, availability (comma list),
+ * Supported: search, listingType, stay ("true": short stays only, "false": none), type (comma list), area, city, availability (comma list),
  * minPrice, maxPrice, bedrooms, bathrooms (minimums), amenities (comma list, all required),
  * featured, owner, ids, exclude.
  * ObjectIds are cast explicitly because the recommended sort runs as an aggregation.
@@ -162,6 +165,8 @@ export const buildPublicFilter = (q, base) => {
   }
   const listingType = q.listingType || ({ rent: "Rent", sale: "Sale" })[q.purpose];
   if (["Sale", "Rent"].includes(listingType)) and.push({ listingType });
+  if (q.stay === "true") and.push(SHORT_STAY);
+  if (q.stay === "false") and.push({ $nor: [SHORT_STAY] });
   if (list(q.type).length) and.push({ propertyType: { $in: list(q.type).map(exact) } });
   // Any spelling of the place ("East-Legon", "east legon") finds its listings, through the place-key index
   if (q.area) and.push(placeFilter("area", placeSlug(String(q.area)), [placePattern(placeSlug(String(q.area)))]));
@@ -318,12 +323,16 @@ const mergeSpellings = (places) => {
 
 /**
  * GET /api/properties/facets (public): filter options and headline numbers,
- * computed from the public listings in MongoDB (optionally for one listingType).
+ * computed from the public listings in MongoDB (optionally for one listingType, and short stays only or none: ?stay=true|false).
  */
 export const propertyFacets = async (req, res) => {
   const { agents } = await publicQuery();
   const base = publicBase(agents);
-  const match = ["Sale", "Rent"].includes(req.query.listingType) ? { $and: [base, { listingType: req.query.listingType }] } : base;
+  const match = { $and: [base, ...(["Sale", "Rent"].includes(req.query.listingType) ? [{ listingType: req.query.listingType }] : []), ...(req.query.stay === "true" ? [SHORT_STAY] : req.query.stay === "false" ? [{ $nor: [SHORT_STAY] }] : [])] };
+  ok(res, await facetSummary(match, agents));
+};
+
+const facetSummary = async (match, agents) => {
   const [facet] = await Property.aggregate([
     { $match: match },
     {
@@ -339,16 +348,19 @@ export const propertyFacets = async (req, res) => {
           { $sort: { count: -1, views: -1, name: 1 } },
         ],
         listingTypes: [{ $group: { _id: "$listingType", count: { $sum: 1 }, minPrice: { $min: "$price" }, maxPrice: { $max: "$price" } } }],
+        stays: [{ $match: SHORT_STAY }, { $count: "count" }],
         totals: [{ $group: { _id: null, total: { $sum: 1 }, avgRating: { $avg: { $cond: [{ $gt: ["$ratingCount", 0] }, "$ratingAverage", null] } }, agents: { $addToSet: { $cond: [{ $eq: ["$ownerType", "agent"] }, "$owner", null] } } } }],
       },
     },
   ]);
   const totals = facet.totals[0] || { total: 0, avgRating: null, agents: [] };
   const byListingType = Object.fromEntries(facet.listingTypes.map((t) => [t._id, { count: t.count, minPrice: t.minPrice, maxPrice: t.maxPrice }]));
-  ok(res, {
+  return {
     total: totals.total,
     sale: byListingType.Sale?.count || 0,
     rent: byListingType.Rent?.count || 0,
+    stays: facet.stays[0]?.count || 0,
+    rentHomes: (byListingType.Rent?.count || 0) - (facet.stays[0]?.count || 0), // rentals that aren't short stays
     priceRange: byListingType,
     agents: agents.length, // available agents (same rule as the public agents directory), with or without listings
     avgRating: totals.avgRating ? Math.round(totals.avgRating * 10) / 10 : null,
@@ -357,6 +369,35 @@ export const propertyFacets = async (req, res) => {
     cities: mergeSpellings(facet.cities.map((c) => ({ name: c.city, region: c.region, count: c.count }))).sort((a, b) => a.name.localeCompare(b.name)),
     areas: mergeSpellings(facet.areas.map((a) => ({ name: a.name, city: a.city, region: a.region, image: a.image || "", count: a.count, views: a.views })))
       .sort((a, b) => b.count - a.count || (b.views || 0) - (a.views || 0) || a.name.localeCompare(b.name)),
+  };
+};
+
+const HOME_ROW = 8;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * GET /api/properties/home (public): everything the home page lists, in one request.
+ * Rows are listing ids (a home can be in several); each home is sent once, in `items`.
+ */
+export const homeProperties = async (req, res) => {
+  const { agents } = await publicQuery();
+  const base = publicBase(agents);
+  const row = (filter, sort = SORTS.latest) => Property.find({ $and: [base, { availability: "Available" }, filter] }).sort(sort).limit(HOME_ROW);
+  const [featured, latest, sale, rent, stays, newThisWeek, facets] = await Promise.all([
+    row({ isFeatured: true }, SORTS.featured),
+    row({}),
+    row({ listingType: "Sale" }),
+    row({ listingType: "Rent", $nor: [SHORT_STAY] }), // homes to live in: stays have their own row
+    row(SHORT_STAY),
+    Property.countDocuments({ $and: [base, { createdAt: { $gte: new Date(Date.now() - WEEK_MS) } }] }),
+    facetSummary(base, agents),
+  ]);
+  const rows = { featured, latest, sale, rent, stays };
+  const unique = [...new Map(Object.values(rows).flat().map((doc) => [String(doc._id), doc])).values()];
+  ok(res, {
+    items: await presentProperties(unique, { includeAgentDetails: Boolean(req.user) }),
+    rows: Object.fromEntries(Object.entries(rows).map(([name, docs]) => [name, docs.map((doc) => String(doc._id))])),
+    newThisWeek,
+    facets,
   });
 };
 

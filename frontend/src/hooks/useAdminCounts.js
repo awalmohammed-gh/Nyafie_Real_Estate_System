@@ -1,30 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { adminApi } from "../frontApi";
+import { useTransactions } from "../context/useTransactions";
 
-const POLL_MS = 60000;
-// Fired after an admin action changes a count (e.g. reviewing a report), so the badge updates at once
-export const ADMIN_COUNTS_CHANGED = "admin-counts-changed";
+const FIELDS = ["pendingApplications", "openReports", "pendingDocumentChecks", "pendingListings", "newInquiries"];
 
-// Admin sidebar badges: agent applications waiting for a decision, open safety reports and
-// ownership documents waiting to be checked.
-// Refreshes every minute, on every page change and after ADMIN_COUNTS_CHANGED.
+/**
+ * Admin sidebar badges, from the same counts request as the transaction badges (TransactionsProvider):
+ * refreshed every minute while the tab is visible, on every page change and after ADMIN_COUNTS_CHANGED.
+ */
 export const useAdminCounts = () => {
-  const [counts, setCounts] = useState({ pendingApplications: 0, openReports: 0, pendingDocumentChecks: 0 });
+  const { counts, reloadCounts } = useTransactions();
   const { pathname } = useLocation();
+  const shown = useRef(pathname);
 
   useEffect(() => {
-    let active = true;
-    const load = () => adminApi.getAdminCounts().then((data) => active && setCounts({ pendingApplications: data.pendingApplications || 0, openReports: data.openReports || 0, pendingDocumentChecks: data.pendingDocumentChecks || 0 })).catch(() => {});
-    load();
-    const timer = setInterval(load, POLL_MS);
-    window.addEventListener(ADMIN_COUNTS_CHANGED, load);
-    return () => {
-      active = false;
-      clearInterval(timer);
-      window.removeEventListener(ADMIN_COUNTS_CHANGED, load);
-    };
-  }, [pathname]);
+    if (shown.current === pathname) return; // the first load is the provider's
+    shown.current = pathname;
+    reloadCounts();
+  }, [pathname, reloadCounts]);
 
-  return counts;
+  return Object.fromEntries(FIELDS.map((field) => [field, counts[field] || 0]));
 };

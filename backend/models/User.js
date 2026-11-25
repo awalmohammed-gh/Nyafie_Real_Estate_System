@@ -69,8 +69,13 @@ const userSchema = new mongoose.Schema(
     firstName: { type: String, required: true, trim: true, maxlength: 80 },
     lastName: { type: String, required: true, trim: true, maxlength: 80 },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    emailVerifiedAt: { type: Date, default: null },
+    // One value per inbox (utils/signupEmail.js); accounts from before it was stored have none
+    emailKey: { type: String, select: false },
+    emailVerifiedAt: { type: Date, default: null }, // when this person proved the email is theirs
     googleId: { type: String, unique: true, sparse: true, select: false },
+    // When this person chose (or signed in with) a NyaFie password. A Google account without it has only a
+    // random one nobody knows: Google never shares the Google password.
+    passwordSetAt: { type: Date, select: false },
     phone: { type: String, default: "", trim: true, maxlength: 30 },
     password: { type: String, required: true, minlength: 8, select: false },
     // Empty only for accounts whose password has never changed. Older cookies
@@ -79,7 +84,9 @@ const userSchema = new mongoose.Schema(
     profileImage: { type: String, default: "" },
     // Roles and application decisions are assigned only by server-owned flows.
     role: { type: String, enum: ["user", "agent", "admin"], default: "user" },
-    customerAccess: { type: Boolean, default: false }, // retained only when a customer starts agent onboarding
+    // Started as a customer, so agent onboarding asks for the plan before the profile (utils/agentApplication.js).
+    // Not a permission: every agent can use the customer area (utils/sessionAccess.js).
+    customerAccess: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     agentApplication: { type: applicationSchema, default: undefined },
     // Current subscription for agents (full history lives in the Subscription collection)
@@ -105,6 +112,7 @@ userSchema.pre("save", async function hashPassword() {
   if (!this.isModified("password")) return;
   // A finished sign-up arrives already hashed (utils/registration.js): never hash it twice
   if (!this.$locals.passwordHashed) this.password = await bcrypt.hash(this.password, 10);
+  if (!this.$locals.randomPassword) this.passwordSetAt = new Date();
   // Persist the password hash and revocation marker in the same database write.
   // Random versions also distinguish changes made within the same second.
   if (!this.isNew) this.sessionVersion = randomUUID();
@@ -115,6 +123,7 @@ userSchema.methods.matchPassword = function matchPassword(plain) {
   return bcrypt.compare(plain, this.password);
 };
 
+userSchema.index({ emailKey: 1 }, { unique: true, partialFilterExpression: { emailKey: { $type: "string" } } });
 // Agent and customer lists and counts in the admin console, newest first
 userSchema.index({ role: 1, createdAt: -1 });
 // How many customers saved a listing (listing insights)

@@ -11,6 +11,7 @@ import Plan from "../models/Plan.js";
 import agentRoutes from "../routes/agentRoutes.js";
 import propertyRoutes from "../routes/propertyRoutes.js";
 import { fakeListedAgents } from "./support/listedAgents.js";
+import { TEST_SESSION } from "./support/sessions.js";
 
 const query = (value) => ({
   then: (resolve, reject) => Promise.resolve(value).then(resolve, reject),
@@ -46,7 +47,7 @@ test("agent directory and listing identities require a valid selected session", 
   const call = (path, cookie, domain = "customer") => fetch(`${base}${path}`, { headers: { ...customerTabHeaders(domain), "X-Session-Domain": domain, ...(cookie ? { Cookie: cookie } : {}) } });
   try {
     await t.test("guest, forged and expired sessions cannot download the directory", async () => {
-      for (const cookie of [undefined, "customer_token=invalid", `customer_token=${jwt.sign({ id: String(customer._id), role: "user", session: "customer" }, process.env.JWT_KEY, { expiresIn: -1 })}`]) {
+      for (const cookie of [undefined, "customer_token=invalid", `customer_token=${jwt.sign({ sid: TEST_SESSION, id: String(customer._id), role: "user", session: "customer" }, process.env.JWT_KEY, { expiresIn: -1 })}`]) {
         const response = await call("/api/agents/public", cookie);
         assert.equal(response.status, 401);
         assert.equal(Object.hasOwn(await response.json(), "data"), false);

@@ -1,3 +1,4 @@
+import { ownerPage } from "../utils/ownerPage.js";
 import mongoose from "mongoose";
 import Rental from "../models/Rental.js";
 import Property from "../models/Property.js";
@@ -8,7 +9,7 @@ import { cleanText, validateContact } from "../utils/validation.js";
 import { HttpError, ok, fail } from "../utils/response.js";
 import { isHotel, quoteHotelRoom, hotelTransaction } from "../utils/hotel.js";
 import { hasRentalConflict, rentalInventoryTransaction } from "../utils/rentalAvailability.js";
-import { announceCancelledBookingRefund, flagCancelledBookingPayment } from "../utils/refunds.js";
+import { announceCancelledBookingRefund, cancelledPaymentText, flagCancelledBookingPayment } from "../utils/refunds.js";
 import { openRequestLimitProblem } from "../utils/openRequestLimits.js";
 import Payment from "../models/Payment.js";
 import { newReference } from "../utils/paystack.js";
@@ -20,7 +21,7 @@ import { approvalDeadline, expireUnansweredBookings, isAwaitingApproval } from "
 
 // What the customer is told about their money when a paid booking is cancelled
 const refundNotice = (flagged, cancelledPaid, fallback) => {
-  if (flagged) return ` Your payment of ${formatGHS(flagged.amount)} will be refunded; we will let you know when it is processed.`;
+  if (flagged) return ` ${cancelledPaymentText(flagged)}${flagged.status !== "paid" ? "; we will let you know when it is processed" : ""}.`;
   return cancelledPaid ? fallback : "";
 };
 export { PAYMENT_HOLD } from "../utils/rentalAvailability.js";
@@ -230,19 +231,44 @@ export const myRentals = async (req, res) => {
   ok(res, rentals.map((r) => presentRental(r, req.user)));
 };
 
-// GET /api/agents/rentals and /api/admin/rentals (admins see all)
+// GET /api/agents/rentals and /api/admin/rentals -> a page of bookings (admins see all)
 export const ownerRentals = async (req, res) => {
   await expireUnansweredBookings(ownerFilter(req.user));
-  const rentals = await populateRental(Rental.find(ownerFilter(req.user)).sort({ createdAt: -1 }));
+  const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+  const stay = { $or: [{ hotelId: { $ne: null } }, { pricePeriod: "night" }] };
+  ok(res, await ownerPage(req, {
+    Model: Rental, tab: "All", fields: ["contactName", "roomName", "paymentReference", "bookingCode"],
+    tabs: {
+      All: {},
+      Action: { status: { $in: ["paid", "confirmed"] } }, // to confirm or approve, or to prepare the move-in
+      Payment: { status: { $in: ["pending", "payment_pending"] } },
+      Active: { status: "active" },
+      CheckIns: { $and: [stay, { status: { $in: ["paid", "confirmed"] }, startDate: { $gte: today } }] },
+      Closed: { status: { $in: ["completed", "cancelled"] } },
+    },
+    stats: { action: { status: { $in: ["paid", "confirmed"] } }, payment: { status: { $in: ["pending", "payment_pending"] } }, active: { status: "active" }, completed: { status: "completed" } },
+    sort: (tab) => (tab === "CheckIns" ? { startDate: 1, _id: 1 } : { createdAt: -1, _id: -1 }), // the next guests first
+    scope: ({ room }) => (typeof room === "string" && mongoose.isValidObjectId(room) ? { roomTypeId: new mongoose.Types.ObjectId(room) } : {}),
+    load: async (query) => presentOwnerRentals(await populateRental(query), req.user),
+    // Room types with bookings, for the hotel filter
+    extra: async ({ mine, property }) => {
+      const rooms = await Rental.aggregate([{ $match: { $and: [mine, { hotelId: { $ne: null } }, property ? { property } : {}] } }, { $group: { _id: "$roomTypeId", name: { $last: "$roomName" }, property: { $last: "$property" } } }, { $limit: 200 }]);
+      const hotels = await Property.find({ _id: { $in: rooms.map((room) => room.property) } }).select("title").lean();
+      return { rooms: rooms.filter((room) => room._id).map((room) => ({ id: String(room._id), name: room.name, hotel: hotels.find((hotel) => String(hotel._id) === String(room.property))?.title || "Removed property" })) };
+    },
+  }));
+};
+
+const presentOwnerRentals = async (rentals, user) => {
   // Hotel bookings waiting for approval: the rooms of their room type, for the hotel to pick from
   const waiting = rentals.filter((r) => r.hotelId && isAwaitingApproval(r));
   const hotels = waiting.length ? await Property.find({ _id: { $in: [...new Set(waiting.map((r) => String(r.hotelId)))] } }).select("roomTypes._id roomTypes.roomNumbers").lean() : [];
   const roomsOf = new Map(hotels.flatMap((hotel) => (hotel.roomTypes || []).map((room) => [`${hotel._id}:${room._id}`, room.roomNumbers || []])));
-  ok(res, rentals.map((r) => {
-    const presented = presentRental(r, req.user);
+  return rentals.map((r) => {
+    const presented = presentRental(r, user);
     const roomOptions = r.hotelId && isAwaitingApproval(r) ? roomsOf.get(`${r.hotelId}:${r.roomTypeId}`) : null;
     return roomOptions?.length ? { ...presented, roomOptions } : presented;
-  }));
+  });
 };
 
 // GET /api/rentals/:id

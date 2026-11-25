@@ -13,7 +13,7 @@ export const buildAdminReport = ({ users = [], listings = [], inquiries = [], pa
   const reviewed = agentListings.filter((property) => ["published", "rejected", "suspended"].includes(property.listing?.state));
   const monthly = (series) => monthlySeries(series, 6, now);
   const sections = [
-    { key: "revenue", title: "Subscription revenue", description: "Paid agent subscriptions per month", currency: true, wide: true, totalKey: "revenue", series: [{ key: "revenue", label: "Revenue" }], data: monthly({ revenue: { items: paid, date: (payment) => payment.createdAt, value: (payment) => payment.amount } }) },
+    { key: "revenue", title: "Subscription revenue", description: "Paid agent subscriptions per month", currency: true, wide: true, totalKey: "revenue", series: [{ key: "revenue", label: "Revenue" }], data: monthly({ revenue: { items: paid, date: (payment) => payment.createdAt, value: (payment) => payment.received ?? payment.amount } }) },
     { key: "users", title: "User registrations", description: "New customer accounts", totalKey: "users", series: [{ key: "users", label: "Users" }], data: monthly({ users: { items: customers, date: (user) => user.createdAt } }) },
     { key: "agents", title: "Agent registrations", description: "Accounts that became agents", totalKey: "agents", series: [{ key: "agents", label: "Agents" }], data: monthly({ agents: { items: agents, date: (agent) => agent.createdAt } }) },
     { key: "listings", title: "Property listings", description: "New listings created (admin and agents)", totalKey: "listings", series: [{ key: "listings", label: "Listings" }], data: monthly({ listings: { items: listings, date: (property) => property.listing?.createdAt } }) },

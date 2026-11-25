@@ -21,6 +21,48 @@ const planOf = async (subscription) => {
   return plan ? Plan.findById(plan).catch(() => null) : null;
 };
 
+// Everything that led to the current plan: renewals and upgrades carry the earlier payments' value over
+const MAX_CHAIN = 24;
+const paymentsBehind = async (subscription, session) => {
+  const records = [subscription];
+  for (let record = subscription; records.length < MAX_CHAIN && record.kind !== "new" && record.previousSubscription;) {
+    const query = Subscription.findById(record.previousSubscription);
+    record = await (session ? query.session(session) : query);
+    if (!record) break;
+    records.push(record);
+  }
+  return records;
+};
+
+/**
+ * The unused value of an active plan, credited to an upgrade, less any money that went back through
+ * lost Paystack disputes. `disputed` while a dispute is undecided: there is no credit until it is settled.
+ */
+export const upgradeCredit = async (current, activePlan, now, session) => {
+  // Value per day of what was bought: the plan's price when bought (older records: the amount charged).
+  // Plans the admin granted for free carry no credit.
+  const value =
+    current.paymentStatus === "waived"
+      ? 0
+      : (current.planPrice ?? current.amount ?? 0);
+  const days = current.durationDays || activePlan?.duration || 1;
+  const remainingDays = Math.max(
+    0,
+    (new Date(current.expiresAt).getTime() - now.getTime()) / DAY,
+  );
+  const records = await paymentsBehind(current, session);
+  const disputed = records.some((record) =>
+    ["open", "check"].includes(record.disputeStatus),
+  );
+  const lost = records.reduce((sum, record) => sum + (record.disputeLost || 0), 0);
+  // A renewed plan can have more than one period left; each remaining day is worth the same
+  const credit = disputed ? 0 : money(Math.max(0, (value / days) * remainingDays - lost));
+  return { credit, disputed, remainingDays: Math.ceil(remainingDays) };
+};
+
+export const DISPUTED_UPGRADE =
+  "The payment for your current plan is being disputed, so upgrades are paused until that is settled. You can still renew your plan. Contact support if you think this is a mistake.";
+
 /**
  * What a plan costs this provider right now, worked out only from database records.
  *  - new:     no active plan -> any plan for their account type, full price, starts today
@@ -94,22 +136,14 @@ export const quotePlan = async (user, plan, now = new Date(), loaded) => {
       `${plan.name} isn't an upgrade from ${current.planName}. While your plan is active you can upgrade to a higher ${lower(currentType)} plan or renew your current one.`,
     );
 
-  // Value per day of what was bought: the plan's price when bought (older records: the amount charged).
-  // Plans the admin granted for free carry no credit.
-  const value =
-    current.paymentStatus === "waived"
-      ? 0
-      : (current.planPrice ?? current.amount ?? 0);
-  const days = current.durationDays || activePlan.duration || 1;
-  const remainingDays = Math.max(0, (end.getTime() - now.getTime()) / DAY);
-  // A renewed plan can have more than one period left; each remaining day is worth the same
-  const credit = money((value / days) * remainingDays);
+  const { credit, disputed, remainingDays } = await upgradeCredit(current, activePlan, now);
+  if (disputed) throw new HttpError(409, DISPUTED_UPGRADE);
   return {
     ...base,
     kind: "upgrade",
     currentPlan,
     credit,
-    remainingDays: Math.ceil(remainingDays),
+    remainingDays,
     amount: money(Math.max(0, plan.price - credit)),
     startsAt: now,
     expiresAt: new Date(now.getTime() + plan.duration * DAY),
@@ -140,6 +174,8 @@ export const upgradeOptions = async (user, now = new Date()) => {
     (current.accountType || activePlan.accountType) !== accountType
   )
     return { status: state.status, currentPlan, upgrades: [] };
+  if ((await upgradeCredit(current, activePlan, now)).disputed)
+    return { status: state.status, currentPlan, upgrades: [], blocked: DISPUTED_UPGRADE };
   const plans = await Plan.find({
     isActive: true,
     accountType,

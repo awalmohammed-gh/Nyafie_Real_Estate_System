@@ -4,6 +4,7 @@ import { createApp } from "../app.js";
 import User from "../models/User.js";
 import Setting from "../models/Setting.js";
 import LoginAttempt from "../models/LoginAttempt.js";
+import { adminSignInMailer } from "../utils/email.js";
 import { createLoginAttempts, LOGIN_LOCK_MS } from "../utils/loginAttempts.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
 import { customerTabHeaders } from "./support/customerTab.js";
@@ -12,12 +13,16 @@ test("production failed-password lockouts persist across instances and protect e
   skip: process.env.RUN_LOGIN_LOCKOUT_INTEGRATION !== "1", timeout: 90000,
 }, async (t) => {
   await isolatedMongo(t);
-  const previous = { NODE_ENV: process.env.NODE_ENV, JWT_KEY: process.env.JWT_KEY, PUBLIC_SITE_URL: process.env.PUBLIC_SITE_URL, ADMIN_ENTRY_PATH: process.env.ADMIN_ENTRY_PATH };
+  const previous = { NODE_ENV: process.env.NODE_ENV, JWT_KEY: process.env.JWT_KEY, PUBLIC_SITE_URL: process.env.PUBLIC_SITE_URL, ADMIN_ENTRY_PATH: process.env.ADMIN_ENTRY_PATH, SMTP_USER: process.env.SMTP_USER, SMTP_APP_PASSWORD: process.env.SMTP_APP_PASSWORD, ADMIN_TWO_STEP: process.env.ADMIN_TWO_STEP };
   process.env.NODE_ENV = "production";
   process.env.ADMIN_ENTRY_PATH = "hb-lockout-fixture-entry";
   process.env.JWT_KEY = "production-login-lockout-regression-signing-key";
   process.env.PUBLIC_SITE_URL = "https://nyafie.example";
   t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+  // The admin's second step stays on; its code is captured, never emailed
+  Object.assign(process.env, { SMTP_USER: "sender@example.test", SMTP_APP_PASSWORD: "not-a-real-password" });
+  delete process.env.ADMIN_TWO_STEP;
+  t.mock.method(adminSignInMailer, "send", async () => {});
   let time = Date.now();
   t.mock.method(Date, "now", () => time);
   await Setting.create({ key: "platform", agent: { requireSubscription: false } });
@@ -34,12 +39,14 @@ test("production failed-password lockouts persist across instances and protect e
   });
 
   for (const session of Object.keys(users)) {
+    // A correct admin password isn't a session yet: it leads to the emailed code
+    const accepted = session === "admin" ? 202 : 200;
     await t.test(`${session}: only failures count; the third locks correct passwords until the deadline`, async () => {
       const email = users[session].email;
-      for (let index = 0; index < 6; index++) assert.equal((await signIn(session, email, "CorrectPassword123")).status, 200, "successful logins do not consume the failure budget");
+      for (let index = 0; index < 6; index++) assert.equal((await signIn(session, email, "CorrectPassword123")).status, accepted, "successful logins do not consume the failure budget");
       assert.equal((await signIn(session, email)).status, 401);
       assert.equal((await signIn(session, email)).status, 401);
-      assert.equal((await signIn(session, email, "CorrectPassword123")).status, 200, "success clears two earlier failures");
+      assert.equal((await signIn(session, email, "CorrectPassword123")).status, accepted, "success clears two earlier failures");
       assert.equal((await signIn(session, email)).status, 401);
       time += 10 * 60 * 1000;
       assert.equal((await signIn(session, ` ${email.toUpperCase()} `)).status, 401);
@@ -61,7 +68,7 @@ test("production failed-password lockouts persist across instances and protect e
       assert.equal(blocked.status, 429);
       assert.equal(blocked.headers.get("retry-after"), "1");
       time += 1000;
-      assert.equal((await signIn(session, email, "CorrectPassword123")).status, 200, "the full lock expires without relying on TTL deletion");
+      assert.equal((await signIn(session, email, "CorrectPassword123")).status, accepted, "the full lock expires without relying on TTL deletion");
     });
   }
 

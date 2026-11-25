@@ -9,6 +9,7 @@ import Notification from "../models/Notification.js";
 import { createApp } from "../app.js";
 import { activateSubscription } from "../controllers/subscriptionController.js";
 import { isolatedMongo } from "./support/isolatedMongo.js";
+import { TEST_SESSION } from "./support/sessions.js";
 
 const DAY = 86400000;
 
@@ -35,9 +36,9 @@ test("subscription activation commits payment, history and account together exac
   const base = `http://127.0.0.1:${server.address().port}/api`;
   let sequence = 0;
   const plan = (fields = {}) => Plan.create({ name: `Plan ${++sequence}`, price: 100, duration: 30, propertyLimit: 10, imageLimit: 5, ...fields });
-  const agent = (fields = {}) => User.create({ firstName: "Test", lastName: "Agent", email: `agent${++sequence}@subscription.test`, password: "TestPassword123", role: "agent", agentApplication: { status: "approved", agentType: "individual" }, ...fields });
+  const agent = (fields = {}) => User.create({ firstName: "Test", lastName: "Agent", email: `agent${++sequence}@subscription.test`, password: "TestPassword123", emailVerifiedAt: new Date(), role: "agent", agentApplication: { status: "approved", agentType: "individual" }, ...fields });
   const purchase = (user, target, fields = {}) => Subscription.create({ user: user.id, plan: target.id, planName: target.name, accountType: target.accountType, amount: target.price, planPrice: target.price, durationDays: target.duration, paymentReference: `SUB-${++sequence}`, ...fields });
-  const verify = (user, record) => realFetch(base + "/subscriptions/verify", { method: "POST", headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", Cookie: "agent_token=" + jwt.sign({ id: user.id, role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" }) }, body: JSON.stringify({ reference: record.paymentReference }) });
+  const verify = (user, record) => realFetch(base + "/subscriptions/verify", { method: "POST", headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", Cookie: "agent_token=" + jwt.sign({ sid: TEST_SESSION, id: user.id, role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" }) }, body: JSON.stringify({ reference: record.paymentReference }) });
   const currentPlan = async (user, target, fields = {}) => {
     const current = await purchase(user, target, { status: "active", paymentStatus: "paid", startDate: new Date(Date.now() - 5 * DAY), expiresAt: new Date(Date.now() + 25 * DAY), paidAt: new Date(), ...fields });
     await User.updateOne({ _id: user.id }, { subscription: current.id });
@@ -181,6 +182,74 @@ test("subscription activation commits payment, history and account together exac
     const renewed = await Subscription.findById(renewal.id);
     assert.equal(renewed.paymentStatus, "paid");
     assert.equal(+renewed.expiresAt, +current.expiresAt + 30 * DAY);
+  });
+
+  await t.test("an upgrade credit only counts money that was kept", async (st) => {
+    const basic = () => plan({ sortOrder: 1 }), higher = () => plan({ price: 300, sortOrder: 2 });
+    const asAgent = async (user, path, body) => {
+      const response = await realFetch(base + path, { method: body ? "POST" : "GET", headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", Cookie: "agent_token=" + jwt.sign({ sid: TEST_SESSION, id: user.id, role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" }) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+      return { code: response.status, ...(await response.json()) };
+    };
+    const ready = () => agent({ emailVerifiedAt: new Date(), agentApplication: { status: "approved", agentType: "individual", profileCompletedAt: new Date() } });
+    const quoteFor = async (fields) => {
+      const user = await ready(), target = await higher();
+      await currentPlan(user, await basic(), { expiresAt: new Date(Date.now() + 15 * DAY), ...fields });
+      return { user, target, quote: await asAgent(user, "/subscriptions/quote", { planId: target.id }) };
+    };
+    await st.test("no dispute: the unused half is credited", async () => {
+      const { quote } = await quoteFor({});
+      assert.equal(quote.code, 200, JSON.stringify(quote));
+      assert.equal(quote.data.credit, 50);
+    });
+    await st.test("a dispute that was won changes nothing", async () => assert.equal((await quoteFor({ disputeStatus: "won" })).quote.data.credit, 50));
+    await st.test("a lost dispute leaves no credit", async () => {
+      const { quote } = await quoteFor({ disputeStatus: "lost", disputeLost: 100 });
+      assert.equal(quote.data.credit, 0);
+      assert.equal(quote.data.amount, 300);
+    });
+    await st.test("a partly lost one comes off the credit", async () => assert.equal((await quoteFor({ disputeStatus: "lost", disputeLost: 40 })).quote.data.credit, 10));
+    await st.test("money lost on the payment an upgrade or renewal came from counts too, but not a separate earlier purchase", async () => {
+      const user = await ready(), first = await purchase(user, await basic(), { disputeStatus: "lost", disputeLost: 100, status: "cancelled", paymentStatus: "paid" });
+      const target = await higher();
+      await currentPlan(user, await basic(), { kind: "upgrade", previousSubscription: first.id, expiresAt: new Date(Date.now() + 15 * DAY) });
+      assert.equal((await asAgent(user, "/subscriptions/quote", { planId: target.id })).data.credit, 0);
+      await Subscription.updateOne({ previousSubscription: first.id }, { kind: "new" });
+      assert.equal((await asAgent(user, "/subscriptions/quote", { planId: target.id })).data.credit, 50);
+    });
+    await st.test("an undecided dispute pauses upgrades but not renewals", async () => {
+      for (const disputeStatus of ["open", "check"]) {
+        const { user, quote } = await quoteFor({ disputeStatus });
+        assert.equal(quote.code, 409);
+        assert.match(quote.message, /disputed/);
+        const listed = await asAgent(user, "/subscriptions/upgrades");
+        assert.equal(listed.code, 200);
+        assert.match(listed.data.blocked, /disputed/);
+        assert.equal(listed.data.highest, false);
+        assert.deepEqual(listed.data.upgrades, []);
+        const current = await Subscription.findOne({ user: user.id, status: "active" });
+        assert.equal((await asAgent(user, "/subscriptions/quote", { planId: String(current.plan) })).data.kind, "renewal");
+      }
+    });
+    await st.test("a checkout saved before the dispute can't be paid later at the credited price", async () => {
+      for (const dispute of [{ disputeStatus: "open" }, { disputeStatus: "lost", disputeLost: 100 }]) {
+        const user = await ready(), target = await higher();
+        const current = await currentPlan(user, await basic(), { expiresAt: new Date(Date.now() + 15 * DAY), activationProcessedAt: new Date(Date.now() - 5 * DAY) });
+        const saved = await purchase(user, target, { kind: "upgrade", credit: 50, amount: 250 });
+        await Subscription.updateOne({ _id: current.id }, dispute);
+        const response = await verify(user, saved);
+        assert.equal(response.status, 409);
+        assert.match((await response.json()).message, /upgrade credit was disputed/);
+        assert.equal((await Subscription.findById(saved.id)).paymentStatus, "refund_required");
+        assert.equal((await Subscription.findById(current.id)).status, "active");
+      }
+    });
+    await st.test("an ordinary saved upgrade still activates", async () => {
+      const user = await ready(), target = await higher();
+      await currentPlan(user, await basic(), { expiresAt: new Date(Date.now() + 15 * DAY), activationProcessedAt: new Date(Date.now() - 5 * DAY) });
+      const saved = await purchase(user, target, { kind: "upgrade", credit: 50, amount: 250 });
+      assert.equal((await verify(user, saved)).status, 200);
+      assert.equal(String((await User.findById(user.id)).subscription), saved.id);
+    });
   });
 
   await t.test("legacy attempts fall back to the plan duration and waived activation stays waived", async () => {

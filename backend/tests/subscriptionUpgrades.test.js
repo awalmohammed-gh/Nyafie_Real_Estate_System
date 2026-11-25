@@ -10,6 +10,7 @@ import Setting from "../models/Setting.js";
 import Subscription from "../models/Subscription.js";
 import Notification from "../models/Notification.js";
 import subscriptionRoutes from "../routes/subscriptionRoutes.js";
+import { TEST_SESSION } from "./support/sessions.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 // A chainable, awaitable stand-in for a Mongoose query
@@ -116,7 +117,7 @@ test("plan upgrades: only higher plans of the provider's own type, priced and co
   t.after(() => server.close());
   const base = `http://127.0.0.1:${server.address().port}/api/subscriptions`;
   const as = (user) => async (method, path, body) => {
-    const response = await realFetch(`${base}${path}`, { method, headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", Cookie: `agent_token=${jwt.sign({ id: String(user._id), role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" })}` }, body: body && JSON.stringify(body) });
+    const response = await realFetch(`${base}${path}`, { method, headers: { "Content-Type": "application/json", "X-Session-Domain": "agent", Cookie: `agent_token=${jwt.sign({ sid: TEST_SESSION, id: String(user._id), role: "agent", session: "agent" }, process.env.JWT_KEY, { expiresIn: "1h" })}` }, body: body && JSON.stringify(body) });
     return { status: response.status, body: await response.json() };
   };
   const upgrade = (user, target, extra = {}) => as(user)("POST", "/upgrade", { planId: String(target._id), ...extra });

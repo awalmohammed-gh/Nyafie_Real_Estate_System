@@ -3,7 +3,9 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Building2, CheckCircle2, ExternalLink, Eye, Inbox, Lock, Pencil, PlusSquare, Search, Settings2, Star, Trash2 } from "lucide-react";
 import { useAgent } from "../../hooks/useAgent";
 import { useRealEstate } from "../../context/useRealEstate";
-import { useTransactions } from "../../context/useTransactions";
+import { agentApi } from "../../frontApi";
+import { useApiQuery } from "../../hooks/useApiQuery";
+import { useBackgroundRefresh } from "../../hooks/useBackgroundRefresh";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import PageTitle from "../../components/agent/PageTitle";
 import DataTable from "../../components/ui/DataTable";
@@ -37,7 +39,9 @@ const tabs = [
 const MyProperties = () => {
   const { myProperties, myInquiries, permissions: perms } = useAgent();
   const { deleteListing, isPubliclyVisible, confirmAvailability } = useRealEstate();
-  const { offers, rentals, sales } = useTransactions();
+  const received = useApiQuery("agent-property-activity", agentApi.getPropertyActivity);
+  useBackgroundRefresh(received.reload);
+  const activityOf = (p) => (received.data ?? received.previous)?.[p.id] || { offers: 0, pendingOffers: 0, requests: 0 };
   const run = useAsyncAction();
   const navigate = useNavigate();
   const [tab, setTab] = useState("all");
@@ -61,8 +65,8 @@ const MyProperties = () => {
 
   // A published listing is only truly live when the agent is in good standing
   const statusOf = (p) => getListingStatus(p, p.listing.state !== "published" || isPubliclyVisible(p));
-  const offerCount = (p) => offers.filter((o) => o.property.id === p.id).length;
-  const pendingOffers = (p) => offers.filter((o) => o.property.id === p.id && o.status === "Pending").length;
+  const offerCount = (p) => activityOf(p).offers;
+  const pendingOffers = (p) => activityOf(p).pendingOffers;
   const limitCopy = lockCopy(perms, "propertyLimit");
   const manage = (p) => navigate(`/agent/properties/${p.id}`);
   const types = [...new Set(myProperties.map((p) => p.property.type))].sort();
@@ -79,7 +83,7 @@ const MyProperties = () => {
     views: p.meta?.views || 0,
     inquiries: inquiryCount(p),
     offers: offerCount(p),
-    requests: rentals.filter((r) => r.property.id === p.id).length + sales.filter((x) => x.property.id === p.id).length,
+    requests: activityOf(p).requests,
   });
 
   const confirmDelete = async () => {

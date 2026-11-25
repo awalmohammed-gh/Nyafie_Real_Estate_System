@@ -193,13 +193,16 @@ test("role session isolation", async (t) => {
       assert.equal((await call("/customer", { domain: "agent" })).status, 403);
       assert.equal((await call("/owner", { domain: "agent" })).status, 204);
     });
-    await t.test("login never accepts credentials from another role", async () => {
+    await t.test("login never accepts credentials from another role, except agents as customers", async () => {
       for (const target of Object.keys(SESSION_ROLES)) for (const source of Object.keys(SESSION_ROLES)) {
-        if (target === source) continue;
+        if (target === source || (target === "customer" && source === "agent")) continue; // every agent is a customer too
         const response = await call(`/api/auth/${target}/login`, { domain: target, data: { email: `${source}@example.test`, password: "TestPassword123" } });
         assert.equal(response.status, 401);
         assert.equal(response.headers.getSetCookie().length, 0);
       }
+      const agent = await call("/api/auth/customer/login", { domain: "customer", jar: {}, data: { email: "agent@example.test", password: "TestPassword123" } });
+      assert.equal(agent.status, 200);
+      assert.deepEqual(agent.headers.getSetCookie().map((value) => value.split("=")[0]), ["customer_token"], "the customer area only");
     });
     await t.test("role login/logout routes reject a conflicting session selector", async () => {
       for (const [path, domain] of [["/api/auth/admin/logout", "customer"], ["/api/auth/agent/logout", "customer"], ["/api/auth/customer/logout", "agent"], ["/api/auth/admin/login", "agent"], ["/api/auth/logout", "admin"]]) {
@@ -213,8 +216,13 @@ test("role session isolation", async (t) => {
       account.isActive = false;
       assert.equal((await call("/api/auth/customer/me", { domain: "customer" })).status, 401);
       account.isActive = true;
-      account.role = "agent";
+      account.role = "admin";
       assert.equal((await call("/api/auth/customer/me", { domain: "customer" })).status, 401);
+      account.role = "agent"; // a customer who became an agent stays a customer
+      assert.equal((await call("/api/auth/customer/me", { domain: "customer" })).status, 200);
+      account.agentApplication = { status: "removed" };
+      assert.equal((await call("/api/auth/customer/me", { domain: "customer" })).status, 401);
+      delete account.agentApplication;
       account.role = "user";
     });
     await t.test("password-change guesses share an account limit across customer aliases", async () => {

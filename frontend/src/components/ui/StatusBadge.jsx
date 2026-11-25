@@ -68,6 +68,10 @@ const statusTone = {
   "Refund processing": "sky",
   "Refund needs attention": "amber",
   "Refund failed": "red",
+  "Dispute open": "red",
+  "Check dispute": "amber",
+  "Dispute lost": "gray",
+  "Dispute won": "green",
 };
 
 const StatusBadge = ({ status, tone, dot = true, className = "" }) => {

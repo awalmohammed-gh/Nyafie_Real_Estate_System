@@ -19,6 +19,7 @@ const savedSearchSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true, maxlength: 80 },
     filters: {
       listingType: { type: String, enum: ["", "Sale", "Rent"], default: "" },
+      stay: { type: Boolean, default: false }, // short stays only
       types: [{ type: String, maxlength: 60 }],
       area: { type: String, default: "", maxlength: 80 },
       city: { type: String, default: "", maxlength: 80 },

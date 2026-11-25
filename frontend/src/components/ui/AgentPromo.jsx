@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { ArrowUpRight, BriefcaseBusiness } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { CORNER_CARD } from "./cornerCard";
+import { listPropertyPath } from "../../utils/listProperty";
 import { usePlatform } from "../../context/usePlatform";
 import { accepted, addActiveTime, notNow, promoAllowedFor, promoAllowedOn, readPromo, remindLater, shouldShowPromo, startVisit, writePromo } from "../../utils/agentPromo";
 
@@ -23,10 +24,10 @@ const AgentPromo = ({ paused = false }) => {
   const titleId = useId();
   const { pathname } = useLocation();
   const { user, ready } = useAuth();
-  const { siteName } = usePlatform();
+  const { siteName, paths } = usePlatform();
   const [open, setOpen] = useState(false);
   const eligible = ready && promoAllowedFor(user);
-  const shown = open && eligible && !paused && promoAllowedOn(pathname);
+  const shown = open && eligible && !paused && promoAllowedOn(pathname, paths.listings);
 
   useEffect(() => {
     if (!eligible) return undefined;
@@ -74,7 +75,8 @@ const AgentPromo = ({ paused = false }) => {
             </div>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-            <Link to="/agent/register" onClick={() => answer(accepted)} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700">
+            {/* Customers apply with the account they have; only visitors register */}
+            <Link to={listPropertyPath(user)} onClick={() => answer(accepted)} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700">
               Become an agent <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
             </Link>
             <button type="button" onClick={() => answer(remindLater)} className="min-h-10 text-sm font-medium text-gray-700 underline decoration-gray-300 underline-offset-4 hover:text-gray-900">Remind me later</button>

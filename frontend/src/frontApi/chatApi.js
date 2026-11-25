@@ -1,4 +1,5 @@
 import client from "./client";
+import { fetchPage } from "./page";
 import { mapConversation, mapMessage } from "./mappers";
 
 // Inbox endpoints by audience: conversations the user started, or chats about
@@ -9,11 +10,11 @@ const INBOX = {
   admin: "/admin/messages",
 };
 
-export const getConversations = async (scope = "customer") =>
-  (await client.get(INBOX[scope])).data.map(mapConversation);
+export const getConversationsPage = (scope, params) => fetchPage(INBOX[scope], params, mapConversation);
 
-export const getConversationById = async (id) => {
-  const data = (await client.get(`/conversations/${id}`)).data;
+// The latest messages, or the ones before `before` (a message id)
+export const getConversationById = async (id, { before } = {}) => {
+  const data = (await client.get(`/conversations/${id}`, { params: { before } })).data;
   const offer = data.offer
     ? {
         amount: data.offer.amount,
@@ -25,6 +26,7 @@ export const getConversationById = async (id) => {
   return {
     conversation: mapConversation(data.conversation),
     messages: data.messages.map(mapMessage),
+    hasEarlier: Boolean(data.hasEarlier),
     offer,
   };
 };

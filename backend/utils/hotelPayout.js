@@ -8,15 +8,16 @@ import { paymentEnvironment, paymentMode, paystack } from "./paystack.js";
  *
  *  - Pay at the hotel / on arrival (always offered): the guest reserves (the rooms or dates are
  *    held), says when they're arriving, and shows their booking code when they arrive and pay.
- *  - Pay online (agent hotels only, if the hotel switches it on): Paystack checkout settled straight
+ *  - Pay online (agent hotels only, unless the hotel switches it off): Paystack checkout settled straight
  *    to the hotel's own bank account or mobile money wallet through a Paystack subaccount (the hotel
  *    bears Paystack's fee; NyaFie takes no share and never holds the money). Not offered for NyaFie's
  *    own hotels or for per-night rentals, whose online payments would go to NyaFie's account.
  */
 
-// Every stay can be booked and paid on arrival; only an agent hotel may add online payment
-export const STAY_BOOKING_DEFAULTS = Object.freeze({ payOnArrival: true, payOnline: false, arrivalDeadline: "18:00", cancellationPolicy: "" });
-export const NIGHTLY_RENTAL_DEFAULTS = STAY_BOOKING_DEFAULTS;
+// Every stay can be booked and paid on arrival. An agent hotel offers both ways (online payment starts
+// once its payout account is connected); per-night rentals and NyaFie's own hotels on arrival only.
+export const STAY_BOOKING_DEFAULTS = Object.freeze({ payOnArrival: true, payOnline: true, arrivalDeadline: "18:00", cancellationPolicy: "" });
+export const NIGHTLY_RENTAL_DEFAULTS = Object.freeze({ ...STAY_BOOKING_DEFAULTS, payOnline: false });
 // Online payment goes to the hotel's own account: only hotels listed by an agent can offer it
 export const takesOnlinePayment = (property) => hotelListing(property) && property?.ownerType !== "admin";
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -111,6 +112,7 @@ export const stayPaymentOptions = (property, payout, settings) => {
   return {
     onArrival: options.payOnArrival,
     online: !onlineProblem,
+    onlineOffered: options.payOnline, // the hotel wants both ways, even while online payment isn't ready
     onlineProblem: onlineProblem || null,
     arrivalDeadline: options.arrivalDeadline,
     cancellationPolicy: options.cancellationPolicy,

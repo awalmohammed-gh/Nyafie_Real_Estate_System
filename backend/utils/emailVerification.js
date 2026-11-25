@@ -7,16 +7,17 @@ import { HttpError } from "./response.js";
 export const verificationHash = (userId, email, code) => createHmac("sha256", process.env.JWT_KEY)
   .update(`email-verification:${userId}:${email}:${code}`).digest("hex");
 
-export const verificationChallenge = (user) => jwt.sign({
+const purposeFor = (session) => `${session}-email-verification`; // a code for one area never opens another
+export const verificationChallenge = (user, session = "customer") => jwt.sign({
   id: String(user._id), email: user.email, version: user.sessionVersion || "",
-  purpose: "customer-email-verification",
+  purpose: purposeFor(session),
 }, process.env.JWT_KEY, { algorithm: "HS256", expiresIn: "30m" });
 
-export const readVerificationChallenge = (token) => {
+export const readVerificationChallenge = (token, session = "customer") => {
   try {
     if (typeof token !== "string" || token.length > 2000) throw new Error();
     const payload = jwt.verify(token, process.env.JWT_KEY, { algorithms: ["HS256"] });
-    if (payload.purpose !== "customer-email-verification" || !/^[a-f\d]{24}$/i.test(payload.id || "")) throw new Error();
+    if (payload.purpose !== purposeFor(session) || !/^[a-f\d]{24}$/i.test(payload.id || "")) throw new Error();
     return payload;
   } catch { throw new HttpError(401, "Your verification session expired. Sign in again to continue."); }
 };

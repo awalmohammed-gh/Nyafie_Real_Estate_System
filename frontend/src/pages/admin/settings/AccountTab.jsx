@@ -6,6 +6,7 @@ import { adminApi } from "../../../frontApi";
 import { UnsavedContext } from "../../../hooks/useSettingsForm";
 import { Callout, Panel, Row, SaveBar } from "../../../components/admin/settings/SettingsUI";
 import { getInitials } from "../../../utils/property";
+import SignedInDevices from "../../../components/account/SignedInDevices";
 
 // Reports unsaved edits to the settings page (tab switch / leave warnings)
 const useTrackUnsaved = (id, dirty) => {
@@ -164,6 +165,9 @@ export const AccountTab = () => (
   <div className="space-y-6">
     <ProfileForm />
     <PasswordForm />
+    <Panel title="Where you're signed in" description="The browsers and devices using this admin account now.">
+      <SignedInDevices className="px-5 py-4 sm:px-7" />
+    </Panel>
     <Callout icon={Info}>
       ADMIN_EMAIL and ADMIN_PSD in backend/.env are only used to create the first admin account. After that, the details above are the ones that count.
       If you forget your password, run <code className="rounded bg-white px-1 py-0.5 text-xs ring-1 ring-slate-200">npm run admin:reset</code> in the backend folder to set it back to ADMIN_PSD.

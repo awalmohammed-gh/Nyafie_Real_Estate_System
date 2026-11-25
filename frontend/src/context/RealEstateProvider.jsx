@@ -5,16 +5,18 @@ import { RealEstateContext } from "./realEstateContext";
 import { useAuth } from "./useAuth";
 import { propertyApi, agentApi, adminApi, inquiryApi, userApi } from "../frontApi";
 import { canAccessAgent } from "../utils/sessionDomain";
+import { adminCountsChanged } from "../utils/adminCounts";
 
 const GUEST_FAVORITES_KEY = "nyafie:favorites";
 const EMPTY_PROPERTIES = [];
 
 // Listings, inquiries and favorites backed by the API.
 //  - properties: what the public can see
-//  - listings:   the agent's own listings, or every listing for admins
-//  - inquiries:  sent (customers), received (agents) or all (admins)
+//  - listings:   the agent's own listings
+//  - inquiries:  sent (customers) or received (agents)
+// Admin pages load their own pages of listings and inquiries (usePagedList).
 export const RealEstateProvider = ({ children }) => {
-  const { user, users, refreshUser } = useAuth();
+  const { user, refreshUser } = useAuth();
   const role = user?.role === "agent" && !canAccessAgent(user) ? undefined : user?.role;
   const userId = user?.id;
 
@@ -50,10 +52,10 @@ export const RealEstateProvider = ({ children }) => {
   }, [userId]);
 
   const refreshListings = useCallback(async () => {
-    if (role !== "agent" && role !== "admin") return setListings([]);
+    if (role !== "agent") return setListings([]);
     setListingsLoading(true);
     try {
-      setListings(role === "admin" ? await adminApi.getAllProperties() : await propertyApi.getMyProperties());
+      setListings(await propertyApi.getMyProperties());
       setListingsLoadedFor(role);
     } finally {
       setListingsLoading(false);
@@ -61,28 +63,26 @@ export const RealEstateProvider = ({ children }) => {
   }, [role]);
 
   const refreshInquiries = useCallback(async () => {
-    if (!role) return setInquiries([]);
-    const loader = role === "admin" ? adminApi.getAllInquiries : role === "agent" ? agentApi.getAgentInquiries : inquiryApi.getMyInquiries;
+    if (!role || role === "admin") return setInquiries([]);
+    const loader = role === "agent" ? agentApi.getAgentInquiries : inquiryApi.getMyInquiries;
     setInquiries(await loader());
   }, [role]);
 
-  // Admin account actions (suspend, cancel a plan...) change what is public, so
-  // reload public listings whenever the admin user list is refreshed
   useEffect(() => {
     if (publicPropertiesRequested) refreshProperties().catch(() => {});
-  }, [refreshProperties, users, publicPropertiesRequested]);
+  }, [refreshProperties, publicPropertiesRequested]);
 
   // Agent profiles are visible only to the current signed-in account.
   // Ignore requests that finish after logout or an account switch.
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || role === "admin") return; // the admin lists say what is public themselves
     let active = true;
     agentApi.getPublicAgents().then(
       (data) => active && setAgentDirectory({ userId, data }),
       () => active && setAgentDirectory({ userId, data: null }),
     );
     return () => { active = false; };
-  }, [userId, users, properties]);
+  }, [userId, role, properties]);
 
   // Reload role-specific data whenever the signed-in account changes
   useEffect(() => {
@@ -98,8 +98,12 @@ export const RealEstateProvider = ({ children }) => {
 
   // After any listing change, refresh both the public list and the owner's list
   const refreshAfterChange = useCallback(async () => {
-    await Promise.all([refreshProperties({ fresh: true }), refreshListings()]);
-  }, [refreshProperties, refreshListings]);
+    if (role === "admin") adminCountsChanged();
+    await Promise.all([
+      role !== "admin" || publicPropertiesRequested ? refreshProperties({ fresh: true }) : null,
+      refreshListings(),
+    ]);
+  }, [role, publicPropertiesRequested, refreshProperties, refreshListings]);
 
   const directory = agentDirectory?.userId === userId ? agentDirectory?.data : undefined;
   const agents = useMemo(() => userId ? mergeAgents(directory, properties) : [], [userId, directory, properties]);
@@ -179,11 +183,11 @@ export const RealEstateProvider = ({ children }) => {
 
   const updateInquiryStatus = useCallback(
     async (id, status) => {
-      const updated = role === "admin" ? await adminApi.updateInquiryStatus(id, status) : await agentApi.updateAgentInquiryStatus(id, status);
+      const updated = await agentApi.updateAgentInquiryStatus(id, status);
       setInquiries((prev) => prev.map((inq) => (inq.id === id ? updated : inq)));
       return updated;
     },
-    [role]
+    []
   );
 
   const findProperty = useCallback((id) => listings.find((p) => p.id === id) || properties.find((p) => p.id === id), [listings, properties]);
